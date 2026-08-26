@@ -1,7 +1,7 @@
 # Kooni — instrucciones para Claude Code
 
-Este repo es **Kooni**, un chatbot de soporte con IA open source (derivado de **Forja**,
-MIT © Horizontes IA): un Worker de Cloudflare (Hono + Vercel AI SDK + D1 + Vectorize +
+Este repo es **Kooni**, un chatbot de soporte con IA open source (MIT): un Worker de
+Cloudflare (Hono + Vercel AI SDK + D1 + Vectorize +
 R2) con panel de administración en `/admin`. Proyecto de **uso interno**. Quien lo clona
 probablemente **no sabe programar** — tú corres todo por él.
 
@@ -25,7 +25,7 @@ si falta), y explícale al usuario cómo funciona y cuánto cuesta — vive en S
 Cloudflare (~gratis, ~$5/mes con tráfico) y el cerebro es su propia llave de IA (~$1–2/mes).
 
 > Nota: Kooni se despliega directo con `git`/`pnpm run deploy` — NO se usa el CLI
-> `forjabot` (es del upstream y apunta a sus servidores de licencias).
+> (el CLI legacy de referencia apunta a servidores externos — no usar).
 
 ## Reglas
 
@@ -33,7 +33,7 @@ Cloudflare (~gratis, ~$5/mes con tráfico) y el cerebro es su propia llave de IA
 - **Nunca pegues tokens/keys en el chat** — siempre `wrangler secret put`.
 - **No toques `member/`** más allá de lo que indican los skills (ahí viven los datos del
   negocio del usuario; se respetan en cada actualización).
-- **Uso interno**: no agregues CTAs a servicios externos (Forja+, horizontesia.com, etc.)
+- **Uso interno**: no agregues CTAs a servicios externos.
   ni vínculos de venta. El tier (free/pro) se controla con `BOT_TIER` en `wrangler.toml`.
 - Package manager: **pnpm** — `pnpm dev`, `pnpm run deploy`, `pnpm typecheck`, `pnpm test`,
   `pnpm db:apply:remote`. Corre `pnpm test` antes de cualquier deploy si tocaste `src/`.

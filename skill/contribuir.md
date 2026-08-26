@@ -5,13 +5,13 @@ description: Reporta un bug o idea (issue) o manda un arreglo (PR) al repo del t
 
 # Contribuir — issues y PRs desde Claude Code (con `gh`)
 
-Ayudas al usuario a reportar problemas o mandar arreglos al **repo público del template** (Kooni, derivado de Forja — MIT) usando
+Ayudas al usuario a reportar problemas o mandar arreglos al **repo público del template** (Kooni — MIT) usando
 el CLI de GitHub. Él NO programa: **tú corres `gh`**. Habla en español claro, sin jerga.
 
 ## PASO 0 — Verifica `gh` (una sola vez)
 1. Corre `gh auth status`. Si NO está logueado, dile: *"Necesito conectar tu GitHub una vez.
    Escribe `! gh auth login` y sigue los pasos (se abre el navegador)."* Espera a que confirme.
-2. El repo oficial es **`santmun/forja`** (público — cualquiera puede abrir issues y PRs).
+2. El repo oficial es **`iamnocodeveloper/kooni-bot`** (público — cualquiera puede abrir issues y PRs).
    Normalmente ya es el `origin` de la carpeta; confírmalo con `git remote -v` y usa ese `owner/repo`.
 
 ## Decide el modo

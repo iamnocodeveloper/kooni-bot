@@ -1,6 +1,6 @@
 # Cómo contribuir — Kooni Bot
 
-¡Gracias por mejorar la plantilla Kooni! (Uso interno — el código deriva de Forja, MIT.) Si tú
+¡Gracias por mejorar la plantilla Kooni! (Uso interno — MIT.) Si tú
 encuentras o arreglas algo, el proyecto completo se beneficia.
 
 ## ¿Encontraste un bug o tienes una idea? → Abre un Issue

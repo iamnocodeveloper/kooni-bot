@@ -6,9 +6,9 @@
 
 ---
 
-## 0. Cuántos pasos antes de ver tu dashboard (lógica de Forja)
+## 0. Cuántos pasos antes de ver tu dashboard
 
-En **Forja**, el dashboard se ve al terminar la **Fase 1 (TU PLATAFORMA)**:
+El dashboard se ve al terminar la **Fase 1 (TU PLATAFORMA)**:
 ~4 sub-pasos (login, recursos, secrets, deploy) y ~10 minutos. Kooni replica
 exactamente eso:
 
@@ -21,10 +21,10 @@ exactamente eso:
 > `kooni-init.ps1 deploy` + fixes (Windows deploy-check, gateway var, R2 opcional).
 
 El instalador te dice en cada paso *"faltan N para ver tu dashboard"* (como el
-"FASE X/4" de Forja). Resumen de los 6 pasos de deploy:
+Resumen de los 6 pasos de deploy:
 `PASO 1 config → PASO 2 login → PASO 3 recursos → PASO 4 secrets → PASO 5 migraciones → PASO 6 deploy → 🎉 DASHBOARD`.
 
-## 0b. Instalador interactivo (lo más fácil — como el `forjabot init` de Forja)
+## 0b. Instalador interactivo (lo más fácil — `npx kooni-bot init`)
 
 ```bash
 bash scripts/kooni-init.sh local      # te pregunta todo y prueba local

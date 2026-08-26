@@ -45,10 +45,10 @@
 
 | # | Tarea | Estado |
 |---|---|---|
-| E1 | Análisis del texto de la landing de Forja (estructura, hooks, copy, números). | ✅ `01-analisis-forja.md` |
+| E1 | Análisis del texto de la landing de la competencia (estructura, hooks, copy, números). | ✅ `01-analisis-forja.md` |
 | E2 | Arquitectura de secciones propuesta para Kooni. | ✅ `02-arquitectura-landing.md` |
 | E3 | Prompts listos para generar la landing con IA (hero, flujo, planes, FAQ, QA de marca). | ✅ `03-prompts-landing.md` |
-| E4 | Textos base de Kooni (adaptados de Forja a la marca). | ✅ `04-textos-base.md` |
+| E4 | Textos base de Kooni (adaptados a la marca). | ✅ `04-textos-base.md` |
 | E5 | Checklist de marca obligatorio. | ✅ `05-checklist-marca.md` |
 | E6 | `sitio-web/` agregado a `.gitignore` (nunca se sube ni se publica). | ✅ |
 | E7 | Generar el `index.html` de la landing usando los prompts (cuando quieras — dime y lo genero). | ⏳ Pendiente |
@@ -85,13 +85,30 @@
 
 | # | Tarea | Estado |
 |---|---|---|
-| I1 | **Módulo `src/limits.ts`**: límites free (contactos 50, mensajes IA 500/mes, canales 2, reglas 5, DMs 100/mes, links 3) + enforcement fail-open en agent.ts / zernio.ts. | ⏳ Pendiente |
-| I2 | **Código de licencia Pro**: script `scripts/gen-license.ts` (HMAC con `LICENSE_MASTER_KEY`) + validación en el panel. Soporta lifetime (expiry vacío) y mensual (expiry embebida). | ⏳ Pendiente |
-| I3 | **Banner de límites** en el panel (Resumen: X/Y usados + CTA). | ⏳ Pendiente |
-| I4 | **CLI `npx kooni-bot init`**: paquete npm `kooni-bot` (disponible ✓), descarga tarball del repo GitHub público del dueño + instalador + deploy. | ⏳ Pendiente |
-| I5 | **`npx kooni-bot update`**: trae versión nueva SIN tocar member/ ni D1. | ⏳ Pendiente |
-| I6 | Pruebas internas: instalar limpio, límites, licencia, update sin pérdida. | ⏳ Pendiente |
+| I1 | **Módulo `src/limits.ts`**: límites free (contactos 50, mensajes IA 500/mes, canales 2, reglas 5, DMs 100/mes, links 3) + enforcement fail-open en agent.ts / zernio.ts. | ✅ v23ddf5de |
+| I2 | **Código de licencia Pro**: script `scripts/gen-license.ts` (HMAC con `LICENSE_MASTER_KEY`) + validación en el panel. Soporta lifetime (expiry vacío) y mensual (expiry embebida). | ✅ v23ddf5de |
+| I3 | **Banner de límites** en el panel (Resumen: X/Y usados + CTA). | ✅ v23ddf5de |
+| I4 | **CLI `npx kooni-bot init`**: paquete `cli-kooni/` (npm `kooni-bot`), descarga tarball del repo público + instalador. Probado end-to-end. | ✅ Probado (falta npm publish) |
+| I5 | **`npx kooni-bot update`**: trae versión nueva SIN tocar member/ ni D1. | ✅ Probado |
+| I6 | **Repo público** `github.com/iamnocodeveloper/kooni-bot` subido limpio (sin historial, sin datos). `admin-pagos/` gitignored. | ✅ |
 | I7 | **Precios decididos**: Opción B — lifetime fundador ($29-49, primeros 10-20) + mensual ($9-15) después. Detalle en `sitio-web/10-precios-opciones.md`. | ✅ Decidido |
+| I8 | **Publicar en npm**: `cd cli-kooni && npm login && npm publish`. | ⏳ Falta cuenta npm |
+| I9 | Pruebas internas: instalar limpio, límites, licencia, update sin pérdida. | ⏳ Pendiente |
+
+## J. Mini sistema de gestión de claves y membresías (InsForge, local) — NUEVO
+
+> El dueño quiere gestionar usuarios de pago y membresías **visualmente, en modo local**,
+> usando **InsForge** (no publicar en un dominio). Es una app interna del dueño —
+> NO es parte del repo público.
+
+| # | Tarea | Estado |
+|---|---|---|
+| J1 | Crear app InsForge (auth + DB) para el admin de pagos. | ⏳ Pendiente (esperando datos del dueño) |
+| J2 | Tablas: clientes, planes (lifetime/mensual), licencias emitidas, pagos. | ⏳ Pendiente |
+| J3 | Generador visual de códigos (botón → genera KOONI-PRO-... con la master key). | ⏳ Pendiente |
+| J4 | Registro de clientes (nombre, contacto, plan, expira, precio, pagado). | ⏳ Pendiente |
+| J5 | Recordatorio de renovaciones (mensuales) + historial. | ⏳ Pendiente |
+| J6 | Integración: la app guarda la master key y genera códigos con el mismo formato de `src/license.ts`. | ⏳ Pendiente |
 
 ---
 

@@ -17,10 +17,7 @@
 
 ---
 
-> **Proyecto de uso interno.** Kooni deriva de [Forja](https://github.com/santmun/forja)
-> (© Horizontes IA, licencia MIT — ver [`LICENSE`](./LICENSE)). El código core es el
-> Starter open source de Forja, re-marcado y adaptado para uso interno. No es un
-> producto comercial.
+> **Proyecto de uso interno.** Kooni es un asistente de IA multicanal self-hosted.
 >
 > Guía de marca: [`docs/IDENTIDAD-KOONI.md`](docs/IDENTIDAD-KOONI.md) ·
 > Arquitectura: [`docs/ARQUITECTURA.md`](docs/ARQUITECTURA.md) ·
@@ -148,7 +145,8 @@ Todo en el ecosistema de Cloudflare: un solo `pnpm run deploy` y está en línea
 │   └── db/schema.sql    #   esquema D1
 ├── member/              # Datos del negocio (NUNCA se sobrescriben en updates)
 ├── skill/               # Skills para Claude Code (instalar, actualizar, reporte…)
-├── cli/                 # CLI original de Forja (upstream, solo referencia — no usar)
+├── cli/                 # CLI legacy (solo referencia histórica — no usar)
+├── cli-kooni/           # CLI de instalación: npx kooni-bot init/update
 ├── docs/                # Documentación de Kooni (identidad, arquitectura, despliegue)
 └── assets/              # Logo y favicon de Kooni
 ```
@@ -170,14 +168,13 @@ Todo el detalle está en [`PRIVACY.md`](./PRIVACY.md).
 
 ---
 
-## 📄 Licencia y origen
+## 📄 Licencia
 
-[MIT](./LICENSE) © Horizontes IA (Forja) — proyecto derivado **Kooni** para uso interno.
-La licencia MIT permite usar, modificar y desplegar el software; exige conservar el
-aviso de copyright original.
+[MIT](./LICENSE). La licencia MIT permite usar, modificar y desplegar el software;
+exige conservar el aviso de copyright original.
 
 <div align="center">
 
-**Kooni** — asistente de IA multicanal self-hosted. Derivado de 🔨 [Forja](https://github.com/santmun/forja) (MIT).
+**Kooni** — asistente de IA multicanal self-hosted.
 
 </div>

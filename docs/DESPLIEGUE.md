@@ -4,7 +4,7 @@
 > (panel: `/admin`). IA verificada respondiendo con el contexto del negocio.
 
 > Despliegue de cero a **dashboard vivo** en **6 pasos / ~15 min** (lógica de
-> Forja: la Fase 1 termina con el panel en el navegador) y ~10 min más por canal.
+> La Fase 1 termina con el panel en el navegador) y ~10 min más por canal.
 > El instalador `.\scripts\kooni-init.ps1 deploy` hace todo esto numerando los
 > pasos y avisándote cuántos faltan.
 >

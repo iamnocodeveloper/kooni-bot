@@ -26,10 +26,10 @@ Si en algún momento dudas: **member/ es sagrado, src/ se actualiza.**
 ## Sobre las actualizaciones
 
 No hay validación de nivel por API ni chequeos externos. Las actualizaciones vienen del
-repo público de Forja (`upstream`) y **conservan siempre tu `member/`**.
+repo público del template (`origin`) y **conservan siempre tu `member/`**.
 
 No corras ningún `curl` a servicios externos para "chequear nivel": Kooni es open source
-(MIT, derivado de Forja) y las mejoras llegan por `git` — el template completo se
+(MIT) y las mejoras llegan por `git` — el template completo se
 actualiza por aquí.
 
 ## Paso 0 — Pre-flight (chequeos antes de tocar nada)
@@ -50,7 +50,7 @@ actualiza por aquí.
 
 ## Paso 1 — Configurar el remote del template (solo la primera vez)
 
-Las actualizaciones vienen del repo oficial del template (Forja, MIT), que añadimos como un remote llamado `upstream`.
+Las actualizaciones vienen del repo oficial del template (Kooni, MIT).
 
 ```bash
 git remote -v
@@ -59,10 +59,10 @@ git remote -v
 - Si **ya aparece `upstream`** → perfecto, continúa.
 - Si **NO aparece `upstream`** → agrégalo apuntando al repo oficial:
   ```bash
-  git remote add upstream https://github.com/santmun/forja.git
+  # origin ya apunta al repo oficial del template (github.com/iamnocodeveloper/kooni-bot)
   ```
 
-> Nota: si el usuario clonó directo el repo oficial (su `origin` ya apunta a `santmun/forja`), puede usar `origin` en lugar de `upstream` en todos los pasos siguientes.
+> Nota: `origin` apunta al repo oficial del template; los updates usan `git pull`.
 
 ## Paso 2 — Traer la última versión y comparar
 

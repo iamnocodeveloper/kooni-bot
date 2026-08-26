@@ -113,11 +113,11 @@ Kooni habla **español sencillo (LATAM)**, directo y cálido.
 
 - **Uso interno:** Kooni es un proyecto de uso interno (no comercial). No se
   revende, no se redistribuye el código con la marca Kooni sin permiso.
-- **Origen:** el código deriva de **Forja** (© Horizontes IA, licencia MIT).
-  La licencia MIT se conserva (`LICENSE`) y exige mantener el aviso de copyright
-  original. Kooni agrega su propia marca encima, lo cual la MIT permite.
-- **No usar** la marca "Forja" ni "Horizontes IA" en productos de Kooni; solo en
-  el aviso de licencia y en referencias históricas de la documentación.
+- **Origen:** el código deriva de un template open source (MIT). La licencia
+  MIT se conserva (`LICENSE`) y exige mantener el aviso de copyright original.
+  Kooni agrega su propia marca encima, lo cual la MIT permite.
+- **No usar** marcas de terceros en productos de Kooni; solo en el aviso de
+  licencia y en referencias históricas de la documentación.
 
 ---
 
