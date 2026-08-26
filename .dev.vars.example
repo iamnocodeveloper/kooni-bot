@@ -1,0 +1,38 @@
+# ============================================================
+# KOONI — secrets locales (modo dev). NUNCA se commitean.
+# ============================================================
+# Copia este archivo como .dev.vars y llena los valores.
+# El worker local (pnpm dev) los lee de aquí; en producción se
+# guardan con: npx wrangler secret put <NOMBRE>
+
+# ── Cerebro del bot (necesario para que la IA responda) ──────
+# Elige UNO y borra el otro. Pon TU llave real.
+ANTHROPIC_API_KEY=sk-ant-xxxxxxxxxxxx
+# OPENAI_API_KEY=sk-xxxxxxxxxxxx
+
+# ── Panel /admin (necesario) ─────────────────────────────────
+DASHBOARD_PASSWORD=kooni-local-password
+# opcional: entra con tu email por magic link
+# OWNER_EMAIL=tu@correo.com
+
+# ── Protege POST /kb/reindex (necesario) ─────────────────────
+KB_REINDEX_TOKEN=local-reindex-token
+
+# ── Canales (opcionales para probar) ─────────────────────────
+# Telegram: crea un bot con @BotFather y pega el token aquí.
+# TELEGRAM_BOT_TOKEN=123456:ABC-DEF...
+# Avisos al dueño por Telegram (opcional):
+# OWNER_TELEGRAM_CHAT_ID=123456789
+
+# ── Zernio (multicanal unificado: IG/FB/X/TG/WhatsApp…) ───────
+# ZERNIO_API_KEY=zkey_xxxx
+# ZERNIO_WEBHOOK_SECRET=xxxx
+# Auto-DM por keyword en comentarios (comentario → DM con botón):
+# ZERNIO_AUTO_DM_KEYWORD=claude
+# ZERNIO_AUTO_DM_MESSAGE=¡Hola! Aquí tienes el recurso:
+# ZERNIO_AUTO_DM_BUTTON_LABEL=Abrir recurso
+# ZERNIO_AUTO_DM_BUTTON_URL=https://tusitio.com/recurso
+
+# ── Vars locales (opcionales, también van en wrangler.toml) ──
+# BOT_NICHE=generico
+# CALCOM_API_KEY=cal_xxxx

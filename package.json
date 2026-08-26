@@ -1,0 +1,41 @@
+{
+  "name": "kooni",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Kooni — asistente de IA multicanal (WhatsApp, Instagram, Messenger, Telegram) self-hosted en tu Cloudflare. Derivado de Forja (MIT, © Horizontes IA).",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "version:write": "node -e \"require('fs').writeFileSync('.bot-version', require('./package.json').version + '\\n')\"",
+    "deploy-check": "tsx scripts/deploy-check.ts",
+    "predeploy": "pnpm deploy-check && pnpm version:write",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "db:apply": "wrangler d1 execute kooni_db --file=src/db/schema.sql",
+    "db:apply:remote": "wrangler d1 execute kooni_db --file=src/db/schema.sql --remote",
+    "kb:reindex": "tsx scripts/generate-fixtures.ts",
+    "eval": "tsx scripts/eval-bot-live.ts"
+  },
+  "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.0",
+    "@ai-sdk/openai": "^3.0.68",
+    "@ai-sdk/xai": "^3.0.106",
+    "@anthropic-ai/sdk": "^0.90.0",
+    "agents": "^0.1.0",
+    "ai": "^6.0.0",
+    "hono": "^4.10.0",
+    "resend": "^6.12.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260531.1",
+    "@types/node": "^25.9.1",
+    "miniflare": "^4.20260526.0",
+    "tsx": "^4.22.3",
+    "typescript": "^5",
+    "vitest": "^4.1.7",
+    "wrangler": "^4.125.0"
+  }
+}

@@ -1,0 +1,10 @@
+# pnpm 11: config de dependencias del proyecto Kooni.
+# (En pnpm ≥11 las opciones de package.json "pnpm.*" ya no se leen; viven aquí.)
+allowBuilds:
+  bufferutil: true
+  core-js-pure: true
+  esbuild: true
+  keccak: true
+  sharp: true
+  utf-8-validate: true
+  workerd: true
