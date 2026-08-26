@@ -12,13 +12,20 @@
 // Pro se activa con un código local en el panel (ver docs del proyecto).
 import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
-import { mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, chmodSync } from "node:fs";
+import { mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, chmodSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
 
 const REPO = process.env.KOONI_REPO || "iamnocodeveloper/kooni-bot";
 const BRANCH = process.env.KOONI_BRANCH || "main";
 const TARBALL = `https://codeload.github.com/${REPO}/tar.gz/refs/heads/${BRANCH}`;
+
+// El tar de Windows (MSYS) confunde las rutas C:\... con host remoto. Normaliza
+// a rutas POSIX (/c/...) para que tar las entienda.
+function posixPath(p) {
+  if (process.platform !== "win32") return p;
+  return p.replace(/\\/g, "/").replace(/^([A-Za-z]):\//, "/$1/");
+}
 
 const LANG = process.env.KOONI_LANG === "en" ? "en" : "es";
 const I = {
@@ -78,20 +85,44 @@ async function download(url, dest) {
 
 function extractFresh(tgz, dir) {
   mkdirSync(dir, { recursive: true });
-  execFileSync("tar", ["-xzf", tgz, "-C", dir, "--strip-components=1"]);
+  // El tarball de GitHub trae una carpeta raíz (kooni-bot-main/). Extraemos a
+  // una carpeta temporal y movemos el contenido (más robusto en Windows que
+  // --strip-components con el tar nativo).
+  const tmp = join(dir, ".kooni-extract");
+  mkdirSync(tmp, { recursive: true });
+  execFileSync("tar", ["-xzf", posixPath(tgz), "-C", posixPath(tmp)]);
+  const root = readdirSync(tmp)[0];
+  const src = join(tmp, root);
+  const entries = readdirSync(src);
+  for (const e of entries) {
+    const from = join(src, e);
+    const to = join(dir, e);
+    try { rmSync(to, { recursive: true, force: true }); } catch {}
+    // moveSync manual: rename falla entre unidades en Windows, copiamos.
+    execFileSync("cp", ["-r", from, dir]);
+  }
+  rmSync(tmp, { recursive: true, force: true });
   rmSync(tgz, { force: true });
   writeFileSync(join(dir, ".kooni-version"), "cli-0.1.0");
 }
 
 function extractOver(tgz, dir) {
   // Actualización: NO pisar la config del miembro ni los datos.
-  execFileSync("tar", [
-    "-xzf", tgz, "-C", dir, "--strip-components=1",
-    "--exclude=./member/*.local.ts", "--exclude=./member/kb",
-    "--exclude=./wrangler.toml", "--exclude=./.dev.vars", "--exclude=./.dev.vars.*",
-    "--exclude=./.env", "--exclude=./.env.*",
-    "--exclude=./.bot-state.json", "--exclude=./.bot-setup.json",
-  ]);
+  const tmp = join(dir, ".kooni-extract");
+  mkdirSync(tmp, { recursive: true });
+  execFileSync("tar", ["-xzf", tgz, "-C", tmp]);
+  const root = readdirSync(tmp)[0];
+  const src = join(tmp, root);
+  const EXCLUDE = ["member", "wrangler.toml", ".dev.vars", ".dev.vars.example", ".dev.vars.local", ".env", ".env.example", ".bot-state.json", ".bot-setup.json", ".git", ".kooni-extract"];
+  const entries = readdirSync(src);
+  for (const e of entries) {
+    if (EXCLUDE.includes(e)) continue;
+    const from = join(src, e);
+    const to = join(dir, e);
+    try { rmSync(to, { recursive: true, force: true }); } catch {}
+    execFileSync("cp", ["-r", from, dir]);
+  }
+  rmSync(tmp, { recursive: true, force: true });
   rmSync(tgz, { force: true });
   writeFileSync(join(dir, ".kooni-version"), "cli-0.1.0");
 }

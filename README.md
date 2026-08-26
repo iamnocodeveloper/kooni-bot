@@ -46,7 +46,23 @@ en una tarde — sin saber programar. Vive en tu cuenta, con tu llave de IA, y
 
 ## 🚀 Instalar en ~15 minutos
 
-Kooni se despliega directo (sin CLI externo):
+**La forma más rápida (con el CLI):**
+
+```bash
+npx kooni-bot init
+```
+
+Descarga el template, te hace unas preguntas sobre tu negocio y despliega tu bot
+en TU cuenta de Cloudflare. Al terminar tienes tu dashboard en
+`https://<slug>.workers.dev/admin`.
+
+Actualizaciones sin perder datos:
+
+```bash
+npx kooni-bot update
+```
+
+**O despliega directo (sin CLI):**
 
 ```bash
 git clone <tu-repo-kooni> mi-bot
