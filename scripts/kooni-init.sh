@@ -2,14 +2,14 @@
 # =============================================================================
 # KOONI — asistente de configuración e instalación
 # -----------------------------------------------------------------------------
-# Como el `npx forjabot init` de Forja, pero para Kooni:
+# Como el `npx kooni-bot init`:
 #   1. TE PREGUNTA la configuración (una pregunta a la vez, en español):
 #      • slug y nombre del bot   • negocio   • idioma   • tier (free/pro)
 #      • proveedor de IA (Claude/GPT/Grok/gateway) + TU API key (oculta)
 #      • contraseña del panel    • datos del negocio (horario, servicios…)
 #   2. ESCRIBE las variables por ti: .dev.vars (secrets), wrangler.toml
 #      ([vars] + nombre del worker) y member/config.local.ts (negocio).
-#   3. SIGUE el proceso de integración (igual que Forja, Fase 1):
+#   3. SIGUE el proceso de integración:
 #      local  → corre la prueba automática (scripts/test-local.sh)
 #      deploy → Cloudflare: login, recursos (D1/Vectorize/R2), secrets,
 #               migraciones, deploy y te entrega la URL del panel.
@@ -56,7 +56,7 @@ warn() { echo "  ⚠️  $1"; }
 echo ""
 echo "══════════════════════════════════════════════════════"
 echo "  🔨 KOONI · asistente de configuración"
-echo "  (como Forja: te pregunta, tú contestas, él escribe)"
+echo "  (te pregunta, tú contestas, él escribe)"
 echo "══════════════════════════════════════════════════════"
 
 # ── 1. CONFIGURACIÓN ─────────────────────────────────────────────────────────
@@ -203,7 +203,7 @@ case "$MODE" in
   config)
     info "Configuración lista. Siguiente: bash scripts/test-local.sh (probar local) o bash scripts/kooni-init.sh deploy";;
   deploy)
-    info "3. Despliegue en Cloudflare (como Forja Fase 1)"
+    info "3. Despliegue en Cloudflare"
     confirm "¿Desplegar en TU cuenta de Cloudflare ahora?" || { warn "puedes hacerlo luego con: bash scripts/kooni-init.sh deploy"; exit 0; }
 
     echo "  → Abre el navegador para autorizar Cloudflare (wrangler login)..."

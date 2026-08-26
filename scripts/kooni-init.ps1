@@ -1,7 +1,7 @@
 ﻿# =============================================================================
-# KOONI — instalador interactivo (PowerShell nativo, como el forjabot de Forja)
+# KOONI — instalador interactivo (PowerShell nativo)
 # -----------------------------------------------------------------------------
-# Flujo guiado por Forja, adaptado a Kooni:
+# Flujo guiado del instalador:
 #
 #   PASO 0 · El plan (qué va a pasar y cuántos pasos faltan)
 #   PASO 1 · Configuración  — te pregunta todo y escribe las variables
@@ -70,10 +70,10 @@ $NPX = Find-Exe "npx"
 
 Write-Host ""
 Write-Host "══════════════════════════════════════════════════════"
-Write-Host "  🔨 KOONI · instalador (como el de Forja)"
+Write-Host "  🔨 KOONI · instalador"
 Write-Host "══════════════════════════════════════════════════════"
 
-# ── PASO 0 · EL PLAN (como Forja: primero el mapa, después el trabajo) ───────
+# ── PASO 0 · EL PLAN (primero el mapa, después el trabajo) ───────
 if ($Mode -ne "config" -and -not $Silent) {
   Step 0 6 "El plan (30 segundos)"
   Write-Host "  • Tu bot va a vivir en TU cuenta de Cloudflare (gratis para empezar)."
