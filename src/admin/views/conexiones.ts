@@ -7,6 +7,7 @@ import type { Env } from "../../env";
 import { layout } from "./layout";
 import type { ZernioAccount } from "../../channels/zernioAccounts";
 import { zernioPlatformIcon, zernioPlatformLabel } from "../../channels/zernioAccounts";
+import type { ZernioCredentials } from "../../channels/zernioCredentials";
 
 interface ChannelStatus {
   id: string;
@@ -24,7 +25,7 @@ interface ChannelStatus {
   howTo: string;
 }
 
-function channelStatuses(env: Env): ChannelStatus[] {
+function channelStatuses(env: Env, zernioCreds: ZernioCredentials): ChannelStatus[] {
   const has = (v?: string) => Boolean(v && v.trim() !== "");
 
   const telegramMissing = [!has(env.TELEGRAM_BOT_TOKEN) && "TELEGRAM_BOT_TOKEN"].filter(
@@ -44,8 +45,8 @@ function channelStatuses(env: Env): ChannelStatus[] {
     Boolean,
   ) as string[];
   const zernioMissing = [
-    !has(env.ZERNIO_API_KEY) && "ZERNIO_API_KEY",
-    !has(env.ZERNIO_WEBHOOK_SECRET) && "ZERNIO_WEBHOOK_SECRET",
+    !has(zernioCreds.apiKey) && "ZERNIO_API_KEY",
+    !has(zernioCreds.webhookSecret) && "ZERNIO_WEBHOOK_SECRET",
   ].filter(Boolean) as string[];
   const whatsappCloudMissing = [
     !has(env.WHATSAPP_PHONE_NUMBER_ID) && "WHATSAPP_PHONE_NUMBER_ID",
@@ -119,7 +120,7 @@ function channelStatuses(env: Env): ChannelStatus[] {
       missing: zernioMissing,
       webhookPath: "/webhooks/zernio",
       securityNote:
-        zernioMissing.length === 0 && !has(env.ZERNIO_WEBHOOK_SECRET)
+        zernioMissing.length === 0 && !has(zernioCreds.webhookSecret)
           ? "Sin ZERNIO_WEBHOOK_SECRET el webhook acepta todo (fail-open). Recomendado: ponlo para validar la firma."
           : undefined,
       howTo: "zernio.com → crea tu cuenta, conecta tus redes con OAuth de un clic, copia tu API key como secret y registra el webhook de abajo (eventos message.received + comment.received).",
@@ -139,10 +140,43 @@ export async function renderConexiones(
   pausedChannels: string[] = [],
   zernioAccounts: ZernioAccount[] = [],
   rateUsage: Record<string, { used: number; windowStart: number }> = {},
+  opts: { zernioCreds?: ZernioCredentials; saved?: boolean; error?: string } = {},
 ): Promise<string> {
-  const channels = channelStatuses(env);
+  const zernioCreds = opts.zernioCreds ?? {
+    apiKey: env.ZERNIO_API_KEY,
+    webhookSecret: env.ZERNIO_WEBHOOK_SECRET,
+  };
+  const channels = channelStatuses(env, zernioCreds);
   const connected = channels.filter((ch) => ch.ok).length;
   const base = (env.DASHBOARD_BASE_URL ?? "").replace(/\/$/, "");
+
+  // Formulario de conexión de Zernio: pegar API key + webhook secret y listo.
+  // Se guarda en D1 (settings) y el canal se pone verde SIN redeploy.
+  const zernioForm = (ch: ChannelStatus) => {
+    if (ch.id !== "zernio") return "";
+    const keyTail = (zernioCreds.apiKey ?? "").trim().slice(-4);
+    const hasSecret = (zernioCreds.webhookSecret ?? "").trim() !== "";
+    return `
+      <form method="POST" action="/admin/conexiones/zernio" style="display:flex;flex-direction:column;gap:10px;margin-top:4px">
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <label class="font-display font-semibold text-[12.5px] text-cream">API key de Zernio</label>
+          <input type="password" name="zernio_api_key" value="" autocomplete="off"
+                 placeholder="${keyTail ? `hay una key guardada (…${keyTail})` : "Pega tu API key de zernio.com"}"
+                 style="background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:10px 12px;font-size:12.5px;outline:none">
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <label class="font-display font-semibold text-[12.5px] text-cream">Webhook secret (recomendado)</label>
+          <input type="password" name="zernio_webhook_secret" value="" autocomplete="off"
+                 placeholder="${hasSecret ? "secreto guardado — escribe para reemplazar" : "opcional: firma HMAC de los webhooks"}"
+                 style="background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:10px 12px;font-size:12.5px;outline:none">
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <button type="submit" class="text-[12px] font-display font-semibold"
+                  style="border:1px solid var(--line);color:var(--cream);padding:9px 14px;cursor:pointer;background:none">${ch.ok ? "Actualizar conexión" : "Conectar Zernio"}</button>
+          ${ch.ok ? `<label class="text-dim text-[11.5px]" style="display:flex;align-items:center;gap:7px;cursor:pointer"><input type="checkbox" name="clear" value="1"> Quitar conexión</label>` : ""}
+        </div>
+      </form>`;
+  };
 
   const cards = channels
     .map((ch) => {
@@ -244,17 +278,27 @@ export async function renderConexiones(
           ${missing}
           ${security}
           ${webhook}
+          ${zernioForm(ch)}
           ${zernioBlock}
           ${pauseBtn}
         </div>`;
     })
     .join("");
 
+  const savedBanner = opts.saved
+    ? `<div style="border:1px solid var(--ok);background:rgba(127,183,126,.1);color:var(--ok);padding:10px 14px;font-size:12.5px;font-weight:600">✓ Zernio guardado. Pega la URL del webhook en zernio.com para terminar.</div>`
+    : "";
+  const errorBanner = opts.error
+    ? `<div style="border:1px solid var(--danger,#e0654d);background:rgba(224,101,77,.1);color:var(--danger,#e0654d);padding:10px 14px;font-size:12.5px;font-weight:600">✕ ${esc(opts.error)}</div>`
+    : "";
+
   const body = `
     <div style="display:flex;flex-direction:column;gap:18px">
+      ${savedBanner}
+      ${errorBanner}
       <div style="display:flex;flex-direction:column;gap:2px">
         <h2 class="font-display font-semibold text-[15px] text-cream">Canales conectados: ${connected} de ${channels.length}</h2>
-        <p class="text-muted text-[12.5px]">Conecta los canales donde están tus clientes. Cuando un canal queda listo, su tarjeta se pone verde. Los secrets se configuran con <span class="font-mono">wrangler secret put NOMBRE</span> (o pídeselo a Claude Code).</p>
+        <p class="text-muted text-[12.5px]">Conecta los canales donde están tus clientes. Cuando un canal queda listo, su tarjeta se pone verde. Zernio se conecta pegando su API key aquí mismo; los demás canales se configuran con <span class="font-mono">wrangler secret put NOMBRE</span>.</p>
       </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px">
         ${cards}
@@ -265,7 +309,7 @@ export async function renderConexiones(
 }
 
 /** Resumen corto para el badge de salud del Resumen. */
-export function connectionsSummary(env: Env): { connected: number; total: number } {
-  const channels = channelStatuses(env);
+export function connectionsSummary(env: Env, zernioCreds: ZernioCredentials): { connected: number; total: number } {
+  const channels = channelStatuses(env, zernioCreds);
   return { connected: channels.filter((ch) => ch.ok).length, total: channels.length };
 }

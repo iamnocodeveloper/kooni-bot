@@ -34,6 +34,10 @@ export const SETTING_KEYS = {
   menuButtons: "menu_buttons", // JSON: botones del menú que se envían al saludo
   resourceLibrary: "resource_library", // JSON: biblioteca de recursos (imagen/audio/botones)
   allowMultimedia: "allow_multimedia", // "0" | "1": permite que el bot envíe imagen/audio/botones
+  // Zernio (multicanal): API key + webhook secret editables desde el panel.
+  // Viven en settings para conectar el canal SIN `wrangler secret put` ni redeploy.
+  zernioApiKey: "zernio_api_key",
+  zernioWebhookSecret: "zernio_webhook_secret",
 } as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[keyof typeof SETTING_KEYS];

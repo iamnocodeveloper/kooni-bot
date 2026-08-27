@@ -1,4 +1,5 @@
 import type { Env } from "../env";
+import { resolveZernioCredentials } from "./zernioCredentials";
 
 /** Cuenta social conectada en Zernio (respuesta de GET /v1/accounts). */
 export interface ZernioAccount {
@@ -22,7 +23,7 @@ const DEFAULT_BASE = "https://zernio.com/api";
  * la API falla, devuelve [] (la vista muestra el estado sin cuentas).
  */
 export async function listZernioAccounts(env: Env): Promise<ZernioAccount[]> {
-  const apiKey = env.ZERNIO_API_KEY;
+  const { apiKey } = await resolveZernioCredentials(env);
   if (!apiKey) return [];
   const base = env.ZERNIO_API_BASE_URL ?? DEFAULT_BASE;
   try {

@@ -69,6 +69,7 @@ function parseRuleForm(form: FormData) {
   return { kind, platform, keywords, message, buttonLabel, buttonUrl, replyToComment, aiReplyPrompt, wholeWordMatch, requireFollow, followPromptMessage, followButtonLabel };
 }
 import { renderConexiones } from "./views/conexiones";
+import { resolveZernioCredentials } from "../channels/zernioCredentials";
 import { renderCampanas } from "./views/campanas";
 import { sendCampaign, createHandoffTemplate, contentApprovalStatus } from "../campaigns";
 import { Db } from "../db/client";
@@ -425,6 +426,7 @@ adminApp.get("/conexiones", async (c) => {
   }
   const { listZernioAccounts } = await import("../channels/zernioAccounts");
   const zernioAccounts = await listZernioAccounts(c.env);
+  const zernioCreds = await resolveZernioCredentials(c.env);
 
   // Uso de rate limit por cuenta (DM/hora) para mostrar en la card Zernio.
   const rateUsage: Record<string, { used: number; windowStart: number }> = {};
@@ -438,7 +440,60 @@ adminApp.get("/conexiones", async (c) => {
   } catch {
     // sin rate usage
   }
-  return c.html(await renderConexiones(c.env, pausedChannels, zernioAccounts, rateUsage));
+  return c.html(await renderConexiones(c.env, pausedChannels, zernioAccounts, rateUsage, {
+    zernioCreds,
+    saved: c.req.query("zernio") === "saved",
+    error: c.req.query("zernio") === "error" ? (c.req.query("msg") ?? "No se pudo validar la API key.") : undefined,
+  }));
+});
+
+// Conectar Zernio desde el panel: guarda API key + webhook secret en D1 (settings)
+// para que el canal quede activo sin `wrangler secret put` ni redeploy. Si viene
+// una key nueva, se valida con GET /v1/accounts antes de guardarla.
+adminApp.post("/conexiones/zernio", async (c) => {
+  const form = await c.req.formData();
+  const repo = new SettingsRepo(new Db(c.env.DB));
+
+  if (String(form.get("clear") ?? "") === "1") {
+    await repo.set(SETTING_KEYS.zernioApiKey, "");
+    await repo.set(SETTING_KEYS.zernioWebhookSecret, "");
+    return c.redirect("/admin/conexiones?zernio=saved");
+  }
+
+  const apiKey = String(form.get("zernio_api_key") ?? "").trim();
+  const webhookSecret = String(form.get("zernio_webhook_secret") ?? "").trim();
+
+  // Si NO escribieron una key nueva (campo vacío), se conserva la que ya existe.
+  const existing = await repo.get(SETTING_KEYS.zernioApiKey);
+  const keyToSave = apiKey || existing || "";
+
+  if (keyToSave) {
+    // Validación directa contra la API de Zernio (GET /v1/accounts). Una key
+    // inválida devuelve 4xx/5xx; una válida devuelve 2xx (aunque no haya cuentas).
+    const base = c.env.ZERNIO_API_BASE_URL ?? "https://zernio.com/api";
+    let valid = false;
+    let status = 0;
+    try {
+      const res = await fetch(`${base}/v1/accounts`, {
+        headers: { Authorization: `Bearer ${keyToSave}` },
+        signal: AbortSignal.timeout(8000),
+      });
+      status = res.status;
+      valid = res.ok;
+    } catch {
+      return c.redirect(`/admin/conexiones?zernio=error&msg=${encodeURIComponent("No se pudo contactar Zernio para validar la API key.")}`);
+    }
+    if (!valid) {
+      return c.redirect(`/admin/conexiones?zernio=error&msg=${encodeURIComponent(`La API key no es válida (HTTP ${status}).`)}`);
+    }
+  }
+
+  await repo.set(SETTING_KEYS.zernioApiKey, keyToSave);
+  // El webhook secret solo se sobreescribe si escribieron algo.
+  if (webhookSecret) {
+    await repo.set(SETTING_KEYS.zernioWebhookSecret, webhookSecret);
+  }
+  return c.redirect("/admin/conexiones?zernio=saved");
 });
 
 // Licencia: activa Pro pegando un código KOONI-PRO-... (validación local HMAC).

@@ -1,7 +1,8 @@
 # KOONI — template de configuración para Cloudflare.
-# El instalador (scripts/kooni-init.sh / kooni-init.ps1) genera tu wrangler.toml
-# a partir de este archivo con tus valores (slug, IDs de D1/Vectorize, etc.).
-# NO edites este archivo directamente para tu bot: corre el instalador.
+# El instalador (npx kooni-bot init) genera tu wrangler.toml real a partir de
+# este archivo, estampando valores ÚNICOS por instalación: worker/D1/Vectorize
+# se namespacan con un uid de 6 caracteres para que dos bots en la MISMA cuenta
+# de Cloudflare NUNCA compartan datos. NO edites este archivo para tu bot.
 
 name = "kooni-bot-{{BOT_SLUG}}"
 main = "src/index.ts"

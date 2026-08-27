@@ -22,7 +22,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 
-const CLI_VERSION = "0.2.5";
+const CLI_VERSION = "0.2.6";
 
 const REPO = process.env.KOONI_REPO || "iamnocodeveloper/kooni-bot";
 const BRANCH = process.env.KOONI_BRANCH || "main";
@@ -33,6 +33,7 @@ const CHECKIN_URL = process.env.KOONI_CHECKIN_URL || "https://f5gacw7g.function2
 
 const CFG_DIR = join(homedir(), ".kooni");
 const CFG_FILE = join(CFG_DIR, "config.json");
+const INSTALLS_FILE = join(CFG_DIR, "installs.json");
 const MARKER = ".kooni-bot.json";
 const SKILL_DIR = join(homedir(), ".claude", "skills", "kooni");
 
@@ -250,6 +251,26 @@ function banner() {
 function loadCfg() { try { return JSON.parse(readFileSync(CFG_FILE, "utf8")); } catch { return {}; } }
 function saveCfg(o) { mkdirSync(CFG_DIR, { recursive: true }); writeFileSync(CFG_FILE, JSON.stringify(o, null, 2)); }
 
+// Registro local de instalaciones (~/.kooni/installs.json): cada instalación de
+// esta computadora queda identificada por su carpeta real + uid de Cloudflare.
+// Sirve para que `deploy`/`update`/`doctor` sepan cuál elegir si hay varias.
+function loadInstalls() {
+  try { return JSON.parse(readFileSync(INSTALLS_FILE, "utf8")); } catch { return []; }
+}
+function saveInstalls(list) {
+  mkdirSync(CFG_DIR, { recursive: true });
+  writeFileSync(INSTALLS_FILE, JSON.stringify(list, null, 2));
+}
+function recordInstall(dir, meta) {
+  const real = realpathSync(dir);
+  const list = loadInstalls().filter((x) => x && x.dir !== real);
+  list.push({ dir: real, ...meta, updatedAt: new Date().toISOString() });
+  saveInstalls(list);
+}
+function listInstalls() {
+  return loadInstalls().filter((x) => x && x.dir && existsSync(x.dir));
+}
+
 // ── flags / interacción ──────────────────────────────────────────────────────
 function parseFlags(args) {
   const flags = {};
@@ -461,10 +482,9 @@ function backupBeforeUpdate(dir, version) {
 }
 
 // ── markers / detección ──────────────────────────────────────────────────────
-function writeMarker(dir, { slug, version, lang }) {
-  writeFileSync(join(dir, MARKER), JSON.stringify({
-    slug, version, lang, updatedAt: new Date().toISOString(),
-  }, null, 2));
+function writeMarker(dir, meta) {
+  const prev = readMarker(dir) || {};
+  writeFileSync(join(dir, MARKER), JSON.stringify({ ...prev, ...meta, updatedAt: new Date().toISOString() }, null, 2));
 }
 
 function readMarker(dir) {
@@ -482,9 +502,28 @@ function isKooni(dir) {
   return existsSync(join(dir, "package.json")) && (existsSync(join(dir, "member")) || existsSync(join(dir, "src", "index.ts")));
 }
 
-function resolveBotDir(arg) {
+// Elige la instalación sobre la que actuar. `arg` es una ruta explícita (gana).
+// Si no hay ruta, prioriza el cwd; después el registro local `installs.json`;
+// y como último recurso escanea los hijos del cwd. Devuelve la ruta o null.
+async function resolveBotDir(arg, rl) {
   if (arg && isKooni(arg)) return arg;
   if (isKooni(process.cwd())) return process.cwd();
+
+  const registered = listInstalls();
+  if (registered.length === 1) return registered[0].dir;
+  if (registered.length > 1) {
+    if (!interactive()) {
+      console.log(C.yellow("\n  " + m("Hay varias instalaciones de Kooni. Pasa la carpeta explícita:", "Multiple Kooni installs found. Pass an explicit folder:")));
+      registered.forEach((x) => console.log("    " + C.cyan(`npx kooni-bot <comando> "${x.dir}"`)));
+      process.exit(1);
+    }
+    const idx = await select(rl, m("¿Cuál instalación?", "Which install?"), registered.map((x) => ({
+      key: x.dir,
+      label: `${x.slug || basename(x.dir)} · ${x.dir}`,
+    })));
+    return registered[idx]?.dir || null;
+  }
+
   for (const e of readdirSync(process.cwd())) {
     try {
       const p = join(process.cwd(), e);
@@ -559,7 +598,7 @@ function sanitizeSlug(s) {
   return String(s || "mi-negocio").toLowerCase().replace(/ /g, "-").replace(/[^a-z0-9-]/g, "").replace(/-+/g, "-").replace(/^-|-$/g, "") || "mi-negocio";
 }
 
-function stampWrangler(dir, answers) {
+function stampWrangler(dir, answers, botUid) {
   const wt = join(dir, "wrangler.toml");
   const example = join(dir, "wrangler.toml.example");
   // El template distribuye wrangler.toml.example; init genera el wrangler.toml real.
@@ -569,15 +608,21 @@ function stampWrangler(dir, answers) {
   if (!existsSync(wt)) return null;
   let s = readFileSync(wt, "utf8");
   const slug = answers.slug;
-  // Nombres canónicos del proyecto (coinciden con `pnpm db:apply:remote`, que
-  // apunta a `kooni_db`, y con la instalación probada del template).
-  const dbName = "kooni_db";
-  const kbName = "kooni_kb";
+  // Identidad ÚNICA por instalación: cada bot genera su propio uid de 6 chars y
+  // lo usa en worker/D1/Vectorize. Así dos instalaciones en la MISMA cuenta de
+  // Cloudflare nunca comparten datos. Si el wrangler.toml ya trae un uid (reinstall
+  // en la misma carpeta), se reutiliza.
+  const existingUid = (s.match(/name\s*=\s*"kooni-bot-.+-([a-f0-9]{6})"/) || [])[1];
+  const uid = existingUid || botUid || randomUUID().replace(/-/g, "").slice(0, 6);
+  const resId = slug.replace(/-/g, "_");
+  const dbName = `kooni_${resId}_${uid}_db`;
+  const kbName = `kooni_${resId}_${uid}_kb`;
+  const workerName = `kooni-bot-${slug}-${uid}`;
   const R = REGIONS[answers.lang] || REGIONS["es-MX"];
 
   const set = (re, val) => { s = s.replace(re, val); };
 
-  set(/^name\s*=\s*"[^"]*"/m, `name = "kooni-bot-${slug}"`);
+  set(/^name\s*=\s*"[^"]*"/m, `name = "${workerName}"`);
   set(/BOT_NAME\s*=\s*"[^"]*"/g, `BOT_NAME = "${String(answers.botName).replace(/"/g, "'")}"`);
   set(/BUSINESS_NAME\s*=\s*"[^"]*"/g, `BUSINESS_NAME = "${String(answers.businessName).replace(/"/g, "'")}"`);
   set(/BOT_LANGUAGE\s*=\s*"[^"]*"/g, `BOT_LANGUAGE = "${answers.lang}"`);
@@ -617,7 +662,7 @@ function stampWrangler(dir, answers) {
   }
 
   writeFileSync(wt, s);
-  return { dbName, kbName, tz: R.tz, currency: R.currency };
+  return { uid, dbName, kbName, workerName, tz: R.tz, currency: R.currency };
 }
 
 function renderMemberConfig(answers, meta) {
@@ -696,6 +741,7 @@ function collectAnswers(flags) {
   // `onboarding()` lo pregunte (interactivo) o use el default (no-interactivo).
   return {
     slug: flags.slug ? sanitizeSlug(flags.slug) : undefined,
+    uid: String(flags.uid || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 6) || undefined,
     businessName: String(flags.negocio || flags.nombre || flags.name || "").trim() || undefined,
     botName: String(flags["bot-name"] || "").trim() || undefined,
     lang: flags.lang ? normBotLang(flags.lang) : undefined,
@@ -821,10 +867,11 @@ async function deployBot(dir, { flags = {}, rl } = {}) {
   wrangler(dir, ["login"]);
   console.log("  " + C.green("✓") + " " + t().loginOk);
 
-  // recursos (nombres canónicos del proyecto: kooni_db / kooni_kb)
+  // recursos (nombres ÚNICOS por instalación, ya estampados en wrangler.toml)
   console.log("\n  " + C.dim(t().creatingResources));
-  const dbName = "kooni_db";
-  const kbName = "kooni_kb";
+  const wtRaw = readFileSync(wt, "utf8");
+  const dbName = (wtRaw.match(/database_name\s*=\s*"([^"]+)"/) || [])[1] || "kooni_db";
+  const kbName = (wtRaw.match(/index_name\s*=\s*"([^"]+)"/) || [])[1] || "kooni_kb";
 
   let d1Id = "";
   try {
@@ -904,7 +951,7 @@ async function deployBot(dir, { flags = {}, rl } = {}) {
   console.log("  " + C.green("✓") + " " + m("dependencias listas", "dependencies ready"));
 
   console.log("  " + C.dim(t().migrations));
-  runPnpm(dir, ["db:apply:remote"]);
+  wrangler(dir, ["d1", "execute", dbName, "--file=src/db/schema.sql", "--remote"]);
   console.log("  " + C.green("✓") + " " + m("migraciones aplicadas", "migrations applied"));
 
   console.log("  " + C.dim(t().deploying));
@@ -925,6 +972,8 @@ async function deployBot(dir, { flags = {}, rl } = {}) {
   } else {
     console.log(C.yellow("  ⚠ " + m("no se detectó la URL del worker — revisa la salida del deploy", "couldn't detect the worker URL — check the deploy output")));
   }
+  // Persistir identidad de Cloudflare en el marker (para update/doctor/selector).
+  writeMarker(dir, { databaseId: d1Id, workerUrl: url || undefined, dbName, kbName });
   return url;
 }
 
@@ -1079,7 +1128,7 @@ async function cmdInit(flags, rest) {
     const answers = collectAnswers(flags);
     await onboarding(rl, answers, basename(dir));
 
-    const meta = stampWrangler(dir, answers);
+    const meta = stampWrangler(dir, answers, answers.uid);
     const kbToken = "kooni-reindex-" + randomUUID().replace(/-/g, "").slice(0, 12);
     if (existsSync(join(dir, "member"))) {
       const region = REGIONS[answers.lang] || REGIONS["es-MX"];
@@ -1090,8 +1139,25 @@ async function cmdInit(flags, rest) {
       }));
     }
     writeDevVars(dir, answers, kbToken);
-    writeMarker(dir, { slug: answers.slug, version, lang: L });
+    writeMarker(dir, {
+      slug: answers.slug,
+      version,
+      lang: L,
+      uid: (meta && meta.uid) || answers.uid,
+      workerName: meta && meta.workerName,
+      dbName: meta && meta.dbName,
+      kbName: meta && meta.kbName,
+    });
     console.log("\n  " + C.green("✓") + " " + t().configDone);
+
+    // Registrar la instalación local para el selector multi-bot.
+    recordInstall(dir, {
+      slug: answers.slug,
+      uid: (meta && meta.uid) || answers.uid,
+      workerName: meta && meta.workerName,
+      dbName: meta && meta.dbName,
+      kbName: meta && meta.kbName,
+    });
 
     // deploy (si no lo deshabilitan)
     if (!flags["no-deploy"] && !process.env.KOONI_NO_DEPLOY) {
@@ -1122,11 +1188,11 @@ async function cmdDeploy(flags, rest) {
   banner();
   installAgentSkill(flags);
 
-  const dir = resolveBotDir(rest[0]);
-  if (!dir) { console.log("  " + C.red(t().needDir) + " " + (rest[0] || process.cwd()) + "\n"); process.exit(1); }
-
   const rl = createInterface({ input, output });
   try {
+    const dir = await resolveBotDir(rest[0], rl);
+    if (!dir) { console.log("  " + C.red(t().needDir) + " " + (rest[0] || process.cwd()) + "\n"); process.exit(1); }
+
     // provider para elegir el secret correcto
     let brainKey = "claude";
     try {
@@ -1151,7 +1217,13 @@ async function cmdUpdate(flags, rest) {
   banner();
   installAgentSkill(flags);
 
-  const dir = resolveBotDir(rest[0]);
+  const rl = createInterface({ input, output });
+  let dir;
+  try {
+    dir = await resolveBotDir(rest[0], rl);
+  } finally {
+    rl.close();
+  }
   if (!dir) { console.log("  " + C.red(t().needDir) + " " + (rest[0] || process.cwd()) + "\n"); process.exit(1); }
 
   const marker = readMarker(dir) || {};
@@ -1190,10 +1262,11 @@ async function cmdUpdate(flags, rest) {
   console.log("  " + C.dim(t().updPreserved));
   console.log("  " + C.dim(t().updReplaced));
 
-  // dependencias + migraciones + reindex + deploy
+  // dependencias + migraciones (por nombre ÚNICO de D1) + reindex + deploy
   console.log("\n  " + C.dim(t().installing));
   runPnpm(dir, ["install"]);
-  try { runPnpm(dir, ["db:apply:remote"]); } catch { /* best-effort */ }
+  const dbName = marker.dbName || (readFileSync(join(dir, "wrangler.toml"), "utf8").match(/database_name\s*=\s*"([^"]+)"/) || [])[1] || "kooni_db";
+  try { wrangler(dir, ["d1", "execute", dbName, "--file=src/db/schema.sql", "--remote"]); } catch { /* best-effort */ }
   try { runPnpm(dir, ["kb:reindex"]); } catch { /* best-effort */ }
   console.log("  " + C.dim(t().deploying));
   try { runPnpm(dir, ["run", "deploy"]); } catch { /* el deploy-check imprime el detalle */ }
@@ -1220,7 +1293,13 @@ async function cmdDoctor(flags, rest) {
   const warn = (s, h) => { console.log("  " + C.yellow("⚠") + " " + s); if (h) console.log("    " + C.dim(h)); };
   const bad = (s, h) => { console.log("  " + C.red("✗") + " " + s); if (h) console.log("    " + C.dim(h)); };
 
-  const dir = resolveBotDir(rest[0]);
+  const rl = createInterface({ input, output });
+  let dir;
+  try {
+    dir = await resolveBotDir(rest[0], rl);
+  } finally {
+    rl.close();
+  }
   if (!dir) { bad(t().needDir + " " + (rest[0] || process.cwd())); process.exit(1); }
   ok(m("Bot encontrado en ", "Bot found in ") + C.cyan(dir));
 

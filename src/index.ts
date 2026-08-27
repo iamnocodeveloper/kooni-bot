@@ -7,6 +7,7 @@ import { twilioAdapter } from "./channels/twilio";
 import { parseMetaEvents, verifyMetaSignature } from "./channels/meta";
 import { parseWhatsAppEvents, serveWhatsAppMedia } from "./channels/whatsapp";
 import { parseZernioEvents, verifyZernioSignature } from "./channels/zernio";
+import { resolveZernioCredentials } from "./channels/zernioCredentials";
 import { adminApp } from "./admin/routes";
 import { purgeOldMessages } from "./crons/purgeOldMessages";
 import { DAILY_CRON, isNightlyTick } from "./crons/schedule";
@@ -90,10 +91,8 @@ app.post("/webhooks/zernio", async (c) => {
   const raw = await c.req.text();
   const sig =
     c.req.header("x-zernio-signature") ?? c.req.header("x-late-signature");
-  if (
-    c.env.ZERNIO_WEBHOOK_SECRET &&
-    !(await verifyZernioSignature(raw, sig, c.env.ZERNIO_WEBHOOK_SECRET))
-  ) {
+  const { webhookSecret } = await resolveZernioCredentials(c.env);
+  if (webhookSecret && !(await verifyZernioSignature(raw, sig, webhookSecret))) {
     console.warn("zernio webhook rejected: firma inválida");
     return c.text("unauthorized", 401);
   }

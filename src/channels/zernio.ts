@@ -21,6 +21,7 @@
 import type { ChannelAdapter, IncomingMessage, OutgoingReply, ChannelId } from "./shared";
 import type { Env } from "../env";
 import { matchKeywords, renderUsername } from "../utils/keyword-matcher";
+import { resolveZernioCredentials } from "./zernioCredentials";
 
 const DEFAULT_BASE = "https://zernio.com/api";
 
@@ -202,7 +203,7 @@ async function sendCommentActions(
   commentText: string | undefined,
   env: Env,
 ): Promise<void> {
-  const apiKey = env.ZERNIO_API_KEY;
+  const { apiKey } = await resolveZernioCredentials(env);
   if (!apiKey) return;
   const base = env.ZERNIO_API_BASE_URL ?? DEFAULT_BASE;
   const headers = {
@@ -609,7 +610,7 @@ async function autoReplyOnDm(body: ZernioWebhookBody, env: Env): Promise<boolean
   const text = (m.text ?? "").trim();
   if (!text) return false;
 
-  const apiKey = env.ZERNIO_API_KEY;
+  const apiKey = (await resolveZernioCredentials(env)).apiKey;
   const base = env.ZERNIO_API_BASE_URL ?? DEFAULT_BASE;
   if (!apiKey) return false;
 
@@ -870,7 +871,7 @@ export const zernioAdapter: ChannelAdapter = {
   },
 
   async sendReply(reply: OutgoingReply, env: Env): Promise<void> {
-    const apiKey = env.ZERNIO_API_KEY;
+    const { apiKey } = await resolveZernioCredentials(env);
     if (!apiKey) throw new Error("ZERNIO_API_KEY not set");
     const base = env.ZERNIO_API_BASE_URL ?? DEFAULT_BASE;
     // channelUserId = "<accountId>:<conversationId>"
