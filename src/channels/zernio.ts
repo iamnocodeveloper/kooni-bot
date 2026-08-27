@@ -282,9 +282,13 @@ async function sendCommentActions(
     }
   }
 
-  let dmOk = false;
+  // Estados FINALES honestos para el historial: sent = se envió de verdad en
+  // este intento · skipped = dedup/ya enviado antes · failed = error real.
+  let dmSent = false;
+  let dmSkipped = false;
   let dmError: string | undefined;
-  let publicOk = false;
+  let publicSent = false;
+  let publicSkipped = false;
   let publicError: string | undefined;
 
   // ── Dedup SEPARADO por pierna (fix: no saltar la pública si el DM ya fue) ──
@@ -292,7 +296,7 @@ async function sendCommentActions(
   // CUALQUIER regla o intento previo), NO re-enviamos el DM, PERO sí intentamos
   // la respuesta pública si aún no se publicó (un intento previo pudo fallar a
   // mitad). El error 400 "ya se ha enviado una respuesta privada" de Instagram
-  // se trata como caso esperado (el DM ya fue) → dmOk=true para no marcarlo fail.
+  // se trata como caso esperado (el DM ya fue) → skipped para no marcarlo fail.
   let dmAlreadySent = false;
   let publicAlreadySent = false;
   try {
@@ -319,6 +323,7 @@ async function sendCommentActions(
         error: `Rate limit: la cuenta agotó su cupo de esta hora (${used} DM). Ventana: ${new Date(windowStart + 3600_000).toISOString()}`,
       });
       dmAlreadySent = true; // no reintentar DM; intentar pública igual
+      dmSkipped = true;
     }
 
     // Límite free de DMs automáticos / mes (solo si aún no se envió el DM).
@@ -339,6 +344,7 @@ async function sendCommentActions(
             error: `Límite gratis de respuestas automáticas alcanzado (${dmCheck.used}/${dmCheck.limit} este mes). Activa Pro para quitarlo.`,
           });
           dmAlreadySent = true;
+          dmSkipped = true;
         }
       } catch (e) {
         console.warn("[limits] chequeo de DMs mensuales falló — fail-open:", e);
@@ -364,7 +370,9 @@ async function sendCommentActions(
         payload: `followcheck:${matched.ruleId ?? ""}:${commentId}`,
       },
     ];
-    if (!dmAlreadySent) {
+    if (dmAlreadySent) {
+      dmSkipped = true;
+    } else {
       try {
         const res = await fetch(`${base}/v1/inbox/comments/${postId}/${commentId}/private-reply`, {
           method: "POST",
@@ -374,28 +382,28 @@ async function sendCommentActions(
         if (!res.ok) {
           const detail = await res.text().catch(() => "");
           // Instagram: "ya se ha enviado una respuesta privada" → el DM ya fue
-          // (intento previo). Tratarlo como enviado, no como fallo.
+          // (intento previo). Tratarlo como skipped, no como fallo.
           if (/respuesta privada|private reply|already|invalid for a private reply/i.test(detail)) {
-            dmOk = true;
-            console.warn(`[zernio] follow-gate DM ya enviado antes — se asume OK (${commentId})`);
+            dmSkipped = true;
+            console.warn(`[zernio] follow-gate DM ya enviado antes — se omite (${commentId})`);
           } else {
             dmError = `HTTP ${res.status} ${detail.slice(0, 200)}`;
             console.error(`zernio follow-gate DM falló: ${dmError}`);
           }
         } else {
-          dmOk = true;
+          dmSent = true;
           console.log(`[zernio] follow-gate DM enviado (link pendiente): ${matched.keywords.join(",")}`);
         }
       } catch (e) {
         dmError = String((e as Error)?.message ?? e);
         console.error("zernio follow-gate DM error:", e);
       }
-    } else {
-      dmOk = true; // ya enviado en un intento previo
     }
   } else {
     // DM normal: private-reply al autor del comentario.
-    if (!dmAlreadySent) {
+    if (dmAlreadySent) {
+      dmSkipped = true;
+    } else {
       try {
         const res = await fetch(`${base}/v1/inbox/comments/${postId}/${commentId}/private-reply`, {
           method: "POST",
@@ -405,24 +413,22 @@ async function sendCommentActions(
         if (!res.ok) {
           const detail = await res.text().catch(() => "");
           // Instagram: "ya se ha enviado una respuesta privada" → el DM ya fue
-          // (intento previo del webhook). Tratarlo como enviado.
+          // (intento previo del webhook). Tratarlo como skipped.
           if (/respuesta privada|private reply|already|invalid for a private reply/i.test(detail)) {
-            dmOk = true;
-            console.warn(`[zernio] DM ya enviado antes — se asume OK (${commentId})`);
+            dmSkipped = true;
+            console.warn(`[zernio] DM ya enviado antes — se omite (${commentId})`);
           } else {
             dmError = `HTTP ${res.status} ${detail.slice(0, 200)}`;
             console.error(`zernio DM falló: ${dmError}`);
           }
         } else {
-          dmOk = true;
+          dmSent = true;
           console.log(`[zernio] DM enviado por keyword: ${matched.keywords.join(",")}`);
         }
       } catch (e) {
         dmError = String((e as Error)?.message ?? e);
         console.error("zernio DM error:", e);
       }
-    } else {
-      dmOk = true; // ya enviado en un intento previo
     }
   }
 
@@ -437,16 +443,16 @@ async function sendCommentActions(
       });
       if (!res.ok) {
         const detail = await res.text().catch(() => "");
-        // "ya respondiste" / "already replied" → la pública ya fue; ok.
+        // "ya respondiste" / "already replied" → la pública ya fue; skipped.
         if (/ya respond|ya.*respuesta|already|duplicate/i.test(detail)) {
-          publicOk = true;
-          console.warn(`[zernio] reply público ya enviado antes — se asume OK (${commentId})`);
+          publicSkipped = true;
+          console.warn(`[zernio] reply público ya enviado antes — se omite (${commentId})`);
         } else {
           publicError = `HTTP ${res.status} ${detail.slice(0, 200)}`;
           console.error(`zernio reply público falló: ${publicError}`);
         }
       } else {
-        publicOk = true;
+        publicSent = true;
         console.log(`[zernio] respuesta pública enviada por keyword: ${matched.keywords.join(",")}`);
       }
     } catch (e) {
@@ -454,35 +460,51 @@ async function sendCommentActions(
       console.error("zernio reply público error:", e);
     }
   } else if (publicAlreadySent) {
-    publicOk = true; // ya publicada en un intento previo
+    publicSkipped = true; // ya publicada en un intento previo
   }
 
-  // Registrar el resultado: dedup (si el DM se envió), log de automatización.
+  // Registrar el resultado: dedup + log de automatización (estados honestos).
   try {
     const { Db } = await import("../db/client");
     const { DmLogsRepo } = await import("../db/dmLogs");
     const logs = new DmLogsRepo(new Db(env.DB));
-    if (dmOk || publicOk) {
+    if (dmSent || publicSent) {
       await logs.recordProcessedComment({
         commentId,
         ruleId: matched.ruleId ?? "",
-        status: dmOk ? "sent" : "failed",
+        status: "sent",
         matchedKeyword: matched.keywords.join(","),
-        dmSentAt: dmOk ? Date.now() : undefined,
-        publicReplySentAt: publicOk ? Date.now() : undefined,
+        dmSentAt: dmSent ? Date.now() : undefined,
+        publicReplySentAt: publicSent ? Date.now() : undefined,
         error: dmError ?? publicError,
       });
     }
-    await logs.log({
-      ruleId: matched.ruleId,
-      kind: publicReply ? "comment_dm" : "comment_reply",
-      platform: "instagram",
-      target: commentId,
-      username: commenterName ?? undefined,
-      message: dmMessage,
-      status: dmOk || publicOk ? "sent" : "failed",
-      error: dmError ?? publicError,
-    });
+    // Un log por pierna para que el historial no mienta: cada intento de DM y de
+    // respuesta pública queda con su propio estado (sent/skipped/failed).
+    if (dmSent || dmSkipped || dmError) {
+      await logs.log({
+        ruleId: matched.ruleId,
+        kind: "comment_dm",
+        platform: "instagram",
+        target: commentId,
+        username: commenterName ?? undefined,
+        message: dmMessage,
+        status: dmSent ? "sent" : dmError ? "failed" : "skipped",
+        error: dmError,
+      });
+    }
+    if (publicReply && (publicSent || publicSkipped || publicError)) {
+      await logs.log({
+        ruleId: matched.ruleId,
+        kind: "comment_reply",
+        platform: "instagram",
+        target: commentId,
+        username: commenterName ?? undefined,
+        message: publicReply,
+        status: publicSent ? "sent" : publicError ? "failed" : "skipped",
+        error: publicError,
+      });
+    }
 
     // Actualizar el comentario registrado (pestaña Comentarios): qué regla
     // disparó y si el DM / respuesta pública se enviaron.
@@ -491,40 +513,12 @@ async function sendCommentActions(
       await new CommentsRepo(new Db(env.DB)).upsert({
         id: commentId,
         ruleId: matched.ruleId,
-        dmSent: dmOk,
-        publicReplySent: publicOk,
+        dmSent,
+        publicReplySent: publicSent,
         publicReplyText: publicReply,
       });
     } catch (e) {
       console.warn("[zernio] no se pudo actualizar el comentario:", e);
-    }
-
-    // Guardar la interacción completa en Conversaciones: el DM automático
-    // enviado aparece como mensaje del agente en la conversación del cliente
-    // (canal zernio, id = cuenta:comentarista). Así el dueño ve la conversación
-    // completa aunque el DM salió por regla (no por el agente).
-    try {
-      const { ConversationsRepo } = await import("../db/conversations");
-      const { MessagesRepo } = await import("../db/messages");
-      const convs = new ConversationsRepo(new Db(env.DB));
-      const convId = commenterId
-        ? `${accountId}:comment:${commenterId}`
-        : `${accountId}:comment:${commentId}`;
-      const conv = await convs.getOrCreate("zernio", convId, commenterName ?? undefined);
-      await new MessagesRepo(new Db(env.DB)).append(
-        conv.id,
-        "user",
-        commentText ?? "(comentario)",
-      );
-      if (dmOk && dmMessage) {
-        await new MessagesRepo(new Db(env.DB)).append(conv.id, "assistant", dmMessage);
-      }
-      if (publicOk && publicReply) {
-        await new MessagesRepo(new Db(env.DB)).append(conv.id, "assistant", `[respuesta pública] ${publicReply}`);
-      }
-      await convs.touchLastMessage(conv.id);
-    } catch (e) {
-      console.warn("[zernio] no se pudo guardar la conversación del comentario:", e);
     }
   } catch (e) {
     console.warn("[zernio] no se pudo registrar el log:", e);
