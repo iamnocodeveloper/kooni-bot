@@ -95,20 +95,21 @@
 | I8 | **Publicar en npm**: `cd cli-kooni && npm login && npm publish`. | ⏳ Falta cuenta npm |
 | I9 | Pruebas internas: instalar limpio, límites, licencia, update sin pérdida. | ⏳ Pendiente |
 
-## J. Mini sistema de gestión de claves y membresías (InsForge, local) — NUEVO
+## J. Mini sistema de gestión de claves y membresías (InsForge, local) — ✅ IMPLEMENTADO
 
-> El dueño quiere gestionar usuarios de pago y membresías **visualmente, en modo local**,
-> usando **InsForge** (no publicar en un dominio). Es una app interna del dueño —
-> NO es parte del repo público.
+> App INTERNA del dueño para gestionar clientes de pago y códigos de licencia,
+> visual y local, con InsForge. La web (landing) va al cPanel del dueño; en
+> InsForge vive SOLO el sistema de licencias.
 
 | # | Tarea | Estado |
 |---|---|---|
-| J1 | Crear app InsForge (auth + DB) para el admin de pagos. | ⏳ Pendiente (esperando datos del dueño) |
-| J2 | Tablas: clientes, planes (lifetime/mensual), licencias emitidas, pagos. | ⏳ Pendiente |
-| J3 | Generador visual de códigos (botón → genera KOONI-PRO-... con la master key). | ⏳ Pendiente |
-| J4 | Registro de clientes (nombre, contacto, plan, expira, precio, pagado). | ⏳ Pendiente |
-| J5 | Recordatorio de renovaciones (mensuales) + historial. | ⏳ Pendiente |
-| J6 | Integración: la app guarda la master key y genera códigos con el mismo formato de `src/license.ts`. | ⏳ Pendiente |
+| J1 | Proyecto InsForge `kooni-licencias` creado (API base `f5gacw7g.us-east.insforge.app`). | ✅ |
+| J2 | Tablas: clientes, licencias, pagos, profiles + RLS solo-admin + trigger perfil. | ✅ Migración aplicada |
+| J3 | Super admin: joeldavidar@gmail.com (rol admin, email verificado, login probado). | ✅ |
+| J4 | Edge functions: auth-login, generar-licencia, listar-licencias, registrar-pago. | ✅ `f5gacw7g.function2.insforge.app` |
+| J5 | UI admin de licencias (generar código, listar, registrar pago). | ✅ `f5gacw7g.insforge.site` |
+| J6 | LICENSE_MASTER_KEY guardada como secret en InsForge (misma que en Cloudflare). | ✅ |
+| J7 | Prueba end-to-end: login → generar lifetime + mensual → listar. | ✅ |
 
 ---
 

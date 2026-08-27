@@ -17,7 +17,7 @@ import { monthIaCostUsd, applyBudgetGuard } from "./budget";
 import { CustomerFactsRepo } from "./db/facts";
 import { createModel } from "./llm/provider";
 import { costOfUsage } from "./pricing";
-import type { ChannelId } from "./channels/shared";
+import type { ChannelId, ReplyButton } from "./channels/shared";
 import { maskTelegramToken, unmaskTelegramToken } from "./telegramFiles";
 
 export interface SupportAgentState {
@@ -73,6 +73,19 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
       channelUserId: payload.channelUserId,
       conversationId: conv.id,
     });
+
+    // Registrar contacto (todos los que interactúan, separado de Leads).
+    try {
+      const { ContactsRepo } = await import("./db/contacts");
+      await new ContactsRepo(db).touch({
+        channel: payload.channel,
+        channelUserId: payload.channelUserId,
+        displayName: payload.displayName,
+        username: payload.displayName,
+      });
+    } catch (e) {
+      console.warn("[contacts] no se pudo registrar el contacto:", e);
+    }
 
     // ── Límite de contactos (free): si hay una conversación nueva y se llegó
     // al tope, se responde amablemente una vez y no se procesa. Fail-open.
@@ -297,9 +310,18 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
       getConversationId: () => convId,
     });
     const toolNames = Object.keys(tools);
-
     // Resolve effective config (D1 settings overlaid on env defaults).
     const cfg = await resolveAgentConfig(this.env, toolNames);
+
+    // Fase A: inyectar el canal real para enviarRecurso y respetar el toggle
+    // allow_multimedia (si está off, la tool se quita del registro).
+    if (this.state.channel) {
+      const { setRecursoCtx } = await import("./tools/index");
+      setRecursoCtx(this.state.channel as ChannelId, this.state.channelUserId);
+    }
+    if (cfg.allowMultimedia === false) {
+      delete tools.enviarRecurso;
+    }
 
     // Honor the dashboard's tool toggles: the prompt already only advertises
     // enabled tools (settings-loader), so the registry must match.
@@ -485,12 +507,21 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
     const chunks = chunkReply(assistantText, cfg.maxChunks);
     const channel = this.state.channel as ChannelId;
     const adapter = pickAdapter(channel);
+
+    // Fase A: adjuntar botones del menú (si están configurados y no vienen otros
+    // botones en la respuesta — ej. enviarRecurso ya los puso).
+    let buttons: ReplyButton[] | undefined;
+    if (cfg.menuButtons.length > 0 && cfg.allowMultimedia) {
+      buttons = cfg.menuButtons;
+    }
+
     await adapter.sendReply(
       {
         channel,
         channelUserId: this.state.channelUserId,
         chunks,
         interChunkDelayMs: cfg.interChunkDelayMs,
+        ...(buttons && buttons.length ? { buttons } : {}),
       },
       this.env,
     );

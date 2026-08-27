@@ -25,6 +25,8 @@ interface Item {
 interface Section {
   label: string;
   items: Item[];
+  /** Si true, la sección se renderiza como acordeón (colapsada salvo activa). */
+  collapsible?: boolean;
 }
 
 // Navigation model. The item ids + hrefs are load-bearing (views and tests
@@ -35,12 +37,14 @@ const NAV: Section[] = [
     items: [{ id: "overview", label: "Resumen", href: "/admin/overview", icon: "layout-dashboard" }],
   },
   {
-    label: "Bandeja",
+    label: "Inbox",
+    collapsible: true,
     items: [
       { id: "conversations", label: "Conversaciones", href: "/admin/conversations", icon: "messages-square" },
+      { id: "comentarios", label: "Comentarios", href: "/admin/comentarios", icon: "message-circle" },
+      { id: "contactos", label: "Contactos", href: "/admin/contactos", icon: "users" },
       { id: "leads", label: "Leads", href: "/admin/leads", icon: "user-plus" },
       { id: "tickets", label: "Tickets", href: "/admin/tickets", icon: "life-buoy" },
-      { id: "campanas", label: "Campañas", href: "/admin/campanas", icon: "megaphone" },
     ],
   },
   {
@@ -50,6 +54,7 @@ const NAV: Section[] = [
       { id: "automatizaciones", label: "Automatizaciones", href: "/admin/automatizaciones", icon: "zap" },
       { id: "kb", label: "Conocimiento", href: "/admin/kb", icon: "book-open" },
       { id: "mejoras", label: "Mejoras", href: "/admin/mejoras", icon: "sparkles" },
+      { id: "campanas", label: "Campañas", href: "/admin/campanas", icon: "megaphone" },
       { id: "conexiones", label: "Conexiones", href: "/admin/conexiones", icon: "plug-zap" },
       { id: "licencia", label: "Licencia", href: "/admin/licencia", icon: "key-round" },
       { id: "config", label: "Configuración", href: "/admin/config", icon: "sliders-horizontal" },
@@ -243,6 +248,19 @@ const GLOBAL_SCRIPT = `
       if (root) root.innerHTML = "";
     }
   });
+  // Acordeón del sidebar: secciones colapsables (Inbox).
+  document.querySelectorAll("button[data-acc]").forEach(function(btn){
+    btn.addEventListener("click", function(){
+      var label = btn.getAttribute("data-acc");
+      var body = document.querySelector('[data-acc-body="' + label + '"]');
+      if (!body) return;
+      var isOpen = body.style.display !== "none";
+      body.style.display = isOpen ? "none" : "block";
+      btn.setAttribute("aria-expanded", isOpen ? "false" : "true");
+      var icon = btn.querySelector("[data-lucide]");
+      if (icon) icon.style.transform = isOpen ? "" : "rotate(180deg)";
+    });
+  });
 </script>`;
 
 function navItem(item: Item, active: boolean): string {
@@ -290,6 +308,21 @@ function sidebar(activeTab: string, pro: boolean, niche: NichePack | null): stri
         return locked(i.id) ? navItemLocked(i) : navItem(i, i.id === activeTab);
       })
       .join("");
+
+    // Sección colapsable (acordeón): el label es un botón que despliega los
+    // items. Abierta si la sección tiene el tab activo o el usuario la abrió.
+    if (sec.collapsible) {
+      const open = hasActive ? "1" : "";
+      return `<div class="sb-sec" style="color:${labelColor}">
+        <button type="button" data-acc="${sec.label}" aria-expanded="${open ? "true" : "false"}"
+          style="all:unset;cursor:pointer;display:flex;align-items:center;justify-content:space-between;width:100%;padding:9px 10px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:${labelColor}">
+          ${sec.label}
+          <i data-lucide="chevron-down" width="14" height="14" style="transition:transform .18s;${open ? "transform:rotate(180deg)" : ""}"></i>
+        </button>
+        <div class="acc-body" data-acc-body="${sec.label}" style="display:${open ? "block" : "none"}">${items}</div>
+      </div>`;
+    }
+
     return `<div class="sb-sec" style="color:${labelColor}">${sec.label}</div>${items}`;
   }).join("");
 

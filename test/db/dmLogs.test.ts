@@ -13,6 +13,7 @@ function makeDb() {
         if (existing) {
           existing.status = params[2];
           existing.matched_keyword = params[3] ?? existing.matched_keyword;
+          // COALESCE: conserva el valor previo si el nuevo es null/undefined
           existing.dm_sent_at = params[4] ?? existing.dm_sent_at;
           existing.public_reply_sent_at = params[5] ?? existing.public_reply_sent_at;
           existing.error = params[6] ?? existing.error;
@@ -70,6 +71,10 @@ function makeDb() {
       if (/COUNT\(\*\) as n FROM processed_comments/.test(sql)) {
         const n = processed.filter((p) => p.comment_id === params[0] && p.status === "sent").length;
         return { n } as T;
+      }
+      if (/SELECT dm_sent_at, public_reply_sent_at FROM processed_comments/.test(sql)) {
+        const row = processed.find((p) => p.comment_id === params[0]);
+        return (row ? { dm_sent_at: row.dm_sent_at ?? null, public_reply_sent_at: row.public_reply_sent_at ?? null } : null) as T;
       }
       if (/SELECT count FROM dm_rate_limits/.test(sql)) {
         const [accountId, windowStart] = params as [string, number];
@@ -170,5 +175,33 @@ describe("DmLogsRepo — rate limit por cuenta", () => {
     expect(await repo.reserveDmSlot("acct_a", 2)).toBe(true);
     expect(await repo.reserveDmSlot("acct_a", 2)).toBe(false);
     expect(await repo.reserveDmSlot("acct_b", 2)).toBe(true); // b tiene su propio cupo
+  });
+});
+
+describe("DmLogsRepo — getProcessedComment (dedup por pierna)", () => {
+  it("devuelve null si el comentario no está registrado", async () => {
+    const repo = new DmLogsRepo(makeDb() as any);
+    expect(await repo.getProcessedComment("cm_100")).toBeNull();
+  });
+
+  it("devuelve dmSentAt/publicReplySentAt por separado (permite reintentar la pública)", async () => {
+    const db = makeDb();
+    const repo = new DmLogsRepo(db as any);
+    // El DM se envió, pero la pública NO (intento previo falló a mitad).
+    await repo.recordProcessedComment({ commentId: "cm_50", ruleId: "r1", status: "sent", dmSentAt: 1000 });
+    const rec = await repo.getProcessedComment("cm_50");
+    expect(rec?.dmSentAt).toBe(1000);
+    expect(rec?.publicReplySentAt).toBeUndefined(); // falta la pública → se reintenta
+  });
+
+  it("upsert registra la pública sin borrar el estado del DM", async () => {
+    const db = makeDb();
+    const repo = new DmLogsRepo(db as any);
+    await repo.recordProcessedComment({ commentId: "cm_51", ruleId: "r1", status: "sent", dmSentAt: 1000 });
+    // Reintento: solo se registra la pública (dmSentAt undefined → conserva el previo)
+    await repo.recordProcessedComment({ commentId: "cm_51", ruleId: "r1", status: "sent", publicReplySentAt: 3000 });
+    const rec = await repo.getProcessedComment("cm_51");
+    expect(rec?.dmSentAt).toBe(1000); // conservado
+    expect(rec?.publicReplySentAt).toBe(3000);
   });
 });

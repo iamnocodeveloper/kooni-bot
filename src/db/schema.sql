@@ -220,6 +220,7 @@ CREATE TABLE IF NOT EXISTS auto_rules (
   button_label TEXT,
   button_url TEXT,
   reply_to_comment TEXT,
+  ai_reply_prompt TEXT,
   is_active INTEGER NOT NULL DEFAULT 1,
   whole_word_match INTEGER NOT NULL DEFAULT 1,
   require_follow INTEGER NOT NULL DEFAULT 0,
@@ -300,3 +301,44 @@ CREATE TABLE IF NOT EXISTS dm_rate_limits (
   count INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (account_id, window_start)
 );
+
+-- Comentarios recibidos (igual que la pestaña "Comentarios" de Zernio).
+-- Se guarda CADA comment.received: texto, autor, post, y qué hizo la
+-- automatización (DM enviado, respuesta pública enviada).
+-- id: commentId de Zernio (único) · rule_id: regla que disparó (si matcheó)
+CREATE TABLE IF NOT EXISTS comments (
+  id TEXT PRIMARY KEY,
+  post_id TEXT,
+  platform_post_id TEXT,
+  text TEXT,
+  author_username TEXT,
+  author_name TEXT,
+  author_id TEXT,
+  platform TEXT DEFAULT 'instagram',
+  account_id TEXT,
+  rule_id TEXT,
+  dm_sent INTEGER NOT NULL DEFAULT 0,
+  public_reply_sent INTEGER NOT NULL DEFAULT 0,
+  public_reply_text TEXT,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_comments_created ON comments(created_at);
+CREATE INDEX IF NOT EXISTS idx_comments_platform ON comments(platform);
+CREATE INDEX IF NOT EXISTS idx_comments_dm ON comments(dm_sent);
+
+-- Contactos: TODOS los que interactúan (DM o comentario), separados de Leads.
+-- Un contacto se crea la primera vez que alguien escribe o comenta. El lead es
+-- el contacto calificado (captura de intención). Un contacto puede tener 0..1 lead.
+-- channel: telegram | zernio | whatsapp | ... · channel_user_id: id del usuario
+CREATE TABLE IF NOT EXISTS contacts (
+  id TEXT PRIMARY KEY,
+  channel TEXT NOT NULL,
+  channel_user_id TEXT NOT NULL,
+  display_name TEXT,
+  username TEXT,
+  last_interaction_at INTEGER NOT NULL,
+  first_seen_at INTEGER NOT NULL,
+  interaction_count INTEGER NOT NULL DEFAULT 1,
+  UNIQUE (channel, channel_user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_contacts_last ON contacts(last_interaction_at);

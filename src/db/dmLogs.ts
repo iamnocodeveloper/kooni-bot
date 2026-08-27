@@ -29,6 +29,16 @@ export class DmLogsRepo {
     return (row?.n ?? 0) > 0;
   }
 
+  /** Lee el registro completo de un comentario (timestamps de DM y pública). */
+  async getProcessedComment(commentId: string): Promise<{ dmSentAt?: number; publicReplySentAt?: number } | null> {
+    const row = await this.db.first<{ dm_sent_at: number | null; public_reply_sent_at: number | null }>(
+      "SELECT dm_sent_at, public_reply_sent_at FROM processed_comments WHERE comment_id = ?",
+      [commentId],
+    );
+    if (!row) return null;
+    return { dmSentAt: row.dm_sent_at ?? undefined, publicReplySentAt: row.public_reply_sent_at ?? undefined };
+  }
+
   /** Marca un comentario como procesado (sent | skipped | failed). */
   async recordProcessedComment(input: {
     commentId: string;

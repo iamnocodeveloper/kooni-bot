@@ -70,8 +70,52 @@ export const telegramAdapter: ChannelAdapter = {
   async sendReply(reply: OutgoingReply, env: Env): Promise<void> {
     const token = env.TELEGRAM_BOT_TOKEN;
     if (!token) throw new Error("TELEGRAM_BOT_TOKEN not set");
-    for (let i = 0; i < reply.chunks.length; i++) {
-      // typing indicator (best effort)
+
+    // Teclado inline (botones) — se adjunta al ÚLTIMO chunk de texto.
+    const replyMarkup =
+      reply.buttons && reply.buttons.length > 0
+        ? {
+            inline_keyboard: [
+              reply.buttons.map((b) => ({
+                text: b.text,
+                ...(b.url ? { url: b.url } : {}),
+                ...(b.callback ? { callback_data: b.callback } : {}),
+              })),
+            ],
+          }
+        : undefined;
+
+    // Adjunto multimedia (imagen/audio): se manda ANTES del texto (primer chunk
+    // como caption). Telegram los soporta; si la URL falla, se degrada a texto.
+    const first = reply.chunks[0] ?? "";
+    const rest = reply.chunks.slice(1);
+
+    if (reply.imageUrl) {
+      await fetch(`${TG_API}${token}/sendPhoto`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: reply.channelUserId,
+          photo: reply.imageUrl,
+          caption: first.slice(0, 1024) || undefined,
+          ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
+        }),
+      }).catch((e) => console.error("telegram sendPhoto error:", e));
+    } else if (reply.audioUrl) {
+      await fetch(`${TG_API}${token}/sendVoice`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: reply.channelUserId,
+          voice: reply.audioUrl,
+          caption: first.slice(0, 1024) || undefined,
+          ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
+        }),
+      }).catch((e) => console.error("telegram sendVoice error:", e));
+    }
+
+    const textChunks = reply.imageUrl || reply.audioUrl ? rest : reply.chunks;
+    for (let i = 0; i < textChunks.length; i++) {
       await fetch(`${TG_API}${token}/sendChatAction`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -79,10 +123,15 @@ export const telegramAdapter: ChannelAdapter = {
       }).catch(() => {});
       const delay = i === 0 ? 0 : reply.interChunkDelayMs ?? 1000;
       if (delay > 0) await new Promise((r) => setTimeout(r, delay));
+      const isLast = i === textChunks.length - 1 && !reply.imageUrl && !reply.audioUrl;
       await fetch(`${TG_API}${token}/sendMessage`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chat_id: reply.channelUserId, text: reply.chunks[i] }),
+        body: JSON.stringify({
+          chat_id: reply.channelUserId,
+          text: textChunks[i],
+          ...(isLast && replyMarkup ? { reply_markup: replyMarkup } : {}),
+        }),
       });
     }
   },

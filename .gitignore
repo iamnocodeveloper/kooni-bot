@@ -30,3 +30,27 @@ scripts/gen-license.ts
 # wrangler.toml real (contiene IDs de tu cuenta Cloudflare). El template público
 # es wrangler.toml.example; tu instalador genera el tuyo.
 wrangler.toml
+
+# Backend InsForge (sistema de licencias/instalaciones) — PRIVADO, no va al repo
+# público de Kooni. Vive en admin-pagos/ + el proyecto InsForge.
+AGENTS.md
+insforge.toml
+migrations/
+
+# Landing web (va a su propio repo web-kooni-bot)
+web/
+
+# InsForge & AI agent skills
+.insforge
+.agent
+.agents
+.augment
+.claude
+.cline
+.github/copilot*
+.kilocode
+.qoder
+.qwen
+.roo
+.trae
+.windsurf

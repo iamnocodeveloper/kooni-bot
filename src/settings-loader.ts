@@ -6,6 +6,7 @@ import { renderBusinessContext } from "./businessContext";
 import { getBufferMs } from "./config";
 import { getNiche } from "./niches";
 import type { LlmOverrides } from "./llm/provider";
+import type { ReplyButton } from "./channels/shared";
 
 export type ModelOverride = "auto" | "haiku" | "sonnet";
 
@@ -24,6 +25,10 @@ export interface AgentConfig {
   temperature?: number;
   /** Monthly AI budget (USD). undefined = no cap. */
   monthlyBudgetUsd?: number;
+  /** Fase A: si el dueño permitió que el bot envíe imagen/audio/botones. */
+  allowMultimedia: boolean;
+  /** Botones del menú (JSON parseado) que se adjuntan a cada respuesta. */
+  menuButtons: ReplyButton[];
   /** BYO-LLM del dashboard (proveedor / API key / modelo). */
   llm: LlmOverrides;
 }
@@ -151,6 +156,23 @@ export async function resolveAgentConfig(env: Env, toolNames: string[]): Promise
   const interChunkDelayMs = clamp(parseIntOr(get(SETTING_KEYS.interChunkDelayMs), 1000), 0, 5000);
   const modelOverride = normalizeModelOverride(get(SETTING_KEYS.modelOverride));
   const botPaused = get(SETTING_KEYS.botPaused) === "1";
+  const allowMultimedia = get(SETTING_KEYS.allowMultimedia) === "1";
+
+  // Botones del menú (JSON array): se adjuntan a cada respuesta si multimedia está activo.
+  let menuButtons: ReplyButton[] = [];
+  const menuRaw = get(SETTING_KEYS.menuButtons);
+  if (menuRaw && allowMultimedia) {
+    try {
+      const parsed = JSON.parse(menuRaw);
+      if (Array.isArray(parsed)) {
+        menuButtons = parsed
+          .map((b) => ({ text: String(b?.text ?? "").trim(), url: b?.url ? String(b.url) : undefined, callback: b?.callback ? String(b.callback) : undefined }))
+          .filter((b) => b.text.length > 0);
+      }
+    } catch (e) {
+      console.warn("[settings] menu_buttons JSON inválido:", e);
+    }
+  }
 
   // Canales pausados desde el panel (JSON array). Se chequean en ingest(): si
   // el canal del mensaje entrante está aquí, el bot no arma el alarm y queda
@@ -191,6 +213,8 @@ export async function resolveAgentConfig(env: Env, toolNames: string[]): Promise
     enabledToolNames,
     temperature,
     monthlyBudgetUsd,
+    allowMultimedia,
+    menuButtons,
     llm: llmOverridesFrom(settings),
   };
 }

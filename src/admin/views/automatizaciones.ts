@@ -46,6 +46,7 @@ function ruleCard(rule: AutoRule, clicks: number): string {
     `<span style="font-size:10px;letter-spacing:.12em;padding:3px 9px;border:1px solid ${accent ? "var(--accent)" : "var(--line)"};color:${accent ? "var(--accent2)" : "var(--muted)"};background:${accent ? "rgba(45,212,191,.07)" : "transparent"}">${esc(label)}</span>`;
 
   const actions = [
+    `<a href="/admin/automatizaciones/${esc(rule.id)}/edit" class="text-[11px]" style="border:1px solid var(--line);color:var(--accent2);padding:5px 10px;cursor:pointer;background:none;text-decoration:none">✏️ Editar</a>`,
     `<button type="submit" form="toggle-${esc(rule.id)}" class="text-[11px]" style="border:1px solid var(--line);color:var(--cream);padding:5px 10px;cursor:pointer;background:none">${rule.isActive ? "⏸ Pausar" : "▶ Activar"}</button>`,
     `<button type="submit" form="delete-${esc(rule.id)}" class="text-[11px]" style="border:1px solid var(--bad);color:var(--bad);padding:5px 10px;cursor:pointer;background:none">🗑 Eliminar</button>`,
   ].join("");
@@ -74,7 +75,7 @@ function ruleCard(rule: AutoRule, clicks: number): string {
     </div>`;
 }
 
-export async function renderAutomatizaciones(env: Env, saved?: boolean, error?: string): Promise<string> {
+export async function renderAutomatizaciones(env: Env, saved?: boolean, error?: string, editRule?: AutoRule | null): Promise<string> {
   const { Db } = await import("../../db/client");
   const repo = new AutoRulesRepo(new Db(env.DB));
   let rules: AutoRule[] = [];
@@ -134,7 +135,7 @@ export async function renderAutomatizaciones(env: Env, saved?: boolean, error?: 
       ${banner}
       <div style="display:flex;flex-direction:column;gap:12px">${cards}</div>
       <div class="bg-panel border" style="padding:18px 20px;display:flex;flex-direction:column;gap:14px">
-        <h3 class="font-display font-semibold text-[13.5px] text-cream">Nueva automatización</h3>
+        <h3 class="font-display font-semibold text-[13.5px] text-cream">${editRule ? `✏️ Editar automatización` : "Nueva automatización"}</h3>
         <div style="display:flex;flex-direction:column;gap:6px">
           <label class="font-display font-semibold text-[12px] text-cream" for="template_picker">O empezar de una plantilla</label>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -146,65 +147,71 @@ export async function renderAutomatizaciones(env: Env, saved?: boolean, error?: 
           </div>
           <span class="text-dim text-[10.5px]">Toca una plantilla y el formulario se rellena solo; ajusta keywords y mensajes a tu negocio.</span>
         </div>
-        <form method="POST" action="/admin/automatizaciones/save" id="auto-form" style="display:flex;flex-direction:column;gap:14px">
+        <form method="POST" action="${editRule ? `/admin/automatizaciones/${esc(editRule.id)}/save` : "/admin/automatizaciones/save"}" id="auto-form" style="display:flex;flex-direction:column;gap:14px">
+          ${editRule ? `<input type="hidden" name="editing_id" value="${esc(editRule.id)}">` : ""}
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px">
             <div style="display:flex;flex-direction:column;gap:5px">
               <label class="font-display font-semibold text-[12px] text-cream" for="kind">Tipo de flujo</label>
-              <select id="kind" name="kind" style="${INPUT_STYLE}">${kindOptions}</select>
+              <select id="kind" name="kind" style="${INPUT_STYLE}">${kindOptions.replace(`value="${esc(editRule?.kind ?? "")}"`, `value="${esc(editRule?.kind ?? "")}" selected`)}</select>
             </div>
             <div style="display:flex;flex-direction:column;gap:5px">
               <label class="font-display font-semibold text-[12px] text-cream" for="platform">Plataforma</label>
-              <select id="platform" name="platform" style="${INPUT_STYLE}">${platformOptions}</select>
+              <select id="platform" name="platform" style="${INPUT_STYLE}">${platformOptions.replace(`value="${esc(editRule?.platform ?? "")}"`, `value="${esc(editRule?.platform ?? "")}" selected`)}</select>
             </div>
           </div>
           <div style="display:flex;flex-direction:column;gap:5px">
             <label class="font-display font-semibold text-[12px] text-cream" for="keywords">Keywords (separadas por coma)</label>
-            <input id="keywords" name="keywords" required placeholder="precio, cuánto cuesta, cotización" style="${INPUT_STYLE}">
+            <input id="keywords" name="keywords" required value="${esc(editRule?.keywords.join(", ") ?? "")}" placeholder="precio, cuánto cuesta, cotización" style="${INPUT_STYLE}">
           </div>
           <div style="display:flex;flex-direction:column;gap:5px">
             <label class="font-display font-semibold text-[12px] text-cream" for="message">Mensaje del DM / respuesta</label>
-            <textarea id="message" name="message" required rows="3" placeholder="¡Hola {username}! 👋 Gracias por tu interés. Te mando el catálogo:" style="${INPUT_STYLE}"></textarea>
+            <textarea id="message" name="message" required rows="3" placeholder="¡Hola {username}! 👋 Gracias por tu interés. Te mando el catálogo:" style="${INPUT_STYLE}">${esc(editRule?.message ?? "")}</textarea>
             <span class="text-dim text-[10.5px]">Puedes usar <span class="font-mono">{"{username}"}</span> para saludar al cliente por su nombre.</span>
           </div>
           <div style="display:flex;align-items:center;gap:10px">
             <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);cursor:pointer">
-              <input type="checkbox" name="whole_word_match" value="1" checked style="accent-color:var(--accent)">
+              <input type="checkbox" name="whole_word_match" value="1" ${editRule?.wholeWordMatch !== false ? "checked" : ""} style="accent-color:var(--accent)">
               La keyword debe ser palabra completa (recomendado). Desmárcalo para matchear también dentro de otras palabras (ej. "link" matchea "linking").
             </label>
           </div>
           <div style="display:flex;align-items:center;gap:10px">
             <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);cursor:pointer">
-              <input type="checkbox" name="require_follow" value="1" style="accent-color:var(--accent)">
+              <input type="checkbox" name="require_follow" value="1" ${editRule?.requireFollow ? "checked" : ""} style="accent-color:var(--accent)">
               Follow gate: exigir que el cliente siga la cuenta antes de entregar el link (hace crecer tu cuenta).
             </label>
           </div>
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px">
             <div style="display:flex;flex-direction:column;gap:5px">
               <label class="font-display font-semibold text-[12px] text-cream" for="follow_prompt_message">Mensaje para pedir el follow (opcional)</label>
-              <input id="follow_prompt_message" name="follow_prompt_message" placeholder="Hola {username}! Sígueme y toca el botón para recibir el link 👇" style="${INPUT_STYLE}">
+              <input id="follow_prompt_message" name="follow_prompt_message" value="${esc(editRule?.followPromptMessage ?? "")}" placeholder="Hola {username}! Sígueme y toca el botón para recibir el link 👇" style="${INPUT_STYLE}">
             </div>
             <div style="display:flex;flex-direction:column;gap:5px">
               <label class="font-display font-semibold text-[12px] text-cream" for="follow_button_label">Texto del botón de confirmación (opcional)</label>
-              <input id="follow_button_label" name="follow_button_label" placeholder="Ya te sigo" style="${INPUT_STYLE}">
+              <input id="follow_button_label" name="follow_button_label" value="${esc(editRule?.followButtonLabel ?? "")}" placeholder="Ya te sigo" style="${INPUT_STYLE}">
             </div>
           </div>
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px">
             <div style="display:flex;flex-direction:column;gap:5px">
               <label class="font-display font-semibold text-[12px] text-cream" for="button_label">Texto del botón (opcional)</label>
-              <input id="button_label" name="button_label" placeholder="Ver catálogo" style="${INPUT_STYLE}">
+              <input id="button_label" name="button_label" value="${esc(editRule?.buttonLabel ?? "")}" placeholder="Ver catálogo" style="${INPUT_STYLE}">
             </div>
             <div style="display:flex;flex-direction:column;gap:5px">
               <label class="font-display font-semibold text-[12px] text-cream" for="button_url">Link del botón (opcional)</label>
-              <input id="button_url" name="button_url" placeholder="https://tusitio.com/catalogo" style="${INPUT_STYLE}">
+              <input id="button_url" name="button_url" value="${esc(editRule?.buttonUrl ?? "")}" placeholder="https://tusitio.com/catalogo" style="${INPUT_STYLE}">
             </div>
           </div>
           <div style="display:flex;flex-direction:column;gap:5px">
-            <label class="font-display font-semibold text-[12px] text-cream" for="reply_to_comment">Respuesta pública al comentario (opcional)</label>
-            <input id="reply_to_comment" name="reply_to_comment" placeholder="¡Gracias por preguntar! Te escribí por privado ✨" style="${INPUT_STYLE}">
+            <label class="font-display font-semibold text-[12px] text-cream" for="reply_to_comment">Respuesta pública fija (opcional)</label>
+            <input id="reply_to_comment" name="reply_to_comment" value="${esc(editRule?.replyToComment ?? "")}" placeholder="¡Gracias por preguntar! Te escribí por privado ✨" style="${INPUT_STYLE}">
+          </div>
+          <div style="display:flex;flex-direction:column;gap:5px">
+            <label class="font-display font-semibold text-[12px] text-cream" for="ai_reply_prompt">Respuesta pública con IA (opcional, reemplaza la fija)</label>
+            <textarea id="ai_reply_prompt" name="ai_reply_prompt" rows="2" placeholder="Ej. Responde breve y cálido, en mi tono, agradeciendo el comentario e invitando a escribir por privado. Máximo 2 oraciones." style="${INPUT_STYLE}">${esc(editRule?.aiReplyPrompt ?? "")}</textarea>
+            <span class="text-dim text-[10.5px]">La IA genera la respuesta pública usando la llave/configuración del bot, en tu tono. Si falla, usa la respuesta fija de arriba (si la hay).</span>
           </div>
           <div style="display:flex;align-items:center;gap:10px">
-            <button type="submit" style="background:var(--accent);color:#06251f;font-weight:700;border:none;padding:10px 18px;font-size:12.5px;cursor:pointer">+ Crear automatización</button>
-            <span class="text-dim text-[11px]">La regla queda activa de inmediato.</span>
+            <button type="submit" style="background:var(--accent);color:#06251f;font-weight:700;border:none;padding:10px 18px;font-size:12.5px;cursor:pointer">${editRule ? "💾 Guardar cambios" : "+ Crear automatización"}</button>
+            ${editRule ? `<a href="/admin/automatizaciones" class="text-[11px]" style="border:1px solid var(--line);color:var(--dim);padding:10px 18px;text-decoration:none">Cancelar</a>` : `<span class="text-dim text-[11px]">La regla queda activa de inmediato.</span>`}
           </div>
         </form>
       </div>

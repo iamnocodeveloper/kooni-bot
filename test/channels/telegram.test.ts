@@ -120,3 +120,62 @@ describe("resolveTelegramFileUrl", () => {
     expect(url).toBeNull();
   });
 });
+
+describe("telegramAdapter.sendReply — botones y multimedia (Fase A)", () => {
+  it("envía botones como inline_keyboard en el último chunk", async () => {
+    const fetchMock = vi.fn(async () => new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await telegramAdapter.sendReply(
+      {
+        channel: "telegram",
+        channelUserId: "123",
+        chunks: ["Hola, ¿qué necesitas?"],
+        buttons: [{ text: "Precios", callback: "precios" }, { text: "Web", url: "https://kooni.click" }],
+      },
+      { TELEGRAM_BOT_TOKEN: "tok" } as any,
+    );
+
+    const calls = fetchMock.mock.calls as unknown as [string, RequestInit][];
+    const sendMsg = calls.find((c) => String(c[0]).includes("/sendMessage"));
+    expect(sendMsg).toBeTruthy();
+    const body = JSON.parse(sendMsg![1].body as string);
+    expect(body.reply_markup.inline_keyboard[0]).toEqual([
+      { text: "Precios", callback_data: "precios" },
+      { text: "Web", url: "https://kooni.click" },
+    ]);
+  });
+
+  it("envía imagen con sendPhoto y el primer chunk como caption", async () => {
+    const fetchMock = vi.fn(async () => new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await telegramAdapter.sendReply(
+      { channel: "telegram", channelUserId: "123", chunks: ["Aquí tienes el catálogo"], imageUrl: "https://img/x.jpg" },
+      { TELEGRAM_BOT_TOKEN: "tok" } as any,
+    );
+
+    const calls = fetchMock.mock.calls as unknown as [string, RequestInit][];
+    const photo = calls.find((c) => String(c[0]).includes("/sendPhoto"));
+    expect(photo).toBeTruthy();
+    const body = JSON.parse(photo![1].body as string);
+    expect(body.photo).toBe("https://img/x.jpg");
+    expect(body.caption).toBe("Aquí tienes el catálogo");
+  });
+
+  it("envía audio con sendVoice", async () => {
+    const fetchMock = vi.fn(async () => new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await telegramAdapter.sendReply(
+      { channel: "telegram", channelUserId: "123", chunks: ["Te dejo un audio"], audioUrl: "https://aud/x.ogg" },
+      { TELEGRAM_BOT_TOKEN: "tok" } as any,
+    );
+
+    const calls = fetchMock.mock.calls as unknown as [string, RequestInit][];
+    const voice = calls.find((c) => String(c[0]).includes("/sendVoice"));
+    expect(voice).toBeTruthy();
+    const body = JSON.parse(voice![1].body as string);
+    expect(body.voice).toBe("https://aud/x.ogg");
+  });
+});

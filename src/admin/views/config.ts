@@ -250,6 +250,40 @@ export function renderConfig(
         })}
       </div>
 
+      <!-- Botones y multimedia (Fase A) -->
+      <div class="bg-panel border border-line" style="padding:20px;display:flex;flex-direction:column;gap:18px">
+        <div style="display:flex;flex-direction:column;gap:2px">
+          <h3 class="font-display font-semibold text-[14px] text-cream">Botones y multimedia</h3>
+          <p class="text-muted text-[12px]">El bot puede enviar botones, imágenes y audios en los canales que lo soporten (Telegram, Zernio, WhatsApp…). Actívelo aquí.</p>
+        </div>
+
+        <label style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted);cursor:pointer">
+          <input type="checkbox" name="${SETTING_KEYS.allowMultimedia}" value="1"
+                 ${settings[SETTING_KEYS.allowMultimedia] === "1" ? "checked" : ""}
+                 style="accent-color:var(--accent);width:auto">
+          Permitir que el bot envíe botones, imágenes y audios
+          <span class="text-dim text-[11px]">(en los canales que lo soporten; si no, degrada a texto)</span>
+        </label>
+
+        ${renderTextArea({
+          name: SETTING_KEYS.menuButtons,
+          label: "Botones del menú (opcional)",
+          help: "Botones que se muestran con cada respuesta de saludo. Formato JSON: [{\"text\":\"💬 Precios\",\"callback\":\"precios\"},{\"text\":\"📅 Agendar\",\"callback\":\"agendar\"}] — usá \"url\" para un link.",
+          value: settings[SETTING_KEYS.menuButtons] ?? "",
+          placeholder: '[{"text":"💬 Precios","callback":"precios"},{"text":"📅 Agendar","callback":"agendar"}]',
+          rows: 3,
+        })}
+
+        ${renderTextArea({
+          name: SETTING_KEYS.resourceLibrary,
+          label: "Biblioteca de recursos (opcional)",
+          help: "Imágenes/audios/botones que el bot puede enviar cuando el cliente los pida. Formato JSON: {\"catalogo\":{\"image\":\"https://...\",\"caption\":\"Nuestro catálogo 👇\",\"buttons\":[{\"text\":\"Cotizar\",\"url\":\"https://wa.me/...\"}]},\"bienvenida\":{\"audio\":\"https://...\"}}. El bot los elige por nombre.",
+          value: settings[SETTING_KEYS.resourceLibrary] ?? "",
+          placeholder: '{"catalogo":{"image":"https://...","caption":"Nuestro catálogo 👇","buttons":[{"text":"Cotizar","url":"https://wa.me/..."}]}}',
+          rows: 4,
+        })}
+      </div>
+
       <button type="submit" class="bigbtn font-display font-bold text-[13px] cursor-pointer"
               style="width:fit-content;background:var(--accent);border:1px solid var(--accent);color:#1a1206;box-shadow:4px 4px 0 var(--linelit);padding:13px 24px;display:flex;align-items:center;gap:9px">
         <i data-lucide="check" width="16" height="16"></i> Guardar cambios

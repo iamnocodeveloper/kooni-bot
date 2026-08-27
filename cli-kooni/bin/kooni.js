@@ -19,6 +19,8 @@ import { execFileSync } from "node:child_process";
 const REPO = process.env.KOONI_REPO || "iamnocodeveloper/kooni-bot";
 const BRANCH = process.env.KOONI_BRANCH || "main";
 const TARBALL = `https://codeload.github.com/${REPO}/tar.gz/refs/heads/${BRANCH}`;
+// Control del dueño: check-in al instalar (no bloquea; solo registra quién).
+const CHECKIN_URL = process.env.KOONI_CHECKIN_URL || "https://f5gacw7g.function2.insforge.app/registrar-instalacion";
 
 // El tar de Windows (MSYS) confunde las rutas C:\... con host remoto. Normaliza
 // a rutas POSIX (/c/...) para que tar las entienda.
@@ -103,7 +105,7 @@ function extractFresh(tgz, dir) {
   }
   rmSync(tmp, { recursive: true, force: true });
   rmSync(tgz, { force: true });
-  writeFileSync(join(dir, ".kooni-version"), "cli-0.1.0");
+  writeFileSync(join(dir, ".kooni-version"), "cli-0.1.2");
 }
 
 function extractOver(tgz, dir) {
@@ -124,7 +126,7 @@ function extractOver(tgz, dir) {
   }
   rmSync(tmp, { recursive: true, force: true });
   rmSync(tgz, { force: true });
-  writeFileSync(join(dir, ".kooni-version"), "cli-0.1.0");
+  writeFileSync(join(dir, ".kooni-version"), "cli-0.1.2");
 }
 
 function isKooni(dir) {
@@ -165,6 +167,31 @@ async function cmdInit() {
     process.exit(1);
   }
   console.log(I.ok(t("¡Bot listo! Tu panel: https://<slug>.workers.dev/admin", "Bot ready! Your panel: https://<slug>.workers.dev/admin")));
+
+  // Check-in (opcional, no bloquea): registrar quién instaló, para el control
+  // del dueño. Si KOONI_SILENT=1, no pregunta email y registra sin él.
+  try {
+    let email = "";
+    if (process.env.KOONI_SILENT !== "1" && process.env.KOONI_NO_CHECKIN !== "1") {
+      email = await ask(t("¿Tu email? (opcional, para soporte)", "Your email? (optional, for support)"), "");
+    }
+    const slug = dir.split(/[\\/]/).pop() || "kooni-bot";
+    const res = await fetch(CHECKIN_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: email || undefined,
+        slug,
+        workerUrl: `https://${slug}.workers.dev`,
+        cliVersion: "0.1.2",
+        platform: process.platform,
+      }),
+      signal: AbortSignal.timeout(4000),
+    });
+    void res;
+  } catch {
+    // fire-and-forget: nunca falla la instalación por el check-in
+  }
 }
 
 async function cmdUpdate() {
@@ -184,7 +211,7 @@ async function cmdUpdate() {
 async function main() {
   const cmd = process.argv[2] || "help";
   if (cmd === "help" || cmd === "--help" || cmd === "-h") return help();
-  if (cmd === "version" || cmd === "--version" || cmd === "-v") { console.log("kooni-bot 0.1.0"); return; }
+  if (cmd === "version" || cmd === "--version" || cmd === "-v") { console.log("kooni-bot 0.1.2"); return; }
   if (cmd === "init") return cmdInit();
   if (cmd === "update") return cmdUpdate();
   console.log(t(`comando desconocido: ${cmd}`, `unknown command: ${cmd}`));

@@ -7,6 +7,20 @@ import { snoozeUserTool } from "./snoozeUser";
 import { captureLeadTool } from "./captureLead";
 import { scheduleAppointmentTool } from "./scheduleAppointment";
 import { catalogQueryTool } from "./catalogQuery";
+import { enviarRecursoTool, type RecursoCtx } from "./enviarRecurso";
+import type { ChannelId } from "../channels/shared";
+
+// Contexto compartido para tools que necesitan el canal real (enviarRecurso).
+let recursoCtx: { channel: ChannelId; channelUserId: string } | null = null;
+
+/** El agente inyecta el canal actual antes del loop (si cambia entre turnos). */
+export function setRecursoCtx(channel: ChannelId, channelUserId: string): void {
+  recursoCtx = { channel, channelUserId };
+}
+
+export function getRecursoCtx(): RecursoCtx | null {
+  return recursoCtx;
+}
 
 export interface ToolContext {
   env: Env;
@@ -34,6 +48,10 @@ export function buildTools(ctx: ToolContext) {
   if (isPro(ctx.env)) {
     tools.catalogQuery = catalogQueryTool(ctx.env);
   }
+
+  // Fase A: enviarRecurso — activable desde Configuración (allow_multimedia).
+  // El agente llama setRecursoCtx antes del loop con el canal real.
+  tools.enviarRecurso = enviarRecursoTool(ctx.env, ctx.getConversationId, getRecursoCtx);
 
   return tools;
 }

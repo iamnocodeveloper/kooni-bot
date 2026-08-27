@@ -17,6 +17,8 @@ export interface AutoRule {
   buttonLabel?: string;
   buttonUrl?: string;
   replyToComment?: string;
+  /** Prompt para que la IA genere la respuesta pública en el tono del dueño. */
+  aiReplyPrompt?: string;
   isActive: boolean;
   /** true = la keyword debe ser palabra completa; false = match parcial. */
   wholeWordMatch: boolean;
@@ -37,6 +39,7 @@ interface AutoRuleRow {
   button_label: string | null;
   button_url: string | null;
   reply_to_comment: string | null;
+  ai_reply_prompt: string | null;
   is_active: number;
   whole_word_match: number | null;
   require_follow: number | null;
@@ -63,6 +66,7 @@ function rowToRule(row: AutoRuleRow): AutoRule {
     buttonLabel: row.button_label ?? undefined,
     buttonUrl: row.button_url ?? undefined,
     replyToComment: row.reply_to_comment ?? undefined,
+    aiReplyPrompt: row.ai_reply_prompt ?? undefined,
     isActive: row.is_active === 1,
     wholeWordMatch: row.whole_word_match !== 0,
     requireFollow: row.require_follow === 1,
@@ -108,6 +112,7 @@ export class AutoRulesRepo {
     buttonLabel?: string;
     buttonUrl?: string;
     replyToComment?: string;
+    aiReplyPrompt?: string;
     wholeWordMatch?: boolean;
     requireFollow?: boolean;
     followPromptMessage?: string;
@@ -116,8 +121,8 @@ export class AutoRulesRepo {
     const id = crypto.randomUUID();
     const now = Date.now();
     await this.db.run(
-      `INSERT INTO auto_rules (id, kind, platform, keywords, message, button_label, button_url, reply_to_comment, is_active, whole_word_match, require_follow, follow_prompt_message, follow_button_label, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO auto_rules (id, kind, platform, keywords, message, button_label, button_url, reply_to_comment, ai_reply_prompt, is_active, whole_word_match, require_follow, follow_prompt_message, follow_button_label, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         input.kind,
@@ -127,6 +132,7 @@ export class AutoRulesRepo {
         input.buttonLabel?.trim() ?? null,
         input.buttonUrl?.trim() ?? null,
         input.replyToComment?.trim() ?? null,
+        input.aiReplyPrompt?.trim() ?? null,
         input.wholeWordMatch === false ? 0 : 1,
         input.requireFollow ? 1 : 0,
         input.followPromptMessage?.trim() ?? null,
@@ -150,6 +156,7 @@ export class AutoRulesRepo {
       buttonLabel?: string;
       buttonUrl?: string;
       replyToComment?: string;
+      aiReplyPrompt?: string;
       isActive: boolean;
       wholeWordMatch: boolean;
       requireFollow: boolean;
@@ -168,6 +175,7 @@ export class AutoRulesRepo {
       ...(input.buttonLabel !== undefined ? { buttonLabel: input.buttonLabel?.trim() || undefined } : {}),
       ...(input.buttonUrl !== undefined ? { buttonUrl: input.buttonUrl?.trim() || undefined } : {}),
       ...(input.replyToComment !== undefined ? { replyToComment: input.replyToComment?.trim() || undefined } : {}),
+      ...(input.aiReplyPrompt !== undefined ? { aiReplyPrompt: input.aiReplyPrompt?.trim() || undefined } : {}),
       ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
       ...(input.wholeWordMatch !== undefined ? { wholeWordMatch: input.wholeWordMatch } : {}),
       ...(input.requireFollow !== undefined ? { requireFollow: input.requireFollow } : {}),
@@ -175,7 +183,7 @@ export class AutoRulesRepo {
       ...(input.followButtonLabel !== undefined ? { followButtonLabel: input.followButtonLabel?.trim() || undefined } : {}),
     };
     await this.db.run(
-      `UPDATE auto_rules SET kind = ?, platform = ?, keywords = ?, message = ?, button_label = ?, button_url = ?, reply_to_comment = ?, is_active = ?, whole_word_match = ?, require_follow = ?, follow_prompt_message = ?, follow_button_label = ?, updated_at = ? WHERE id = ?`,
+      `UPDATE auto_rules SET kind = ?, platform = ?, keywords = ?, message = ?, button_label = ?, button_url = ?, reply_to_comment = ?, ai_reply_prompt = ?, is_active = ?, whole_word_match = ?, require_follow = ?, follow_prompt_message = ?, follow_button_label = ?, updated_at = ? WHERE id = ?`,
       [
         next.kind,
         next.platform,
@@ -184,6 +192,7 @@ export class AutoRulesRepo {
         next.buttonLabel ?? null,
         next.buttonUrl ?? null,
         next.replyToComment ?? null,
+        next.aiReplyPrompt ?? null,
         next.isActive ? 1 : 0,
         next.wholeWordMatch ? 1 : 0,
         next.requireFollow ? 1 : 0,

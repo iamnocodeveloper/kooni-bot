@@ -44,8 +44,30 @@ import { renderLeads, exportLeadsCsv } from "./views/leads";
 import { renderTickets } from "./views/tickets";
 import { renderConfig } from "./views/config";
 import { renderAutomatizaciones } from "./views/automatizaciones";
+import { renderComentarios } from "./views/comentarios";
+import { renderContactos } from "./views/contactos";
 import { renderLicencia } from "./views/licencia";
 import { AutoRulesRepo, type AutoRuleKind } from "../db/autoRules";
+
+/** Parsea el form de una automatización (crear o editar) a un objeto de regla. */
+function parseRuleForm(form: FormData) {
+  const kind = String(form.get("kind") ?? "comment_dm") as AutoRuleKind;
+  const platform = String(form.get("platform") ?? "all").trim() || "all";
+  const keywords = String(form.get("keywords") ?? "")
+    .split(",")
+    .map((k) => k.trim())
+    .filter(Boolean);
+  const message = String(form.get("message") ?? "").trim();
+  const buttonLabel = String(form.get("button_label") ?? "").trim() || undefined;
+  const buttonUrl = String(form.get("button_url") ?? "").trim() || undefined;
+  const replyToComment = String(form.get("reply_to_comment") ?? "").trim() || undefined;
+  const aiReplyPrompt = String(form.get("ai_reply_prompt") ?? "").trim() || undefined;
+  const wholeWordMatch = String(form.get("whole_word_match") ?? "") !== "0";
+  const requireFollow = String(form.get("require_follow") ?? "") === "1";
+  const followPromptMessage = String(form.get("follow_prompt_message") ?? "").trim() || undefined;
+  const followButtonLabel = String(form.get("follow_button_label") ?? "").trim() || undefined;
+  return { kind, platform, keywords, message, buttonLabel, buttonUrl, replyToComment, aiReplyPrompt, wholeWordMatch, requireFollow, followPromptMessage, followButtonLabel };
+}
 import { renderConexiones } from "./views/conexiones";
 import { renderCampanas } from "./views/campanas";
 import { sendCampaign, createHandoffTemplate, contentApprovalStatus } from "../campaigns";
@@ -454,28 +476,21 @@ adminApp.get("/automatizaciones", async (c) =>
   ),
 );
 
+// Comentarios: bandeja de comentarios recibidos (como Zernio).
+adminApp.get("/comentarios", async (c) => c.html(await renderComentarios(c.env)));
+
+// Contactos: todos los que interactúan (separados de Leads).
+adminApp.get("/contactos", async (c) => c.html(await renderContactos(c.env)));
+
 adminApp.post("/automatizaciones/save", async (c) => {
   try {
     const form = await c.req.formData();
-    const kind = String(form.get("kind") ?? "comment_dm") as AutoRuleKind;
-    const platform = String(form.get("platform") ?? "all").trim() || "all";
-    const keywords = String(form.get("keywords") ?? "")
-      .split(",")
-      .map((k) => k.trim())
-      .filter(Boolean);
-    const message = String(form.get("message") ?? "").trim();
-    const buttonLabel = String(form.get("button_label") ?? "").trim() || undefined;
-    const buttonUrl = String(form.get("button_url") ?? "").trim() || undefined;
-    const replyToComment = String(form.get("reply_to_comment") ?? "").trim() || undefined;
-    const wholeWordMatch = String(form.get("whole_word_match") ?? "") !== "0";
-    const requireFollow = String(form.get("require_follow") ?? "") === "1";
-    const followPromptMessage = String(form.get("follow_prompt_message") ?? "").trim() || undefined;
-    const followButtonLabel = String(form.get("follow_button_label") ?? "").trim() || undefined;
-    if (keywords.length === 0 || !message) {
+    const input = parseRuleForm(form);
+    if (input.keywords.length === 0 || !input.message) {
       return c.redirect("/admin/automatizaciones?error=keywords%20y%20mensaje%20son%20obligatorios");
     }
     const { Db } = await import("../db/client");
-    const { checkLimit, limitMessage } = await import("../limits");
+    const { checkLimit } = await import("../limits");
     const limitCheck = await checkLimit(c.env, "rules");
     if (!limitCheck.allowed) {
       return c.redirect(
@@ -483,19 +498,32 @@ adminApp.post("/automatizaciones/save", async (c) => {
           encodeURIComponent(`Límite gratis de reglas alcanzado (${limitCheck.used}/${limitCheck.limit}). Activa Pro en Licencia para quitarlo.`),
       );
     }
-    await new AutoRulesRepo(new Db(c.env.DB)).create({
-      kind,
-      platform,
-      keywords,
-      message,
-      buttonLabel,
-      buttonUrl,
-      replyToComment,
-      wholeWordMatch,
-      requireFollow,
-      followPromptMessage,
-      followButtonLabel,
-    });
+    await new AutoRulesRepo(new Db(c.env.DB)).create(input);
+    return c.redirect("/admin/automatizaciones?saved=1");
+  } catch (e) {
+    return c.redirect("/admin/automatizaciones?error=" + encodeURIComponent(String((e as Error)?.message ?? e)));
+  }
+});
+
+// Editar una automatización: vista con el formulario precargado.
+adminApp.get("/automatizaciones/:id/edit", async (c) => {
+  const { Db } = await import("../db/client");
+  const rule = await new AutoRulesRepo(new Db(c.env.DB)).get(c.req.param("id"));
+  if (!rule) return c.redirect("/admin/automatizaciones?error=regla%20no%20encontrada");
+  return c.html(await renderAutomatizaciones(c.env, false, undefined, rule));
+});
+
+// Guardar edición de una automatización.
+adminApp.post("/automatizaciones/:id/save", async (c) => {
+  try {
+    const form = await c.req.formData();
+    const input = parseRuleForm(form);
+    if (input.keywords.length === 0 || !input.message) {
+      return c.redirect("/admin/automatizaciones?error=keywords%20y%20mensaje%20son%20obligatorios");
+    }
+    const { Db } = await import("../db/client");
+    const repo = new AutoRulesRepo(new Db(c.env.DB));
+    await repo.update(c.req.param("id"), { ...input, isActive: undefined });
     return c.redirect("/admin/automatizaciones?saved=1");
   } catch (e) {
     return c.redirect("/admin/automatizaciones?error=" + encodeURIComponent(String((e as Error)?.message ?? e)));
@@ -620,6 +648,9 @@ adminApp.post("/config", async (c) => {
     SETTING_KEYS.businessContext,
     SETTING_KEYS.systemPromptOverride,
     SETTING_KEYS.escalationKeywords,
+    SETTING_KEYS.menuButtons,
+    SETTING_KEYS.resourceLibrary,
+    SETTING_KEYS.allowMultimedia,
   ];
   for (const key of textKeys) {
     const raw = form.get(key);

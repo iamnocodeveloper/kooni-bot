@@ -30,6 +30,10 @@ export const SETTING_KEYS = {
   llmApiKey: "llm_api_key", // owner's API key; empty = use the env key
   llmModel: "llm_model", // concrete model id; empty = auto tiers (fast⇄smart)
   proLicense: "pro_license", // código KOONI-PRO-... pegado en el panel (quita límites)
+  // Botones y multimedia (Fase A): activable desde Configuración.
+  menuButtons: "menu_buttons", // JSON: botones del menú que se envían al saludo
+  resourceLibrary: "resource_library", // JSON: biblioteca de recursos (imagen/audio/botones)
+  allowMultimedia: "allow_multimedia", // "0" | "1": permite que el bot envíe imagen/audio/botones
 } as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[keyof typeof SETTING_KEYS];
