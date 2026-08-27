@@ -22,7 +22,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 
-const CLI_VERSION = "0.2.6";
+const CLI_VERSION = "0.2.7";
 
 const REPO = process.env.KOONI_REPO || "iamnocodeveloper/kooni-bot";
 const BRANCH = process.env.KOONI_BRANCH || "main";
@@ -642,6 +642,13 @@ function stampWrangler(dir, answers, botUid) {
     return new RegExp(`^\\s*${key}\\s*=`, "m").test(varsMatch[0]);
   };
 
+  // Identidad de instalación para ligar licencias (ver src/license.ts + limits.ts).
+  if (hasInVars("BOT_INSTANCE_ID")) {
+    set(/BOT_INSTANCE_ID\s*=\s*"[^"]*"/g, `BOT_INSTANCE_ID = "${uid}"`);
+  } else {
+    s = s.replace(/^(\s*\[vars\][^\n]*\n)/m, `$1BOT_INSTANCE_ID = "${uid}"\n`);
+  }
+
   if (answers.provider !== "anthropic") {
     if (hasInVars("LLM_PROVIDER")) {
       set(/LLM_PROVIDER\s*=\s*"[^"]*"/g, `LLM_PROVIDER = "${answers.provider}"`);
@@ -981,14 +988,19 @@ async function deployBot(dir, { flags = {}, rl } = {}) {
 async function checkin(dir, answers, version) {
   if (process.env.KOONI_NO_CHECKIN === "1" || process.env.KOONI_SILENT === "1") return;
   try {
-    const slug = answers.slug || basename(dir);
+    const marker = readMarker(dir) || {};
+    const slug = answers.slug || marker.slug || basename(dir);
     await fetchTimeout(CHECKIN_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         email: answers.email || undefined,
         slug,
-        workerUrl: `https://kooni-bot-${slug}.workers.dev`,
+        uid: marker.uid,
+        workerName: marker.workerName,
+        dbName: marker.dbName,
+        kbName: marker.kbName,
+        workerUrl: marker.workerUrl || `https://kooni-bot-${slug}.workers.dev`,
         cliVersion: CLI_VERSION,
         botVersion: version,
         tier: answers.tier,
@@ -1022,8 +1034,13 @@ constructor. No hay licencia ni servidor de Horizontes: el tier free/pro se cont
 - \`npx kooni-bot init [dir]\` — descarga el template, configura (idioma, negocio, cerebro) y ofrece desplegar.
 - \`npx kooni-bot deploy [dir]\` — provisiona Cloudflare (login, D1/Vectorize/R2, secrets, migraciones, deploy).
 - \`npx kooni-bot update [dir]\` — trae la versión nueva conservando \`member/\`, \`wrangler.toml\` y datos.
+- \`npx kooni-bot update --all\` — actualiza TODAS las instalaciones registradas en esta computadora.
 - \`npx kooni-bot doctor [dir]\` — diagnostica el bot instalado.
 - \`npx kooni-bot version\`.
+
+## Conexión de canales (DESDE el panel, sin redeploy)
+- Telegram y Zernio se conectan pegando su token/API key en \`/admin/conexiones\`. Se guardan en D1 (\`settings\`) y el canal se pone verde al instante, SIN \`wrangler secret put\` ni redeploy.
+- La URL del webhook de cada canal se muestra en su propia card (con botón copiar).
 
 ## Regla de oro (memorízala)
 | Carpeta / archivo | Qué pasa al actualizar |
@@ -1210,30 +1227,16 @@ async function cmdDeploy(flags, rest) {
   }
 }
 
-async function cmdUpdate(flags, rest) {
-  const cfg = loadCfg();
-  ASSUME_YES = !!(flags.yes || process.env.KOONI_YES);
-  if (flags.lang === "en" || cfg.lang === "en") L = "en";
-  banner();
-  installAgentSkill(flags);
-
-  const rl = createInterface({ input, output });
-  let dir;
-  try {
-    dir = await resolveBotDir(rest[0], rl);
-  } finally {
-    rl.close();
-  }
-  if (!dir) { console.log("  " + C.red(t().needDir) + " " + (rest[0] || process.cwd()) + "\n"); process.exit(1); }
-
+// Actualiza UNA instalación. Devuelve un resumen; NO hace process.exit (para que
+// `--all` pueda recorrer varias sin cortar el proceso).
+async function updateOne(dir, flags = {}) {
   const marker = readMarker(dir) || {};
+  const slug = marker.slug || basename(dir);
   const current = marker.version || readPkgVersion(dir) || "0.0.0";
 
   const tgz = join(dir, ".kooni-template.tgz");
-  process.stdout.write(C.dim("  " + t().updRevalidating + "\n"));
   await downloadTemplate(tgz);
 
-  // versión nueva desde el tarball
   const tmp = join(dir, ".kooni-extract");
   mkdirSync(tmp, { recursive: true });
   const src = extractToTemp(tgz, tmp);
@@ -1248,21 +1251,18 @@ async function cmdUpdate(flags, rest) {
   if (!verLt(current, next)) {
     rmSync(tmp, { recursive: true, force: true });
     rmSync(tgz, { force: true });
-    console.log("  " + C.green("✓") + " " + t().updUpToDate + "  (v" + current + ")\n");
-    return;
+    return { dir, slug, updated: false, from: current, to: next };
   }
 
-  // respaldo + extraer sobre la instalación
   const backupPath = backupBeforeUpdate(dir, current);
   extractOver(tgz, dir);
-  writeMarker(dir, { slug: marker.slug || basename(dir), version: next, lang: marker.lang || L });
+  writeMarker(dir, { slug, version: next, lang: marker.lang || L });
 
   console.log("  " + C.green("✓") + " " + t().updDone(next));
   if (backupPath) console.log("  " + C.dim(t().updBackup(backupPath.slice(dir.length + 1))));
   console.log("  " + C.dim(t().updPreserved));
   console.log("  " + C.dim(t().updReplaced));
 
-  // dependencias + migraciones (por nombre ÚNICO de D1) + reindex + deploy
   console.log("\n  " + C.dim(t().installing));
   runPnpm(dir, ["install"]);
   const dbName = marker.dbName || (readFileSync(join(dir, "wrangler.toml"), "utf8").match(/database_name\s*=\s*"([^"]+)"/) || [])[1] || "kooni_db";
@@ -1271,7 +1271,6 @@ async function cmdUpdate(flags, rest) {
   console.log("  " + C.dim(t().deploying));
   try { runPnpm(dir, ["run", "deploy"]); } catch { /* el deploy-check imprime el detalle */ }
 
-  // reindex del worker si hay estado con URL
   try {
     const st = JSON.parse(readFileSync(join(dir, ".bot-state.json"), "utf8"));
     if (st.worker_url) {
@@ -1281,6 +1280,60 @@ async function cmdUpdate(flags, rest) {
     }
   } catch {}
 
+  return { dir, slug, updated: true, from: current, to: next };
+}
+
+async function cmdUpdate(flags, rest) {
+  const cfg = loadCfg();
+  ASSUME_YES = !!(flags.yes || process.env.KOONI_YES);
+  if (flags.lang === "en" || cfg.lang === "en") L = "en";
+  banner();
+  installAgentSkill(flags);
+
+  // --all: actualiza todas las instalaciones registradas en ~/.kooni/installs.json.
+  if (flags.all) {
+    const dirs = listInstalls().map((x) => x.dir);
+    if (dirs.length === 0) {
+      console.log("  " + C.red(t().needDir) + " (sin instalaciones registradas)\n");
+      process.exit(1);
+    }
+    console.log("  " + C.dim(m(`Actualizando ${dirs.length} instalaciones…`, `Updating ${dirs.length} installs…`)) + "\n");
+    const results = [];
+    for (const d of dirs) {
+      const marker = readMarker(d) || {};
+      const slug = marker.slug || basename(d);
+      console.log(C.b("\n  ◇ " + slug));
+      try {
+        const r = await updateOne(d, flags);
+        results.push(r);
+        console.log(r.updated
+          ? "  " + C.green(`✓ ${slug}: ${r.from} → ${r.to}`)
+          : "  " + C.green(`✓ ${slug}: ${t().updUpToDate} (v${r.to})`));
+      } catch (e) {
+        results.push({ dir: d, slug, error: e.message || String(e) });
+        console.log("  " + C.red(`✗ ${slug}: ${e.message || e}`));
+      }
+    }
+    console.log("");
+    return;
+  }
+
+  const rl = createInterface({ input, output });
+  let dir;
+  try {
+    dir = await resolveBotDir(rest[0], rl);
+  } finally {
+    rl.close();
+  }
+  if (!dir) { console.log("  " + C.red(t().needDir) + " " + (rest[0] || process.cwd()) + "\n"); process.exit(1); }
+
+  const marker = readMarker(dir) || {};
+  const slug = marker.slug || basename(dir);
+  console.log(C.b("\n  ◇ " + slug));
+  const r = await updateOne(dir, flags);
+  if (!r.updated) {
+    console.log("  " + C.green("✓") + " " + t().updUpToDate + "  (v" + r.to + ")\n");
+  }
   console.log("");
 }
 
@@ -1358,6 +1411,7 @@ ${C.cyan("kooni-bot")} — ${t().helpIntro}
   ${C.cyan("npx kooni-bot init [dir]")}    ${m("instala (descarga template + config + deploy)", "install (download template + config + deploy)")}
   ${C.cyan("npx kooni-bot deploy [dir]")}  ${m("provisiona Cloudflare y publica el worker", "provision Cloudflare and publish the worker")}
   ${C.cyan("npx kooni-bot update [dir]")}  ${m("actualiza sin perder tu configuración", "update without losing config")}
+  ${C.cyan("npx kooni-bot update --all")}   ${m("actualiza TODAS las instalaciones registradas", "update ALL registered installs")}
   ${C.cyan("npx kooni-bot doctor [dir]")}  ${m("diagnóstico del bot instalado", "diagnose the installed bot")}
   ${C.cyan("npx kooni-bot version")}       ${m("versión del CLI", "CLI version")}
 

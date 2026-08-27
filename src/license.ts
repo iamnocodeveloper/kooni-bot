@@ -22,6 +22,7 @@ export interface LicensePayload {
   kind: "lifetime" | "monthly";
   expiry?: number; // epoch_ms (monthly)
   bot?: string; // slug del bot (opcional)
+  inst?: string; // uid de 6 chars de la instalación (opcional; liga el código a UNA instalación)
 }
 
 export function encodeLicensePayload(payload: LicensePayload): string {
@@ -74,10 +75,15 @@ export function verifyLicense(code: string, env: Env): LicensePayload | null {
   return payload;
 }
 
-/** ¿El código es válido Y aplica a este bot (si payload.bot está definido)? */
-export function verifyLicenseFor(env: Env, code: string, botSlug?: string): boolean {
+/** ¿El código es válido Y aplica a este bot/instalación? */
+export function verifyLicenseFor(
+  env: Env,
+  code: string,
+  opts: { botSlug?: string; instanceUid?: string } = {},
+): boolean {
   const payload = verifyLicense(code, env);
   if (!payload) return false;
-  if (payload.bot && botSlug && payload.bot !== botSlug) return false;
+  if (payload.bot && opts.botSlug && payload.bot !== opts.botSlug) return false;
+  if (payload.inst && opts.instanceUid && payload.inst !== opts.instanceUid) return false;
   return true;
 }

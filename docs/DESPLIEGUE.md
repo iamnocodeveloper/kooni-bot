@@ -217,8 +217,17 @@ Cuando el bot no puede resolver o el cliente pide humano, avisa al dueño:
 
 ## 12. Actualizaciones
 
-`/actualizar-mi-bot` (skill) trae la última versión del template por `git` sin
-perder `member/`, secrets ni datos de D1. Manual:
+Con el CLI (recomendado):
+
+```bash
+npx kooni-bot update           # una instalación (o te pregunta cuál)
+npx kooni-bot update --all     # TODAS las instalaciones registradas en esta máquina
+```
+
+Cada instalación tiene un `uid` único y su propio Worker/D1/Vectorize, así que
+`update --all` actualiza cada una por separado sin cruzar datos.
+
+Manual (por `git`, dentro de la carpeta del bot):
 
 ```bash
 git fetch upstream main && git merge upstream/main --no-edit -X theirs
@@ -226,6 +235,19 @@ pnpm install
 pnpm db:apply:remote     # si cambió src/db/schema.sql
 pnpm run deploy
 ```
+
+## 13. Licencias por instalación
+
+Cada código `KOONI-PRO-...` puede ligarse a una instalación concreta (su `uid` de
+6 caracteres). Para generarlo por instalación:
+
+```bash
+npx tsx scripts/gen-license.ts --secret <LICENSE_MASTER_KEY> --kind lifetime --inst <uid>
+```
+
+Ese código solo funciona en la instalación con ese `uid`; si lo pegas en otra, el
+panel lo rechaza. El `uid` está en el marker `.kooni-bot.json` de cada instalación
+y en su `wrangler.toml` (`BOT_INSTANCE_ID`).
 
 ---
 

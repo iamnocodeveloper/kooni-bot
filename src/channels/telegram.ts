@@ -1,5 +1,6 @@
 import type { ChannelAdapter, IncomingMessage, OutgoingReply } from "./shared";
 import type { Env } from "../env";
+import { resolveTelegramToken } from "./telegramCredentials";
 
 const TG_API = "https://api.telegram.org/bot";
 
@@ -41,7 +42,7 @@ export const telegramAdapter: ChannelAdapter = {
     let text = msg.text;
     let audioUrl: string | undefined;
     let imageUrl: string | undefined;
-    const token = env.TELEGRAM_BOT_TOKEN ?? "";
+    const token = (await resolveTelegramToken(env)) ?? "";
     if (msg.voice) {
       // Resolve to a real, fetchable HTTPS URL via getFile (see docs above).
       audioUrl = (await resolveTelegramFileUrl(msg.voice.file_id, token)) ?? undefined;
@@ -68,7 +69,7 @@ export const telegramAdapter: ChannelAdapter = {
   },
 
   async sendReply(reply: OutgoingReply, env: Env): Promise<void> {
-    const token = env.TELEGRAM_BOT_TOKEN;
+    const token = await resolveTelegramToken(env);
     if (!token) throw new Error("TELEGRAM_BOT_TOKEN not set");
 
     // Teclado inline (botones) — se adjunta al ÚLTIMO chunk de texto.
@@ -137,7 +138,7 @@ export const telegramAdapter: ChannelAdapter = {
   },
 
   async showTyping(channelUserId: string, env: Env): Promise<void> {
-    const token = env.TELEGRAM_BOT_TOKEN;
+    const token = await resolveTelegramToken(env);
     if (!token) return;
     await fetch(`${TG_API}${token}/sendChatAction`, {
       method: "POST",

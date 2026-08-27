@@ -35,7 +35,13 @@ describe("generateLicense / verifyLicense", () => {
 
   it("verifyLicenseFor respeta el bot del payload", () => {
     const code = generateLicense(SECRET, { kind: "lifetime", bot: "mi-negocio" });
-    expect(verifyLicenseFor(env, code, "mi-negocio")).toBe(true);
-    expect(verifyLicenseFor(env, code, "otro-bot")).toBe(false);
+    expect(verifyLicenseFor(env, code, { botSlug: "mi-negocio" })).toBe(true);
+    expect(verifyLicenseFor(env, code, { botSlug: "otro-bot" })).toBe(false);
+  });
+
+  it("verifyLicenseFor respeta la instalación (inst) del payload", () => {
+    const code = generateLicense(SECRET, { kind: "lifetime", inst: "a1b2c3" });
+    expect(verifyLicenseFor(env, code, { instanceUid: "a1b2c3" })).toBe(true);
+    expect(verifyLicenseFor(env, code, { instanceUid: "d4e5f6" })).toBe(false);
   });
 });

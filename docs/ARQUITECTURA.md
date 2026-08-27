@@ -118,12 +118,17 @@ para responder con tus propios documentos.
 
 | Canal | Webhook | Secrets necesarios |
 |---|---|---|
-| Telegram | `/webhooks/telegram` | `TELEGRAM_BOT_TOKEN` |
+| Telegram | `/webhooks/telegram` | `TELEGRAM_BOT_TOKEN` (se conecta desde el panel) |
 | WhatsApp (Twilio) | `/webhooks/twilio` | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WA_FROM` |
 | WhatsApp (Cloud API Meta) | `/webhooks/whatsapp` | `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_APP_SECRET` |
 | Instagram + Messenger (Meta oficial) | `/webhooks/meta` | `META_VERIFY_TOKEN`, `META_APP_SECRET`, `META_PAGE_ACCESS_TOKEN` (+ `INSTAGRAM_*` si IG Login standalone) |
 | ManyChat (IG/WA/Messenger) | `/webhooks/manychat` | `MANYCHAT_API_KEY` |
-| Zernio (unificado: IG/FB/X/TG/WhatsApp/Bluesky/Reddit…) | `/webhooks/zernio` | `ZERNIO_API_KEY` (+`ZERNIO_WEBHOOK_SECRET`; auto-DM por keyword: `ZERNIO_AUTO_DM_KEYWORD`…) |
+| Zernio (unificado: IG/FB/X/TG/WhatsApp/Bluesky/Reddit…) | `/webhooks/zernio` | `ZERNIO_API_KEY` (+`ZERNIO_WEBHOOK_SECRET`; se conecta desde el panel) |
+
+Telegram y Zernio se conectan desde `/admin/conexiones` pegando el token/API key: se
+guardan en D1 (`settings`) y el canal se pone verde sin `wrangler secret put` ni
+redeploy. Cada card muestra su webhook URL (con botón copiar) — aunque
+`DASHBOARD_BASE_URL` esté vacío, se usa el origin real del request.
 
 **Avisos al dueño (handoff):** `OWNER_TELEGRAM_CHAT_ID` (DM de Telegram, default),
 `RESEND_API_KEY` + `OWNER_EMAIL` (correo), `TWILIO_HANDOFF_CONTENT_SID` +

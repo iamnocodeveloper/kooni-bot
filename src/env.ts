@@ -35,6 +35,9 @@ export interface Env {
   OPENAI_MODEL_SMART?: string;
   BUFFER_SECONDS: string;
   DASHBOARD_BASE_URL: string;
+  // uid de 6 chars de esta instalación (estampado por el CLI en wrangler.toml).
+  // Sirve para ligar las licencias Pro a UNA instalación concreta.
+  BOT_INSTANCE_ID?: string;
 
   // Secrets (member-set via wrangler secret put)
   ANTHROPIC_API_KEY: string;

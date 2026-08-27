@@ -34,6 +34,9 @@ index_name = "kooni_kb"
 [vars]
 LLM_PROVIDER = "openai"               # 'anthropic' | 'openai' | 'xai'
 OPENAI_API_BASE_URL = ""              # opcional: gateway (ej. api.aisa.one/v1)
+# BOT_INSTANCE_ID lo estampa el CLI con el uid de 6 chars; liga las licencias Pro
+# a UNA instalación concreta (no lo edites a mano).
+BOT_INSTANCE_ID = "{{BOT_INSTANCE_ID}}"
 BOT_NAME = "{{BOT_NAME}}"
 BUSINESS_NAME = "{{BUSINESS_NAME}}"
 BOT_LANGUAGE = "es"

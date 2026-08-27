@@ -50,8 +50,8 @@ export async function isProLicense(env: Env): Promise<boolean> {
     const { SettingsRepo, SETTING_KEYS } = await import("./db/settings");
     const code = await new SettingsRepo(new Db(env.DB)).get(SETTING_KEYS.proLicense);
     if (code) {
-      const { verifyLicense } = await import("./license");
-      return verifyLicense(code, env) !== null;
+      const { verifyLicenseFor } = await import("./license");
+      return verifyLicenseFor(env, code, { instanceUid: env.BOT_INSTANCE_ID });
     }
   } catch (e) {
     console.warn("[limits] isProLicense falló:", e);

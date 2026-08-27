@@ -25,10 +25,10 @@ interface ChannelStatus {
   howTo: string;
 }
 
-function channelStatuses(env: Env, zernioCreds: ZernioCredentials): ChannelStatus[] {
+function channelStatuses(env: Env, zernioCreds: ZernioCredentials, telegramToken?: string): ChannelStatus[] {
   const has = (v?: string) => Boolean(v && v.trim() !== "");
 
-  const telegramMissing = [!has(env.TELEGRAM_BOT_TOKEN) && "TELEGRAM_BOT_TOKEN"].filter(
+  const telegramMissing = [!has(telegramToken) && "TELEGRAM_BOT_TOKEN"].filter(
     Boolean,
   ) as string[];
   const twilioMissing = [
@@ -140,15 +140,18 @@ export async function renderConexiones(
   pausedChannels: string[] = [],
   zernioAccounts: ZernioAccount[] = [],
   rateUsage: Record<string, { used: number; windowStart: number }> = {},
-  opts: { zernioCreds?: ZernioCredentials; saved?: boolean; error?: string } = {},
+  opts: { zernioCreds?: ZernioCredentials; telegramToken?: string; baseUrl?: string; saved?: boolean; error?: string } = {},
 ): Promise<string> {
   const zernioCreds = opts.zernioCreds ?? {
     apiKey: env.ZERNIO_API_KEY,
     webhookSecret: env.ZERNIO_WEBHOOK_SECRET,
   };
-  const channels = channelStatuses(env, zernioCreds);
+  const telegramToken = opts.telegramToken ?? env.TELEGRAM_BOT_TOKEN;
+  const channels = channelStatuses(env, zernioCreds, telegramToken);
   const connected = channels.filter((ch) => ch.ok).length;
-  const base = (env.DASHBOARD_BASE_URL ?? "").replace(/\/$/, "");
+  // Fallback de base: la ruta GET pasa el origin real si DASHBOARD_BASE_URL está
+  // vacío, para que las cards SIEMPRE muestren su webhook URL.
+  const base = (opts.baseUrl ?? env.DASHBOARD_BASE_URL ?? "").replace(/\/$/, "");
 
   // Formulario de conexión de Zernio: pegar API key + webhook secret y listo.
   // Se guarda en D1 (settings) y el canal se pone verde SIN redeploy.
@@ -178,6 +181,26 @@ export async function renderConexiones(
       </form>`;
   };
 
+  // Formulario de Telegram: token del bot (validado con getMe), igual de simple.
+  const telegramForm = (ch: ChannelStatus) => {
+    if (ch.id !== "telegram") return "";
+    const hasToken = (telegramToken ?? "").trim() !== "";
+    return `
+      <form method="POST" action="/admin/conexiones/telegram" style="display:flex;flex-direction:column;gap:10px;margin-top:4px">
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <label class="font-display font-semibold text-[12.5px] text-cream">Token del bot (BotFather)</label>
+          <input type="password" name="telegram_bot_token" value="" autocomplete="off"
+                 placeholder="${hasToken ? "token guardado — escribe para reemplazar" : "Pega el token de @BotFather"}"
+                 style="background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:10px 12px;font-size:12.5px;outline:none">
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <button type="submit" class="text-[12px] font-display font-semibold"
+                  style="border:1px solid var(--line);color:var(--cream);padding:9px 14px;cursor:pointer;background:none">${ch.ok ? "Actualizar conexión" : "Conectar Telegram"}</button>
+          ${ch.ok ? `<label class="text-dim text-[11.5px]" style="display:flex;align-items:center;gap:7px;cursor:pointer"><input type="checkbox" name="clear" value="1"> Quitar conexión</label>` : ""}
+        </div>
+      </form>`;
+  };
+
   const cards = channels
     .map((ch) => {
       const badge = ch.ok
@@ -192,7 +215,7 @@ export async function renderConexiones(
            <div class="text-dim text-[11.5px]">${esc(ch.howTo)}</div>`;
 
       const webhook =
-        ch.webhookPath && base
+        ch.webhookPath
           ? `<div class="text-dim text-[10.5px] font-mono" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
                <span style="border:1px solid var(--line);padding:4px 8px;background:var(--bg)">${esc(base + ch.webhookPath)}</span>
                <button type="button" class="text-[10.5px]" style="border:1px solid var(--line);color:var(--cream);padding:4px 8px;cursor:pointer;background:none"
@@ -279,6 +302,7 @@ export async function renderConexiones(
           ${security}
           ${webhook}
           ${zernioForm(ch)}
+          ${telegramForm(ch)}
           ${zernioBlock}
           ${pauseBtn}
         </div>`;
@@ -286,7 +310,7 @@ export async function renderConexiones(
     .join("");
 
   const savedBanner = opts.saved
-    ? `<div style="border:1px solid var(--ok);background:rgba(127,183,126,.1);color:var(--ok);padding:10px 14px;font-size:12.5px;font-weight:600">✓ Zernio guardado. Pega la URL del webhook en zernio.com para terminar.</div>`
+    ? `<div style="border:1px solid var(--ok);background:rgba(127,183,126,.1);color:var(--ok);padding:10px 14px;font-size:12.5px;font-weight:600">✓ Conexión guardada. Registra la URL del webhook en el proveedor para terminar.</div>`
     : "";
   const errorBanner = opts.error
     ? `<div style="border:1px solid var(--danger,#e0654d);background:rgba(224,101,77,.1);color:var(--danger,#e0654d);padding:10px 14px;font-size:12.5px;font-weight:600">✕ ${esc(opts.error)}</div>`
@@ -309,7 +333,7 @@ export async function renderConexiones(
 }
 
 /** Resumen corto para el badge de salud del Resumen. */
-export function connectionsSummary(env: Env, zernioCreds: ZernioCredentials): { connected: number; total: number } {
-  const channels = channelStatuses(env, zernioCreds);
+export function connectionsSummary(env: Env, zernioCreds: ZernioCredentials, telegramToken?: string): { connected: number; total: number } {
+  const channels = channelStatuses(env, zernioCreds, telegramToken);
   return { connected: channels.filter((ch) => ch.ok).length, total: channels.length };
 }

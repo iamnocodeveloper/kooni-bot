@@ -56,8 +56,14 @@ en TU cuenta de Cloudflare. Al terminar tienes tu dashboard en
 Actualizaciones sin perder datos:
 
 ```bash
-npx kooni-bot update
+npx kooni-bot update          # actualiza la instalación actual (o te pregunta cuál)
+npx kooni-bot update --all    # actualiza TODAS las instalaciones registradas en esta máquina
 ```
+
+Cada instalación tiene un `uid` único: su propio Worker, D1 y Vectorize. Así puedes
+tener varios bots en la misma cuenta de Cloudflare sin que compartan datos, y
+actualizarlos juntos con `update --all`. Telegram y Zernio se conectan desde el
+panel (`/admin/conexiones`) pegando su token/API key, sin redesplegar.
 
 **O despliega directo (sin CLI):**
 

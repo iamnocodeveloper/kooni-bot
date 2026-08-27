@@ -425,8 +425,10 @@ adminApp.get("/conexiones", async (c) => {
     // sin settings: sin canales pausados
   }
   const { listZernioAccounts } = await import("../channels/zernioAccounts");
+  const { resolveTelegramToken } = await import("../channels/telegramCredentials");
   const zernioAccounts = await listZernioAccounts(c.env);
   const zernioCreds = await resolveZernioCredentials(c.env);
+  const telegramToken = await resolveTelegramToken(c.env);
 
   // Uso de rate limit por cuenta (DM/hora) para mostrar en la card Zernio.
   const rateUsage: Record<string, { used: number; windowStart: number }> = {};
@@ -440,10 +442,20 @@ adminApp.get("/conexiones", async (c) => {
   } catch {
     // sin rate usage
   }
+  // Fallback de origin para la webhook URL: si DASHBOARD_BASE_URL está vacío,
+  // usamos la URL real del request para que las cards SIEMPRE muestren su webhook.
+  const baseUrl = c.env.DASHBOARD_BASE_URL?.trim() || new URL(c.req.url).origin;
   return c.html(await renderConexiones(c.env, pausedChannels, zernioAccounts, rateUsage, {
     zernioCreds,
-    saved: c.req.query("zernio") === "saved",
-    error: c.req.query("zernio") === "error" ? (c.req.query("msg") ?? "No se pudo validar la API key.") : undefined,
+    telegramToken,
+    baseUrl,
+    saved: c.req.query("zernio") === "saved" || c.req.query("telegram") === "saved",
+    error:
+      c.req.query("zernio") === "error"
+        ? (c.req.query("msg") ?? "No se pudo validar la API key.")
+        : c.req.query("telegram") === "error"
+          ? (c.req.query("msg") ?? "No se pudo validar el token de Telegram.")
+          : undefined,
   }));
 });
 
@@ -496,13 +508,47 @@ adminApp.post("/conexiones/zernio", async (c) => {
   return c.redirect("/admin/conexiones?zernio=saved");
 });
 
+// Conectar Telegram desde el panel: guarda el token del bot en D1 (settings),
+// validándolo con getMe antes de persistirlo. Sin `wrangler secret put` ni redeploy.
+adminApp.post("/conexiones/telegram", async (c) => {
+  const form = await c.req.formData();
+  const repo = new SettingsRepo(new Db(c.env.DB));
+
+  if (String(form.get("clear") ?? "") === "1") {
+    await repo.set(SETTING_KEYS.telegramBotToken, "");
+    return c.redirect("/admin/conexiones?telegram=saved");
+  }
+
+  const token = String(form.get("telegram_bot_token") ?? "").trim();
+  // Campo vacío: conserva el token existente.
+  const existing = await repo.get(SETTING_KEYS.telegramBotToken);
+  const tokenToSave = token || existing || "";
+
+  if (tokenToSave) {
+    try {
+      const res = await fetch(`https://api.telegram.org/bot${tokenToSave}/getMe`, {
+        signal: AbortSignal.timeout(8000),
+      });
+      const j = (await res.json().catch(() => ({}))) as { ok?: boolean };
+      if (!res.ok || j.ok !== true) {
+        return c.redirect(`/admin/conexiones?telegram=error&msg=${encodeURIComponent("El token de Telegram no es válido.")}`);
+      }
+    } catch {
+      return c.redirect(`/admin/conexiones?telegram=error&msg=${encodeURIComponent("No se pudo contactar Telegram para validar el token.")}`);
+    }
+  }
+
+  await repo.set(SETTING_KEYS.telegramBotToken, tokenToSave);
+  return c.redirect("/admin/conexiones?telegram=saved");
+});
+
 // Licencia: activa Pro pegando un código KOONI-PRO-... (validación local HMAC).
 adminApp.get("/licencia", async (c) => c.html(await renderLicencia(c.env)));
 
 adminApp.post("/licencia", async (c) => {
   const { Db } = await import("../db/client");
   const { SettingsRepo, SETTING_KEYS } = await import("../db/settings");
-  const { verifyLicense } = await import("../license");
+  const { verifyLicense, verifyLicenseFor } = await import("../license");
   const form = await c.req.formData();
   const repo = new SettingsRepo(new Db(c.env.DB));
 
@@ -516,6 +562,9 @@ adminApp.post("/licencia", async (c) => {
   const payload = verifyLicense(code, c.env);
   if (!payload) {
     return c.html(await renderLicencia(c.env, "Código inválido o vencido. Verifícalo con quien te lo vendió.", true));
+  }
+  if (!verifyLicenseFor(c.env, code, { instanceUid: c.env.BOT_INSTANCE_ID })) {
+    return c.html(await renderLicencia(c.env, "Este código es de OTRA instalación. Pide una licencia para este bot específico.", true));
   }
   await repo.set(SETTING_KEYS.proLicense, code);
   const detail = payload.kind === "monthly" && payload.expiry

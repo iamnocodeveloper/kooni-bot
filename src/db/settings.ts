@@ -38,6 +38,8 @@ export const SETTING_KEYS = {
   // Viven en settings para conectar el canal SIN `wrangler secret put` ni redeploy.
   zernioApiKey: "zernio_api_key",
   zernioWebhookSecret: "zernio_webhook_secret",
+  // Telegram: token del bot editable desde el panel (mismo patrón que Zernio).
+  telegramBotToken: "telegram_bot_token",
 } as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[keyof typeof SETTING_KEYS];
