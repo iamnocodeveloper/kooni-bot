@@ -14,15 +14,15 @@
 import { createInterface } from "node:readline/promises";
 import { emitKeypressEvents } from "node:readline";
 import { stdin as input, stdout as output } from "node:process";
-import { mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, readdirSync, statSync, cpSync, chmodSync } from "node:fs";
+import { mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, readdirSync, statSync, cpSync } from "node:fs";
+import { realpathSync } from "node:fs";
 import { join, basename } from "node:path";
 import { homedir } from "node:os";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
-import { realpathSync } from "node:fs";
 
-const CLI_VERSION = "0.2.0";
+const CLI_VERSION = "0.2.1";
 
 const REPO = process.env.KOONI_REPO || "iamnocodeveloper/kooni-bot";
 const BRANCH = process.env.KOONI_BRANCH || "main";
@@ -339,32 +339,27 @@ async function ask(rl, q, val) {
   return (await rl.question("\n  " + C.b(q) + "\n  " + C.cyan("› "))).trim();
 }
 
-// Input oculto (raw mode, sin eco) para API keys / contraseñas.
-async function askSecret(rl, q) {
+// Input oculto para API keys / contraseñas. Usa una interfaz readline DEDICADA
+// (no el rl compartido) con máscara de salida para no chocar con los listeners
+// del selector y soportar pegado. Devuelve "" si no hay TTY.
+async function promptSecret(q) {
   if (!interactive()) return "";
-  process.stdout.write("\n  " + C.b(q) + "\n  " + C.cyan("› "));
-  return await new Promise((resolve) => {
-    const prev = input.isRaw;
-    input.setRawMode(true);
-    input.resume();
-    let buf = "";
-    const onData = (chunk) => {
-      const s = chunk.toString();
-      for (const ch of s) {
-        if (ch === "\r" || ch === "\n") {
-          cleanup();
-          process.stdout.write("\n");
-          resolve(buf);
-          return;
-        }
-        if (ch === "\u0003") { cleanup(); process.stdout.write("\n"); process.exit(130); }
-        if (ch === "\u007f" || ch === "\b") { buf = buf.slice(0, -1); }
-        else if (ch >= " " && ch !== "\u001b") { buf += ch; }
-      }
+  const rl = createInterface({ input, output, terminal: true });
+  const answer = await new Promise((resolve) => {
+    // Enmascara lo que teclea el usuario: solo deja pasar el prompt y los saltos
+    // de línea (nunca la tecla), para que la API key quede oculta.
+    const orig = rl._writeToOutput;
+    rl._writeToOutput = (s) => {
+      if (s === "\r\n" || s === "\n" || s === "\r") process.stdout.write(s);
+      else if (typeof orig === "function" && s.includes("› ")) orig.call(rl, s);
     };
-    const cleanup = () => { input.removeListener("data", onData); input.pause(); if (!prev) input.setRawMode(false); };
-    input.on("data", onData);
+    rl.question("\n  " + C.b(q) + "\n  " + C.cyan("› "), (a) => {
+      rl.close();
+      resolve(a);
+    });
   });
+  process.stdout.write("\n");
+  return answer.trim();
 }
 
 async function confirm(rl, q) {
@@ -499,40 +494,49 @@ function resolveBotDir(arg) {
 // ── exec cross-platform ──────────────────────────────────────────────────────
 const isWin = process.platform === "win32";
 
-// Ejecuta `npx wrangler ...` respetando el shim .cmd en Windows.
+// Ejecuta un binario de forma segura en Windows/macOS/Linux SIN `shell: true`:
+// - En Windows se resuelve el shim `.cmd` (npx.cmd / pnpm.cmd) y se lanza con
+//   `spawnSync` (así Node no concatena argumentos ni emite DEP0190).
+// - `stdio` hereda por defecto para que el usuario vea el progreso en vivo.
+// - Devuelve stdout como string; si el proceso falla, lanza el error con stderr.
+function run(file, args = [], opts = {}) {
+  const cwd = opts.cwd;
+  const input = opts.input != null ? String(opts.input) : undefined;
+  const stdio = opts.stdio || (opts.capture ? ["pipe", "pipe", "pipe"] : "inherit");
+
+  let cmd = file;
+  if (isWin && !/\.(cmd|bat|exe)$/i.test(file)) {
+    // pnpm/npx en Windows son shims .cmd; ejecutarlos directo falla con ENOENT/EINVAL.
+    if (file === "pnpm") cmd = "pnpm.cmd";
+    else if (file === "npx") cmd = "npx.cmd";
+  }
+
+  const r = spawnSync(cmd, args, { cwd, input, stdio, encoding: "utf8" });
+  if (r.error) throw r.error;
+  if (r.status !== 0) {
+    const err = new Error(`Command failed: ${[cmd, ...args].join(" ")}`);
+    err.stdout = r.stdout;
+    err.stderr = r.stderr;
+    err.status = r.status;
+    throw err;
+  }
+  return (r.stdout || "").toString();
+}
+
+// Ejecuta `npx wrangler ...`. `capture` captura stdout/stderr (para parsear);
+// por defecto hereda la terminal (progreso visible).
 function wrangler(dir, args, opts = {}) {
-  const npx = isWin ? "npx.cmd" : "npx";
-  return execFileSync(npx, ["wrangler", ...args], {
-    cwd: dir,
-    encoding: "utf8",
-    stdio: opts.stdio || ["ignore", "pipe", "pipe"],
-    ...(isWin ? { shell: true } : {}),
-    ...opts.extra,
-  });
+  return run("npx", ["wrangler", ...args], { cwd: dir, ...opts });
 }
 
 // Ejecuta `pnpm ...`, habilitando corepack si no existe pnpm.
 function runPnpm(dir, args, opts = {}) {
-  const pnpm = process.env.KOONI_PNPM || "pnpm";
   try {
-    return execFileSync(pnpm, args, {
-      cwd: dir,
-      encoding: "utf8",
-      stdio: opts.stdio || ["ignore", "pipe", "pipe"],
-      ...(isWin ? { shell: true } : {}),
-      ...opts.extra,
-    });
+    return run("pnpm", args, { cwd: dir, ...opts });
   } catch (e) {
-    // pnpm ausente: habilítalo vía corepack y reintenta una vez.
-    if (/pnpm/.test(e.message || "")) {
-      try { execFileSync("corepack", ["enable", "pnpm"], { stdio: "ignore" }); } catch {}
-      return execFileSync(pnpm, args, {
-        cwd: dir,
-        encoding: "utf8",
-        stdio: opts.stdio || ["ignore", "pipe", "pipe"],
-        ...(isWin ? { shell: true } : {}),
-        ...opts.extra,
-      });
+    if (e && /ENOENT|not found|pnpm/.test(String(e.message || ""))) {
+      try { run("corepack", ["enable", "pnpm"], { stdio: "ignore" }); } catch {}
+      return run("pnpm", args, { cwd: dir, ...opts });
     }
     throw e;
   }
@@ -553,9 +557,10 @@ function stampWrangler(dir, answers) {
   if (!existsSync(wt)) return null;
   let s = readFileSync(wt, "utf8");
   const slug = answers.slug;
-  const resId = slug.replace(/-/g, "_");
-  const dbName = `kooni_${resId}_db`;
-  const kbName = `kooni_${resId}_kb`;
+  // Nombres canónicos del proyecto (coinciden con `pnpm db:apply:remote`, que
+  // apunta a `kooni_db`, y con la instalación probada del template).
+  const dbName = "kooni_db";
+  const kbName = "kooni_kb";
   const R = REGIONS[answers.lang] || REGIONS["es-MX"];
 
   const set = (re, val) => { s = s.replace(re, val); };
@@ -567,7 +572,6 @@ function stampWrangler(dir, answers) {
   set(/BOT_TIER\s*=\s*"[^"]*"/g, `BOT_TIER = "${answers.tier}"`);
   set(/BUFFER_SECONDS\s*=\s*"[^"]*"/g, `BUFFER_SECONDS = "${answers.bufferSeconds || "15"}"`);
   set(/DASHBOARD_BASE_URL\s*=\s*"[^"]*"/g, `DASHBOARD_BASE_URL = ""`);
-  // D1 / Vectorize namespaced por bot.
   set(/database_name\s*=\s*"[^"]*"/, `database_name = "${dbName}"`);
   set(/index_name\s*=\s*"[^"]*"/, `index_name = "${kbName}"`);
   // El id del demo no sirve: placeholder hasta que `deploy` lo reemplace.
@@ -671,44 +675,49 @@ function writeDevVars(dir, answers, kbToken) {
   writeFileSync(join(dir, ".dev.vars"), lines.join("\n") + "\n");
 }
 
-function collectAnswers(flags, rl) {
-  const slug = sanitizeSlug(flags.slug || "");
-  const brainKey = ({ claude: "claude", anthropic: "claude", chatgpt: "chatgpt", openai: "chatgpt", gpt: "chatgpt", grok: "grok", xai: "grok", gateway: "gateway" })[String(flags.cerebro || flags.brain || "claude").trim().toLowerCase()] || "claude";
-  const tone = ({ cercano: "cercano", friendly: "cercano", formal: "formal", divertido: "divertido", playful: "divertido" })[String(flags.tono || "").trim().toLowerCase()] || "";
+function collectAnswers(flags) {
+  const rawBrain = String(flags.cerebro || flags.brain || "").trim().toLowerCase();
+  const brainKey = ({ claude: "claude", anthropic: "claude", chatgpt: "chatgpt", openai: "chatgpt", gpt: "chatgpt", grok: "grok", xai: "grok", gateway: "gateway" })[rawBrain] || null;
+  const tone = ({ cercano: "cercano", friendly: "cercano", formal: "formal", divertido: "divertido", playful: "divertido" })[String(flags.tono || "").trim().toLowerCase()] || null;
+
+  // Lo que vino por flag se conserva; lo que NO vino queda undefined para que
+  // `onboarding()` lo pregunte (interactivo) o use el default (no-interactivo).
   return {
-    slug,
-    businessName: String(flags.negocio || flags.nombre || flags.name || "").trim(),
-    botName: String(flags["bot-name"] || "Asistente").trim(),
-    lang: normBotLang(flags.lang),
-    tier: String(flags.tier || "free").trim().toLowerCase() === "pro" ? "pro" : "free",
-    provider: BRAINS[brainKey].provider,
+    slug: flags.slug ? sanitizeSlug(flags.slug) : undefined,
+    businessName: String(flags.negocio || flags.nombre || flags.name || "").trim() || undefined,
+    botName: String(flags["bot-name"] || "").trim() || undefined,
+    lang: flags.lang ? normBotLang(flags.lang) : undefined,
+    tier: flags.tier ? (String(flags.tier).trim().toLowerCase() === "pro" ? "pro" : "free") : undefined,
+    provider: brainKey ? BRAINS[brainKey].provider : undefined,
     brainKey,
-    baseUrl: String(flags["base-url"] || "").trim() || (brainKey === "gateway" ? "https://api.aisa.one/v1" : ""),
-    secret: BRAINS[brainKey].secret,
-    what: String(flags.que || "").trim(),
-    offer: String(flags.ofrece || "").trim(),
-    hours: String(flags.horario || "").trim(),
-    location: String(flags.ubicacion || "").trim(),
-    phone: String(flags.telefono || "").trim(),
-    web: String(flags.web || flags.redes || "").trim(),
-    pagos: String(flags.pagos || "").trim(),
-    faq: String(flags.faq || "").trim(),
-    reglas: String(flags.reglas || "").trim(),
+    baseUrl: String(flags["base-url"] || "").trim() || undefined,
+    secret: brainKey ? BRAINS[brainKey].secret : undefined,
+    what: String(flags.que || "").trim() || undefined,
+    offer: String(flags.ofrece || "").trim() || undefined,
+    hours: String(flags.horario || "").trim() || undefined,
+    location: String(flags.ubicacion || "").trim() || undefined,
+    phone: String(flags.telefono || "").trim() || undefined,
+    web: String(flags.web || flags.redes || "").trim() || undefined,
+    pagos: String(flags.pagos || "").trim() || undefined,
+    faq: String(flags.faq || "").trim() || undefined,
+    reglas: String(flags.reglas || "").trim() || undefined,
     tone,
-    email: String(flags.email || "").trim(),
+    email: String(flags.email || "").trim() || undefined,
   };
 }
 
-// Pregunta lo que falte, uno a uno. En no-interactivo sin flag, devuelve default.
-async function onboarding(rl, answers) {
+// Pregunta lo que falte, uno a uno. En interactivo muestra menús reales; en
+// no-interactivo (`--yes`/agente) usa defaults. `defaultDir` alimenta el slug.
+async function onboarding(rl, answers, defaultDir) {
   console.log("\n  " + C.dim(t().prep));
 
-  answers.slug = answers.slug || sanitizeSlug(await ask(rl, t().qSlug, null) || "mi-negocio");
-  if (!answers.businessName) answers.businessName = await ask(rl, t().qBusiness, null);
-  if (!answers.botName || answers.botName === "Asistente") {
-    const b = await ask(rl, t().qBotName, null);
-    if (b) answers.botName = b;
+  if (!answers.slug) {
+    const dflt = sanitizeSlug(defaultDir || "mi-negocio");
+    const v = await ask(rl, t().qSlug, undefined);
+    answers.slug = v ? sanitizeSlug(v) : dflt;
   }
+  if (!answers.businessName) answers.businessName = await ask(rl, t().qBusiness, undefined) || "";
+  if (!answers.botName) answers.botName = await ask(rl, t().qBotName, undefined) || "Asistente";
 
   const langKeys = Object.keys(REGIONS);
   const langIdx = await select(rl, t().qLang, langKeys.map((k) => ({ key: k, label: k })), { value: answers.lang, default: 0 });
@@ -729,33 +738,51 @@ async function onboarding(rl, answers) {
   answers.provider = BRAINS[answers.brainKey].provider;
   answers.secret = BRAINS[answers.brainKey].secret;
   if (answers.brainKey === "gateway" && !answers.baseUrl) {
-    answers.baseUrl = await ask(rl, t().qBaseUrl, null) || "https://api.aisa.one/v1";
+    answers.baseUrl = await ask(rl, t().qBaseUrl, undefined) || "https://api.aisa.one/v1";
   }
 
-  answers.what = answers.what || await ask(rl, t().qWhat, null);
-  answers.offer = answers.offer || await ask(rl, t().qOffer, null);
-  answers.hours = answers.hours || await ask(rl, t().qHours, null);
-  answers.location = answers.location || await ask(rl, t().qLoc, null);
-  answers.phone = answers.phone || await ask(rl, t().qPhone, null);
-  answers.web = answers.web || await ask(rl, t().qWeb, null);
-  answers.pagos = answers.pagos || await ask(rl, t().qPagos, null);
-  answers.faq = answers.faq || await ask(rl, t().qFaq, null);
-  answers.reglas = answers.reglas || await ask(rl, t().qReglas, null);
+  answers.what = answers.what ?? (await ask(rl, t().qWhat, undefined) || "");
+  answers.offer = answers.offer ?? (await ask(rl, t().qOffer, undefined) || "");
+  answers.hours = answers.hours ?? (await ask(rl, t().qHours, undefined) || "");
+  answers.location = answers.location ?? (await ask(rl, t().qLoc, undefined) || "");
+  answers.phone = answers.phone ?? (await ask(rl, t().qPhone, undefined) || "");
+  answers.web = answers.web ?? (await ask(rl, t().qWeb, undefined) || "");
+  answers.pagos = answers.pagos ?? (await ask(rl, t().qPagos, undefined) || "");
+  answers.faq = answers.faq ?? (await ask(rl, t().qFaq, undefined) || "");
+  answers.reglas = answers.reglas ?? (await ask(rl, t().qReglas, undefined) || "");
 
   const toneIdx = await select(rl, t().qTone, [
     { key: "cercano", label: t().toneFriendly, desc: t().tone1 },
     { key: "formal", label: t().toneFormal, desc: t().tone2 },
     { key: "divertido", label: t().tonePlayful, desc: t().tone3 },
-  ], { value: answers.tone || "cercano", default: 0 });
+  ], { value: answers.tone, default: 0 });
   answers.tone = ["cercano", "formal", "divertido"][toneIdx] || "cercano";
 
   return answers;
 }
 
 // ── deploy ───────────────────────────────────────────────────────────────────
+const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+
 function parseD1Id(raw) {
-  const m = raw.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/);
+  const m = String(raw || "").match(UUID_RE);
   return m ? m[0] : "";
+}
+
+// Extrae el id de una D1 por nombre desde la salida de `wrangler d1 list`. Sabe
+// leer el JSON de `--json` (objeto por db) y, si no es JSON, cae a regex.
+function findD1IdByName(raw, name) {
+  const s = String(raw || "");
+  try {
+    const parsed = JSON.parse(s);
+    const arr = Array.isArray(parsed) ? parsed : parsed.result;
+    if (Array.isArray(arr)) {
+      const hit = arr.find((d) => d && (d.name === name || d.database_name === name));
+      if (hit && hit.uuid) return hit.uuid;
+    }
+  } catch { /* no es JSON → regex */ }
+  const m = s.match(new RegExp(`${name}[\\s\\S]{0,200}?(${UUID_RE.source})`, "i"));
+  return m ? m[1] : "";
 }
 
 function patchWranglerFile(dir, fn) {
@@ -774,38 +801,43 @@ async function deployBot(dir, { flags = {}, rl } = {}) {
 
   // login
   process.stdout.write(C.dim("  " + t().login + "\n"));
-  wrangler(dir, ["login"], { stdio: "inherit" });
+  wrangler(dir, ["login"]);
   console.log("  " + C.green("✓") + " " + t().loginOk);
 
-  // recursos
+  // recursos (nombres canónicos del proyecto: kooni_db / kooni_kb)
   console.log("\n  " + C.dim(t().creatingResources));
-  const dbName = (readFileSync(wt, "utf8").match(/database_name\s*=\s*"([^"]+)"/) || [])[1] || "kooni_db";
-  const kbName = (readFileSync(wt, "utf8").match(/index_name\s*=\s*"([^"]+)"/) || [])[1] || "kooni_kb";
+  const dbName = "kooni_db";
+  const kbName = "kooni_kb";
 
   let d1Id = "";
   try {
-    const out = wrangler(dir, ["d1", "create", dbName]);
+    const out = wrangler(dir, ["d1", "create", dbName], { capture: true });
     d1Id = parseD1Id(out);
   } catch {}
   if (!d1Id) {
     try {
-      const list = wrangler(dir, ["d1", "list"]);
-      const m = list.match(new RegExp(`${dbName}[\\s\\S]{0,160}?([0-9a-f-]{36})`));
-      d1Id = m ? m[1] : "";
+      // `--json` da un JSON limpio; si falla, caemos al texto plano.
+      let list = "";
+      try { list = wrangler(dir, ["d1", "list", "--json"], { capture: true }); }
+      catch { list = wrangler(dir, ["d1", "list"], { capture: true }); }
+      d1Id = findD1IdByName(list, dbName);
     } catch {}
   }
-  if (d1Id) {
-    patchWranglerFile(dir, (s) => s.replace(/database_id\s*=\s*"[^"]*"/, `database_id = "${d1Id}"`));
-    console.log("  " + C.green("✓") + " " + t().d1Ok(d1Id));
-  } else {
-    console.log("  " + C.yellow("⚠") + " " + t().d1Warn);
+  if (!d1Id) {
+    // Sin id real NO podemos migrar ni desplegar: el placeholder rompe wrangler.
+    throw new Error(m(
+      `no pude crear/encontrar la base D1 "${dbName}". Córrelo a mano (npx wrangler d1 create ${dbName}) y pega el id en wrangler.toml, luego reintenta kooni-bot deploy.`,
+      `couldn't create/find the D1 database "${dbName}". Run it manually (npx wrangler d1 create ${dbName}), paste the id into wrangler.toml, then retry kooni-bot deploy.`,
+    ));
   }
+  patchWranglerFile(dir, (s) => s.replace(/database_id\s*=\s*"[^"]*"/, `database_id = "${d1Id}"`));
+  console.log("  " + C.green("✓") + " " + t().d1Ok(d1Id));
 
-  try { wrangler(dir, ["vectorize", "create", kbName, "--dimensions=1024", "--metric=cosine"]); } catch {}
+  try { wrangler(dir, ["vectorize", "create", kbName, "--dimensions=1024", "--metric=cosine"], { capture: true }); } catch {}
   console.log("  " + C.green("✓") + " " + t().vectorOk);
 
   try {
-    wrangler(dir, ["r2", "bucket", "create", "kooni-bot-catalog"]);
+    wrangler(dir, ["r2", "bucket", "create", "kooni-bot-catalog"], { capture: true });
     console.log("  " + C.green("✓") + " " + t().r2Ok);
   } catch {
     console.log("  " + C.yellow("⚠") + " " + t().r2Warn);
@@ -821,10 +853,10 @@ async function deployBot(dir, { flags = {}, rl } = {}) {
   // API key: interactiva por defecto; en no-interactivo se delega al agente.
   let apiKey = flags["api-key"] || "";
   if (!apiKey && interactive()) {
-    apiKey = await askSecret(rl, m(`Pega tu API key de ${BRAINS[flags.brainKey || "claude"].label} (no se mostrará):`, `Paste your ${BRAINS[flags.brainKey || "claude"].label} API key (hidden):`));
+    apiKey = await promptSecret(m(`Pega tu API key de ${BRAINS[flags.brainKey || "claude"].label} (no se mostrará):`, `Paste your ${BRAINS[flags.brainKey || "claude"].label} API key (hidden):`));
   }
   if (apiKey) {
-    wrangler(dir, ["secret", "put", BRAINS[flags.brainKey || "claude"].secret], { stdio: ["pipe", "pipe", "pipe"], extra: { input: apiKey } });
+    wrangler(dir, ["secret", "put", BRAINS[flags.brainKey || "claude"].secret], { input: apiKey, capture: true });
     console.log("  " + C.green("✓") + " " + t().secretOk(BRAINS[flags.brainKey || "claude"].secret));
   } else if (!interactive()) {
     console.log(C.yellow("\n  ── PARA EL AGENTE ──  falta la API key de IA."));
@@ -833,9 +865,9 @@ async function deployBot(dir, { flags = {}, rl } = {}) {
   }
 
   let dash = "";
-  if (interactive()) dash = await askSecret(rl, m("Elige una contraseña para el panel /admin (usuario: admin):", "Choose a password for the /admin dashboard (user: admin):"));
+  if (interactive()) dash = await promptSecret(m("Elige una contraseña para el panel /admin (usuario: admin):", "Choose a password for the /admin dashboard (user: admin):"));
   if (!dash) dash = "kooni-local-password";
-  wrangler(dir, ["secret", "put", "DASHBOARD_PASSWORD"], { stdio: ["pipe", "pipe", "pipe"], extra: { input: dash } });
+  wrangler(dir, ["secret", "put", "DASHBOARD_PASSWORD"], { input: dash, capture: true });
   console.log("  " + C.green("✓") + " " + t().secretOk("DASHBOARD_PASSWORD"));
 
   // KB token desde .dev.vars
@@ -843,28 +875,34 @@ async function deployBot(dir, { flags = {}, rl } = {}) {
     const dv = readFileSync(join(dir, ".dev.vars"), "utf8");
     const m = dv.match(/^KB_REINDEX_TOKEN=(.+)$/m);
     if (m && m[1]) {
-      wrangler(dir, ["secret", "put", "KB_REINDEX_TOKEN"], { stdio: ["pipe", "pipe", "pipe"], extra: { input: m[1] } });
+      wrangler(dir, ["secret", "put", "KB_REINDEX_TOKEN"], { input: m[1], capture: true });
       console.log("  " + C.green("✓") + " " + t().secretOk("KB_REINDEX_TOKEN"));
     }
   } catch {}
 
-  // dependencias + migraciones + deploy
+  // dependencias + migraciones + deploy (progreso visible en vivo)
   console.log("\n  " + C.dim(t().installing));
+  console.log("  " + C.dim(m("esto puede tardar unos minutos la primera vez (descarga el runtime y compila dependencias).", "this may take a few minutes the first time (downloads the runtime and builds native deps).")));
   runPnpm(dir, ["install"]);
   console.log("  " + C.green("✓") + " " + m("dependencias listas", "dependencies ready"));
 
   console.log("  " + C.dim(t().migrations));
-  wrangler(dir, ["d1", "execute", dbName, "--file=src/db/schema.sql", "--remote"]);
+  runPnpm(dir, ["db:apply:remote"]);
   console.log("  " + C.green("✓") + " " + m("migraciones aplicadas", "migrations applied"));
 
   console.log("  " + C.dim(t().deploying));
-  let dep = wrangler(dir, ["deploy"]);
-  let url = (dep.match(/https:\/\/[a-z0-9-]+\.workers\.dev/) || [])[0] || "";
+  let url = "";
+  try {
+    const dep = runPnpm(dir, ["run", "deploy"], { capture: true });
+    url = (dep.match(/https:\/\/[a-z0-9-]+\.workers\.dev/) || [])[0] || "";
+  } catch {
+    // el deploy-check imprime el detalle; si falló, no seguimos.
+    throw new Error(t().deployFailed);
+  }
   if (url) {
     patchWranglerFile(dir, (s) => s.replace(/DASHBOARD_BASE_URL\s*=\s*"[^"]*"/g, `DASHBOARD_BASE_URL = "${url}"`));
-    wrangler(dir, ["deploy"]);
-  }
-  if (!url) {
+    try { runPnpm(dir, ["run", "deploy"], { capture: true }); } catch {}
+  } else {
     console.log(C.yellow("  ⚠ " + m("no se detectó la URL del worker — revisa la salida del deploy", "couldn't detect the worker URL — check the deploy output")));
   }
   return url;
@@ -1018,8 +1056,8 @@ async function cmdInit(flags, rest) {
 
     // config
     console.log("\n  " + C.cyan("◇ ") + C.b(t().runInit));
-    const answers = collectAnswers(flags, rl);
-    await onboarding(rl, answers);
+    const answers = collectAnswers(flags);
+    await onboarding(rl, answers, basename(dir));
 
     const meta = stampWrangler(dir, answers);
     const kbToken = "kooni-reindex-" + randomUUID().replace(/-/g, "").slice(0, 12);
