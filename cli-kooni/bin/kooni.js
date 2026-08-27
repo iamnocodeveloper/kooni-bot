@@ -22,7 +22,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 
-const CLI_VERSION = "0.2.4";
+const CLI_VERSION = "0.2.5";
 
 const REPO = process.env.KOONI_REPO || "iamnocodeveloper/kooni-bot";
 const BRANCH = process.env.KOONI_BRANCH || "main";
@@ -102,7 +102,7 @@ const DICT = {
     migrations: "Aplicando migraciones D1…",
     deploying: "Desplegando el worker…",
     panel: "Panel de administración:",
-    next: "Lo que sigue: conecta tu primer canal (Telegram ~5 min) desde el panel → Conexiones.",
+    next: "Abre tu panel → Conexiones para conectar canales (Telegram, Zernio, WhatsApp…) — ahí mismo se activan y quedan en verde.",
     // update
     updRevalidating: "Buscando la versión nueva…",
     updUpToDate: "Ya estás en la última versión.",
@@ -174,7 +174,7 @@ const DICT = {
     migrations: "Applying D1 migrations…",
     deploying: "Deploying the worker…",
     panel: "Admin dashboard:",
-    next: "Next: connect your first channel (Telegram ~5 min) from the panel → Connections.",
+    next: "Open your panel → Connections to connect channels (Telegram, Zernio, WhatsApp…) — they activate and turn green right there.",
     updRevalidating: "Checking for a new version…",
     updUpToDate: "You're on the latest version.",
     updDone: (v) => `Updated to v${v}  (your config and data were preserved)`,
@@ -526,6 +526,11 @@ function run(file, args = [], opts = {}) {
     err.stderr = r.stderr;
     err.status = r.status;
     throw err;
+  }
+  // En modo capture, combinamos stdout+stderr: wrangler suele imprimir la URL del
+  // worker en stderr (progreso/banners), y necesitamos verla para parsearla.
+  if (opts.capture) {
+    return `${r.stdout || ""}\n${r.stderr || ""}`;
   }
   return (r.stdout || "").toString();
 }
@@ -907,8 +912,11 @@ async function deployBot(dir, { flags = {}, rl } = {}) {
   try {
     const dep = runPnpm(dir, ["run", "deploy"], { capture: true });
     url = (dep.match(/https:\/\/[a-z0-9-]+\.workers\.dev/) || [])[0] || "";
-  } catch {
-    // el deploy-check imprime el detalle; si falló, no seguimos.
+  } catch (e) {
+    // Muestra el detalle real del deploy en vez de tragarlo: así el usuario ve
+    // qué falló (deploy-check, binding, auth…) y puede corregirlo.
+    const tail = ((e && (e.stderr || e.stdout || e.message)) || "").toString().trim().split("\n").slice(-12).join("\n");
+    if (tail) console.log(C.red("  ✗ " + tail));
     throw new Error(t().deployFailed);
   }
   if (url) {
@@ -1093,6 +1101,8 @@ async function cmdInit(flags, rest) {
         console.log("\n  " + C.green(C.b(m("🎉 BOT EN LÍNEA", "🎉 BOT LIVE"))));
         console.log("  " + C.cyan(t().panel) + " " + C.b(url + "/admin"));
         console.log("  " + C.dim(t().next) + "\n");
+      } else {
+        console.log("  " + C.yellow(m("No detecté la URL automáticamente. Búscala en la salida de `pnpm run deploy` arriba (https://…workers.dev) y abre <url>/admin.", "Couldn't auto-detect the URL. Find it in the `pnpm run deploy` output above (https://…workers.dev) and open <url>/admin.")) + "\n");
       }
     }
 
