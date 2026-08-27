@@ -67,9 +67,9 @@ const DICT = {
     qBusiness: "¿Cómo se llama tu negocio?",
     qBotName: "¿Cómo se llama tu asistente?",
     qLang: "¿En qué idioma debe hablar tu bot?",
-    qTier: "¿Qué plan quieres? (free | pro)",
     brainQ: "¿Con qué cerebro (modelo de IA) quieres que piense tu bot?",
     brainDesc: "recomendado",
+    qApiKey: (label) => `Pega tu API key de ${label} (no se mostrará):`,
     qBaseUrl: "URL base del gateway (ej. https://api.aisa.one/v1)",
     qWhat: "En una frase, ¿a qué se dedica?",
     qOffer: "¿Qué ofreces? (tus servicios o productos principales, con precios si quieres)",
@@ -140,9 +140,9 @@ const DICT = {
     qBusiness: "What's your business called?",
     qBotName: "What's your assistant's name?",
     qLang: "What language should your bot speak?",
-    qTier: "Which plan do you want? (free | pro)",
     brainQ: "Which brain (AI model) should your bot think with?",
     brainDesc: "recommended",
+    qApiKey: (label) => `Paste your ${label} API key (hidden):`,
     qBaseUrl: "Gateway base URL (e.g. https://api.aisa.one/v1)",
     qWhat: "In one line, what does it do?",
     qOffer: "What do you offer? (main services or products, with prices if you like)",
@@ -494,24 +494,27 @@ function resolveBotDir(arg) {
 // ── exec cross-platform ──────────────────────────────────────────────────────
 const isWin = process.platform === "win32";
 
-// Ejecuta un binario de forma segura en Windows/macOS/Linux SIN `shell: true`:
-// - En Windows se resuelve el shim `.cmd` (npx.cmd / pnpm.cmd) y se lanza con
-//   `spawnSync` (así Node no concatena argumentos ni emite DEP0190).
-// - `stdio` hereda por defecto para que el usuario vea el progreso en vivo.
-// - Devuelve stdout como string; si el proceso falla, lanza el error con stderr.
+// Ejecuta un binario de forma segura en Windows/macOS/Linux:
+// - Unix/mac: `spawnSync(file, args)` directo.
+// - Windows: `npx`/`pnpm` son shims `.cmd`, que NO se pueden spawnear directo
+//   (EINVAL). Se lanzan con `cmd.exe /c <file> <args...>` pasando los argumentos
+//   como lista separada (nada de `shell: true` ni concatenación → sin DEP0190).
+// - `stdio` hereda por defecto (progreso en vivo); `capture` captura para parsear.
 function run(file, args = [], opts = {}) {
   const cwd = opts.cwd;
   const input = opts.input != null ? String(opts.input) : undefined;
   const stdio = opts.stdio || (opts.capture ? ["pipe", "pipe", "pipe"] : "inherit");
 
   let cmd = file;
-  if (isWin && !/\.(cmd|bat|exe)$/i.test(file)) {
-    // pnpm/npx en Windows son shims .cmd; ejecutarlos directo falla con ENOENT/EINVAL.
-    if (file === "pnpm") cmd = "pnpm.cmd";
-    else if (file === "npx") cmd = "npx.cmd";
+  let argv = args;
+
+  if (isWin) {
+    const shim = { npx: "npx.cmd", pnpm: "pnpm.cmd" }[file] || file;
+    cmd = "cmd.exe";
+    argv = ["/d", "/c", shim, ...args];
   }
 
-  const r = spawnSync(cmd, args, { cwd, input, stdio, encoding: "utf8" });
+  const r = spawnSync(cmd, argv, { cwd, input, stdio, encoding: "utf8" });
   if (r.error) throw r.error;
   if (r.status !== 0) {
     const err = new Error(`Command failed: ${[cmd, ...args].join(" ")}`);
@@ -692,6 +695,7 @@ function collectAnswers(flags) {
     brainKey,
     baseUrl: String(flags["base-url"] || "").trim() || undefined,
     secret: brainKey ? BRAINS[brainKey].secret : undefined,
+    apiKey: String(flags["api-key"] || "").trim() || undefined,
     what: String(flags.que || "").trim() || undefined,
     offer: String(flags.ofrece || "").trim() || undefined,
     hours: String(flags.horario || "").trim() || undefined,
@@ -723,11 +727,9 @@ async function onboarding(rl, answers, defaultDir) {
   const langIdx = await select(rl, t().qLang, langKeys.map((k) => ({ key: k, label: k })), { value: answers.lang, default: 0 });
   answers.lang = langKeys[langIdx] || "es-MX";
 
-  const tierIdx = await select(rl, t().qTier, [
-    { key: "free", label: "free", desc: m("Starter", "Starter") },
-    { key: "pro", label: "pro", desc: m("panel completo + tools avanzadas", "full panel + advanced tools") },
-  ], { value: answers.tier, default: 0 });
-  answers.tier = tierIdx === 1 ? "pro" : "free";
+  // El plan NO se pregunta: se instala en free y la activación de plan/clave se
+  // hace después desde el dashboard. Aquí solo fijamos el default.
+  answers.tier = answers.tier || "free";
 
   const brainKeys = ["claude", "chatgpt", "grok", "gateway"];
   const brainIdx = await select(rl, t().brainQ, brainKeys.map((k) => ({
@@ -739,6 +741,12 @@ async function onboarding(rl, answers, defaultDir) {
   answers.secret = BRAINS[answers.brainKey].secret;
   if (answers.brainKey === "gateway" && !answers.baseUrl) {
     answers.baseUrl = await ask(rl, t().qBaseUrl, undefined) || "https://api.aisa.one/v1";
+  }
+
+  // La API key se pide aquí, apenas se elige el cerebro — y se conserva para el
+  // deploy (se guarda como secret sin mostrarla). En no-interactivo se salta.
+  if (!answers.apiKey) {
+    answers.apiKey = await promptSecret(t().qApiKey(BRAINS[answers.brainKey].label));
   }
 
   answers.what = answers.what ?? (await ask(rl, t().qWhat, undefined) || "");
@@ -850,11 +858,9 @@ async function deployBot(dir, { flags = {}, rl } = {}) {
   // secrets (sin mostrarlos)
   console.log("\n  " + C.dim(t().secretsTitle));
 
-  // API key: interactiva por defecto; en no-interactivo se delega al agente.
+  // API key: viene del onboarding (o de --api-key). Si no está y no-interactivo,
+  // se delega al agente (wrangler secret put). No se vuelve a preguntar aquí.
   let apiKey = flags["api-key"] || "";
-  if (!apiKey && interactive()) {
-    apiKey = await promptSecret(m(`Pega tu API key de ${BRAINS[flags.brainKey || "claude"].label} (no se mostrará):`, `Paste your ${BRAINS[flags.brainKey || "claude"].label} API key (hidden):`));
-  }
   if (apiKey) {
     wrangler(dir, ["secret", "put", BRAINS[flags.brainKey || "claude"].secret], { input: apiKey, capture: true });
     console.log("  " + C.green("✓") + " " + t().secretOk(BRAINS[flags.brainKey || "claude"].secret));
@@ -862,6 +868,8 @@ async function deployBot(dir, { flags = {}, rl } = {}) {
     console.log(C.yellow("\n  ── PARA EL AGENTE ──  falta la API key de IA."));
     console.log("  " + C.cyan(`npx wrangler secret put ${BRAINS[flags.brainKey || "claude"].secret}`));
     console.log("  " + m("Pídele la llave al usuario y guárdala tú (entrada oculta).", "Ask the user for the key and save it (hidden input)."));
+  } else {
+    console.log("  " + C.yellow("⚠") + " " + m("sin API key — el bot no responderá hasta que la pongas desde el panel (Configuración → Modelo de IA).", "no API key — the bot won't reply until you set it from the panel (Settings → AI Model)."));
   }
 
   let dash = "";
@@ -1075,7 +1083,7 @@ async function cmdInit(flags, rest) {
 
     // deploy (si no lo deshabilitan)
     if (!flags["no-deploy"] && !process.env.KOONI_NO_DEPLOY) {
-      const deployFlags = { ...flags, brainKey: answers.brainKey };
+      const deployFlags = { ...flags, brainKey: answers.brainKey, "api-key": answers.apiKey || "" };
       const url = await deployBot(dir, { flags: deployFlags, rl });
       if (url) {
         console.log("\n  " + C.green(C.b(m("🎉 BOT EN LÍNEA", "🎉 BOT LIVE"))));
