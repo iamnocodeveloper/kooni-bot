@@ -22,7 +22,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 
-const CLI_VERSION = "0.2.2";
+const CLI_VERSION = "0.2.3";
 
 const REPO = process.env.KOONI_REPO || "iamnocodeveloper/kooni-bot";
 const BRANCH = process.env.KOONI_BRANCH || "main";
@@ -339,27 +339,30 @@ async function ask(rl, q, val) {
   return (await rl.question("\n  " + C.b(q) + "\n  " + C.cyan("› "))).trim();
 }
 
-// Input oculto para API keys / contraseñas. Usa una interfaz readline DEDICADA
-// (no el rl compartido) con máscara de salida para no chocar con los listeners
-// del selector y soportar pegado. Devuelve "" si no hay TTY.
-async function promptSecret(q) {
+// Input oculto para API keys / contraseñas. Reutiliza la MISMA interfaz `rl`
+// compartida (crear una segunda readline sobre el mismo stdin competía por los
+// datos y nunca recibía Enter → el proceso se quedaba colgado). Enmascara el eco
+// parcheando temporalmente `_writeToOutput`: deja pasar solo los saltos de línea.
+async function promptSecret(rl, q) {
   if (!interactive()) return "";
-  const rl = createInterface({ input, output, terminal: true });
-  const answer = await new Promise((resolve) => {
-    // Enmascara lo que teclea el usuario: solo deja pasar el prompt y los saltos
-    // de línea (nunca la tecla), para que la API key quede oculta.
-    const orig = rl._writeToOutput;
-    rl._writeToOutput = (s) => {
-      if (s === "\r\n" || s === "\n" || s === "\r") process.stdout.write(s);
-      else if (typeof orig === "function" && s.includes("› ")) orig.call(rl, s);
-    };
-    rl.question("\n  " + C.b(q) + "\n  " + C.cyan("› "), (a) => {
-      rl.close();
-      resolve(a);
-    });
-  });
-  process.stdout.write("\n");
-  return answer.trim();
+  process.stdout.write("\n  " + C.b(q) + "\n  " + C.cyan("› "));
+
+  const orig = rl._writeToOutput;
+  let masking = true;
+  rl._writeToOutput = (s) => {
+    if (!masking) return typeof orig === "function" ? orig.call(rl, s) : process.stdout.write(s);
+    // Enmascara lo tecleado; solo deja los saltos de línea.
+    if (s === "\r\n" || s === "\n" || s === "\r") process.stdout.write(s);
+  };
+
+  try {
+    const answer = await rl.question("");
+    return answer.trim();
+  } finally {
+    rl._writeToOutput = orig;
+    masking = false;
+    process.stdout.write("\n");
+  }
 }
 
 async function confirm(rl, q) {
@@ -746,7 +749,7 @@ async function onboarding(rl, answers, defaultDir) {
   // La API key se pide aquí, apenas se elige el cerebro — y se conserva para el
   // deploy (se guarda como secret sin mostrarla). En no-interactivo se salta.
   if (!answers.apiKey) {
-    answers.apiKey = await promptSecret(t().qApiKey(BRAINS[answers.brainKey].label));
+    answers.apiKey = await promptSecret(rl, t().qApiKey(BRAINS[answers.brainKey].label));
   }
 
   answers.what = answers.what ?? (await ask(rl, t().qWhat, undefined) || "");
@@ -873,7 +876,7 @@ async function deployBot(dir, { flags = {}, rl } = {}) {
   }
 
   let dash = "";
-  if (interactive()) dash = await promptSecret(m("Elige una contraseña para el panel /admin (usuario: admin):", "Choose a password for the /admin dashboard (user: admin):"));
+  if (interactive()) dash = await promptSecret(rl, m("Elige una contraseña para el panel /admin (usuario: admin):", "Choose a password for the /admin dashboard (user: admin):"));
   if (!dash) dash = "kooni-local-password";
   wrangler(dir, ["secret", "put", "DASHBOARD_PASSWORD"], { input: dash, capture: true });
   console.log("  " + C.green("✓") + " " + t().secretOk("DASHBOARD_PASSWORD"));
