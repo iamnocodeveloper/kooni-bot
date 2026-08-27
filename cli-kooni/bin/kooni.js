@@ -22,7 +22,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 
-const CLI_VERSION = "0.2.3";
+const CLI_VERSION = "0.2.4";
 
 const REPO = process.env.KOONI_REPO || "iamnocodeveloper/kooni-bot";
 const BRANCH = process.env.KOONI_BRANCH || "main";
@@ -499,9 +499,11 @@ const isWin = process.platform === "win32";
 
 // Ejecuta un binario de forma segura en Windows/macOS/Linux:
 // - Unix/mac: `spawnSync(file, args)` directo.
-// - Windows: `npx`/`pnpm` son shims `.cmd`, que NO se pueden spawnear directo
-//   (EINVAL). Se lanzan con `cmd.exe /c <file> <args...>` pasando los argumentos
-//   como lista separada (nada de `shell: true` ni concatenación → sin DEP0190).
+// - Windows: `npx`/`pnpm` son shims, pero `cmd.exe /c` los resuelve SIN la
+//   extensión `.cmd` (probado: `cmd.exe /c pnpm --version` funciona, mientras
+//   que `pnpm.cmd` explícito falla con "no se reconoce"). Así que aquí NO se
+//   mapea a `.cmd`: se lanza `cmd.exe /c <file> <args...>` con args separados.
+//   Nada de `shell: true` ni concatenación → sin EINVAL ni DEP0190.
 // - `stdio` hereda por defecto (progreso en vivo); `capture` captura para parsear.
 function run(file, args = [], opts = {}) {
   const cwd = opts.cwd;
@@ -512,15 +514,14 @@ function run(file, args = [], opts = {}) {
   let argv = args;
 
   if (isWin) {
-    const shim = { npx: "npx.cmd", pnpm: "pnpm.cmd" }[file] || file;
     cmd = "cmd.exe";
-    argv = ["/d", "/c", shim, ...args];
+    argv = ["/d", "/c", file, ...args];
   }
 
   const r = spawnSync(cmd, argv, { cwd, input, stdio, encoding: "utf8" });
   if (r.error) throw r.error;
   if (r.status !== 0) {
-    const err = new Error(`Command failed: ${[cmd, ...args].join(" ")}`);
+    const err = new Error(`Command failed: ${[file, ...args].join(" ")}`);
     err.stdout = r.stdout;
     err.stderr = r.stderr;
     err.status = r.status;
