@@ -219,10 +219,9 @@ async function renderReportSection(settings: Record<string, string>, env: Env, r
         <select id="${SETTING_KEYS.nightlyReportChannel}" name="${SETTING_KEYS.nightlyReportChannel}" style="${SELECT_STYLE}">${opts}</select>
       </div>
       <p class="text-dim text-[11px]">${statusLine}</p>
-      <form method="POST" action="/admin/config/report-test" style="width:fit-content">
-        <button type="submit" class="text-[12px] font-display font-semibold cursor-pointer"
-                style="border:1px solid var(--line);color:var(--cream);padding:9px 14px;background:var(--panel2)">📨 Enviar prueba ahora</button>
-      </form>
+      <button type="submit" form="report-test-form"
+              class="text-[12px] font-display font-semibold cursor-pointer"
+              style="border:1px solid var(--line);color:var(--cream);padding:9px 14px;background:var(--panel2);width:fit-content">📨 Enviar prueba ahora</button>
     </div>`;
 }
 
@@ -353,7 +352,11 @@ export async function renderConfig(
               style="width:fit-content;background:var(--accent);border:1px solid var(--accent);color:#1a1206;box-shadow:4px 4px 0 var(--linelit);padding:13px 24px;display:flex;align-items:center;gap:9px">
         <i data-lucide="check" width="16" height="16"></i> Guardar cambios
       </button>
-    </form>`;
+    </form>
+    <!-- Form del botón "Enviar prueba ahora" del Reporte nocturno: vive FUERA del
+         form principal (HTML no permite forms anidados) y el botón lo referencia
+         con form="report-test-form" → envía por POST sin navegar ni guardar. -->
+    <form id="report-test-form" method="POST" action="/admin/config/report-test" style="display:none"></form>`;
 
   return layout({ title: "Config", activeTab: "config", body, env });
 }
