@@ -29,9 +29,43 @@
 |---|---|---|
 | C1 | Revisar `src/config.ts` (`isPro`, `PRO_ONLY_TOOLS`, `PRO_ONLY_TABS`) — ya existe el gating por `BOT_TIER`. | ✅ |
 | C1.5 | **Pro activado en el demo**: `BOT_TIER="pro"` en wrangler.toml → Campañas, Mejoras, Insights, Estadísticas y Costos ya responden sin bloqueo (verificado en vivo). | ✅ |
-| C2 | **Sistema de licencia por código**: el dueño activa Pro desde el panel pegando un código de licencia. El código se valida contra una firma (secret `LICENSE_MASTER_KEY` o lista de códigos en D1 `settings`), se guarda y activa `BOT_TIER=pro` en runtime. Vista en el panel: `/admin/licencia`. | ⏳ Pendiente |
-| C3 | **Generador de códigos** (para el dueño de la plataforma): script que firma un código con el master key. | ⏳ Pendiente |
-| C4 | Upgrade UI: en free, la página `/admin/upgrade` debe ofrecer "pegar tu código de licencia" además del bloqueo visual actual. | ⏳ Pendiente |
+| C2 | **Sistema de licencia por código**: el dueño activa Pro desde el panel pegando un código de licencia. El código se valida contra una firma (secret `LICENSE_MASTER_KEY`), se guarda y desbloquea Pro en runtime. Vista en el panel: `/admin/licencia`. | ✅ |
+| C3 | **Generador de códigos** (para el dueño de la plataforma): `scripts/gen-license.ts` local + edge function `generar-licencia` (InsForge) con soporte de ligar a instalación (`instUid`). | ✅ |
+| C4 | Upgrade UI: en free, la página `/admin/upgrade` ofrece "pegar tu código de licencia" (link a `/admin/licencia") en vez de la instrucción interna de `BOT_TIER`. | ✅ |
+| C5 | **La licencia desbloquea TODO, no solo límites**: antes `isPro()` (BOT_TIER) gateaba tabs/tools/imagen y `isProLicense()` solo límites. Ahora `isProUnlocked()` async unifica: `BOT_TIER=pro` **o** licencia válida → tabs Pro, tools Pro (`catalogQuery`), análisis de imagen del agente, handoff WhatsApp y límites. `layout()`/`renderUpgrade()` pasaron a async. | ✅ (v1.0.2) |
+
+## F. Licencias estilo Forja (email + dispositivo) — PLAN FUTURO ⏳
+
+> Contexto: hoy Kooni valida licencias por **código HMAC local** (sin login). Forja, en
+> cambio, pide **login con email** al inicio y **registra la dirección/dispositivo**
+> (fingerprint) para ligar la licencia a una máquina. El usuario pidió evaluar replicar
+> esa lógica en Kooni (sin copiarla íntegra).
+
+### Qué haría falta (diseño propuesto, NO implementado)
+
+1. **Dashboard de licencias con cuentas** (dueño de Kooni):
+   - Tabla `miembros` / reutilizar `profiles` + auth de InsForge.
+   - Un cliente compra → se crea cuenta con email → se le emiten N licencias.
+2. **Login al inicio del CLI (`kooni-bot init`)**:
+   - Pedir email + verificar (link mágico o código) contra el backend de InsForge.
+   - El CLI guarda una sesión (`~/.kooni/auth.json`).
+3. **Registro de dispositivo**:
+   - Al activar, derivar un `machine_id` (hash de hardware o UUID local) y registrarlo.
+   - La licencia queda ligada a `machine_id` + `uid` de instalación (ya existe `inst`/`uid`).
+4. **Validación en runtime**:
+   - El bot consulta (o cachea) la validez contra InsForge vía `CONTROL_PLANE_URL`/`/api/*`.
+   - Fallback local HMAC si no hay red (el formato actual se mantiene).
+
+### Alternativa de menor fricción (la que hoy funciona)
+
+- Mantener la licencia **por código HMAC** (ya implementada), y solo **pedir email en el
+  check-in** (ya se registra en `instalaciones.email`). El login/dashboard queda para
+  cuando se necesite facturar/recurrencia real.
+
+### Estado
+⏳ PLAN — no implementar hasta que se confirme la necesidad de recurrencia/facturación.
+
+---
 
 ## D. Actualizaciones sin perder datos (REVISAR ✅)
 
