@@ -122,7 +122,11 @@ describe("SupportAgent.ingest — media (Task 6.3)", () => {
 
   beforeEach(() => {
     vi.restoreAllMocks();
-    stubSettings();
+    // 'Oído y vista' (menú Extras) encendido para que el ingest procese audio/fotos.
+    stubSettings({
+      module_unlocks: JSON.stringify(["oido_vista"]),
+      feature_oido_vista_enabled: "1",
+    });
     originalFetch = globalThis.fetch;
     // Audio download is stubbed: transcribeAudio fetches the audioUrl then
     // hands bytes to env.AI.run — neither touches the real network.

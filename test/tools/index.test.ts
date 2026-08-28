@@ -15,13 +15,14 @@ function makeCtx(tier: "free" | "pro", calcom?: boolean): ToolContext {
 }
 
 describe("buildTools", () => {
-  it("registra las 8 tools base (scheduleAppointment siempre — evita alucinaciones)", async () => {
+  it("registra las 9 tools base (scheduleAppointment siempre — evita alucinaciones)", async () => {
     const tools = await buildTools(makeCtx("free"));
     expect(Object.keys(tools).sort()).toEqual([
       "captureLead",
       "enviarRecurso",
       "handoffHuman",
       "pauseBot",
+      "registrarCalificacion",
       "reportQuery",
       "scheduleAppointment",
       "searchKb",
@@ -29,6 +30,7 @@ describe("buildTools", () => {
     ]);
     expect(tools.scheduleAppointment).toBeDefined();
     expect(tools.reportQuery).toBeDefined();
+    expect(tools.registrarCalificacion).toBeDefined();
   });
 
   it("free tier captura leads; pro agrega catálogo (Pro-only)", async () => {
@@ -44,6 +46,7 @@ describe("buildTools", () => {
       "enviarRecurso",
       "handoffHuman",
       "pauseBot",
+      "registrarCalificacion",
       "reportQuery",
       "scheduleAppointment",
       "searchKb",

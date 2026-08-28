@@ -33,6 +33,8 @@ export interface AgentConfig {
   llm: LlmOverrides;
   /** Menú Extras: Vigilante con IA activo (alerta al dueño sin pasar el chat). */
   vigilanteEnabled: boolean;
+  /** Menú Extras: Oído y vista activo (transcribe audio / ve fotos). */
+  oidoVistaEnabled: boolean;
 }
 
 /** Extract the BYO-LLM overrides from a settings snapshot. */
@@ -224,5 +226,6 @@ export async function resolveAgentConfig(env: Env, toolNames: string[]): Promise
     menuButtons,
     llm: llmOverridesFrom(settings),
     vigilanteEnabled: extras.vigilanteEnabled,
+    oidoVistaEnabled: extras.oidoVistaEnabled,
   };
 }

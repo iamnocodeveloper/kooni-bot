@@ -85,6 +85,36 @@ export const PAID_MODULES: PaidModule[] = [
     descripcion: "El bot distingue cuándo pasarte el chat de verdad: cliente molesto, queja, factura o lead caliente → te lo entrega con contexto; lo simple lo resuelve solo.",
     tipo: "membresia",
   },
+  {
+    id: "cazador",
+    nombre: "Cazador de ventas",
+    descripcion: "El bot le escribe solito al cliente que preguntó y se enfrió: un solo mensaje en tu tono, entre 3 y 20 horas después. Recupera ventas que se iban al olvido.",
+    tipo: "membresia",
+  },
+  {
+    id: "oido_vista",
+    nombre: "Oído y vista",
+    descripcion: "El bot escucha notas de voz (transcribe) y ve fotos (reconoce productos, comprobantes) y responde al tiro. Cero mensajes que se quedan en visto.",
+    tipo: "membresia",
+  },
+  {
+    id: "voz_marca",
+    nombre: "Voz de marca",
+    descripcion: "El bot suena a ti, no a un robot: contesta en el tono del negocio (tú/usted, cercano o formal) en cada mensaje, en cada canal.",
+    tipo: "membresia",
+  },
+  {
+    id: "multiidioma",
+    nombre: "Multi-idioma",
+    descripcion: "Detecta el idioma del cliente y responde en ese idioma: español, inglés o portugués. Un solo bot, cero clientes perdidos por el idioma.",
+    tipo: "membresia",
+  },
+  {
+    id: "encuestas",
+    nombre: "Encuestas de satisfacción",
+    descripcion: "Al cerrar cada conversación pregunta del 1 al 5 cómo le fue. Si la nota es baja, te avisa al instante para que recuperes al cliente.",
+    tipo: "membresia",
+  },
 ];
 
 /** Setting (D1) con el override del dueño de la plataforma: JSON array de ids. */

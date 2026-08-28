@@ -648,16 +648,20 @@ adminApp.get("/licencia", async (c) => c.html(await renderLicencia(c.env)));
 // Menú Extras (Forja+): cuadrícula de funciones de pago con toggles on/off.
 adminApp.get("/extras", async (c) => {
   const saved = c.req.query("saved") === "1";
-  return c.html(await renderExtras(c.env, saved));
+  return c.html(await renderExtras(c.env, saved, c.req.query("report")));
 });
 
 adminApp.post("/extras", async (c) => {
   const form = await c.req.formData();
   const repo = new SettingsRepo(new Db(c.env.DB));
-  const { FEATURE_KEYS } = await import("../features");
-  for (const key of Object.values(FEATURE_KEYS)) {
-    await repo.set(key, form.get(key) === "1" ? "1" : "0");
+  const { EXTRA_FEATURES } = await import("../features");
+  // Toggles de todas las funciones del catálogo (reporte incluido).
+  for (const f of EXTRA_FEATURES) {
+    await repo.set(f.toggleKey, form.get(f.toggleKey) === "1" ? "1" : "0");
   }
+  // Canal del reporte nocturno (allow-list).
+  const channel = String(form.get(SETTING_KEYS.nightlyReportChannel) ?? "telegram").trim().toLowerCase();
+  await repo.set(SETTING_KEYS.nightlyReportChannel, ["telegram", "email", "both"].includes(channel) ? channel : "telegram");
   return c.redirect("/admin/extras?saved=1");
 });
 
@@ -823,7 +827,7 @@ adminApp.post("/campanas/send", async (c) => {
 adminApp.get("/config", async (c) => {
   const settings = await new SettingsRepo(new Db(c.env.DB)).all();
   const saved = c.req.query("saved") === "1";
-  return c.html(await renderConfig(c.env, settings, saved, c.req.query("llmtest"), c.req.query("report")));
+  return c.html(await renderConfig(c.env, settings, saved, c.req.query("llmtest")));
 });
 
 // Botón "Enviar prueba ahora" del Reporte nocturno: manda el resumen del día
@@ -833,17 +837,17 @@ adminApp.post("/config/report-test", async (c) => {
   try {
     const { isModuleUnlocked } = await import("../modules");
     if (!(await isModuleUnlocked(c.env, "nightly_report"))) {
-      return c.redirect("/admin/config?report=" + encodeURIComponent("err:El módulo Reporte nocturno no está activado en esta instalación. Actívalo en la pestaña Licencia o pídelo a tu proveedor."));
+      return c.redirect("/admin/extras?report=" + encodeURIComponent("err:El módulo Reporte nocturno no está activado en esta instalación. Actívalo en la pestaña Licencia o pídelo a tu proveedor."));
     }
     const { sendReportTest } = await import("../reports/nightly");
     const res = await sendReportTest(c.env);
     if (res.sentTo.length === 0) {
-      return c.redirect("/admin/config?report=" + encodeURIComponent("err:No hay ningún canal configurado (Telegram o correo). Revisa Conexiones y los secrets."));
+      return c.redirect("/admin/extras?report=" + encodeURIComponent("err:No hay ningún canal configurado (Telegram o correo). Revisa Conexiones y los secrets."));
     }
-    return c.redirect("/admin/config?report=ok:" + res.sentTo.join("+"));
+    return c.redirect("/admin/extras?report=ok:" + res.sentTo.join("+"));
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    return c.redirect(`/admin/config?report=${encodeURIComponent(`err:${msg.slice(0, 160)}`)}`);
+    return c.redirect(`/admin/extras?report=${encodeURIComponent(`err:${msg.slice(0, 160)}`)}`);
   }
 });
 
@@ -911,16 +915,6 @@ adminApp.post("/config", async (c) => {
   const modelRaw = form.get(SETTING_KEYS.llmModel);
   if (modelRaw !== null) {
     await repo.set(SETTING_KEYS.llmModel, String(modelRaw).trim().slice(0, 100));
-  }
-
-  // Reporte nocturno: checkbox → "1"/"0"; canal allow-list.
-  if (form.get(SETTING_KEYS.nightlyReportEnabled) !== null) {
-    await repo.set(SETTING_KEYS.nightlyReportEnabled, form.get(SETTING_KEYS.nightlyReportEnabled) === "1" ? "1" : "0");
-  }
-  const reportChannel = form.get(SETTING_KEYS.nightlyReportChannel);
-  if (reportChannel !== null) {
-    const v = String(reportChannel).trim().toLowerCase();
-    await repo.set(SETTING_KEYS.nightlyReportChannel, ["telegram", "email", "both"].includes(v) ? v : "telegram");
   }
   // La API key SOLO se sobreescribe si escribieron algo (el input siempre
   // llega vacío cuando no la tocaron); el checkbox la borra explícitamente.

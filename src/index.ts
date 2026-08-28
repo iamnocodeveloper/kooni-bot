@@ -304,11 +304,17 @@ export default {
   fetch: (request: Request, env: Env, ctx: ExecutionContext) =>
     app.fetch(request, env, ctx),
   async scheduled(event: ScheduledController, env: Env): Promise<void> {
-    // Follow-up bot: UN mensaje breve de seguimiento a leads que lo ameritan
-    // (venta abierta / 4+ preguntas), dentro de la ventana de 24h y máximo una
-    // vez por conversación. Acotado por caps internos.
-    const { runFollowups } = await import("./followup/run");
-    await runFollowups(env).catch((e) => console.error("followups:", e));
+    // Menú Extras (Forja+): el Cazador de ventas (follow-up automático a leads
+    // que se enfriaron) solo corre si el dueño lo encendió Y su módulo está
+    // desbloqueado. Follow-up bot: UN mensaje breve de seguimiento a leads que
+    // lo ameritan (venta abierta / 4+ preguntas), dentro de la ventana de 3-20h
+    // y máximo una vez por conversación. Acotado por caps internos.
+    const settings = await new SettingsRepo(new Db(env.DB)).all().catch(() => ({}));
+    const { isFeatureActive } = await import("./features");
+    if (await isFeatureActive(env, "cazador", settings)) {
+      const { runFollowups } = await import("./followup/run");
+      await runFollowups(env).catch((e) => console.error("followups:", e));
+    }
 
     // Watchdog: si el bot está fallando en cadena (3+ "Algo falló" en 30 min),
     // avisa al dueño por su canal de handoff. Throttle 6h. Lo ÚNICO que debe

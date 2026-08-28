@@ -7,7 +7,6 @@ import type { Env } from "../../env";
 import { SETTING_KEYS } from "../../db/settings";
 import { renderBusinessContext } from "../../businessContext";
 import { CURATED_MODELS } from "../../llm/provider";
-import { reportChannelStatus } from "../../reports/nightly";
 import {
   CONTROL_LIST,
   valueToLevel,
@@ -173,69 +172,6 @@ function renderLlmSection(settings: Record<string, string>, llmTest?: string): s
     </div>`;
 }
 
-/** Sección "Reporte nocturno" (Forja+): resumen del día al dueño. */
-async function renderReportSection(settings: Record<string, string>, env: Env, report?: string): Promise<string> {
-  const enabled = settings[SETTING_KEYS.nightlyReportEnabled] === "1";
-  const channel = settings[SETTING_KEYS.nightlyReportChannel] ?? "telegram";
-  const { telegram, email } = await reportChannelStatus(env);
-  const { isModuleUnlocked } = await import("../../modules");
-  const unlocked = await isModuleUnlocked(env, "nightly_report");
-
-  const opts = [
-    { v: "telegram", l: "Telegram" },
-    { v: "email", l: "Correo" },
-    { v: "both", l: "Telegram + correo" },
-  ]
-    .map((o) => `<option value="${o.v}" ${channel === o.v ? "selected" : ""}>${o.l}</option>`)
-    .join("");
-
-  const statusLine = [
-    telegram ? "✅ Telegram listo" : "⚠️ Telegram sin configurar (falta el chat del dueño en Conexiones)",
-    email ? "✅ Correo listo" : "⚠️ Correo sin configurar (faltan RESEND_API_KEY y OWNER_EMAIL)",
-  ].join(" · ");
-
-  let banner = "";
-  if (report?.startsWith("ok:")) {
-    const ch = report.slice(3).split("+").join(" + ");
-    banner = `<div style="border:1px solid var(--ok);background:rgba(127,183,126,.1);color:var(--ok);padding:9px 12px;font-size:12px;font-weight:600">✓ Reporte enviado por: ${esc(ch)}</div>`;
-  } else if (report?.startsWith("err:")) {
-    const msg = report.slice(4).slice(0, 160);
-    banner = `<div style="border:1px solid var(--danger,#e0654d);background:rgba(224,101,77,.1);color:var(--danger,#e0654d);padding:9px 12px;font-size:12px;font-weight:600">✕ ${esc(msg)}</div>`;
-  }
-
-  // Módulo de pago bloqueado → la sección se muestra pero deshabilitada.
-  const lock = unlocked
-    ? ""
-    : `<div style="border:1px solid var(--accent2);background:rgba(253,176,101,.07);color:var(--accent2);padding:9px 12px;font-size:12px">🔒 Módulo <b>Reporte nocturno</b> no activado en esta instalación. Se activa con una licencia Pro que lo incluya (pestaña Licencia) o por el dueño de la plataforma.</div>`;
-  const disabled = unlocked ? "" : " disabled style=\"opacity:.45;pointer-events:none\"";
-
-  return `
-    <div class="bg-panel border border-line" style="padding:20px;display:flex;flex-direction:column;gap:16px">
-      <div style="display:flex;flex-direction:column;gap:2px">
-        <h3 class="font-display font-semibold text-[14px] text-cream">🌙 Reporte nocturno <span class="text-[9px] tracking-wide border px-1.5" style="vertical-align:middle;color:var(--accent2);border-color:var(--accent2)">MÓDULO ${unlocked ? "✓" : "🔒"}</span></h3>
-        <p class="text-muted text-[12px]">Cada noche, tu bot te manda un resumen del día: cuántos clientes escribieron, qué leads llegaron, qué ventas están calientes y si alguien quedó molesto. Lo lees en 30 segundos. También puedes preguntarle a tu bot en tu chat privado: "¿cómo fue el día?" o "¿quiénes son las ventas calientes?".</p>
-      </div>
-      ${lock}
-      ${banner}
-      <div${disabled}>
-        <label style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted);cursor:pointer">
-          <input type="checkbox" name="${SETTING_KEYS.nightlyReportEnabled}" value="1"
-                 ${enabled ? "checked" : ""}
-                 style="accent-color:var(--accent);width:auto">
-          Enviarme el resumen cada noche
-        </label>
-        <div style="display:flex;flex-direction:column;gap:6px;max-width:320px;margin-top:12px">
-          <label class="font-display font-semibold text-[12.5px] text-cream" for="${SETTING_KEYS.nightlyReportChannel}">¿Por dónde te lo mando?</label>
-          <select id="${SETTING_KEYS.nightlyReportChannel}" name="${SETTING_KEYS.nightlyReportChannel}" style="${SELECT_STYLE}">${opts}</select>
-        </div>
-        <p class="text-dim text-[11px]" style="margin-top:10px">${statusLine}</p>
-        <button type="submit" form="report-test-form"
-                class="text-[12px] font-display font-semibold cursor-pointer"
-                style="border:1px solid var(--line);color:var(--cream);padding:9px 14px;background:var(--panel2);width:fit-content;margin-top:12px">📨 Enviar prueba ahora</button>
-      </div>
-    </div>`;
-}
-
 /**
  * Render the Config tab. Receives the current settings overlay (Record from
  * SettingsRepo.all()). `saved` shows the "Guardado ✓" confirmation banner after
@@ -246,7 +182,6 @@ export async function renderConfig(
   settings: Record<string, string>,
   saved = false,
   llmTest?: string,
-  report?: string,
 ): Promise<string> {
   const cardGroups = CONTROL_LIST.map((c) => renderCardGroup(c, settings)).join("");
 
@@ -259,8 +194,6 @@ export async function renderConfig(
   const savedBanner = saved
     ? `<div style="border:1px solid var(--ok);background:rgba(127,183,126,.1);color:var(--ok);padding:10px 14px;font-size:12.5px;font-weight:600">Guardado ✓</div>`
     : "";
-
-  const reportSection = await renderReportSection(settings, env, report);
 
   const body = `
     <form method="POST" action="/admin/config" style="display:flex;flex-direction:column;gap:28px">
@@ -356,18 +289,11 @@ export async function renderConfig(
         })}
       </div>
 
-      <!-- Reporte nocturno (Forja+) -->
-      ${reportSection}
-
       <button type="submit" class="bigbtn font-display font-bold text-[13px] cursor-pointer"
               style="width:fit-content;background:var(--accent);border:1px solid var(--accent);color:#1a1206;box-shadow:4px 4px 0 var(--linelit);padding:13px 24px;display:flex;align-items:center;gap:9px">
         <i data-lucide="check" width="16" height="16"></i> Guardar cambios
       </button>
-    </form>
-    <!-- Form del botón "Enviar prueba ahora" del Reporte nocturno: vive FUERA del
-         form principal (HTML no permite forms anidados) y el botón lo referencia
-         con form="report-test-form" → envía por POST sin navegar ni guardar. -->
-    <form id="report-test-form" method="POST" action="/admin/config/report-test" style="display:none"></form>`;
+    </form>`;
 
   return layout({ title: "Config", activeTab: "config", body, env });
 }

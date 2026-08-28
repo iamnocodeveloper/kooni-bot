@@ -5,14 +5,14 @@
 import type { Env } from "../../env";
 import { Db } from "../../db/client";
 import { SettingsRepo, SETTING_KEYS } from "../../db/settings";
-import { EXTRA_FEATURES, FEATURE_KEYS, extrasState } from "../../features";
+import { EXTRA_FEATURES, extrasState } from "../../features";
 import { layout } from "./layout";
 
 function esc(s: string): string {
   return s.replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]!));
 }
 
-export async function renderExtras(env: Env, saved = false): Promise<string> {
+export async function renderExtras(env: Env, saved = false, report?: string): Promise<string> {
   const settings = await new SettingsRepo(new Db(env.DB)).all();
   const state = await extrasState(env, settings);
 
@@ -20,10 +20,22 @@ export async function renderExtras(env: Env, saved = false): Promise<string> {
     ? `<div style="border:1px solid var(--ok);background:rgba(127,183,126,.1);color:var(--ok);padding:10px 14px;font-size:12.5px;font-weight:600">Guardado ✓</div>`
     : "";
 
+  let reportBanner = "";
+  if (report?.startsWith("ok:")) {
+    const ch = report.slice(3).split("+").join(" + ");
+    reportBanner = `<div style="border:1px solid var(--ok);background:rgba(127,183,126,.1);color:var(--ok);padding:9px 12px;font-size:12px;font-weight:600">✓ Reporte enviado por: ${esc(ch)}</div>`;
+  } else if (report?.startsWith("err:")) {
+    const msg = report.slice(4).slice(0, 180);
+    reportBanner = `<div style="border:1px solid var(--danger,#e0654d);background:rgba(224,101,77,.1);color:var(--danger,#e0654d);padding:9px 12px;font-size:12px;font-weight:600">✕ ${esc(msg)}</div>`;
+  }
+
   const actuaBadge = (a: string) => {
     const txt = a === "bot" ? "Actúa en el bot" : a === "panel" ? "Actúa en el panel" : "Actúa en bot y panel";
     return `<span class="text-[9px] tracking-wide border px-1.5" style="color:var(--dim);border-color:var(--line)">${txt}</span>`;
   };
+
+  const SELECT_STYLE =
+    "background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:8px 10px;font-size:12px;outline:none;width:100%";
 
   const cards = EXTRA_FEATURES.map((f) => {
     const st = state[f.id];
@@ -34,11 +46,35 @@ export async function renderExtras(env: Env, saved = false): Promise<string> {
         ? `<span class="text-[9px] tracking-wide border px-1.5" style="color:var(--ok);border-color:var(--ok)">● ACTIVO</span>`
         : `<span class="text-[9px] tracking-wide border px-1.5" style="color:var(--dim);border-color:var(--line)">○ DESACTIVADO</span>`;
     const toggle = st.unlocked
-      ? `<label class="switch" style="display:flex;align-items:center;gap:9px;cursor:pointer;flex:none">
-           <input type="checkbox" name="${FEATURE_KEYS[f.id]}" value="1" ${on ? "checked" : ""} style="accent-color:var(--accent);width:16px;height:16px">
+      ? `<label style="display:flex;align-items:center;gap:9px;cursor:pointer;flex:none">
+           <input type="checkbox" name="${esc(f.toggleKey)}" value="1" ${on ? "checked" : ""} style="accent-color:var(--accent);width:16px;height:16px">
            <span class="text-[11.5px] text-muted">${on ? "Encendida" : "Apagada"}</span>
          </label>`
       : `<span class="text-[11px] text-accent2" style="flex:none">Requiere licencia → <a href="/admin/licencia" style="color:var(--accent2)">Licencia</a></span>`;
+
+    // El Reporte nocturno tiene config extra: canal (Telegram/correo) y botón
+    // de prueba (POST a /admin/config/report-test, vive fuera de este form).
+    let extra = "";
+    if (f.kind === "reporte" && st.unlocked) {
+      const channel = settings[SETTING_KEYS.nightlyReportChannel] ?? "telegram";
+      const opts = [
+        { v: "telegram", l: "Telegram" },
+        { v: "email", l: "Correo" },
+        { v: "both", l: "Telegram + correo" },
+      ]
+        .map((o) => `<option value="${o.v}" ${channel === o.v ? "selected" : ""}>${o.l}</option>`)
+        .join("");
+      extra = `
+        <div style="display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;margin-top:4px">
+          <div style="display:flex;flex-direction:column;gap:4px;max-width:220px">
+            <label class="text-[11px] text-dim" for="${esc(SETTING_KEYS.nightlyReportChannel)}">¿Por dónde te lo mando?</label>
+            <select id="${esc(SETTING_KEYS.nightlyReportChannel)}" name="${esc(SETTING_KEYS.nightlyReportChannel)}" style="${SELECT_STYLE}">${opts}</select>
+          </div>
+          <button type="submit" form="report-test-form"
+                  class="text-[11.5px] font-display font-semibold cursor-pointer"
+                  style="border:1px solid var(--line);color:var(--cream);padding:8px 12px;background:var(--panel2);white-space:nowrap">📨 Enviar prueba ahora</button>
+        </div>`;
+    }
 
     return `
       <div class="bg-panel border border-line" style="padding:18px;display:flex;flex-direction:column;gap:12px;${!st.unlocked ? "opacity:.82" : ""}">
@@ -57,6 +93,8 @@ export async function renderExtras(env: Env, saved = false): Promise<string> {
           ${toggle}
         </div>
         <p class="text-muted text-[12px] leading-relaxed" style="margin:0">${esc(f.descripcion)}</p>
+        ${extra}
+        ${f.id === "reporte" ? reportBanner : ""}
       </div>`;
   }).join("");
 
@@ -72,7 +110,11 @@ export async function renderExtras(env: Env, saved = false): Promise<string> {
               style="width:fit-content;background:var(--accent);border:1px solid var(--accent);color:#1a1206;box-shadow:4px 4px 0 var(--linelit);padding:13px 24px;display:flex;align-items:center;gap:9px">
         <i data-lucide="check" width="16" height="16"></i> Guardar cambios
       </button>
-    </form>`;
+    </form>
+    <!-- Form del botón "Enviar prueba ahora" del Reporte nocturno: vive FUERA del
+         form principal (HTML no permite forms anidados); el botón lo referencia
+         con form="report-test-form". -->
+    <form id="report-test-form" method="POST" action="/admin/config/report-test" style="display:none"></form>`;
 
   return layout({ title: "Extras", activeTab: "extras", body, env });
 }

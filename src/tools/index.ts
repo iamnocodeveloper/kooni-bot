@@ -8,6 +8,7 @@ import { captureLeadTool } from "./captureLead";
 import { scheduleAppointmentTool } from "./scheduleAppointment";
 import { catalogQueryTool } from "./catalogQuery";
 import { reportQueryTool } from "./reportQuery";
+import { registrarCalificacionTool } from "./registrarCalificacion";
 import { enviarRecursoTool, type RecursoCtx } from "./enviarRecurso";
 import type { ChannelId } from "../channels/shared";
 
@@ -46,6 +47,9 @@ export async function buildTools(ctx: ToolContext) {
     // Reporte del día (Forja+): el DUEÑO pregunta en su chat y el bot responde
     // con los números del día (clientes, leads, ventas calientes, molestos).
     reportQuery: reportQueryTool(ctx.env),
+    // Encuestas de satisfacción (Forja+): registra la nota 1-5 y avisa al dueño
+    // si es baja. El prompt solo la anuncia cuando el módulo está encendido.
+    registrarCalificacion: registrarCalificacionTool(ctx.env, ctx.getConversationId),
   };
 
   // Pro tier additions

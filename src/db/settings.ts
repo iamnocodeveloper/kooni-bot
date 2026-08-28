@@ -54,6 +54,11 @@ export const SETTING_KEYS = {
   featureBlindaje: "feature_blindaje_enabled", // "0" | "1"
   featureVigilante: "feature_vigilante_enabled", // "0" | "1"
   featureHandoff: "feature_handoff_enabled", // "0" | "1"
+  featureCazador: "feature_cazador_enabled", // "0" | "1"
+  featureOidoVista: "feature_oido_vista_enabled", // "0" | "1"
+  featureVozMarca: "feature_voz_marca_enabled", // "0" | "1"
+  featureMultiidioma: "feature_multiidioma_enabled", // "0" | "1"
+  featureEncuestas: "feature_encuestas_enabled", // "0" | "1"
 } as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[keyof typeof SETTING_KEYS];

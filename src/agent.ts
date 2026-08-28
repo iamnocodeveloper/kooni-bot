@@ -158,34 +158,48 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
     }
 
     // Process media (audio → transcription, image → Pro-gated multimodal marker)
+    // Menú Extras (Forja+): 'Oído y vista' enciende el entendimiento de audio y
+    // fotos. Si está apagado (o el módulo no está desbloqueado), se le pide al
+    // cliente que escriba — no se procesa el medio.
     let processedText = payload.text ?? "";
     let hasImage = false;
+    const { isFeatureActive } = await import("./features");
+    const oidoVistaOn =
+      (payload.audioUrl || payload.imageUrl) && (await isFeatureActive(this.env, "oido_vista"));
 
     if (payload.audioUrl) {
-      try {
-        const { transcribeAudio } = await import("./media/transcribe");
-        const result = await transcribeAudio(payload.audioUrl, this.env);
-        processedText = result.text || "(audio sin transcripción)";
-      } catch (e) {
-        console.error("[ingest] transcription failed:", e);
-        processedText = "(no pude entender el audio)";
+      if (oidoVistaOn) {
+        try {
+          const { transcribeAudio } = await import("./media/transcribe");
+          const result = await transcribeAudio(payload.audioUrl, this.env);
+          processedText = result.text || "(audio sin transcripción)";
+        } catch (e) {
+          console.error("[ingest] transcription failed:", e);
+          processedText = "(no pude entender el audio)";
+        }
+      } else {
+        processedText = (processedText || "") + "\n(El cliente mandó un audio; esta instalación no tiene 'Oído y vista' activado. Pídele que escriba.)";
       }
     }
 
     if (payload.imageUrl) {
-      hasImage = true;
-      // Pro-only: if free tier, strip the image and inform the bot owner-side
-      if (!(await isProUnlocked(this.env))) {
-        processedText =
-          (processedText || "") +
-          "\n(El cliente mandó una imagen, pero tu plan no soporta análisis de imágenes.)";
+      if (oidoVistaOn) {
+        hasImage = true;
+        // Pro-only: if free tier, strip the image and inform the bot owner-side
+        if (!(await isProUnlocked(this.env))) {
+          processedText =
+            (processedText || "") +
+            "\n(El cliente mandó una imagen, pero tu plan no soporta análisis de imágenes.)";
+        } else {
+          processedText =
+            (processedText || "(imagen sin caption)") +
+            // MASKED: a Telegram file URL carries the bot token inside, and this
+            // marker gets persisted in D1 (and shown in the dashboard, and
+            // included in exports). See src/telegramFiles.ts.
+            `\n[IMAGE_URL: ${maskTelegramToken(payload.imageUrl)}]`;
+        }
       } else {
-        processedText =
-          (processedText || "(imagen sin caption)") +
-          // MASKED: a Telegram file URL carries the bot token inside, and this
-          // marker gets persisted in D1 (and shown in the dashboard, and
-          // included in exports). See src/telegramFiles.ts.
-          `\n[IMAGE_URL: ${maskTelegramToken(payload.imageUrl)}]`;
+        processedText = (processedText || "") + "\n(El cliente mandó una foto; esta instalación no tiene 'Oído y vista' activado. Pídele que describa.)";
       }
     }
 
