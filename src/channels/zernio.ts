@@ -199,6 +199,7 @@ async function loadAutoDmRules(env: Env): Promise<AutoDmRule[]> {
 async function sendCommentActions(
   matched: AutoDmRule,
   accountId: string,
+  publishAccountId: string,
   postId: string,
   commentId: string,
   commenterName: string | null | undefined,
@@ -459,13 +460,15 @@ async function sendCommentActions(
   }
 
   // 2) Respuesta pública al comentario (opcional por regla).
-  // Si ya se publicó en un intento previo, no se re-publica.
+  // Si ya se publicó en un intento previo, no se re-publica. OJO: la respuesta
+  // pública va con la cuenta que PUBLICÓ el post (publishAccountId — la del
+  // webhook), NO la del inbox: Zernio devuelve 400 si no coincide.
   if (publicReply && !publicAlreadySent) {
     try {
       const res = await fetch(`${base}/v1/inbox/comments/${postId}`, {
         method: "POST",
         headers,
-        body: JSON.stringify({ accountId, message: publicReply, commentId }),
+        body: JSON.stringify({ accountId: publishAccountId, message: publicReply, commentId }),
       });
       if (!res.ok) {
         const detail = await res.text().catch(() => "");
@@ -656,6 +659,9 @@ async function autoDmOnComment(body: ZernioWebhookBody, env: Env): Promise<void>
     await sendCommentActions(
       matched,
       accountId,
+      // La cuenta que publicó el post es la del webhook (la respuesta pública
+      // la exige; el DM usa el inbox resuelto arriba).
+      account.accountId ?? accountId,
       postId,
       commentId,
       comment.author?.username ?? comment.author?.name,

@@ -366,7 +366,8 @@ describe("follow gate (require_follow)", () => {
   it("comment_dm_public: responde en público Y envía DM privado", async () => {
     const fetchMock = vi.fn(async (url: string) => {
       if (String(url).includes("/v1/accounts")) {
-        return new Response(JSON.stringify({ accounts: [{ _id: "acct_1", platform: "instagram", username: "mi_negocio" }] }), { status: 200 });
+        // El id social del inbox difiere del accountId del webhook (el que publicó el post)
+        return new Response(JSON.stringify({ accounts: [{ _id: "inbox_acct_99", platform: "instagram", username: "mi_negocio" }] }), { status: 200 });
       }
       return new Response(JSON.stringify({ success: true }), { status: 200 });
     });
@@ -392,10 +393,12 @@ describe("follow gate (require_follow)", () => {
     expect(dm).toBeTruthy();
     const dmBody = JSON.parse(((dm as unknown as [string, RequestInit])[1]).body as string);
     expect(dmBody.message).toBe("Te escribí por privado con la info 👇");
+    expect(dmBody.accountId).toBe("inbox_acct_99"); // el DM usa el inbox resuelto
     const pub = calls.find((c) => /\/v1\/inbox\/comments\/post_1$/.test(String(c[0])));
     expect(pub).toBeTruthy();
     const pubBody = JSON.parse(((pub as unknown as [string, RequestInit])[1]).body as string);
     expect(pubBody.message).toBe("¡Gracias por tu comentario! Mira tu privado ✨");
+    expect(pubBody.accountId).toBe("acct_1"); // la respuesta pública usa la cuenta que publicó el post
   });
 
   it("si NO sigue: envía DM de follow gate con botón postback (no el link)", async () => {
