@@ -15,8 +15,8 @@ function makeCtx(tier: "free" | "pro", calcom?: boolean): ToolContext {
 }
 
 describe("buildTools", () => {
-  it("registra las 7 tools base (scheduleAppointment siempre — evita alucinaciones)", () => {
-    const tools = buildTools(makeCtx("free"));
+  it("registra las 7 tools base (scheduleAppointment siempre — evita alucinaciones)", async () => {
+    const tools = await buildTools(makeCtx("free"));
     expect(Object.keys(tools).sort()).toEqual([
       "captureLead",
       "enviarRecurso",
@@ -29,12 +29,12 @@ describe("buildTools", () => {
     expect(tools.scheduleAppointment).toBeDefined();
   });
 
-  it("free tier captura leads; pro agrega catálogo (Pro-only)", () => {
-    const free = buildTools(makeCtx("free"));
+  it("free tier captura leads; pro agrega catálogo (Pro-only)", async () => {
+    const free = await buildTools(makeCtx("free"));
     expect(free.captureLead).toBeDefined();
     expect(free.catalogQuery).toBeUndefined();
 
-    const pro = buildTools(makeCtx("pro"));
+    const pro = await buildTools(makeCtx("pro"));
     expect(pro.catalogQuery).toBeDefined();
     expect(Object.keys(pro).sort()).toEqual([
       "captureLead",
@@ -48,8 +48,8 @@ describe("buildTools", () => {
     ]);
   });
 
-  it("el Starter genérico no agrega tools de nicho (aunque BOT_NICHE traiga un giro)", () => {
-    const tools = buildTools(makeCtx("pro"));
+  it("el Starter genérico no agrega tools de nicho (aunque BOT_NICHE traiga un giro)", async () => {
+    const tools = await buildTools(makeCtx("pro"));
     expect(tools.crearReservacion).toBeUndefined();
     expect(tools.calificarComprador).toBeUndefined();
     expect(tools.agendarCita).toBeUndefined();

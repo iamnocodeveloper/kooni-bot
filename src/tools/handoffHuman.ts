@@ -5,7 +5,7 @@ import type { Env } from "../env";
 import { Db } from "../db/client";
 import { TicketsRepo } from "../db/tickets";
 import { ConversationsRepo } from "../db/conversations";
-import { isPro } from "../config";
+import { isProUnlocked } from "../config";
 
 export function handoffHumanTool(env: Env, getConversationId: () => string | null) {
   return tool({
@@ -81,7 +81,7 @@ export async function handoffNotifyStatus(env: Env): Promise<{ ok: boolean; chan
   const channels: string[] = [];
   if (tgToken && ownerTg) channels.push("Telegram");
   if (
-    isPro(env) &&
+    (await isProUnlocked(env)) &&
     env.OWNER_WA_NUMBER &&
     env.TWILIO_ACCOUNT_SID &&
     env.TWILIO_AUTH_TOKEN &&
@@ -159,7 +159,7 @@ export async function notifyOwner(env: Env, notice: HandoffNotice): Promise<void
   // ContentVariables (the template's {{1}}, {{2}}, {{3}} placeholders), not Body.
   // El SID (secret o setting) ya se resolvió arriba, antes del guard.
   if (
-    isPro(env) &&
+    (await isProUnlocked(env)) &&
     env.OWNER_WA_NUMBER &&
     env.TWILIO_ACCOUNT_SID &&
     env.TWILIO_AUTH_TOKEN &&

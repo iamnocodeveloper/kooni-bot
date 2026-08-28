@@ -172,12 +172,12 @@ function renderLlmSection(settings: Record<string, string>, llmTest?: string): s
  * SettingsRepo.all()). `saved` shows the "Guardado ✓" confirmation banner after
  * a redirect from POST /admin/config?saved=1.
  */
-export function renderConfig(
+export async function renderConfig(
   env: Env,
   settings: Record<string, string>,
   saved = false,
   llmTest?: string,
-): string {
+): Promise<string> {
   const cardGroups = CONTROL_LIST.map((c) => renderCardGroup(c, settings)).join("");
 
   // Este campo escribe la MISMA llave que "Prompt del agente" de Mi Agente →

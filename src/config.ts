@@ -8,6 +8,20 @@ export function isPro(env: Env): boolean {
   return env.BOT_TIER === "pro";
 }
 
+/** ¿Pro desbloqueado? BOT_TIER=pro O una licencia válida pegada en el panel.
+ *  La licencia vive en D1 (settings) y se valida con HMAC, por eso es async.
+ *  Úsala en los gates de tier (tabs del panel, tools del agente, imagen, etc.);
+ *  `isPro` queda como fast-path síncrono para BOT_TIER. */
+export async function isProUnlocked(env: Env): Promise<boolean> {
+  if (env.BOT_TIER === "pro") return true;
+  try {
+    const { isProLicense } = await import("./limits");
+    return await isProLicense(env);
+  } catch {
+    return false;
+  }
+}
+
 // Tools reservadas al tier Pro. captureLead NO está aquí a propósito: el bot
 // Starter (free) captura leads — es su valor central. Lo Pro son las tools más
 // avanzadas por nicho (agendar citas, consultar catálogo/inventario).

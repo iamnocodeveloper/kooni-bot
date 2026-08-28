@@ -15,7 +15,7 @@
  * esta prueba lo comprueba desde el servidor: coge cada script en línea del
  * HTML y lo pasa por el parser de JavaScript.
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeAll } from "vitest";
 import { layout } from "../../src/admin/views/layout";
 
 const RE_SCRIPT_EN_LINEA = /<script(?![^>]*\ssrc=)[^>]*>([\s\S]*?)<\/script>/g;
@@ -25,7 +25,10 @@ function scriptsDe(html: string): string[] {
 }
 
 describe("los scripts en línea del panel", () => {
-  const html = layout({ title: "Prueba", activeTab: "overview", body: "<p>hola</p>" });
+  let html = "";
+  beforeAll(async () => {
+    html = await layout({ title: "Prueba", activeTab: "overview", body: "<p>hola</p>" });
+  });
 
   it("hay scripts que revisar (si no, la prueba no probaría nada)", () => {
     expect(scriptsDe(html).length).toBeGreaterThan(0);

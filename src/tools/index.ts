@@ -1,5 +1,5 @@
 import type { Env } from "../env";
-import { isPro } from "../config";
+import { isProUnlocked } from "../config";
 import { searchKbTool } from "./searchKb";
 import { handoffHumanTool } from "./handoffHuman";
 import { pauseBotTool } from "./pauseBot";
@@ -27,7 +27,7 @@ export interface ToolContext {
   getConversationId: () => string | null;
 }
 
-export function buildTools(ctx: ToolContext) {
+export async function buildTools(ctx: ToolContext) {
   // Free tier base set. captureLead y scheduleAppointment van aquí a propósito: el bot
   // Starter (free) captura prospectos Y agenda citas — Cal.com lo pone el dueño con su
   // propia cuenta/llave, sin costo para Kooni, así que es valor central sin gate. Lo Pro
@@ -45,7 +45,7 @@ export function buildTools(ctx: ToolContext) {
   };
 
   // Pro tier additions
-  if (isPro(ctx.env)) {
+  if (await isProUnlocked(ctx.env)) {
     tools.catalogQuery = catalogQueryTool(ctx.env);
   }
 

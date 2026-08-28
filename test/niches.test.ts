@@ -23,10 +23,10 @@ describe("getNiche", () => {
 });
 
 describe("dashboard (nav genérico)", () => {
-  const page = (niche?: string) => layout({ title: "T", activeTab: "leads", body: "x", env: envWith(niche) });
+  const page = async (niche?: string) => await layout({ title: "T", activeTab: "leads", body: "x", env: envWith(niche) });
 
-  it("genérico: el nav dice 'Leads'", () => {
-    const html = page(undefined);
+  it("genérico: el nav dice 'Leads'", async () => {
+    const html = await page(undefined);
     expect(html).toContain("Leads");
     expect(html).toContain('href="/admin/leads"');
   });

@@ -19,7 +19,7 @@ import { loadLlmOverrides } from "../settings-loader";
 import type { Env } from "../env";
 import { adminAuth } from "./auth";
 import { layout, renderUpgrade } from "./views/layout";
-import { isPro } from "../config";
+import { isProUnlocked } from "../config";
 import { renderOverview } from "./views/overview";
 import { renderStats } from "./views/stats";
 import { renderCosts } from "./views/costs";
@@ -105,15 +105,15 @@ const PRO_GATE: Array<[string, string]> = [
   ["/admin/campanas", "Campañas"],
 ];
 adminApp.use("*", async (c, next) => {
-  if (isPro(c.env)) return next();
+  if (await isProUnlocked(c.env)) return next();
   const path = c.req.path;
   const hit = PRO_GATE.find(([pre]) => path === pre || path.startsWith(pre + "/"));
-  if (hit) return c.html(renderUpgrade(c.env, hit[1]));
+  if (hit) return c.html(await renderUpgrade(c.env, hit[1]));
   return next();
 });
 
 // Página de upgrade (item bloqueado del nav apunta aquí).
-adminApp.get("/upgrade", (c) => c.html(renderUpgrade(c.env)));
+adminApp.get("/upgrade", async (c) => c.html(await renderUpgrade(c.env)));
 
 // Root → default tab.
 adminApp.get("/", (c) => c.redirect("/admin/overview"));
@@ -153,12 +153,12 @@ adminApp.get("/kb", async (c) =>
   ),
 );
 
-adminApp.get("/kb/new", (c) => c.html(renderKbEditor(null, c.env)));
+adminApp.get("/kb/new", async (c) => c.html(await renderKbEditor(null, c.env)));
 
 adminApp.get("/kb/:id/edit", async (c) => {
   const doc = await new KbDocsRepo(new Db(c.env.DB)).getById(c.req.param("id"));
   if (!doc) return c.redirect("/admin/kb");
-  return c.html(renderKbEditor(doc, c.env));
+  return c.html(await renderKbEditor(doc, c.env));
 });
 
 // Save = persist in D1 + index into Vectorize immediately (stale vectors for
@@ -563,20 +563,28 @@ adminApp.post("/conexiones/telegram", async (c) => {
 
     // Registrar el webhook del worker: sin esto Telegram NO entrega ningún
     // mensaje (el síntoma es "el token sale conectado pero el bot no responde").
+    // Se reintenta un par de veces: un workers.dev recién desplegado a veces da
+    // "Temporary failure in name resolution" en el resolver de Telegram.
     const baseUrl = (c.env.DASHBOARD_BASE_URL?.trim() || new URL(c.req.url).origin).replace(/\/$/, "");
-    try {
-      const whRes = await fetch(`https://api.telegram.org/bot${tokenToSave}/setWebhook`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: `${baseUrl}/webhooks/telegram`, allowed_updates: ["message"] }),
-        signal: AbortSignal.timeout(8000),
-      });
-      const wh = (await whRes.json().catch(() => ({}))) as { ok?: boolean; description?: string };
-      if (!whRes.ok || wh.ok !== true) {
-        return c.redirect(`/admin/conexiones?telegram=error&msg=${encodeURIComponent("Token guardado, pero no pude registrar el webhook: " + (wh.description ?? "error de Telegram"))}`);
+    let whError = "";
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const whRes = await fetch(`https://api.telegram.org/bot${tokenToSave}/setWebhook`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: `${baseUrl}/webhooks/telegram`, allowed_updates: ["message"] }),
+          signal: AbortSignal.timeout(8000),
+        });
+        const wh = (await whRes.json().catch(() => ({}))) as { ok?: boolean; description?: string };
+        if (whRes.ok && wh.ok === true) { whError = ""; break; }
+        whError = wh.description ?? "error de Telegram";
+      } catch {
+        whError = "no se pudo contactar Telegram";
       }
-    } catch {
-      return c.redirect(`/admin/conexiones?telegram=error&msg=${encodeURIComponent("Token guardado, pero no pude contactar Telegram para registrar el webhook.")}`);
+      if (attempt < 3) await new Promise((r) => setTimeout(r, 2000));
+    }
+    if (whError) {
+      return c.redirect(`/admin/conexiones?telegram=error&msg=${encodeURIComponent("Token guardado, pero no pude registrar el webhook: " + whError)}`);
     }
   }
 
@@ -748,7 +756,7 @@ adminApp.post("/campanas/send", async (c) => {
 adminApp.get("/config", async (c) => {
   const settings = await new SettingsRepo(new Db(c.env.DB)).all();
   const saved = c.req.query("saved") === "1";
-  return c.html(renderConfig(c.env, settings, saved, c.req.query("llmtest")));
+  return c.html(await renderConfig(c.env, settings, saved, c.req.query("llmtest")));
 });
 
 // Prueba de la config BYO-LLM guardada: un generateText mínimo con el modelo
@@ -1001,9 +1009,9 @@ adminApp.post("/conversations/:id/suggest", async (c) => {
 
 // --- Fallback ---------------------------------------------------------------
 
-adminApp.notFound((c) =>
+adminApp.notFound(async (c) =>
   c.html(
-    layout({
+    await layout({
       title: "No encontrado",
       activeTab: "overview",
       body: "<p class='text-stone-500'>Página no encontrada.</p>",

@@ -96,7 +96,7 @@ export async function renderKbList(
   return layout({ title: "Conocimiento", activeTab: "kb", body, env });
 }
 
-export function renderKbEditor(doc: KbDoc | null, env: Env): string {
+export async function renderKbEditor(doc: KbDoc | null, env: Env): Promise<string> {
   const isNew = doc === null;
   const body = `
     <div style="margin-bottom:16px">

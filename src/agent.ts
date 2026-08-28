@@ -5,7 +5,7 @@ import type { Env } from "./env";
 import { Db } from "./db/client";
 import { ConversationsRepo } from "./db/conversations";
 import { MessagesRepo } from "./db/messages";
-import { isPro } from "./config";
+import { isProUnlocked } from "./config";
 import { resolveAgentConfig } from "./settings-loader";
 import { buildTools } from "./tools";
 import { buildMultimodalUserMessage } from "./media/vision";
@@ -175,7 +175,7 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
     if (payload.imageUrl) {
       hasImage = true;
       // Pro-only: if free tier, strip the image and inform the bot owner-side
-      if (!isPro(this.env)) {
+      if (!(await isProUnlocked(this.env))) {
         processedText =
           (processedText || "") +
           "\n(El cliente mandó una imagen, pero tu plan no soporta análisis de imágenes.)";
@@ -288,7 +288,7 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
     const lastUserMsg = history[history.length - 1];
     if (lastUserMsg) {
       const imgMatch = lastUserMsg.content.match(/\[IMAGE_URL: (.+?)\]/);
-      if (imgMatch && isPro(this.env)) {
+      if (imgMatch && (await isProUnlocked(this.env))) {
         // The token was masked before storing; it goes back in only here, to
         // fetch the file. It never leaves this call.
         const imageUrl = unmaskTelegramToken(
@@ -305,7 +305,7 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
     }
 
     // Build tools registry (tier-gated in buildTools)
-    const tools = buildTools({
+    const tools = await buildTools({
       env: this.env,
       getConversationId: () => convId,
     });
