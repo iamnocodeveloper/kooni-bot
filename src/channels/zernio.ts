@@ -460,34 +460,42 @@ async function sendCommentActions(
   }
 
   // 2) Respuesta pública al comentario (opcional por regla).
-  // Si ya se publicó en un intento previo, no se re-publica. OJO: la respuesta
-  // pública va con la cuenta que PUBLICÓ el post (publishAccountId — la del
-  // webhook), NO la del inbox: Zernio devuelve 400 si no coincide.
+  // Si ya se publicó en un intento previo, no se re-publica. Se intenta primero
+  // con la cuenta del webhook (la que monitorea el comentario) y, si falla, con
+  // la del inbox resuelta — cubre el caso de posts publicados desde el mismo u
+  // otro perfil de Zernio.
   if (publicReply && !publicAlreadySent) {
-    try {
-      const res = await fetch(`${base}/v1/inbox/comments/${postId}`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ accountId: publishAccountId, message: publicReply, commentId }),
-      });
-      if (!res.ok) {
+    const candidates = [publishAccountId, accountId].filter((v, i, a) => v && a.indexOf(v) === i);
+    let lastError = "";
+    for (const acc of candidates) {
+      try {
+        const res = await fetch(`${base}/v1/inbox/comments/${postId}`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ accountId: acc, message: publicReply, commentId }),
+        });
+        if (res.ok) {
+          publicSent = true;
+          lastError = "";
+          console.log(`[zernio] respuesta pública enviada por keyword: ${matched.keywords.join(",")}`);
+          break;
+        }
         const detail = await res.text().catch(() => "");
         // "ya respondiste" / "already replied" → la pública ya fue; skipped.
         if (/ya respond|ya.*respuesta|already|duplicate/i.test(detail)) {
           publicSkipped = true;
+          lastError = "";
           console.warn(`[zernio] reply público ya enviado antes — se omite (${commentId})`);
-        } else {
-          publicError = `HTTP ${res.status} ${detail.slice(0, 200)}`;
-          console.error(`zernio reply público falló: ${publicError}`);
+          break;
         }
-      } else {
-        publicSent = true;
-        console.log(`[zernio] respuesta pública enviada por keyword: ${matched.keywords.join(",")}`);
+        lastError = `HTTP ${res.status} ${detail.slice(0, 200)}`;
+        console.error(`[zernio] reply público falló (cuenta ${acc}): ${lastError}`);
+      } catch (e) {
+        lastError = String((e as Error)?.message ?? e);
+        console.error("zernio reply público error:", e);
       }
-    } catch (e) {
-      publicError = String((e as Error)?.message ?? e);
-      console.error("zernio reply público error:", e);
     }
+    if (!publicSent && !publicSkipped) publicError = lastError;
   } else if (publicAlreadySent) {
     publicSkipped = true; // ya publicada en un intento previo
   }
