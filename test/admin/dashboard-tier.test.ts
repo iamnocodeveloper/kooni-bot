@@ -37,10 +37,13 @@ describe("dashboard tier gating (nav)", () => {
     expect(html).toContain('href="/admin/insights"');
   });
 
-  it("renderUpgrade arma la página con la nota interna de tier", () => {
+  it("renderUpgrade arma la página y NO expone la nota interna de tier", () => {
     const html = renderUpgrade(envOf("free"), "Insights");
     expect(html).toContain("Insights");
-    expect(html).toContain("BOT_TIER");
-    expect(html).toContain("wrangler.toml");
+    // La instrucción de infraestructura (BOT_TIER/wrangler.toml) NO debe llegar
+    // al cliente: el upgrade debe dirigir a la página de Licencia.
+    expect(html).not.toContain("BOT_TIER");
+    expect(html).not.toContain("wrangler.toml");
+    expect(html).toContain('href="/admin/licencia"');
   });
 });
