@@ -219,8 +219,10 @@ async function renderReportSection(settings: Record<string, string>, env: Env, r
         <select id="${SETTING_KEYS.nightlyReportChannel}" name="${SETTING_KEYS.nightlyReportChannel}" style="${SELECT_STYLE}">${opts}</select>
       </div>
       <p class="text-dim text-[11px]">${statusLine}</p>
-      <a href="/admin/config/report-test" class="text-[12px] font-display font-semibold"
-         style="width:fit-content;border:1px solid var(--line);color:var(--cream);padding:9px 14px;text-decoration:none">📨 Enviar prueba ahora</a>
+      <form method="POST" action="/admin/config/report-test" style="width:fit-content">
+        <button type="submit" class="text-[12px] font-display font-semibold cursor-pointer"
+                style="border:1px solid var(--line);color:var(--cream);padding:9px 14px;background:var(--panel2)">📨 Enviar prueba ahora</button>
+      </form>
     </div>`;
 }
 
