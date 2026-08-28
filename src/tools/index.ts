@@ -7,6 +7,7 @@ import { snoozeUserTool } from "./snoozeUser";
 import { captureLeadTool } from "./captureLead";
 import { scheduleAppointmentTool } from "./scheduleAppointment";
 import { catalogQueryTool } from "./catalogQuery";
+import { reportQueryTool } from "./reportQuery";
 import { enviarRecursoTool, type RecursoCtx } from "./enviarRecurso";
 import type { ChannelId } from "../channels/shared";
 
@@ -42,6 +43,9 @@ export async function buildTools(ctx: ToolContext) {
     // Cal.com configurado, la tool devuelve guía explícita para capturar el
     // lead en vez de agendar (ver scheduleAppointment.ts).
     scheduleAppointment: scheduleAppointmentTool(ctx.env, ctx.getConversationId),
+    // Reporte del día (Forja+): el DUEÑO pregunta en su chat y el bot responde
+    // con los números del día (clientes, leads, ventas calientes, molestos).
+    reportQuery: reportQueryTool(ctx.env),
   };
 
   // Pro tier additions

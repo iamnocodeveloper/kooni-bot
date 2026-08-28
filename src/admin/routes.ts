@@ -806,7 +806,24 @@ adminApp.post("/campanas/send", async (c) => {
 adminApp.get("/config", async (c) => {
   const settings = await new SettingsRepo(new Db(c.env.DB)).all();
   const saved = c.req.query("saved") === "1";
-  return c.html(await renderConfig(c.env, settings, saved, c.req.query("llmtest")));
+  return c.html(await renderConfig(c.env, settings, saved, c.req.query("llmtest"), c.req.query("report")));
+});
+
+// Botón "Enviar prueba ahora" del Reporte nocturno: manda el resumen del día
+// por el canal configurado (aunque el reporte esté apagado) y vuelve con el
+// resultado en la query para el banner de la sección.
+adminApp.post("/config/report-test", async (c) => {
+  try {
+    const { sendReportTest } = await import("../reports/nightly");
+    const res = await sendReportTest(c.env);
+    if (res.sentTo.length === 0) {
+      return c.redirect("/admin/config?report=" + encodeURIComponent("err:No hay ningún canal configurado (Telegram o correo). Revisa Conexiones y los secrets."));
+    }
+    return c.redirect("/admin/config?report=ok:" + res.sentTo.join("+"));
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return c.redirect(`/admin/config?report=${encodeURIComponent(`err:${msg.slice(0, 160)}`)}`);
+  }
 });
 
 // Prueba de la config BYO-LLM guardada: un generateText mínimo con el modelo
@@ -873,6 +890,16 @@ adminApp.post("/config", async (c) => {
   const modelRaw = form.get(SETTING_KEYS.llmModel);
   if (modelRaw !== null) {
     await repo.set(SETTING_KEYS.llmModel, String(modelRaw).trim().slice(0, 100));
+  }
+
+  // Reporte nocturno: checkbox → "1"/"0"; canal allow-list.
+  if (form.get(SETTING_KEYS.nightlyReportEnabled) !== null) {
+    await repo.set(SETTING_KEYS.nightlyReportEnabled, form.get(SETTING_KEYS.nightlyReportEnabled) === "1" ? "1" : "0");
+  }
+  const reportChannel = form.get(SETTING_KEYS.nightlyReportChannel);
+  if (reportChannel !== null) {
+    const v = String(reportChannel).trim().toLowerCase();
+    await repo.set(SETTING_KEYS.nightlyReportChannel, ["telegram", "email", "both"].includes(v) ? v : "telegram");
   }
   // La API key SOLO se sobreescribe si escribieron algo (el input siempre
   // llega vacío cuando no la tocaron); el checkbox la borra explícitamente.

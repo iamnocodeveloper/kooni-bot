@@ -43,6 +43,10 @@ export const SETTING_KEYS = {
   // Avisos al dueño (handoff) por Telegram DM: chat_id del dueño editable desde
   // el panel (Conexiones → card Telegram). Fallback al secret OWNER_TELEGRAM_CHAT_ID.
   ownerTelegramChatId: "owner_telegram_chat_id",
+  // Reporte nocturno (Forja+): resumen del día al dueño, configurable desde
+  // /admin/config → "Reporte nocturno".
+  nightlyReportEnabled: "nightly_report_enabled", // "0" | "1"
+  nightlyReportChannel: "nightly_report_channel", // telegram | email | both
 } as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[keyof typeof SETTING_KEYS];

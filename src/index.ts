@@ -330,6 +330,11 @@ export default {
     await purgeOldMessages(env);
     // Corrida nocturna del Analista de insights (F2). No debe tumbar la purga.
     await analyzeConversations(env, { limit: 50 }).catch((e) => console.error("insights:", e));
+    // Reporte nocturno (Forja+): resumen del día al dueño (Telegram/email),
+    // configurable en /admin/config → "Reporte nocturno". Corre DESPUÉS del
+    // análisis para que los insights del día ya estén frescos.
+    const { sendNightlyReport } = await import("./reports/nightly");
+    await sendNightlyReport(env).catch((e) => console.error("reporte nocturno:", e));
     // Flywheel (F5): detecta huecos de KB y lecciones de takeovers → propone
     // mejoras en /admin/mejoras. Corre DESPUÉS del analizador (usa su output).
     const { runFlywheel } = await import("./flywheel/detect");
