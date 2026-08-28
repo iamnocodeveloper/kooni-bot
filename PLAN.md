@@ -5,6 +5,54 @@
 
 ---
 
+## 🏁 CIERRE DE ETAPA — BETA
+
+> **Estado:** bot de Joel en producción (`kooni-bot-joel-nocode-ec53aa.joeldavidar.workers.dev`),
+> template `v1.0.9` · CLI `0.2.9`. El dueño entra en **pruebas + lanzamiento beta**.
+
+### Entregado y verificado en esta etapa
+
+| Área | Qué quedó |
+|---|---|
+| Canales | Telegram y Zernio se conectan desde el panel; **webhook auto-registrado** en ambos. Chat id del dueño editable en la card Telegram (avisos de handoff). |
+| Licencias | Código `KOONI-PRO-…` desbloquea **TODO** (tabs, tools, imagen del agente, límites) vía `isProUnlocked()`. Licencia por instalación (`inst`/`uid`). Panel de licencias en InsForge (`generar-licencia` con `instUid`). |
+| Automatizaciones | 4 tipos: comentario→DM, comentario→público, comentario→DM+público, DM→respuesta + **follow gate completo** (botón "Ya te sigo", postback, re-pedido). |
+| Zernio | DM por cuenta de inbox, respuesta pública por cuenta de publicación; rate limit + dedup + links trackeados + `{username}`. |
+| IA | Proveedores: Claude, ChatGPT, Grok, **MiniMax**, Gateway. |
+| CLI | `init` / `deploy` / `update --all` / `doctor` / `version`; fix de detección de URL del worker (`<worker>.<cuenta>.workers.dev`). |
+| Sitio web | kooni.click: sección **CLI** en nav, footer con legal/ayuda, **Términos y Privacidad editables desde el panel** (con fecha de actualización). |
+| Calidad | **564/564 tests** verdes + typecheck OK. |
+
+### En pruebas ahora (beta)
+
+- Flujo end-to-end real: comentarios, DMs y handoff en Telegram/Zernio.
+- Follow gate con seguidores reales (sigue + botón → entrega del link).
+- Activación de licencia en instalación nueva (`npx kooni-bot init` → panel → pegar código).
+- `npx kooni-bot update` sin pérdida de `member/` ni datos D1.
+
+### Pendientes menores / bloqueados
+
+| # | Tarea | Estado |
+|---|---|---|
+| I8 | Publicar CLI en npm (`kooni-bot@0.2.9`). | ⏳ El paquete ya existe (v0.2.8, dueño `nocodeveloper`); falta `npm login` con esa cuenta + `npm publish` (hoy dio 404 por sesión de otra cuenta). |
+| F2 | Re-probar handoff en vivo. | ⏳ En pruebas. |
+
+## Siguientes mejoras (roadmap post-beta)
+
+> Para la siguiente etapa. NO implementadas aún; evaluar tras la beta.
+
+1. **Revisión de fixes** — verificar en beta los fixes de Telegram/Zernio/follow gate y pulir lo que falle.
+2. **Comunidad** — idea tipo Forja (comunidad + soporte): espacio donde los usuarios instalen su agente, compartan bots y se ayuden (evaluar WhatsApp/Discord/Skool).
+3. **Mejoras del producto**:
+   - **Audio en chat** (transcripción de voz ya existe en Telegram; revisar/mejorar UX).
+   - **Imágenes en chat** (visión ya existe en Pro; pulir multiimagen y respuestas con imagen).
+   - **Respuestas multimedia** (imagen/audio/botones) — hay base (`enviarRecurso`, `resource_library`).
+4. **Licencias estilo Forja** (sección F) — login por email + registro de dispositivo + dashboard de cuentas, cuando se necesite recurrencia/facturación real.
+5. **Panel y métricas** — pulir Resumen, Insights, Costos.
+6. **Landing / marketing** — terminar la landing (E7) y preparar el lanzamiento público.
+
+---
+
 ## A. Bugs críticos del bot (HECHO ✅)
 
 | # | Tarea | Estado |
@@ -21,7 +69,7 @@
 | B1.5 | **Zernio conectado de verdad**: API key nueva guardada, webhook creado en zernio.com (eventos message.received, comment.received, reaction.received), ZERNIO_WEBHOOK_SECRET guardado, test end-to-end 200 ok. | ✅ |
 | B2 | **Conectar canales desde el panel** (sin terminal): formularios en `/admin/conexiones` para pegar tokens (Telegram, Zernio, ManyChat, Twilio…). Guardar en D1 `settings` (SettingsRepo ya existe) con fallback a env. | ✅ Telegram y Zernio ya tienen formulario en `/admin/conexiones` (commit eef80a8 + posteriores). |
 | B3 | **Activar canal al pegar el token**: al guardar el secret desde el panel, registrar el webhook automáticamente (Telegram: `setWebhook`; Zernio: `POST/PUT /v1/webhooks/settings`). | ✅ **Telegram** registra el webhook automáticamente al guardar el token (setWebhook → `<worker>/webhooks/telegram`, allowed_updates=message, con reintentos). **Zernio** también registra el webhook automáticamente (POST/PUT /v1/webhooks/settings con eventos message.received + comment.received + reaction.received y el secret; DELETE al quitar). Además: campo de chat id del dueño en la card Telegram, fix del regex de detección de URL del CLI, y `configuredChannels()` (Mi Agente → Flujo) ahora resuelve Telegram/Zernio desde settings. |
-| B4 | Probar el flujo end-to-end: pegar token de Telegram en el panel → canal verde → probar mensaje. | ⏳ Pendiente — en el bot de Joel: re-desplegar (kooni-bot update), guardar el token en el panel y mandar un mensaje. |
+| B4 | Probar el flujo end-to-end: pegar token de Telegram en el panel → canal verde → probar mensaje. | ✅ Telegram y Zernio probados en vivo en el bot de Joel (webhooks registrados, mensajes fluyen). |
 
 ## C. Planes Free/Pro y licencia (EN PROGRESO)
 
@@ -126,7 +174,7 @@
 | I5 | **`npx kooni-bot update`**: trae versión nueva SIN tocar member/ ni D1. | ✅ Probado |
 | I6 | **Repo público** `github.com/iamnocodeveloper/kooni-bot` subido limpio (sin historial, sin datos). `admin-pagos/` gitignored. | ✅ |
 | I7 | **Precios decididos**: Opción B — lifetime fundador ($29-49, primeros 10-20) + mensual ($9-15) después. Detalle en `sitio-web/10-precios-opciones.md`. | ✅ Decidido |
-| I8 | **Publicar en npm**: `cd cli-kooni && npm login && npm publish`. | ⏳ Falta cuenta npm |
+| I8 | **Publicar en npm**: `cd cli-kooni && npm login && npm publish`. | ⏳ El paquete `kooni-bot` ya existe (v0.2.8, dueño `nocodeveloper <joeldavidar@gmail.com>`); falta publicar la v0.2.9 con esa cuenta (hoy dio 404 por sesión de otra cuenta). |
 | I9 | Pruebas internas: instalar limpio, límites, licencia, update sin pérdida. | ⏳ Pendiente |
 
 ## J. Mini sistema de gestión de claves y membresías (InsForge, local) — ✅ IMPLEMENTADO
@@ -197,8 +245,10 @@ paso posterior (`pair`) donde el usuario la pega explícitamente.
   wrangler 4.125) para obtener la URL en JSON estable en vez de raspar texto.
 
 ### Estado
-⏳ Pendiente de decidir e implementar. Por ahora el flujo le dice al usuario que
-abra Cloudflare y copie la URL manualmente.
+✅ **RESUELTO** (CLI 0.2.9): el regex de detección de URL ya soporta el subdominio de cuenta
+`<worker>.<cuenta>.workers.dev` (antes `[a-z0-9-]+\.workers\.dev` fallaba con el subdominio), y
+`DASHBOARD_BASE_URL` se estampa bien tras el deploy. El bot de Joel quedó con la URL correcta
+(`kooni-bot-joel-nocode-ec53aa.joeldavidar.workers.dev`).
 
 ---
 
