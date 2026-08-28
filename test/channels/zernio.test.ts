@@ -17,7 +17,7 @@ const dmPayload = {
     sentAt: "2026-08-23T00:00:00Z",
   },
   conversation: { id: "conv_1", participantName: "María", participantUsername: "maria.g" },
-  account: { id: "acct_1", platform: "instagram", username: "mi_negocio" },
+  account: { id: "acct_1", accountId: "acct_1", platform: "instagram", username: "mi_negocio" },
 };
 
 const commentPayload = {
@@ -25,7 +25,7 @@ const commentPayload = {
   event: "comment.received",
   timestamp: "2026-08-23T00:00:00Z",
   comment: { id: "cm_1", postId: "post_1", platformPostId: "pp_1", text: "Claude por favor" },
-  account: { id: "acct_1", platform: "instagram", username: "mi_negocio" },
+  account: { id: "acct_1", accountId: "acct_1", platform: "instagram", username: "mi_negocio" },
 };
 
 const envBase = {
@@ -303,7 +303,7 @@ describe("follow gate (require_follow)", () => {
       {
         event: "comment.received",
         comment: { id: "cm_9", postId: "post_1", platformPostId: "pp_1", text: "me interesa el link", author: { id: "usr_9", username: "pepe" } },
-        account: { id: "acct_1", platform: "instagram" },
+        account: { id: "acct_1", accountId: "acct_1", platform: "instagram" },
       },
       env,
     );
@@ -337,7 +337,7 @@ describe("follow gate (require_follow)", () => {
       {
         event: "comment.received",
         comment: { id: "cm_10", postId: "post_1", platformPostId: "pp_1", text: "me interesa el link", author: { id: "usr_10", username: "pepe" } },
-        account: { id: "acct_1", platform: "instagram" },
+        account: { id: "acct_1", accountId: "acct_1", platform: "instagram" },
       },
       env,
     );
@@ -371,7 +371,7 @@ describe("follow gate (require_follow)", () => {
         event: "message.received",
         message: { id: "m_1", conversationId: "conv_1", direction: "incoming", text: "followcheck:rule-fg:cm_9", sender: { id: "usr_9", name: "pepe" } },
         conversation: { id: "conv_1" },
-        account: { id: "acct_1", platform: "instagram" },
+        account: { id: "acct_1", accountId: "acct_1", platform: "instagram" },
       },
       env,
     );

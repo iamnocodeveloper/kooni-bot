@@ -86,7 +86,7 @@ interface ZernioWebhookBody {
   timestamp?: string;
   message?: ZernioMessage;
   conversation?: { id?: string; platformConversationId?: string; participantName?: string; participantUsername?: string };
-  account?: { id?: string; platform?: string; username?: string; displayName?: string };
+  account?: { id?: string; accountId?: string; profileId?: string; platform?: string; username?: string; displayName?: string };
   comment?: ZernioComment;
 }
 
@@ -546,13 +546,13 @@ async function recordZernioComment(body: ZernioWebhookBody, env: Env): Promise<v
       authorName: comment.author?.name,
       authorId: comment.author?.id,
       platform: comment.platform ?? account?.platform ?? "instagram",
-      accountId: account?.id,
+      accountId: account?.accountId,
     });
     // Registrar el comentarista como contacto (todos los que interactúan).
     if (comment.author?.id) {
       await new ContactsRepo(new Db(env.DB)).touch({
         channel: "zernio",
-        channelUserId: `${account?.id ?? ""}:${comment.author.id}`,
+        channelUserId: `${account?.accountId ?? ""}:${comment.author.id}`,
         displayName: comment.author.name,
         username: comment.author.username,
       });
@@ -565,7 +565,7 @@ async function recordZernioComment(body: ZernioWebhookBody, env: Env): Promise<v
 async function autoDmOnComment(body: ZernioWebhookBody, env: Env): Promise<void> {
   const comment = body.comment;
   const account = body.account;
-  if (!comment || !account?.id) return;
+  if (!comment || !account?.accountId) return;
   const rules = await loadAutoDmRules(env);
   if (rules.length === 0) return;
 
@@ -580,7 +580,7 @@ async function autoDmOnComment(body: ZernioWebhookBody, env: Env): Promise<void>
   if (postId && commentId) {
     await sendCommentActions(
       matched,
-      account.id,
+      account.accountId,
       postId,
       commentId,
       comment.author?.username ?? comment.author?.name,
@@ -600,7 +600,7 @@ async function autoReplyOnDm(body: ZernioWebhookBody, env: Env): Promise<boolean
   const m = body.message;
   const conv = body.conversation;
   const account = body.account;
-  if (!m || !conv?.id || !account?.id) return false;
+  if (!m || !conv?.id || !account?.accountId) return false;
   const text = (m.text ?? "").trim();
   if (!text) return false;
 
@@ -626,7 +626,7 @@ async function autoReplyOnDm(body: ZernioWebhookBody, env: Env): Promise<boolean
       let isFollower = false;
       try {
         const fr = await fetch(
-          `${base}/v1/accounts/${encodeURIComponent(account.id)}/follow-status/${encodeURIComponent(m.sender?.id ?? "")}`,
+          `${base}/v1/accounts/${encodeURIComponent(account.accountId)}/follow-status/${encodeURIComponent(m.sender?.id ?? "")}`,
           { headers: { Authorization: `Bearer ${apiKey}` }, signal: AbortSignal.timeout(6000) },
         );
         if (fr.ok) {
@@ -649,7 +649,7 @@ async function autoReplyOnDm(body: ZernioWebhookBody, env: Env): Promise<boolean
         await fetch(`${base}/v1/inbox/conversations/${encodeURIComponent(conv.id)}/messages`, {
           method: "POST",
           headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ accountId: account.id, message: prompt, buttons: followBtn }),
+          body: JSON.stringify({ accountId: account.accountId, message: prompt, buttons: followBtn }),
         });
         return true;
       }
@@ -674,7 +674,7 @@ async function autoReplyOnDm(body: ZernioWebhookBody, env: Env): Promise<boolean
       await fetch(`${base}/v1/inbox/conversations/${encodeURIComponent(conv.id)}/messages`, {
         method: "POST",
         headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ accountId: account.id, message: dm, buttons: buttons.length ? buttons : undefined }),
+        body: JSON.stringify({ accountId: account.accountId, message: dm, buttons: buttons.length ? buttons : undefined }),
       });
 
       // Registrar la entrega tras el follow gate.
@@ -740,8 +740,8 @@ async function autoReplyOnDm(body: ZernioWebhookBody, env: Env): Promise<boolean
     const { Db } = await import("../db/client");
     const { DmLogsRepo } = await import("../db/dmLogs");
     const logs = new DmLogsRepo(new Db(env.DB));
-    if (!(await logs.reserveDmSlot(account.id))) {
-      console.warn(`[zernio] rate limit (dm_reply): cuenta ${account.id} agotó su cupo — se salta`);
+    if (!(await logs.reserveDmSlot(account.accountId))) {
+      console.warn(`[zernio] rate limit (dm_reply): cuenta ${account.accountId} agotó su cupo — se salta`);
       await logs.log({
         ruleId: matched.ruleId,
         kind: "dm_reply",
@@ -764,7 +764,7 @@ async function autoReplyOnDm(body: ZernioWebhookBody, env: Env): Promise<boolean
     const res = await fetch(`${base}/v1/inbox/conversations/${encodeURIComponent(conv.id)}/messages`, {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ accountId: account.id, message: dmMessage, buttons: buttons.length ? buttons : undefined }),
+      body: JSON.stringify({ accountId: account.accountId, message: dmMessage, buttons: buttons.length ? buttons : undefined }),
     });
     if (!res.ok) {
       const detail = await res.text().catch(() => "");
@@ -813,7 +813,7 @@ export async function parseZernioEvents(body: unknown, env: Env): Promise<Incomi
     const account = b.account;
     if (!m || m.direction !== "incoming") return [];
     const convId = conv?.id;
-    const accountId = account?.id;
+    const accountId = account?.accountId;
     if (!convId || !accountId) return [];
 
     // Flujo automático de DM (reglas dm_reply del panel): si una keyword
