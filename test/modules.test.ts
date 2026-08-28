@@ -16,7 +16,10 @@ function makeDb(settings: Record<string, string>): D1Database {
       }
       return null;
     },
-    async all<T = unknown>(_sql?: string): Promise<T[]> {
+    async all<T = unknown>(sql?: string): Promise<T[]> {
+      if (sql && /FROM settings/.test(sql)) {
+        return Object.entries(settings).map(([key, value]) => ({ key, value })) as T[];
+      }
       return [] as T[];
     },
     async run(): Promise<{ meta: { changes: number } }> {

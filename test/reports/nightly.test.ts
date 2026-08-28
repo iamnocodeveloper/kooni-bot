@@ -44,6 +44,9 @@ function makeDbStub(overrides: Partial<Record<string, unknown>> = {}, settings: 
       return (hit ? hit[1] : null) as T;
     },
     async all<T = unknown>(sql: string): Promise<T[]> {
+      if (/FROM settings/.test(sql)) {
+        return Object.entries(settings).map(([key, value]) => ({ key, value })) as T[];
+      }
       const hit = resultsBySql.find(([re]) => re.test(sql));
       return ((hit ? hit[1] : []) as unknown[]) as T[];
     },

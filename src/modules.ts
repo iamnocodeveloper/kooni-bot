@@ -67,6 +67,24 @@ export const PAID_MODULES: PaidModule[] = [
     tipo: "membresia",
     tab: "campanas",
   },
+  {
+    id: "blindaje",
+    nombre: "Blindaje anti-inventos",
+    descripcion: "El bot verifica cada respuesta contra tu información real y jamás adivina: si no está seguro, dice \"déjame confirmarlo\" y te lo pasa.",
+    tipo: "membresia",
+  },
+  {
+    id: "vigilante",
+    nombre: "Vigilante con IA",
+    descripcion: "Cada conversación se revisa sola: si un cliente se enoja o una venta se está cayendo, te llega el aviso — el bot sigue atendiendo.",
+    tipo: "membresia",
+  },
+  {
+    id: "handoff_smart",
+    nombre: "Handoff que sí atina",
+    descripcion: "El bot distingue cuándo pasarte el chat de verdad: cliente molesto, queja, factura o lead caliente → te lo entrega con contexto; lo simple lo resuelve solo.",
+    tipo: "membresia",
+  },
 ];
 
 /** Setting (D1) con el override del dueño de la plataforma: JSON array de ids. */
@@ -91,9 +109,10 @@ function parseJsonList(raw: string | null | undefined): string[] {
 /**
  * Módulos desbloqueados en esta instalación (tier pro → todos; licencia con
  * modules → los listados; licencia legada sin modules → todos; override del
- * dueño se SUMA a todo lo anterior).
+ * dueño se SUMA a todo lo anterior). Acepta un snapshot de settings para
+ * evitar re-leer la tabla cuando el llamador ya la tiene.
  */
-export async function unlockedModules(env: Env): Promise<Set<string>> {
+export async function unlockedModules(env: Env, settingsSnapshot?: Record<string, string>): Promise<Set<string>> {
   const out = new Set<string>();
   const all = () => PAID_MODULES.forEach((m) => out.add(m.id));
 
@@ -104,15 +123,16 @@ export async function unlockedModules(env: Env): Promise<Set<string>> {
 
   try {
     const { SettingsRepo, SETTING_KEYS } = await import("./db/settings");
-    const repo = new SettingsRepo(new Db(env.DB));
+    const settings = settingsSnapshot ?? (await new SettingsRepo(new Db(env.DB)).all());
+    const get = (k: string) => settings[k]?.trim() || undefined;
 
     // 1) Override del dueño de la plataforma (activación manual por instalación).
-    for (const id of parseJsonList(await repo.get(MODULE_UNLOCKS_SETTING))) {
+    for (const id of parseJsonList(get(MODULE_UNLOCKS_SETTING))) {
       if (MODULE_BY_ID.has(id)) out.add(id);
     }
 
     // 2) Licencia Pro con módulos.
-    const code = await repo.get(SETTING_KEYS.proLicense);
+    const code = get(SETTING_KEYS.proLicense);
     if (code) {
       const { verifyLicenseFor } = await import("./license");
       if (verifyLicenseFor(env, code, { instanceUid: env.BOT_INSTANCE_ID })) {

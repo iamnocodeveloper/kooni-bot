@@ -43,6 +43,7 @@ import { applySuggestion, dismissSuggestion } from "../flywheel/apply";
 import { renderLeads, exportLeadsCsv } from "./views/leads";
 import { renderTickets } from "./views/tickets";
 import { renderConfig } from "./views/config";
+import { renderExtras } from "./views/extras";
 import { renderAutomatizaciones } from "./views/automatizaciones";
 import { renderComentarios } from "./views/comentarios";
 import { renderContactos } from "./views/contactos";
@@ -643,6 +644,22 @@ adminApp.post("/conexiones/telegram", async (c) => {
 
 // Licencia: activa Pro pegando un código KOONI-PRO-... (validación local HMAC).
 adminApp.get("/licencia", async (c) => c.html(await renderLicencia(c.env)));
+
+// Menú Extras (Forja+): cuadrícula de funciones de pago con toggles on/off.
+adminApp.get("/extras", async (c) => {
+  const saved = c.req.query("saved") === "1";
+  return c.html(await renderExtras(c.env, saved));
+});
+
+adminApp.post("/extras", async (c) => {
+  const form = await c.req.formData();
+  const repo = new SettingsRepo(new Db(c.env.DB));
+  const { FEATURE_KEYS } = await import("../features");
+  for (const key of Object.values(FEATURE_KEYS)) {
+    await repo.set(key, form.get(key) === "1" ? "1" : "0");
+  }
+  return c.redirect("/admin/extras?saved=1");
+});
 
 adminApp.post("/licencia", async (c) => {
   const { Db } = await import("../db/client");

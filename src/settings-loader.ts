@@ -31,6 +31,8 @@ export interface AgentConfig {
   menuButtons: ReplyButton[];
   /** BYO-LLM del dashboard (proveedor / API key / modelo). */
   llm: LlmOverrides;
+  /** Menú Extras: Vigilante con IA activo (alerta al dueño sin pasar el chat). */
+  vigilanteEnabled: boolean;
 }
 
 /** Extract the BYO-LLM overrides from a settings snapshot. */
@@ -112,11 +114,16 @@ export async function resolveAgentConfig(env: Env, toolNames: string[]): Promise
     : "No hay agenda en línea configurada. NUNCA digas que agendaste, reservaste ni confirmaste una cita. " +
       "Si el cliente quiere agendar, pide los datos (día, hora, nombre, contacto) y captura el lead con captureLead; " +
       "avísale que el negocio le confirmará por mensaje.";
-  const instructions = calcomNote
-    ? customInstructions
-      ? `${customInstructions}\n\n${calcomNote}`
-      : calcomNote
-    : customInstructions;
+  // Menú Extras (Forja+): Blindaje anti-inventos y Handoff inteligente inyectan
+  // reglas al prompt generado; el Vigilante se enciende post-respuesta (ver
+  // src/features.ts). Todo se SUMA al prompt automático — nunca lo reemplaza.
+  const { extrasForAgent } = await import("./features");
+  const extras = await extrasForAgent(env, settings);
+  const instrParts: string[] = [];
+  if (customInstructions) instrParts.push(customInstructions);
+  if (calcomNote) instrParts.push(calcomNote);
+  instrParts.push(...extras.extraInstructions);
+  const finalInstructions = instrParts.join("\n\n");
   const businessContext = get(SETTING_KEYS.businessContext) ?? renderBusinessContext();
   const botName = get(SETTING_KEYS.botName) ?? env.BOT_NAME;
   // Tono elegido en el panel gana; si no hay, el tono por defecto del nicho.
@@ -143,7 +150,7 @@ export async function resolveAgentConfig(env: Env, toolNames: string[]): Promise
       extraEscalationKeywords: escalationKeywords,
       botName,
       lessons,
-      customInstructions: instructions,
+      customInstructions: finalInstructions,
     });
 
   const bufferSecondsRaw = get(SETTING_KEYS.bufferSeconds);
@@ -216,5 +223,6 @@ export async function resolveAgentConfig(env: Env, toolNames: string[]): Promise
     allowMultimedia,
     menuButtons,
     llm: llmOverridesFrom(settings),
+    vigilanteEnabled: extras.vigilanteEnabled,
   };
 }

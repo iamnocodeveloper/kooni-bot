@@ -50,6 +50,10 @@ export const SETTING_KEYS = {
   // Módulos de pago desbloqueados por override del DUEÑO de la plataforma
   // (JSON array de ids; se setea directo en D1 — no aparece en el panel).
   moduleUnlocks: "module_unlocks",
+  // Toggles del menú Extras (Forja+): el dueño enciende/apaga cada función.
+  featureBlindaje: "feature_blindaje_enabled", // "0" | "1"
+  featureVigilante: "feature_vigilante_enabled", // "0" | "1"
+  featureHandoff: "feature_handoff_enabled", // "0" | "1"
 } as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[keyof typeof SETTING_KEYS];

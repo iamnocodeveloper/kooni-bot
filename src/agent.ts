@@ -526,6 +526,17 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
       this.env,
     );
 
+    // Vigilante (menú Extras): revisa el ánimo del chat y, si algo peligra
+    // (cliente molesto / venta en riesgo / a punto de irse), avisa al dueño
+    // SIN pasarle el chat — el bot sigue atendiendo. Best-effort: si falla,
+    // no bloquea la respuesta.
+    if (cfg.vigilanteEnabled) {
+      const { runVigilanteCheck } = await import("./vigilante");
+      runVigilanteCheck(this.env, convId).catch((e) =>
+        console.error("[vigilante]", e),
+      );
+    }
+
     console.log(
       `[SupportAgent.processBuffer] sent ${chunks.length} chunks, model=${usedModelId}, cost=$${costOfUsage(
         usedModelId,

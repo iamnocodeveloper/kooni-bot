@@ -61,6 +61,10 @@ const NAV: Section[] = [
     ],
   },
   {
+    label: "Extras",
+    items: [{ id: "extras", label: "Funciones", href: "/admin/extras", icon: "sparkles" }],
+  },
+  {
     label: "Análisis",
     items: [
       { id: "insights", label: "Insights", href: "/admin/insights", icon: "scan-eye" },
