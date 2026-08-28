@@ -44,10 +44,11 @@ function channelStatuses(env: Env, zernioCreds: ZernioCredentials, telegramToken
   const manychatMissing = [!has(env.MANYCHAT_API_KEY) && "MANYCHAT_API_KEY"].filter(
     Boolean,
   ) as string[];
-  const zernioMissing = [
-    !has(zernioCreds.apiKey) && "ZERNIO_API_KEY",
-    !has(zernioCreds.webhookSecret) && "ZERNIO_WEBHOOK_SECRET",
-  ].filter(Boolean) as string[];
+  // La API key es lo único que conecta Zernio de verdad. El webhook secret es
+  // opcional (valida la firma), pero NO bloquea la conexión.
+  const zernioMissing = [!has(zernioCreds.apiKey) && "ZERNIO_API_KEY"].filter(
+    Boolean,
+  ) as string[];
   const whatsappCloudMissing = [
     !has(env.WHATSAPP_PHONE_NUMBER_ID) && "WHATSAPP_PHONE_NUMBER_ID",
     !has(env.WHATSAPP_ACCESS_TOKEN) && "WHATSAPP_ACCESS_TOKEN",
@@ -64,7 +65,7 @@ function channelStatuses(env: Env, zernioCreds: ZernioCredentials, telegramToken
       ok: telegramMissing.length === 0,
       missing: telegramMissing,
       webhookPath: "/webhooks/telegram",
-      howTo: "Crea el bot con @BotFather, guarda el token como secret y registra el webhook.",
+      howTo: "Crea el bot con @BotFather y pega el token abajo: lo valida y registra el webhook automáticamente. Opcional: tu chat id para los avisos al dueño.",
     },
     {
       id: "whatsapp",
@@ -120,10 +121,10 @@ function channelStatuses(env: Env, zernioCreds: ZernioCredentials, telegramToken
       missing: zernioMissing,
       webhookPath: "/webhooks/zernio",
       securityNote:
-        zernioMissing.length === 0 && !has(zernioCreds.webhookSecret)
+        !has(zernioCreds.webhookSecret)
           ? "Sin ZERNIO_WEBHOOK_SECRET el webhook acepta todo (fail-open). Recomendado: ponlo para validar la firma."
           : undefined,
-      howTo: "zernio.com → crea tu cuenta, conecta tus redes con OAuth de un clic, copia tu API key como secret y registra el webhook de abajo (eventos message.received + comment.received).",
+      howTo: "zernio.com → copia tu API key y pégala aquí. Con eso el canal queda conectado; opcionalmente registra el webhook de abajo (eventos message.received + comment.received) y pon el webhook secret si quieres validar la firma.",
     },
   ];
 }
@@ -140,13 +141,14 @@ export async function renderConexiones(
   pausedChannels: string[] = [],
   zernioAccounts: ZernioAccount[] = [],
   rateUsage: Record<string, { used: number; windowStart: number }> = {},
-  opts: { zernioCreds?: ZernioCredentials; telegramToken?: string; baseUrl?: string; saved?: boolean; error?: string } = {},
+  opts: { zernioCreds?: ZernioCredentials; telegramToken?: string; ownerChatId?: string; baseUrl?: string; savedKind?: "telegram" | "zernio"; error?: string } = {},
 ): Promise<string> {
   const zernioCreds = opts.zernioCreds ?? {
     apiKey: env.ZERNIO_API_KEY,
     webhookSecret: env.ZERNIO_WEBHOOK_SECRET,
   };
   const telegramToken = opts.telegramToken ?? env.TELEGRAM_BOT_TOKEN;
+  const ownerChatId = opts.ownerChatId ?? env.OWNER_TELEGRAM_CHAT_ID;
   const channels = channelStatuses(env, zernioCreds, telegramToken);
   const connected = channels.filter((ch) => ch.ok).length;
   // Fallback de base: la ruta GET pasa el origin real si DASHBOARD_BASE_URL está
@@ -181,10 +183,13 @@ export async function renderConexiones(
       </form>`;
   };
 
-  // Formulario de Telegram: token del bot (validado con getMe), igual de simple.
+  // Formulario de Telegram: token del bot (validado con getMe + webhook
+  // registrado solo) y chat id del dueño para avisos de handoff.
   const telegramForm = (ch: ChannelStatus) => {
     if (ch.id !== "telegram") return "";
     const hasToken = (telegramToken ?? "").trim() !== "";
+    const hasOwner = (ownerChatId ?? "").trim() !== "";
+    const ownerTail = hasOwner ? String(ownerChatId ?? "").trim().slice(-4) : "";
     return `
       <form method="POST" action="/admin/conexiones/telegram" style="display:flex;flex-direction:column;gap:10px;margin-top:4px">
         <div style="display:flex;flex-direction:column;gap:6px">
@@ -193,10 +198,17 @@ export async function renderConexiones(
                  placeholder="${hasToken ? "token guardado — escribe para reemplazar" : "Pega el token de @BotFather"}"
                  style="background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:10px 12px;font-size:12.5px;outline:none">
         </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <label class="font-display font-semibold text-[12.5px] text-cream">Tu chat id de Telegram (avisos al dueño)</label>
+          <input type="text" name="owner_telegram_chat_id" value="" autocomplete="off"
+                 placeholder="${hasOwner ? `hay un id guardado (…${ownerTail}) — escribe para reemplazar` : "opcional: mándale /start a tu bot y mira tu id con @userinfobot"}"
+                 style="background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:10px 12px;font-size:12.5px;outline:none">
+        </div>
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
           <button type="submit" class="text-[12px] font-display font-semibold"
                   style="border:1px solid var(--line);color:var(--cream);padding:9px 14px;cursor:pointer;background:none">${ch.ok ? "Actualizar conexión" : "Conectar Telegram"}</button>
           ${ch.ok ? `<label class="text-dim text-[11.5px]" style="display:flex;align-items:center;gap:7px;cursor:pointer"><input type="checkbox" name="clear" value="1"> Quitar conexión</label>` : ""}
+          ${hasOwner ? `<label class="text-dim text-[11.5px]" style="display:flex;align-items:center;gap:7px;cursor:pointer"><input type="checkbox" name="clear_owner" value="1"> Quitar aviso</label>` : ""}
         </div>
       </form>`;
   };
@@ -309,9 +321,11 @@ export async function renderConexiones(
     })
     .join("");
 
-  const savedBanner = opts.saved
-    ? `<div style="border:1px solid var(--ok);background:rgba(127,183,126,.1);color:var(--ok);padding:10px 14px;font-size:12.5px;font-weight:600">✓ Conexión guardada. Registra la URL del webhook en el proveedor para terminar.</div>`
-    : "";
+  const savedBanner = opts.savedKind === "telegram"
+    ? `<div style="border:1px solid var(--ok);background:rgba(127,183,126,.1);color:var(--ok);padding:10px 14px;font-size:12.5px;font-weight:600">✓ Telegram conectado: webhook registrado automáticamente. Envía un mensaje a tu bot para probarlo.</div>`
+    : opts.savedKind === "zernio"
+      ? `<div style="border:1px solid var(--ok);background:rgba(127,183,126,.1);color:var(--ok);padding:10px 14px;font-size:12.5px;font-weight:600">✓ Conexión guardada. Registra la URL del webhook en el proveedor para terminar.</div>`
+      : "";
   const errorBanner = opts.error
     ? `<div style="border:1px solid var(--danger,#e0654d);background:rgba(224,101,77,.1);color:var(--danger,#e0654d);padding:10px 14px;font-size:12.5px;font-weight:600">✕ ${esc(opts.error)}</div>`
     : "";

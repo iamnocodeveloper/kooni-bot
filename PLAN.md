@@ -19,9 +19,9 @@
 |---|---|---|
 | B1 | Card de **Zernio (multicanal)** en `/admin/conexiones` con webhook URL lista para copiar. | ✅ |
 | B1.5 | **Zernio conectado de verdad**: API key nueva guardada, webhook creado en zernio.com (eventos message.received, comment.received, reaction.received), ZERNIO_WEBHOOK_SECRET guardado, test end-to-end 200 ok. | ✅ |
-| B2 | **Conectar canales desde el panel** (sin terminal): formularios en `/admin/conexiones` para pegar tokens (Telegram, Zernio, ManyChat, Twilio…). Guardar en D1 `settings` (SettingsRepo ya existe) con fallback a env. | ⏳ Pendiente |
-| B3 | **Activar canal al pegar el token**: al guardar el secret desde el panel, registrar el webhook automáticamente (Telegram: `setWebhook`; Zernio: instrucciones de webhook en la card). | ⏳ Pendiente |
-| B4 | Probar el flujo end-to-end: pegar token de Telegram en el panel → canal verde → probar mensaje. | ⏳ Pendiente |
+| B2 | **Conectar canales desde el panel** (sin terminal): formularios en `/admin/conexiones` para pegar tokens (Telegram, Zernio, ManyChat, Twilio…). Guardar en D1 `settings` (SettingsRepo ya existe) con fallback a env. | ✅ Telegram y Zernio ya tienen formulario en `/admin/conexiones` (commit eef80a8 + posteriores). |
+| B3 | **Activar canal al pegar el token**: al guardar el secret desde el panel, registrar el webhook automáticamente (Telegram: `setWebhook`; Zernio: instrucciones de webhook en la card). | ✅ **Telegram registra el webhook automáticamente** al guardar el token (setWebhook → `<worker>/webhooks/telegram`, con allowed_updates=message). Además: campo de chat id del dueño en la card Telegram (avisos de handoff desde el panel, sin wrangler) y fix del regex de detección de URL del CLI (soporta subdominio de cuenta `<worker>.<cuenta>.workers.dev` → `DASHBOARD_BASE_URL` ya se estampa bien). |
+| B4 | Probar el flujo end-to-end: pegar token de Telegram en el panel → canal verde → probar mensaje. | ⏳ Pendiente — en el bot de Joel: re-desplegar (kooni-bot update), guardar el token en el panel y mandar un mensaje. |
 
 ## C. Planes Free/Pro y licencia (EN PROGRESO)
 
@@ -110,6 +110,61 @@
 | J5 | UI admin de licencias (generar código, listar, registrar pago). | ✅ `f5gacw7g.insforge.site` |
 | J6 | LICENSE_MASTER_KEY guardada como secret en InsForge (misma que en Cloudflare). | ✅ |
 | J7 | Prueba end-to-end: login → generar lifetime + mensual → listar. | ✅ |
+
+---
+
+## K. Detección de URL del worker tras el deploy (Kooni vs Forja)
+
+### Contexto
+Al correr `npx kooni-bot init`, el último paso "Desplegando el worker…" a veces
+termina con `⚠ no se detectó la URL del worker`. La migración D1 y el deploy sí
+funcionan, pero el CLI no logra extraer la URL para mostrarla al usuario.
+
+### Cómo lo hace Kooni hoy (`cli-kooni/bin/kooni.js`)
+```js
+const dep = runPnpm(dir, ["run", "deploy"], { capture: true });
+url = (dep.match(/https:\/\/[a-z0-9-]+\.workers\.dev/) || [])[0] || "";
+```
+`runPnpm` con `capture: true` ejecuta `pnpm run deploy` con `stdio` capturado y
+convierte `stdout` + `stderr` a string. Después busca el primer literal
+`https://<algo>.workers.dev` con una regex.
+
+### Por qué falla
+1. `pnpm run deploy` ejecuta el script `predeploy` (`deploy-check` + `version:write`)
+   ANTES de `wrangler deploy`. Esa salida intercalada puede no contener la URL, o
+   wrangler puede imprimir la URL en una línea con caracteres/colores que la regex
+   no capture.
+2. La URL real de Cloudflare a veces incluye el subdominio de cuenta
+   (`kooni-bot-<slug>.<cuenta>.workers.dev`), que la regex `[a-z0-9-]+\.workers\.dev`
+   sí cubre, pero si wrangler la envuelve en ANSI o la formatea distinto, no matchea.
+3. En Windows, `pnpm run deploy` con `capture: true` puede separar stdout/stderr de
+   forma distinta a como se combina en `run()`.
+
+### Cómo lo hace Forja (`cli/bin/cli.js`)
+Forja NO intenta parsear la URL desde la salida del deploy. Simplemente:
+- Extrae el tarball y estampa `DASHBOARD_BASE_URL = ""`.
+- Al terminar, `nextSteps()` le dice al usuario "tu agente despliega el bot" y le
+  da los pasos; NO imprime una URL directa del worker.
+- La URL real se escribe después con `forjabot pair --url https://…`, que la toma
+  del flag o de `DASHBOARD_BASE_URL`.
+
+Es decir: Forja evita el problema no porque parsee mejor, sino porque NO depende
+de capturar la URL del deploy en ese momento — difiere el "descubrir la URL" a un
+paso posterior (`pair`) donde el usuario la pega explícitamente.
+
+### Opciones para resolver en Kooni
+- **A. Derivar la URL del nombre del worker + workers.dev (sin parsear deploy):**
+  la URL siempre es `https://<workerName>.<cuenta>.workers.dev`, y el subdominio de
+  cuenta se puede obtener con `wrangler whoami` o con la API `GET
+  /accounts/:id/workers/subdomain`. Así no dependemos de capturar stdout.
+- **B. Preguntar/pegar la URL** como hace Forja (`--url`), y persistirla en
+  `DASHBOARD_BASE_URL`.
+- **C. Mejorar el parse:** usar `wrangler deploy --json` (si está disponible en
+  wrangler 4.125) para obtener la URL en JSON estable en vez de raspar texto.
+
+### Estado
+⏳ Pendiente de decidir e implementar. Por ahora el flujo le dice al usuario que
+abra Cloudflare y copie la URL manualmente.
 
 ---
 

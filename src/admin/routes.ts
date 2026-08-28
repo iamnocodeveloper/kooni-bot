@@ -425,10 +425,11 @@ adminApp.get("/conexiones", async (c) => {
     // sin settings: sin canales pausados
   }
   const { listZernioAccounts } = await import("../channels/zernioAccounts");
-  const { resolveTelegramToken } = await import("../channels/telegramCredentials");
+  const { resolveTelegramToken, resolveOwnerTelegramChatId } = await import("../channels/telegramCredentials");
   const zernioAccounts = await listZernioAccounts(c.env);
   const zernioCreds = await resolveZernioCredentials(c.env);
   const telegramToken = await resolveTelegramToken(c.env);
+  const ownerChatId = await resolveOwnerTelegramChatId(c.env);
 
   // Uso de rate limit por cuenta (DM/hora) para mostrar en la card Zernio.
   const rateUsage: Record<string, { used: number; windowStart: number }> = {};
@@ -448,8 +449,9 @@ adminApp.get("/conexiones", async (c) => {
   return c.html(await renderConexiones(c.env, pausedChannels, zernioAccounts, rateUsage, {
     zernioCreds,
     telegramToken,
+    ownerChatId,
     baseUrl,
-    saved: c.req.query("zernio") === "saved" || c.req.query("telegram") === "saved",
+    savedKind: c.req.query("telegram") === "saved" ? "telegram" : c.req.query("zernio") === "saved" ? "zernio" : undefined,
     error:
       c.req.query("zernio") === "error"
         ? (c.req.query("msg") ?? "No se pudo validar la API key.")
@@ -509,20 +511,40 @@ adminApp.post("/conexiones/zernio", async (c) => {
 });
 
 // Conectar Telegram desde el panel: guarda el token del bot en D1 (settings),
-// validándolo con getMe antes de persistirlo. Sin `wrangler secret put` ni redeploy.
+// validándolo con getMe antes de persistirlo, y REGISTRA el webhook del worker
+// automáticamente (setWebhook). Sin `wrangler secret put` ni redeploy.
 adminApp.post("/conexiones/telegram", async (c) => {
   const form = await c.req.formData();
   const repo = new SettingsRepo(new Db(c.env.DB));
+  const existing = await repo.get(SETTING_KEYS.telegramBotToken);
 
+  // "Quitar conexión": borra el token y el aviso al dueño (y desregistra el webhook).
   if (String(form.get("clear") ?? "") === "1") {
+    if (existing) {
+      try {
+        await fetch(`https://api.telegram.org/bot${existing}/deleteWebhook`, {
+          method: "POST",
+          signal: AbortSignal.timeout(6000),
+        });
+      } catch { /* best-effort */ }
+    }
     await repo.set(SETTING_KEYS.telegramBotToken, "");
+    await repo.set(SETTING_KEYS.ownerTelegramChatId, "");
     return c.redirect("/admin/conexiones?telegram=saved");
   }
 
   const token = String(form.get("telegram_bot_token") ?? "").trim();
   // Campo vacío: conserva el token existente.
-  const existing = await repo.get(SETTING_KEYS.telegramBotToken);
   const tokenToSave = token || existing || "";
+
+  // Chat id del dueño (avisos de handoff por DM): si viene el campo, se guarda;
+  // si viene clear_owner=1, se borra. Campo vacío + sin clear = se conserva.
+  const ownerInput = String(form.get("owner_telegram_chat_id") ?? "").trim();
+  if (ownerInput) {
+    await repo.set(SETTING_KEYS.ownerTelegramChatId, ownerInput);
+  } else if (String(form.get("clear_owner") ?? "") === "1") {
+    await repo.set(SETTING_KEYS.ownerTelegramChatId, "");
+  }
 
   if (tokenToSave) {
     try {
@@ -536,9 +558,28 @@ adminApp.post("/conexiones/telegram", async (c) => {
     } catch {
       return c.redirect(`/admin/conexiones?telegram=error&msg=${encodeURIComponent("No se pudo contactar Telegram para validar el token.")}`);
     }
+
+    await repo.set(SETTING_KEYS.telegramBotToken, tokenToSave);
+
+    // Registrar el webhook del worker: sin esto Telegram NO entrega ningún
+    // mensaje (el síntoma es "el token sale conectado pero el bot no responde").
+    const baseUrl = (c.env.DASHBOARD_BASE_URL?.trim() || new URL(c.req.url).origin).replace(/\/$/, "");
+    try {
+      const whRes = await fetch(`https://api.telegram.org/bot${tokenToSave}/setWebhook`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: `${baseUrl}/webhooks/telegram`, allowed_updates: ["message"] }),
+        signal: AbortSignal.timeout(8000),
+      });
+      const wh = (await whRes.json().catch(() => ({}))) as { ok?: boolean; description?: string };
+      if (!whRes.ok || wh.ok !== true) {
+        return c.redirect(`/admin/conexiones?telegram=error&msg=${encodeURIComponent("Token guardado, pero no pude registrar el webhook: " + (wh.description ?? "error de Telegram"))}`);
+      }
+    } catch {
+      return c.redirect(`/admin/conexiones?telegram=error&msg=${encodeURIComponent("Token guardado, pero no pude contactar Telegram para registrar el webhook.")}`);
+    }
   }
 
-  await repo.set(SETTING_KEYS.telegramBotToken, tokenToSave);
   return c.redirect("/admin/conexiones?telegram=saved");
 });
 

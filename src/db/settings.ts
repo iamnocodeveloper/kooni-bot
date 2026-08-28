@@ -40,6 +40,9 @@ export const SETTING_KEYS = {
   zernioWebhookSecret: "zernio_webhook_secret",
   // Telegram: token del bot editable desde el panel (mismo patrón que Zernio).
   telegramBotToken: "telegram_bot_token",
+  // Avisos al dueño (handoff) por Telegram DM: chat_id del dueño editable desde
+  // el panel (Conexiones → card Telegram). Fallback al secret OWNER_TELEGRAM_CHAT_ID.
+  ownerTelegramChatId: "owner_telegram_chat_id",
 } as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[keyof typeof SETTING_KEYS];

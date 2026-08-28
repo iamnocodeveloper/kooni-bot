@@ -350,10 +350,10 @@ export async function renderOverview(env: Env): Promise<string> {
               ? `<span style="font-size:9px;color:var(--bad);border:1px solid var(--bad);padding:1px 6px">⚠ ${openTickets} tickets abiertos</span>`
               : `<span style="font-size:9px;color:var(--ok);border:1px solid var(--ok);padding:1px 6px">✓ 0 tickets abiertos</span>`
           }
-          ${(() => {
+          ${await (async () => {
             // Cuando el bot escala a humano, ¿alguien se entera? Antes esto
             // fallaba en silencio; ahora se ve aquí en rojo si falta configurar.
-            const notify = handoffNotifyStatus(env);
+            const notify = await handoffNotifyStatus(env);
             return notify.ok
               ? `<span style="font-size:9px;color:var(--ok);border:1px solid var(--ok);padding:1px 6px">✓ handoff avisa por ${notify.channels.join(" + ")}</span>`
               : `<span style="font-size:9px;color:var(--bad);border:1px solid var(--bad);padding:1px 6px">⚠ HANDOFF SIN AVISO — el bot crea tickets pero NADIE recibe notificación (configura Telegram, WhatsApp o email del dueño)</span>`;

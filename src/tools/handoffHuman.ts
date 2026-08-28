@@ -70,11 +70,16 @@ interface HandoffNotice {
 /**
  * Qué canales de aviso al dueño están configurados. Lo usa el dashboard
  * (Salud del bot) para hacer VISIBLE cuando un handoff no le avisaría a nadie
- * — antes fallaba en silencio y el ticket se quedaba huérfano.
+ * — antes fallaba en silencio y el ticket se quedaba huérfano. El token de
+ * Telegram y el chat id del dueño pueden vivir en D1 (settings, puestos desde
+ * el panel) o en secrets, así que se resuelven igual que el runtime.
  */
-export function handoffNotifyStatus(env: Env): { ok: boolean; channels: string[] } {
+export async function handoffNotifyStatus(env: Env): Promise<{ ok: boolean; channels: string[] }> {
+  const { resolveTelegramToken, resolveOwnerTelegramChatId } = await import("../channels/telegramCredentials");
+  const tgToken = await resolveTelegramToken(env);
+  const ownerTg = await resolveOwnerTelegramChatId(env);
   const channels: string[] = [];
-  if (env.TELEGRAM_BOT_TOKEN && env.OWNER_TELEGRAM_CHAT_ID) channels.push("Telegram");
+  if (tgToken && ownerTg) channels.push("Telegram");
   if (
     isPro(env) &&
     env.OWNER_WA_NUMBER &&
@@ -116,7 +121,7 @@ export async function notifyOwner(env: Env, notice: HandoffNotice): Promise<void
   // Fail-LOUD (en logs) cuando no hay ningún canal de aviso configurado: el
   // ticket existe en el dashboard pero nadie se entera. El dashboard también
   // lo muestra en "Salud del bot" (handoffNotifyStatus).
-  if (!handoffNotifyStatus(env).ok && !waViaSetting) {
+  if (!(await handoffNotifyStatus(env)).ok && !waViaSetting) {
     console.error(
       `[notifyOwner] ticket ${notice.ticketId} creado pero SIN canal de aviso configurado ` +
         "(faltan OWNER_TELEGRAM_CHAT_ID, OWNER_WA_NUMBER+template o RESEND_API_KEY+OWNER_EMAIL) — el dueño no será notificado",
@@ -125,15 +130,19 @@ export async function notifyOwner(env: Env, notice: HandoffNotice): Promise<void
   }
 
   // --- Telegram DM (default) ------------------------------------------------
-  if (env.TELEGRAM_BOT_TOKEN && env.OWNER_TELEGRAM_CHAT_ID) {
+  // Token y chat id del dueño pueden venir de settings (panel) o de secrets.
+  const { resolveTelegramToken, resolveOwnerTelegramChatId } = await import("../channels/telegramCredentials");
+  const tgToken = await resolveTelegramToken(env);
+  const ownerTg = await resolveOwnerTelegramChatId(env);
+  if (tgToken && ownerTg) {
     try {
       await fetch(
-        `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`,
+        `https://api.telegram.org/bot${tgToken}/sendMessage`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            chat_id: env.OWNER_TELEGRAM_CHAT_ID,
+            chat_id: ownerTg,
             text:
               `🚨 Nuevo ticket [${notice.reason}]\n${notice.summary}\n\nVer: ${ticketUrl}`,
           }),

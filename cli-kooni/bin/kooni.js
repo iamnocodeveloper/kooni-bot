@@ -965,7 +965,8 @@ async function deployBot(dir, { flags = {}, rl } = {}) {
   let url = "";
   try {
     const dep = runPnpm(dir, ["run", "deploy"], { capture: true });
-    url = (dep.match(/https:\/\/[a-z0-9-]+\.workers\.dev/) || [])[0] || "";
+    // La URL real incluye el subdominio de la cuenta: <worker>.<cuenta>.workers.dev
+    url = (dep.match(/https:\/\/[a-z0-9-]+(?:\.[a-z0-9-]+)*\.workers\.dev/) || [])[0] || "";
   } catch (e) {
     // Muestra el detalle real del deploy en vez de tragarlo: así el usuario ve
     // qué falló (deploy-check, binding, auth…) y puede corregirlo.
@@ -1040,6 +1041,7 @@ constructor. No hay licencia ni servidor de Horizontes: el tier free/pro se cont
 
 ## Conexión de canales (DESDE el panel, sin redeploy)
 - Telegram y Zernio se conectan pegando su token/API key en \`/admin/conexiones\`. Se guardan en D1 (\`settings\`) y el canal se pone verde al instante, SIN \`wrangler secret put\` ni redeploy.
+- **Telegram registra su webhook automáticamente** al guardar el token (setWebhook apuntando a <worker>/webhooks/telegram). En la misma card se puede poner el chat id del dueño para los avisos de handoff (alternativa al secret \`OWNER_TELEGRAM_CHAT_ID\`).
 - La URL del webhook de cada canal se muestra en su propia card (con botón copiar).
 
 ## Regla de oro (memorízala)
@@ -1062,7 +1064,7 @@ Si dudas: **member/ es sagrado, src/ se actualiza.**
 ## Secrets y vars (referencia rápida)
 - Secrets: \`ANTHROPIC_API_KEY\` / \`OPENAI_API_KEY\` / \`XAI_API_KEY\` (cerebro), \`DASHBOARD_PASSWORD\` (panel), \`KB_REINDEX_TOKEN\` (reindex).
 - Canales: \`TELEGRAM_BOT_TOKEN\`, \`MANYCHAT_API_KEY\`, \`TWILIO_ACCOUNT_SID\`+\`TWILIO_AUTH_TOKEN\`+\`TWILIO_WA_FROM\`, \`META_PAGE_ACCESS_TOKEN\`+\`META_VERIFY_TOKEN\`+\`META_APP_SECRET\`, \`ZERNIO_API_KEY\`.
-- Avisos al dueño: \`OWNER_TELEGRAM_CHAT_ID\`, \`RESEND_API_KEY\`+\`OWNER_EMAIL\`, \`OWNER_WA_NUMBER\`.
+- Avisos al dueño: \`OWNER_TELEGRAM_CHAT_ID\` (o el campo "chat id" de la card Telegram en Conexiones), \`RESEND_API_KEY\`+\`OWNER_EMAIL\`, \`OWNER_WA_NUMBER\`.
 - Vars en \`wrangler.toml\`: \`BOT_NAME\`, \`BUSINESS_NAME\`, \`BOT_LANGUAGE\`, \`BOT_TIER\`, \`BUFFER_SECONDS\`, \`DASHBOARD_BASE_URL\`, \`LLM_PROVIDER\` (\`anthropic\` default | \`openai\` | \`xai\`).
 
 ## Comandos del proyecto (dentro de la carpeta del bot, con pnpm)
@@ -1166,6 +1168,7 @@ async function cmdInit(flags, rest) {
       kbName: meta && meta.kbName,
     });
     console.log("\n  " + C.green("✓") + " " + t().configDone);
+    console.log("  " + C.green("✓") + " " + m(`Bot instalado  →  ${dir}`, `Bot installed  →  ${dir}`));
 
     // Registrar la instalación local para el selector multi-bot.
     recordInstall(dir, {
@@ -1183,9 +1186,16 @@ async function cmdInit(flags, rest) {
       if (url) {
         console.log("\n  " + C.green(C.b(m("🎉 BOT EN LÍNEA", "🎉 BOT LIVE"))));
         console.log("  " + C.cyan(t().panel) + " " + C.b(url + "/admin"));
-        console.log("  " + C.dim(t().next) + "\n");
+        console.log("\n  " + C.b(m("Lo que sigue (tu agente de Claude Code lo hace por ti):", "Next steps (your Claude Code agent does them for you):")));
+        console.log("  1. " + C.dim(m("abre tu panel en el link de arriba (usuario admin + tu contraseña)", "open your panel at the link above (user admin + your password)")));
+        console.log("  2. " + C.dim(m("Conexiones → pega tu token de Telegram: lo valida y registra el webhook solo", "Connections → paste your Telegram token: it validates and registers the webhook automatically")));
+        console.log("  3. " + C.dim(m("en la misma card, pega tu chat id (mándale /start a tu bot y míralo con @userinfobot) para recibir los avisos de handoff", "on the same card, paste your chat id (send /start to your bot and see it with @userinfobot) to get handoff alerts")));
+        console.log("  4. " + C.dim(m("conecta el resto de canales (Zernio, WhatsApp…) desde el mismo panel — se ponen verdes al instante", "connect the other channels (Zernio, WhatsApp…) from the same panel — they turn green instantly")));
+        console.log("\n  " + C.dim(m("Actualiza cuando saquemos mejoras: npx kooni-bot update", "Update when we ship improvements: npx kooni-bot update")) + "\n");
       } else {
-        console.log("  " + C.yellow(m("No detecté la URL automáticamente. Búscala en la salida de `pnpm run deploy` arriba (https://…workers.dev) y abre <url>/admin.", "Couldn't auto-detect the URL. Find it in the `pnpm run deploy` output above (https://…workers.dev) and open <url>/admin.")) + "\n");
+        console.log("\n  " + C.yellow(m("No desplegaste todavía. Cuando quieras:", "You haven't deployed yet. When you're ready:")));
+        console.log("  " + C.cyan("npx kooni-bot deploy"));
+        console.log("  " + C.dim(m("levanta el bot en TU Cloudflare y te da la URL del panel /admin.", "it deploys the bot on YOUR Cloudflare and gives you the /admin panel URL.")) + "\n");
       }
     }
 

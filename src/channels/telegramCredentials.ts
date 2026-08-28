@@ -16,3 +16,18 @@ export async function resolveTelegramToken(env: Env): Promise<string | undefined
   }
   return env.TELEGRAM_BOT_TOKEN;
 }
+
+/**
+ * Chat_id del dueño para avisos de handoff por Telegram DM. El panel lo guarda
+ * en D1 (settings) en la card de Telegram; si no hay nada, usa el secret
+ * OWNER_TELEGRAM_CHAT_ID (bots viejos).
+ */
+export async function resolveOwnerTelegramChatId(env: Env): Promise<string | undefined> {
+  try {
+    const v = await new SettingsRepo(new Db(env.DB)).get(SETTING_KEYS.ownerTelegramChatId);
+    if (v && v.trim() !== "") return v.trim();
+  } catch {
+    // sin settings disponible → env
+  }
+  return env.OWNER_TELEGRAM_CHAT_ID;
+}
