@@ -315,6 +315,12 @@ export default {
       const { runFollowups } = await import("./followup/run");
       await runFollowups(env).catch((e) => console.error("followups:", e));
     }
+    // Reenganche (Forja+): segundo toque 2-5 días después del Cazador si el
+    // cliente sigue sin contestar. Corre solo si está activo.
+    if (await isFeatureActive(env, "reenganche", settings)) {
+      const { runReengagements } = await import("./followup/reengage");
+      await runReengagements(env).catch((e) => console.error("reenganche:", e));
+    }
 
     // Watchdog: si el bot está fallando en cadena (3+ "Algo falló" en 30 min),
     // avisa al dueño por su canal de handoff. Throttle 6h. Lo ÚNICO que debe

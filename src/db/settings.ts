@@ -59,6 +59,13 @@ export const SETTING_KEYS = {
   featureVozMarca: "feature_voz_marca_enabled", // "0" | "1"
   featureMultiidioma: "feature_multiidioma_enabled", // "0" | "1"
   featureEncuestas: "feature_encuestas_enabled", // "0" | "1"
+  featureReenganche: "feature_reenganche_enabled", // "0" | "1"
+  featureResenas: "feature_resenas_enabled", // "0" | "1"
+  featureCobros: "feature_cobros_enabled", // "0" | "1"
+  featureGaleria: "feature_galeria_enabled", // "0" | "1"
+  // Config de funciones de Extras (enlaces que el bot inyecta al prompt).
+  reviewLink: "review_link", // link de reseñas de Google (Pide reseñas)
+  paymentLink: "payment_link", // link de pago seguro (Cobros por WhatsApp)
 } as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[keyof typeof SETTING_KEYS];

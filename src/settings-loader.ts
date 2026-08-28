@@ -35,6 +35,8 @@ export interface AgentConfig {
   vigilanteEnabled: boolean;
   /** Menú Extras: Oído y vista activo (transcribe audio / ve fotos). */
   oidoVistaEnabled: boolean;
+  /** Menú Extras: Galería activa (envía recursos multimedia de la biblioteca). */
+  galeriaEnabled: boolean;
 }
 
 /** Extract the BYO-LLM overrides from a settings snapshot. */
@@ -227,5 +229,6 @@ export async function resolveAgentConfig(env: Env, toolNames: string[]): Promise
     llm: llmOverridesFrom(settings),
     vigilanteEnabled: extras.vigilanteEnabled,
     oidoVistaEnabled: extras.oidoVistaEnabled,
+    galeriaEnabled: extras.galeriaEnabled,
   };
 }

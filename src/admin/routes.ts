@@ -658,6 +658,10 @@ adminApp.post("/extras", async (c) => {
   // Toggles de todas las funciones del catálogo (reporte incluido).
   for (const f of EXTRA_FEATURES) {
     await repo.set(f.toggleKey, form.get(f.toggleKey) === "1" ? "1" : "0");
+    // Campos de config de la función (links de reseñas / pago, etc.).
+    for (const c of f.config ?? []) {
+      await repo.set(c.key, String(form.get(c.key) ?? "").trim());
+    }
   }
   // Canal del reporte nocturno (allow-list).
   const channel = String(form.get(SETTING_KEYS.nightlyReportChannel) ?? "telegram").trim().toLowerCase();

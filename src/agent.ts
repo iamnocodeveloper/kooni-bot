@@ -333,7 +333,9 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
       const { setRecursoCtx } = await import("./tools/index");
       setRecursoCtx(this.state.channel as ChannelId, this.state.channelUserId);
     }
-    if (cfg.allowMultimedia === false) {
+    // Menú Extras (Forja+): la Galería (enviarRecurso) solo está disponible si
+    // el dueño la encendió Y permitió multimedia. Apagada → la tool se quita.
+    if (cfg.allowMultimedia === false || !cfg.galeriaEnabled) {
       delete tools.enviarRecurso;
     }
 

@@ -23,6 +23,10 @@ export const FEATURE_KEYS = {
   vozMarca: "feature_voz_marca_enabled",
   multiidioma: "feature_multiidioma_enabled",
   encuestas: "feature_encuestas_enabled",
+  reenganche: "feature_reenganche_enabled",
+  resenas: "feature_resenas_enabled",
+  cobros: "feature_cobros_enabled",
+  galeria: "feature_galeria_enabled",
 } as const;
 
 export interface ExtraFeature {
@@ -39,6 +43,8 @@ export interface ExtraFeature {
   tipo: "pago_unico" | "membresia";
   /** "reporte" = además del toggle muestra canal + botón de prueba. */
   kind?: "toggle" | "reporte";
+  /** Campos de config extra (inputs) que se guardan con el form de Extras. */
+  config?: { key: string; label: string; placeholder: string; help: string }[];
 }
 
 /** Catálogo del menú Extras (el orden es el del grid). */
@@ -143,6 +149,66 @@ export const EXTRA_FEATURES: ExtraFeature[] = [
     actuaEn: "bot",
     tipo: "membresia",
   },
+  {
+    id: "reenganche",
+    module: "reenganche",
+    toggleKey: FEATURE_KEYS.reenganche,
+    nombre: "Reenganche (recupera no-shows)",
+    emoji: "🔄",
+    descripcion:
+      "Si el Cazador ya escribió y el cliente sigue sin contestar, el bot insiste una vez más, de 2 a 5 días después, en tu tono. Los que dijeron “luego te digo” vuelven a tu agenda.",
+    actuaEn: "bot",
+    tipo: "membresia",
+  },
+  {
+    id: "resenas",
+    module: "resenas",
+    toggleKey: FEATURE_KEYS.resenas,
+    nombre: "Pide reseñas",
+    emoji: "⭐",
+    descripcion:
+      "Cuando el cliente queda contento, el bot le pide la reseña de Google en ese instante, con tu link. Las estrellas llegan solas y tu negocio sube en el mapa.",
+    actuaEn: "bot",
+    tipo: "membresia",
+    config: [
+      {
+        key: SETTING_KEYS.reviewLink,
+        label: "Link de reseñas de Google",
+        placeholder: "https://g.page/tu-negocio/review",
+        help: "El bot lo manda cuando pide la reseña. Lo sacas de Google Business.",
+      },
+    ],
+  },
+  {
+    id: "cobros",
+    module: "cobros",
+    toggleKey: FEATURE_KEYS.cobros,
+    nombre: "Cobros por WhatsApp",
+    emoji: "💳",
+    descripcion:
+      "En cuanto el cliente dice que sí, el bot le manda tu link de pago seguro. Nada de transferencias a ciegas ni capturas. Tú te enteras al instante cuando pagan.",
+    actuaEn: "bot",
+    tipo: "membresia",
+    config: [
+      {
+        key: SETTING_KEYS.paymentLink,
+        label: "Link de pago (Stripe u otro)",
+        placeholder: "https://buy.stripe.com/...",
+        help: "Crea un Payment Link en Stripe (o tu pasarela) y pégalo. El bot lo envía cuando el cliente acepta.",
+      },
+    ],
+  },
+  {
+    id: "galeria",
+    module: "galeria",
+    toggleKey: FEATURE_KEYS.galeria,
+    nombre: "Galería",
+    emoji: "🖼️",
+    descripcion:
+      "El bot manda fotos, videos y audios de verdad desde tu biblioteca de recursos: productos, menú, antes/después, notas de voz tuyas — en el momento justo.",
+    actuaEn: "bot",
+    tipo: "membresia",
+  },
 ];
 
 /** Texto que se inyecta al prompt del agente cuando el Blindaje está encendido. */
@@ -220,6 +286,29 @@ export async function extrasState(
   return state;
 }
 
+/** Bloques que dependen de config del dueño (links) — se arman por función. */
+function resenasBlock(link: string | undefined): string {
+  const url = link?.trim() || "(pídele el link de reseñas al dueño)";
+  return `<pide_resenas>
+Regla del dueño (PIDE RESEÑAS): convierte clientes contentos en reseñas de Google.
+
+- Cuando el cliente termina agradecido o dice que quedó encantado ("me encantó", "quedó increíble", "excelente, gracias"), es el MOMENTO justo: pídele la reseña con naturalidad, en la misma conversación: "¿Nos regalas 10 segundos y una reseña? Nos ayuda muchísimo a que más personas nos encuentren: ${url}".
+- Si el cliente confirma que YA dejó la reseña, avísale al dueño con handoffHuman (reason: reseña) con el nombre y qué dejó.
+- NO pidas reseñas a clientes molestos ni a mitad de un problema: solo al buen momento.
+</pide_resenas>`;
+}
+
+function cobrosBlock(link: string | undefined): string {
+  const url = link?.trim() || "(pídele el link de pago al dueño)";
+  return `<cobros_whatsapp>
+Regla del dueño (COBROS POR WHATSAPP): del sí al pagado sin salir del chat.
+
+- En cuanto el cliente acepta un precio, paquete, anticipo o reserva con pago, mándale el link seguro de pago: ${url} (con el importe y concepto delante, ej. "Perfecto, aquí tu link seguro para pagar:").
+- Si el cliente dice que ya pagó, confirma amablemente y avísale al dueño con handoffHuman (reason: pago) con el importe y quién pagó.
+- NUNCA pidas transferencia + captura ni des por hecho el pago sin que el cliente confirme.
+</cobros_whatsapp>`;
+}
+
 /**
  * Bloques de prompt + flags que el agente necesita según el menú Extras.
  * Llamado por resolveAgentConfig (que ya tiene el snapshot de settings).
@@ -227,7 +316,7 @@ export async function extrasState(
 export async function extrasForAgent(
   env: Env,
   settings: Record<string, string>,
-): Promise<{ extraInstructions: string[]; vigilanteEnabled: boolean; oidoVistaEnabled: boolean }> {
+): Promise<{ extraInstructions: string[]; vigilanteEnabled: boolean; oidoVistaEnabled: boolean; galeriaEnabled: boolean }> {
   const mods = await unlockedModules(env, settings);
   const on = (key: string, modId: string) => settings[key] === "1" && mods.has(modId);
   const extraInstructions: string[] = [];
@@ -236,10 +325,13 @@ export async function extrasForAgent(
   if (on(FEATURE_KEYS.vozMarca, "voz_marca")) extraInstructions.push(VOZ_MARCA_PROMPT_BLOCK);
   if (on(FEATURE_KEYS.multiidioma, "multiidioma")) extraInstructions.push(MULTIIDIOMA_PROMPT_BLOCK);
   if (on(FEATURE_KEYS.encuestas, "encuestas")) extraInstructions.push(ENCUESTAS_PROMPT_BLOCK);
+  if (on(FEATURE_KEYS.resenas, "resenas")) extraInstructions.push(resenasBlock(settings[SETTING_KEYS.reviewLink]));
+  if (on(FEATURE_KEYS.cobros, "cobros")) extraInstructions.push(cobrosBlock(settings[SETTING_KEYS.paymentLink]));
   return {
     extraInstructions,
     vigilanteEnabled: on(FEATURE_KEYS.vigilante, "vigilante"),
     oidoVistaEnabled: on(FEATURE_KEYS.oidoVista, "oido_vista"),
+    galeriaEnabled: on(FEATURE_KEYS.galeria, "galeria"),
   };
 }
 

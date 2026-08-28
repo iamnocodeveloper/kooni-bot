@@ -115,6 +115,30 @@ export const PAID_MODULES: PaidModule[] = [
     descripcion: "Al cerrar cada conversación pregunta del 1 al 5 cómo le fue. Si la nota es baja, te avisa al instante para que recuperes al cliente.",
     tipo: "membresia",
   },
+  {
+    id: "reenganche",
+    nombre: "Reenganche (recupera no-shows)",
+    descripcion: "Si el Cazador ya escribió y el cliente sigue sin contestar, el bot insiste una vez más de 2 a 5 días después, en tu tono. Trae de regreso a los que se enfriaron.",
+    tipo: "membresia",
+  },
+  {
+    id: "resenas",
+    nombre: "Pide reseñas",
+    descripcion: "Cuando el cliente queda contento, el bot le pide la reseña de Google en ese instante, con tu link. Las estrellas llegan solas y tu negocio sube en el mapa.",
+    tipo: "membresia",
+  },
+  {
+    id: "cobros",
+    nombre: "Cobros por WhatsApp",
+    descripcion: "En cuanto el cliente dice que sí, el bot le manda tu link de pago seguro. Nada de transferencias a ciegas ni capturas.",
+    tipo: "membresia",
+  },
+  {
+    id: "galeria",
+    nombre: "Galería",
+    descripcion: "El bot manda fotos, videos y audios de verdad desde tu biblioteca de recursos: productos, menú, antes/después, notas de voz tuyas — en el momento justo.",
+    tipo: "membresia",
+  },
 ];
 
 /** Setting (D1) con el override del dueño de la plataforma: JSON array de ids. */

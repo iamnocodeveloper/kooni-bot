@@ -76,6 +76,22 @@ export async function renderExtras(env: Env, saved = false, report?: string): Pr
         </div>`;
     }
 
+    // Campos de config de la función (ej. links de reseñas y de pago).
+    if ((f.config ?? []).length > 0 && st.unlocked) {
+      const fields = (f.config ?? [])
+        .map(
+          (c) => `
+            <div style="display:flex;flex-direction:column;gap:4px;max-width:420px">
+              <label class="text-[11px] text-dim" for="${esc(c.key)}">${esc(c.label)}</label>
+              <input type="text" id="${esc(c.key)}" name="${esc(c.key)}" value="${esc(settings[c.key] ?? "")}"
+                     placeholder="${esc(c.placeholder)}" style="${SELECT_STYLE}">
+              <span class="text-[10.5px] text-dim">${esc(c.help)}</span>
+            </div>`,
+        )
+        .join("");
+      extra += `<div style="display:flex;flex-direction:column;gap:8px;margin-top:2px">${fields}</div>`;
+    }
+
     return `
       <div class="bg-panel border border-line" style="padding:18px;display:flex;flex-direction:column;gap:12px;${!st.unlocked ? "opacity:.82" : ""}">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
