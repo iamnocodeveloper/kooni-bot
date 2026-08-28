@@ -205,6 +205,188 @@ describe("auto-DM por keyword en comentarios", () => {
     expect(body.accountId).toBe("inbox_acct_99");
   });
 
+  it("NO responde 2 veces al mismo comentario si el webhook lo reenvía (dedup secuencial)", async () => {
+    let pubPosts = 0;
+    let dmPosts = 0;
+    const fetchMock = vi.fn(async (url: string) => {
+      if (String(url).includes("/v1/accounts")) {
+        return new Response(JSON.stringify({ accounts: [{ _id: "acct_1", platform: "instagram", username: "mi_negocio" }] }), { status: 200 });
+      }
+      if (String(url).includes("/private-reply")) {
+        dmPosts++;
+        return new Response(JSON.stringify({ success: true }), { status: 200 });
+      }
+      if (/\/v1\/inbox\/comments\/post_1$/.test(String(url))) {
+        pubPosts++;
+        return new Response(JSON.stringify({ success: true }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ success: true }), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const env = {
+      ...envBase,
+      ZERNIO_AUTO_DM_KEYWORD: undefined,
+      ZERNIO_AUTO_DM_RULES: JSON.stringify([
+        { keywords: ["precio"], message: "Te escribí por privado 👇", replyToComment: "¡Gracias por tu comentario! Mira tu privado ✨" },
+      ]),
+      DB: makeDbStub({}),
+    } as unknown as Env;
+    const payload = { ...commentPayload, comment: { ...commentPayload.comment, text: "me interesa el precio" } };
+
+    await parseZernioEvents(payload, env);
+    expect(pubPosts).toBe(1);
+    expect(dmPosts).toBe(1);
+
+    // Zernio reintenta el MISMO comentario → NO debe responder otra vez.
+    await parseZernioEvents(payload, env);
+    expect(pubPosts).toBe(1);
+    expect(dmPosts).toBe(1);
+  });
+
+  it("NO responde 2 veces al mismo comentario aunque dos deliveries lleguen en paralelo (race)", async () => {
+    let pubPosts = 0;
+    let dmPosts = 0;
+    const fetchMock = vi.fn(async (url: string) => {
+      if (String(url).includes("/v1/accounts")) {
+        return new Response(JSON.stringify({ accounts: [{ _id: "acct_1", platform: "instagram", username: "mi_negocio" }] }), { status: 200 });
+      }
+      if (String(url).includes("/private-reply")) {
+        dmPosts++;
+        await new Promise((r) => setTimeout(r, 15)); // ventana para que el otro delivery entre
+        return new Response(JSON.stringify({ success: true }), { status: 200 });
+      }
+      if (/\/v1\/inbox\/comments\/post_1$/.test(String(url))) {
+        pubPosts++;
+        await new Promise((r) => setTimeout(r, 15));
+        return new Response(JSON.stringify({ success: true }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ success: true }), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const env = {
+      ...envBase,
+      ZERNIO_AUTO_DM_KEYWORD: undefined,
+      ZERNIO_AUTO_DM_RULES: JSON.stringify([
+        { keywords: ["precio"], message: "Te escribí por privado 👇", replyToComment: "¡Gracias por tu comentario! Mira tu privado ✨" },
+      ]),
+      DB: makeDbStub({}),
+    } as unknown as Env;
+    const payload = { ...commentPayload, comment: { ...commentPayload.comment, text: "me interesa el precio" } };
+
+    // El claim atómico garantiza que solo UNO de los dos envíe.
+    await Promise.all([parseZernioEvents(payload, env), parseZernioEvents(payload, env)]);
+    expect(pubPosts).toBe(1);
+    expect(dmPosts).toBe(1);
+  });
+
+  it("NO responde a un comentario de NUESTRA propia cuenta (anti-bucle de auto-respuesta)", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ success: true }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const env = {
+      ...envBase,
+      ZERNIO_AUTO_DM_KEYWORD: undefined,
+      ZERNIO_AUTO_DM_RULES: JSON.stringify([
+        { keywords: ["kooni"], message: "Aquí tienes el recurso", replyToComment: "¡Gracias! Te escribí con la info de Kooni 👇" },
+      ]),
+      DB: makeDbStub({}),
+    } as unknown as Env;
+
+    // La respuesta pública del bot contiene la keyword ("Kooni") y Zernio la
+    // reenvía como comment.received con autor = la propia cuenta → se ignora.
+    const out = await parseZernioEvents(
+      {
+        ...commentPayload,
+        comment: {
+          id: "cm_999",
+          postId: "post_1",
+          text: "¡Gracias! Te escribí con la info de Kooni 👇",
+          author: { id: "usr_own", username: "mi_negocio" },
+        },
+      },
+      env,
+    );
+    expect(out).toHaveLength(0);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("NO responde a comentarios que son respuestas (isReply) — anti-bucle", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ success: true }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const env = {
+      ...envBase,
+      ZERNIO_AUTO_DM_KEYWORD: undefined,
+      ZERNIO_AUTO_DM_RULES: JSON.stringify([
+        { keywords: ["kooni"], message: "Aquí tienes el recurso" },
+      ]),
+      DB: makeDbStub({}),
+    } as unknown as Env;
+
+    const out = await parseZernioEvents(
+      {
+        ...commentPayload,
+        comment: {
+          id: "cm_reply_1",
+          postId: "post_1",
+          text: "me interesa kooni",
+          isReply: true,
+          parentCommentId: "cm_1",
+        },
+      },
+      env,
+    );
+    expect(out).toHaveLength(0);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("NO responde 2 veces si Zernio reentrega el MISMO comentario con distinto id (dedup por huella)", async () => {
+    let pubPosts = 0;
+    let dmPosts = 0;
+    const fetchMock = vi.fn(async (url: string) => {
+      if (String(url).includes("/v1/accounts")) {
+        return new Response(JSON.stringify({ accounts: [{ _id: "acct_1", platform: "instagram", username: "mi_negocio" }] }), { status: 200 });
+      }
+      if (String(url).includes("/private-reply")) {
+        dmPosts++;
+        return new Response(JSON.stringify({ success: true }), { status: 200 });
+      }
+      if (/\/v1\/inbox\/comments\/post_1$/.test(String(url))) {
+        pubPosts++;
+        return new Response(JSON.stringify({ success: true }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ success: true }), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const env = {
+      ...envBase,
+      ZERNIO_AUTO_DM_KEYWORD: undefined,
+      ZERNIO_AUTO_DM_RULES: JSON.stringify([
+        { keywords: ["precio"], message: "Te escribí por privado 👇", replyToComment: "¡Gracias por tu comentario! Mira tu privado ✨" },
+      ]),
+      DB: makeDbStub({}),
+    } as unknown as Env;
+    const base = {
+      postId: "post_1",
+      text: "me interesa el precio",
+      author: { id: "usr_1", username: "maria.g" },
+    };
+
+    // Primera entrega: id cm_100
+    await parseZernioEvents(
+      { ...commentPayload, comment: { ...base, id: "cm_100" } },
+      env,
+    );
+    expect(pubPosts).toBe(1);
+    expect(dmPosts).toBe(1);
+
+    // Zernio reentrega el MISMO comentario con OTRO id → NO debe responder otra vez.
+    await parseZernioEvents(
+      { ...commentPayload, comment: { ...base, id: "cm_777" } },
+      env,
+    );
+    expect(pubPosts).toBe(1);
+    expect(dmPosts).toBe(1);
+  });
+
 });
 
 describe("zernioAdapter.sendReply", () => {
@@ -234,18 +416,49 @@ describe("zernioAdapter.sendReply", () => {
   });
 });
 
-describe("follow gate (require_follow)", () => {
-  // Stub mínimo de Db en memoria para AutoRulesRepo + DmLogsRepo.
-  function makeDbStub(rule: any) {
-    const processed: any[] = [];
+// Stub mínimo de Db en memoria para AutoRulesRepo + DmLogsRepo.
+function makeDbStub(rule: any) {
+  const processed: any[] = [];
     const logs: any[] = [];
     const rates: any[] = [];
     const pending: any[] = [];
+    const fingerprints: any[] = [];
     const self = {
       async run(sql: string, params: unknown[] = []) {
+        if (/INSERT INTO comment_fingerprints/.test(sql)) {
+          // Claim por huella: INSERT OR IGNORE sobre la PK dedup_key.
+          const [dedupKey] = params as [string];
+          if (!fingerprints.some((f) => f.dedup_key === dedupKey)) {
+            fingerprints.push({ dedup_key: dedupKey, rule_id: params[1], comment_id: params[2], created_at: params[3] });
+            return { meta: { changes: 1 } };
+          }
+          return { meta: { changes: 0 } };
+        }
         if (/INSERT INTO processed_comments/.test(sql)) {
+          if (/DO NOTHING/.test(sql)) {
+            // claimLeg: INSERT OR IGNORE — crea la fila solo si no existe.
+            if (!processed.some((p) => p.comment_id === params[0])) {
+              processed.push({ comment_id: params[0], rule_id: params[1], status: params[2], dm_sent_at: null, public_reply_sent_at: null, created_at: params[3] });
+            }
+            return { meta: { changes: 1 } };
+          }
           processed.push({ comment_id: params[0], status: params[2] });
           return { meta: { changes: 1 } };
+        }
+        // ── claimLeg / releaseClaim: UPDATE condicional atómico por pierna ──
+        if (/UPDATE processed_comments SET (dm_sent_at|public_reply_sent_at) = \? WHERE comment_id = \? AND (dm_sent_at|public_reply_sent_at) IS NULL/.test(sql)) {
+          const [at, commentId] = params as [number, string];
+          const row = processed.find((p) => p.comment_id === commentId);
+          const col = /SET dm_sent_at/.test(sql) ? "dm_sent_at" : "public_reply_sent_at";
+          if (row && row[col] == null) { row[col] = at; return { meta: { changes: 1 } }; }
+          return { meta: { changes: 0 } };
+        }
+        if (/UPDATE processed_comments SET (dm_sent_at|public_reply_sent_at) = NULL WHERE comment_id = \?/.test(sql)) {
+          const [commentId, at] = params as [string, number];
+          const row = processed.find((p) => p.comment_id === commentId);
+          const col = /SET dm_sent_at/.test(sql) ? "dm_sent_at" : "public_reply_sent_at";
+          if (row && row[col] === at) { row[col] = null; return { meta: { changes: 1 } }; }
+          return { meta: { changes: 0 } };
         }
         if (/INSERT INTO follow_gate_pending/.test(sql)) {
           pending.push({ account_id: params[0], commenter_id: params[1], rule_id: params[2], comment_id: params[3], post_id: params[4] });
@@ -277,9 +490,17 @@ describe("follow gate (require_follow)", () => {
         return { meta: { changes: 0 } };
       },
       async first<T = unknown>(sql: string, params: unknown[] = []): Promise<T | null> {
+        if (/SELECT COUNT\(\*\) as n FROM comments/.test(sql)) {
+          // Tope diario de respuestas públicas: 0 por defecto en tests.
+          return { n: 0 } as T;
+        }
         if (/COUNT\(\*\) as n FROM processed_comments/.test(sql)) {
           const n = processed.filter((p) => p.comment_id === params[0] && p.status === "sent").length;
           return { n } as T;
+        }
+        if (/SELECT dm_sent_at, public_reply_sent_at FROM processed_comments/.test(sql)) {
+          const row = processed.find((p) => p.comment_id === params[0]);
+          return (row ? { dm_sent_at: row.dm_sent_at ?? null, public_reply_sent_at: row.public_reply_sent_at ?? null } : null) as T;
         }
         if (/SELECT count FROM dm_rate_limits/.test(sql)) {
           const row = rates.find((r) => r.account_id === params[0] && r.window_start === params[1]);
@@ -313,8 +534,9 @@ describe("follow gate (require_follow)", () => {
         };
       },
     } as unknown as D1Database;
-  }
+}
 
+describe("follow gate (require_follow)", () => {
   const fgRule = {
     id: "rule-fg",
     kind: "comment_dm",

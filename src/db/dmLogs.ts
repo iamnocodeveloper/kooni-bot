@@ -39,6 +39,52 @@ export class DmLogsRepo {
     return { dmSentAt: row.dm_sent_at ?? undefined, publicReplySentAt: row.public_reply_sent_at ?? undefined };
   }
 
+  // ── Claim atómico por pierna (race-safe dedup) ────────────────────────────
+  //
+  // El dedup clásico (leer timestamps → enviar → guardar) tiene una carrera:
+  // si Zernio reintenta el webhook del MISMO comentario mientras el primer
+  // intento aún está enviando (la generación IA + llamadas tardan segundos),
+  // dos ejecuciones ven dm_sent_at / public_reply_sent_at en NULL y ambas
+  // responden. Instagram SÍ permite al dueño responder varias veces el mismo
+  // comentario, así que Zernio acepta el duplicado → el comentario recibe 2+
+  // respuestas públicas.
+  //
+  // claimLeg cierra la carrera con atomicidad de D1 (cada statement se ejecuta
+  // de forma atómica): INSERT OR IGNORE la fila (garantiza que exista) +
+  // UPDATE condicional `SET col = ? WHERE col IS NULL` — SOLO una ejecución
+  // concurrente puede cambiar la fila, así que únicamente el ganador envía.
+  // Si el envío falla de verdad, releaseClaim suelta la marca para que un
+  // intento posterior pueda reintentar.
+
+  /**
+   * Claim atómico de una pierna (dm | public) para un comment_id.
+   * Devuelve el timestamp del claim si GANAMOS (podemos enviar), o null si
+   * otra ejecución ya reclamó/envió esa pierna.
+   */
+  async claimLeg(commentId: string, ruleId: string, leg: "dm" | "public", at: number): Promise<number | null> {
+    // Fila garantizada (no-op si ya existe por un intento previo).
+    await this.db.run(
+      `INSERT INTO processed_comments (comment_id, rule_id, status, created_at) VALUES (?, ?, 'processing', ?)
+       ON CONFLICT(comment_id) DO NOTHING`,
+      [commentId, ruleId, at],
+    );
+    const col = leg === "dm" ? "dm_sent_at" : "public_reply_sent_at";
+    const upd = await this.db.run(
+      `UPDATE processed_comments SET ${col} = ? WHERE comment_id = ? AND ${col} IS NULL`,
+      [at, commentId],
+    );
+    return upd.meta?.changes === 1 ? at : null;
+  }
+
+  /** Suelta un claim tras un fallo real (permite reintento posterior). */
+  async releaseClaim(commentId: string, leg: "dm" | "public", at: number): Promise<void> {
+    const col = leg === "dm" ? "dm_sent_at" : "public_reply_sent_at";
+    await this.db.run(
+      `UPDATE processed_comments SET ${col} = NULL WHERE comment_id = ? AND ${col} = ?`,
+      [commentId, at],
+    );
+  }
+
   /** Marca un comentario como procesado (sent | skipped | failed). */
   async recordProcessedComment(input: {
     commentId: string;

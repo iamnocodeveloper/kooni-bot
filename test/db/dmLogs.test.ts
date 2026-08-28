@@ -10,6 +10,22 @@ function makeDb() {
     async run(sql: string, params: unknown[] = []) {
       if (/INSERT INTO processed_comments/.test(sql)) {
         const existing = processed.find((p) => p.comment_id === params[0]);
+        if (/DO NOTHING/.test(sql)) {
+          // claimLeg: INSERT OR IGNORE — crea la fila solo si no existe.
+          if (!existing) {
+            processed.push({
+              comment_id: params[0],
+              rule_id: params[1],
+              status: params[2],
+              dm_sent_at: null,
+              public_reply_sent_at: null,
+              created_at: params[3],
+            });
+            return { meta: { changes: 1 } };
+          }
+          return { meta: { changes: 0 } };
+        }
+        // recordProcessedComment: upsert (ON CONFLICT DO UPDATE)
         if (existing) {
           existing.status = params[2];
           existing.matched_keyword = params[3] ?? existing.matched_keyword;
@@ -30,6 +46,27 @@ function makeDb() {
           });
         }
         return { meta: { changes: 1 } };
+      }
+      // ── claimLeg / releaseClaim: UPDATE condicional atómico por pierna ──
+      if (/UPDATE processed_comments SET (dm_sent_at|public_reply_sent_at) = \? WHERE comment_id = \? AND (dm_sent_at|public_reply_sent_at) IS NULL/.test(sql)) {
+        const [at, commentId] = params as [number, string];
+        const row = processed.find((p) => p.comment_id === commentId);
+        const col = /SET dm_sent_at/.test(sql) ? "dm_sent_at" : "public_reply_sent_at";
+        if (row && row[col] == null) {
+          row[col] = at;
+          return { meta: { changes: 1 } };
+        }
+        return { meta: { changes: 0 } };
+      }
+      if (/UPDATE processed_comments SET (dm_sent_at|public_reply_sent_at) = NULL WHERE comment_id = \?/.test(sql)) {
+        const [commentId, at] = params as [string, number];
+        const row = processed.find((p) => p.comment_id === commentId);
+        const col = /SET dm_sent_at/.test(sql) ? "dm_sent_at" : "public_reply_sent_at";
+        if (row && row[col] === at) {
+          row[col] = null;
+          return { meta: { changes: 1 } };
+        }
+        return { meta: { changes: 0 } };
       }
       if (/INSERT INTO dm_logs/.test(sql)) {
         logs.push({
@@ -178,6 +215,50 @@ describe("DmLogsRepo — rate limit por cuenta", () => {
   });
 });
 
+describe("DmLogsRepo — claim atómico por pierna (race-safe dedup)", () => {
+  it("solo UNA ejecución concurrente gana el claim del mismo comentario", async () => {
+    const db = makeDb();
+    const repo = new DmLogsRepo(db as any);
+    // Dos deliveries del MISMO comentario intentan reclamar la pública a la vez.
+    const [a, b] = await Promise.all([
+      repo.claimLeg("cm_race", "r1", "public", Date.now() + 1),
+      repo.claimLeg("cm_race", "r1", "public", Date.now() + 2),
+    ]);
+    const winners = [a, b].filter((v) => v != null);
+    expect(winners.length).toBe(1); // solo el ganador envía
+    const rec = await repo.getProcessedComment("cm_race");
+    expect(rec?.publicReplySentAt).toBe(winners[0]);
+  });
+
+  it("DM y pública se reclaman de forma independiente", async () => {
+    const db = makeDb();
+    const repo = new DmLogsRepo(db as any);
+    expect(await repo.claimLeg("cm_5", "r1", "dm", 1000)).toBe(1000);
+    expect(await repo.claimLeg("cm_5", "r1", "dm", 2000)).toBeNull(); // 2º claim pierde
+    expect(await repo.claimLeg("cm_5", "r1", "public", 3000)).toBe(3000); // la pública aún gana
+    const rec = await repo.getProcessedComment("cm_5");
+    expect(rec?.dmSentAt).toBe(1000);
+    expect(rec?.publicReplySentAt).toBe(3000);
+  });
+
+  it("releaseClaim suelta la marca para permitir reintento tras un fallo", async () => {
+    const db = makeDb();
+    const repo = new DmLogsRepo(db as any);
+    expect(await repo.claimLeg("cm_6", "r1", "public", 5000)).toBe(5000);
+    await repo.releaseClaim("cm_6", "public", 5000);
+    // el reintento del webhook puede volver a reclamar
+    expect(await repo.claimLeg("cm_6", "r1", "public", 6000)).toBe(6000);
+  });
+
+  it("releaseClaim no suelta si el timestamp no coincide (otro intento ganó)", async () => {
+    const db = makeDb();
+    const repo = new DmLogsRepo(db as any);
+    await repo.claimLeg("cm_7", "r1", "public", 7000);
+    await repo.releaseClaim("cm_7", "public", 9999); // timestamp equivocado
+    expect((await repo.getProcessedComment("cm_7"))?.publicReplySentAt).toBe(7000);
+  });
+});
+
 describe("DmLogsRepo — getProcessedComment (dedup por pierna)", () => {
   it("devuelve null si el comentario no está registrado", async () => {
     const repo = new DmLogsRepo(makeDb() as any);
@@ -205,3 +286,4 @@ describe("DmLogsRepo — getProcessedComment (dedup por pierna)", () => {
     expect(rec?.publicReplySentAt).toBe(3000);
   });
 });
+

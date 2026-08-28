@@ -269,6 +269,18 @@ CREATE TABLE IF NOT EXISTS follow_gate_pending (
 );
 CREATE INDEX IF NOT EXISTS idx_fg_pending ON follow_gate_pending(account_id, commenter_id);
 
+-- Dedup por huella de comentario (post + autor + texto normalizado). Zernio a
+-- veces reentrega el MISMO comentario con un comment.id distinto, y la huella
+-- es estable entre entregas. El claim atómico (PK dedup_key, INSERT OR IGNORE)
+-- garantiza UNA única respuesta por comentario real. Ver src/db/fingerprints.ts.
+CREATE TABLE IF NOT EXISTS comment_fingerprints (
+  dedup_key TEXT PRIMARY KEY,
+  rule_id TEXT NOT NULL,
+  comment_id TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_comment_fingerprints_time ON comment_fingerprints(created_at);
+
 -- Dedup de comentarios (port OpenReply): Meta permite UNA sola private reply
 -- por comentario, para siempre, a través de TODAS las reglas. Antes de enviar
 -- un DM se chequea si el comment_id ya recibió uno. Se registra el resultado.

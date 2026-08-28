@@ -20,10 +20,19 @@
 
 import type { ChannelAdapter, IncomingMessage, OutgoingReply, ChannelId } from "./shared";
 import type { Env } from "../env";
+import type { DmLogsRepo } from "../db/dmLogs";
 import { matchKeywords, renderUsername } from "../utils/keyword-matcher";
+import { commentFingerprint } from "../db/fingerprints";
 import { resolveZernioCredentials } from "./zernioCredentials";
 
 const DEFAULT_BASE = "https://zernio.com/api";
+
+/**
+ * Tope de seguridad: máximo de respuestas públicas por cuenta en 24h (rolling).
+ * La regla puede matchear muchos comentarios; este tope garantiza que el bot
+ * nunca vuelva a inundar el público aunque algo dispare en bucle.
+ */
+const MAX_PUBLIC_REPLIES_PER_DAY = 200;
 
 export function zernioChannel(): ChannelId {
   return "zernio";
@@ -310,20 +319,22 @@ async function sendCommentActions(
   // se trata como caso esperado (el DM ya fue) → skipped para no marcarlo fail.
   let dmAlreadySent = false;
   let publicAlreadySent = false;
+  let logs: DmLogsRepo | null = null;
   try {
     const { Db } = await import("../db/client");
     const { DmLogsRepo } = await import("../db/dmLogs");
-    const logs = new DmLogsRepo(new Db(env.DB));
-    const rec = await logs.getProcessedComment(commentId);
+    const repo = new DmLogsRepo(new Db(env.DB));
+    logs = repo;
+    const rec = await repo.getProcessedComment(commentId);
     dmAlreadySent = rec?.dmSentAt != null;
     publicAlreadySent = rec?.publicReplySentAt != null;
 
     // Rate limit por cuenta (Fase 5): si el DM NO se ha enviado aún, reservamos
     // slot. Si ya se envió, no gastamos cupo (solo reintentamos la pública).
-    if (!publicOnly && !dmAlreadySent && !(await logs.reserveDmSlot(accountId))) {
-      const { used, windowStart } = await logs.currentHourUsage(accountId);
+    if (!publicOnly && !dmAlreadySent && !(await repo.reserveDmSlot(accountId))) {
+      const { used, windowStart } = await repo.currentHourUsage(accountId);
       console.warn(`[zernio] rate limit: cuenta ${accountId} agotó su cupo (${used}/hora) — se salta DM`);
-      await logs.log({
+      await repo.log({
         ruleId: matched.ruleId,
         kind: "comment_dm",
         platform: "instagram",
@@ -344,7 +355,7 @@ async function sendCommentActions(
         const dmCheck = await checkLimit(env, "autoDmsThisMonth");
         if (!dmCheck.allowed) {
           console.warn(`[limits] DMs automáticos al tope (${dmCheck.used}/${dmCheck.limit}) — se salta DM`);
-          await logs.log({
+          await repo.log({
             ruleId: matched.ruleId,
             kind: "comment_dm",
             platform: "instagram",
@@ -388,42 +399,57 @@ async function sendCommentActions(
     if (dmAlreadySent) {
       dmSkipped = true;
     } else {
+      // Claim atómico del DM: solo la ejecución que gana el UPDATE condicional
+      // envía. Cierra la carrera cuando Zernio reintenta el webhook del mismo
+      // comentario (dos deliveries en vuelo a la vez).
+      let claimedAt: number | null = Date.now(); // fail-open si la DB falla
       try {
-        const res = await fetch(`${base}/v1/inbox/comments/${postId}/${commentId}/private-reply`, {
-          method: "POST",
-          headers,
-          body: JSON.stringify({ accountId, message: prompt, buttons: followBtn }),
-        });
-        if (!res.ok) {
-          const detail = await res.text().catch(() => "");
-          // Instagram: "ya se ha enviado una respuesta privada" → el DM ya fue
-          // (intento previo). Tratarlo como skipped, no como fallo.
-          if (/respuesta privada|private reply|already|invalid for a private reply/i.test(detail)) {
-            dmSkipped = true;
-            console.warn(`[zernio] follow-gate DM ya enviado antes — se omite (${commentId})`);
-          } else {
-            dmError = `HTTP ${res.status} ${detail.slice(0, 200)}`;
-            console.error(`zernio follow-gate DM falló: ${dmError}`);
-          }
-        } else {
-          dmSent = true;
-          console.log(`[zernio] follow-gate DM enviado (link pendiente): ${matched.keywords.join(",")}`);
-          // Zernio NO reenvía el payload del botón al presionarlo (manda la
-          // etiqueta + prefijo postback_); guardamos el estado para completar
-          // la entrega cuando el usuario toque "Ya te sigo".
-          try {
-            const { Db } = await import("../db/client");
-            await new Db(env.DB).run(
-              `INSERT INTO follow_gate_pending (account_id, commenter_id, rule_id, comment_id, post_id, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
-              [accountId, commenterId ?? "", matched.ruleId ?? "", commentId, postId, Date.now()],
-            );
-          } catch (e) {
-            console.warn("[zernio] no se pudo guardar el follow-gate pendiente:", e);
-          }
-        }
+        claimedAt = logs ? await logs.claimLeg(commentId, matched.ruleId ?? "", "dm", Date.now()) : Date.now();
       } catch (e) {
-        dmError = String((e as Error)?.message ?? e);
-        console.error("zernio follow-gate DM error:", e);
+        console.warn("[zernio] claim DM falló (se procede sin control):", e);
+      }
+      if (claimedAt == null) {
+        dmSkipped = true; // otro delivery ya reclamó/envió el DM
+      } else {
+        try {
+          const res = await fetch(`${base}/v1/inbox/comments/${postId}/${commentId}/private-reply`, {
+            method: "POST",
+            headers,
+            body: JSON.stringify({ accountId, message: prompt, buttons: followBtn }),
+          });
+          if (!res.ok) {
+            const detail = await res.text().catch(() => "");
+            // Instagram: "ya se ha enviado una respuesta privada" → el DM ya fue
+            // (intento previo). Tratarlo como skipped, no como fallo.
+            if (/respuesta privada|private reply|already|invalid for a private reply/i.test(detail)) {
+              dmSkipped = true;
+              console.warn(`[zernio] follow-gate DM ya enviado antes — se omite (${commentId})`);
+            } else {
+              dmError = `HTTP ${res.status} ${detail.slice(0, 200)}`;
+              console.error(`zernio follow-gate DM falló: ${dmError}`);
+              await logs?.releaseClaim(commentId, "dm", claimedAt).catch(() => {});
+            }
+          } else {
+            dmSent = true;
+            console.log(`[zernio] follow-gate DM enviado (link pendiente): ${matched.keywords.join(",")}`);
+            // Zernio NO reenvía el payload del botón al presionarlo (manda la
+            // etiqueta + prefijo postback_); guardamos el estado para completar
+            // la entrega cuando el usuario toque "Ya te sigo".
+            try {
+              const { Db } = await import("../db/client");
+              await new Db(env.DB).run(
+                `INSERT INTO follow_gate_pending (account_id, commenter_id, rule_id, comment_id, post_id, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+                [accountId, commenterId ?? "", matched.ruleId ?? "", commentId, postId, Date.now()],
+              );
+            } catch (e) {
+              console.warn("[zernio] no se pudo guardar el follow-gate pendiente:", e);
+            }
+          }
+        } catch (e) {
+          dmError = String((e as Error)?.message ?? e);
+          console.error("zernio follow-gate DM error:", e);
+          await logs?.releaseClaim(commentId, "dm", claimedAt).catch(() => {});
+        }
       }
     }
   } else {
@@ -431,82 +457,112 @@ async function sendCommentActions(
     if (dmAlreadySent) {
       dmSkipped = true;
     } else {
+      // Claim atómico del DM (misma protección que el follow-gate DM).
+      let claimedAt: number | null = Date.now(); // fail-open si la DB falla
       try {
-        const res = await fetch(`${base}/v1/inbox/comments/${postId}/${commentId}/private-reply`, {
-          method: "POST",
-          headers,
-          body: JSON.stringify({ accountId, message: dmMessage, buttons: buttons.length ? buttons : undefined }),
-        });
-        if (!res.ok) {
-          const detail = await res.text().catch(() => "");
-          // Instagram: "ya se ha enviado una respuesta privada" → el DM ya fue
-          // (intento previo del webhook). Tratarlo como skipped.
-          if (/respuesta privada|private reply|already|invalid for a private reply/i.test(detail)) {
-            dmSkipped = true;
-            console.warn(`[zernio] DM ya enviado antes — se omite (${commentId})`);
-          } else {
-            dmError = `HTTP ${res.status} ${detail.slice(0, 200)}`;
-            console.error(`zernio DM falló: ${dmError}`);
-          }
-        } else {
-          dmSent = true;
-          console.log(`[zernio] DM enviado por keyword: ${matched.keywords.join(",")}`);
-        }
+        claimedAt = logs ? await logs.claimLeg(commentId, matched.ruleId ?? "", "dm", Date.now()) : Date.now();
       } catch (e) {
-        dmError = String((e as Error)?.message ?? e);
-        console.error("zernio DM error:", e);
+        console.warn("[zernio] claim DM falló (se procede sin control):", e);
+      }
+      if (claimedAt == null) {
+        dmSkipped = true; // otro delivery ya reclamó/envió el DM
+      } else {
+        try {
+          const res = await fetch(`${base}/v1/inbox/comments/${postId}/${commentId}/private-reply`, {
+            method: "POST",
+            headers,
+            body: JSON.stringify({ accountId, message: dmMessage, buttons: buttons.length ? buttons : undefined }),
+          });
+          if (!res.ok) {
+            const detail = await res.text().catch(() => "");
+            // Instagram: "ya se ha enviado una respuesta privada" → el DM ya fue
+            // (intento previo del webhook). Tratarlo como skipped.
+            if (/respuesta privada|private reply|already|invalid for a private reply/i.test(detail)) {
+              dmSkipped = true;
+              console.warn(`[zernio] DM ya enviado antes — se omite (${commentId})`);
+            } else {
+              dmError = `HTTP ${res.status} ${detail.slice(0, 200)}`;
+              console.error(`zernio DM falló: ${dmError}`);
+              await logs?.releaseClaim(commentId, "dm", claimedAt).catch(() => {});
+            }
+          } else {
+            dmSent = true;
+            console.log(`[zernio] DM enviado por keyword: ${matched.keywords.join(",")}`);
+          }
+        } catch (e) {
+          dmError = String((e as Error)?.message ?? e);
+          console.error("zernio DM error:", e);
+          await logs?.releaseClaim(commentId, "dm", claimedAt).catch(() => {});
+        }
       }
     }
   }
 
   // 2) Respuesta pública al comentario (opcional por regla).
-  // Si ya se publicó en un intento previo, no se re-publica. Se intenta primero
-  // con la cuenta del webhook (la que monitorea el comentario) y, si falla, con
-  // la del inbox resuelta — cubre el caso de posts publicados desde el mismo u
-  // otro perfil de Zernio.
-  if (publicReply && !publicAlreadySent) {
-    const candidates = [publishAccountId, accountId].filter((v, i, a) => v && a.indexOf(v) === i);
-    let lastError = "";
-    for (const acc of candidates) {
+  // Claim atómico ANTES de enviar: solo la ejecución que gana el UPDATE
+  // condicional publica. Cierra la carrera con el reintento del webhook — dos
+  // deliveries del MISMO comentario pueden estar en vuelo a la vez (Zernio
+  // reintenta si el worker tarda; la generación IA tarda segundos) y ambas
+  // leerían public_reply_sent_at en NULL antes de que la primera guarde.
+  if (publicReply) {
+    if (publicAlreadySent) {
+      publicSkipped = true; // ya publicada en un intento previo
+    } else {
+      let claimedAt: number | null = Date.now(); // fail-open si la DB falla
       try {
-        const res = await fetch(`${base}/v1/inbox/comments/${postId}`, {
-          method: "POST",
-          headers,
-          body: JSON.stringify({ accountId: acc, message: publicReply, commentId }),
-        });
-        if (res.ok) {
-          publicSent = true;
-          lastError = "";
-          console.log(`[zernio] respuesta pública enviada por keyword: ${matched.keywords.join(",")}`);
-          break;
-        }
-        const detail = await res.text().catch(() => "");
-        // "ya respondiste" / "already replied" → la pública ya fue; skipped.
-        if (/ya respond|ya.*respuesta|already|duplicate/i.test(detail)) {
-          publicSkipped = true;
-          lastError = "";
-          console.warn(`[zernio] reply público ya enviado antes — se omite (${commentId})`);
-          break;
-        }
-        lastError = `HTTP ${res.status} ${detail.slice(0, 200)}`;
-        console.error(`[zernio] reply público falló (cuenta ${acc}): ${lastError}`);
+        claimedAt = logs ? await logs.claimLeg(commentId, matched.ruleId ?? "", "public", Date.now()) : Date.now();
       } catch (e) {
-        lastError = String((e as Error)?.message ?? e);
-        console.error("zernio reply público error:", e);
+        console.warn("[zernio] claim público falló (se procede sin control):", e);
+      }
+      if (claimedAt == null) {
+        publicSkipped = true; // otro delivery la reclamó/envió → NO responder 2 veces
+      } else {
+        const candidates = [publishAccountId, accountId].filter((v, i, a) => v && a.indexOf(v) === i);
+        let lastError = "";
+        for (const acc of candidates) {
+          try {
+            const res = await fetch(`${base}/v1/inbox/comments/${postId}`, {
+              method: "POST",
+              headers,
+              body: JSON.stringify({ accountId: acc, message: publicReply, commentId }),
+            });
+            if (res.ok) {
+              publicSent = true;
+              lastError = "";
+              console.log(`[zernio] respuesta pública enviada por keyword: ${matched.keywords.join(",")}`);
+              break;
+            }
+            const detail = await res.text().catch(() => "");
+            // "ya respondiste" / "already replied" → la pública ya fue; skipped.
+            if (/ya respond|ya.*respuesta|already|duplicate/i.test(detail)) {
+              publicSkipped = true;
+              lastError = "";
+              console.warn(`[zernio] reply público ya enviado antes — se omite (${commentId})`);
+              break;
+            }
+            lastError = `HTTP ${res.status} ${detail.slice(0, 200)}`;
+            console.error(`[zernio] reply público falló (cuenta ${acc}): ${lastError}`);
+          } catch (e) {
+            lastError = String((e as Error)?.message ?? e);
+            console.error("zernio reply público error:", e);
+          }
+        }
+        if (!publicSent && !publicSkipped) {
+          publicError = lastError;
+          // Falló de verdad: soltar el claim para que un intento posterior
+          // (reintento del webhook) pueda reintentar la respuesta.
+          await logs?.releaseClaim(commentId, "public", claimedAt).catch(() => {});
+        }
+        // Si publicSent o publicSkipped, el claim se mantiene: la respuesta ya
+        // está publicada (la enviamos nosotros o un delivery previo).
       }
     }
-    if (!publicSent && !publicSkipped) publicError = lastError;
-  } else if (publicAlreadySent) {
-    publicSkipped = true; // ya publicada en un intento previo
   }
 
   // Registrar el resultado: dedup + log de automatización (estados honestos).
   try {
-    const { Db } = await import("../db/client");
-    const { DmLogsRepo } = await import("../db/dmLogs");
-    const logs = new DmLogsRepo(new Db(env.DB));
     if (dmSent || publicSent) {
-      await logs.recordProcessedComment({
+      await logs?.recordProcessedComment({
         commentId,
         ruleId: matched.ruleId ?? "",
         status: "sent",
@@ -519,7 +575,7 @@ async function sendCommentActions(
     // Un log por pierna para que el historial no mienta: cada intento de DM y de
     // respuesta pública queda con su propio estado (sent/skipped/failed).
     if (dmSent || dmSkipped || dmError) {
-      await logs.log({
+      await logs?.log({
         ruleId: matched.ruleId,
         kind: "comment_dm",
         platform: "instagram",
@@ -531,7 +587,7 @@ async function sendCommentActions(
       });
     }
     if (publicReply && (publicSent || publicSkipped || publicError)) {
-      await logs.log({
+      await logs?.log({
         ruleId: matched.ruleId,
         kind: "comment_reply",
         platform: "instagram",
@@ -546,6 +602,7 @@ async function sendCommentActions(
     // Actualizar el comentario registrado (pestaña Comentarios): qué regla
     // disparó y si el DM / respuesta pública se enviaron.
     try {
+      const { Db } = await import("../db/client");
       const { CommentsRepo } = await import("../db/comments");
       await new CommentsRepo(new Db(env.DB)).upsert({
         id: commentId,
@@ -566,14 +623,23 @@ async function sendCommentActions(
 // id de la cuenta social del inbox. private-reply exige el id social real (el
 // que devuelve GET /v1/accounts) o responde 404 account_not_found. Resolvemos
 // el id real por plataforma (+ username) con una caché corta de 5 min.
-let _accountsCache: { at: number; list: { id: string; platform: string; username?: string }[] } | null = null;
+interface ZernioAccountInfo {
+  id: string;
+  platform: string;
+  username?: string;
+}
 
-async function resolveInboxAccountId(env: Env, platform?: string, username?: string): Promise<string | undefined> {
-  if (!platform) return undefined;
+let _accountsCache: { at: number; list: ZernioAccountInfo[] } | null = null;
+
+/** GET /v1/accounts con caché de 5 min: las cuentas sociales conectadas. */
+async function fetchZernioAccounts(env: Env): Promise<ZernioAccountInfo[]> {
+  if (_accountsCache && Date.now() - _accountsCache.at <= 5 * 60_000) {
+    return _accountsCache.list;
+  }
   const { apiKey } = await resolveZernioCredentials(env);
-  if (!apiKey) return undefined;
   const base = env.ZERNIO_API_BASE_URL ?? DEFAULT_BASE;
-  if (!_accountsCache || Date.now() - _accountsCache.at > 5 * 60_000) {
+  let list: ZernioAccountInfo[] = [];
+  if (apiKey) {
     try {
       const res = await fetch(`${base}/v1/accounts`, {
         headers: { Authorization: `Bearer ${apiKey}` },
@@ -581,23 +647,66 @@ async function resolveInboxAccountId(env: Env, platform?: string, username?: str
       });
       if (res.ok) {
         const json = (await res.json()) as { accounts?: Array<{ _id?: string; platform?: string; username?: string }> };
-        _accountsCache = {
-          at: Date.now(),
-          list: (json.accounts ?? []).map((a) => ({
-            id: String(a._id ?? ""),
-            platform: String(a.platform ?? "").toLowerCase(),
-            username: a.username ? String(a.username) : undefined,
-          })),
-        };
+        list = (json.accounts ?? []).map((a) => ({
+          id: String(a._id ?? ""),
+          platform: String(a.platform ?? "").toLowerCase(),
+          username: a.username ? String(a.username) : undefined,
+        }));
       }
-    } catch { /* cache miss → fallback al accountId del webhook */ }
+    } catch {
+      /* cache miss → lista vacía */
+    }
   }
-  const list = _accountsCache?.list ?? [];
+  _accountsCache = { at: Date.now(), list };
+  return list;
+}
+
+async function resolveInboxAccountId(env: Env, platform?: string, username?: string): Promise<string | undefined> {
+  if (!platform) return undefined;
+  const list = await fetchZernioAccounts(env);
   const plat = platform.toLowerCase();
   const hit =
     (username && list.find((a) => a.platform === plat && a.username === username)) ||
     list.find((a) => a.platform === plat);
   return hit?.id;
+}
+
+/**
+ * ¿El autor del comentario es UNA de NUESTRAS propias cuentas conectadas?
+ *
+ * Anti-bucle: cuando el bot responde en público a un comentario, Zernio
+ * reenvía ESA respuesta como un nuevo comment.received cuyo autor es la cuenta
+ * del negocio. Sin este chequeo, si el texto de la respuesta contiene una
+ * keyword de la regla (ej. la marca "Kooni"), el bot se respondía a sí mismo
+ * en loop infinito (observado: 85+ respuestas propias en producción).
+ */
+async function isOwnCommenter(
+  env: Env,
+  commenter: { id?: string; username?: string } | undefined,
+  account: ZernioWebhookBody["account"] | undefined,
+): Promise<boolean> {
+  if (!commenter) return false;
+
+  // Señal sin API: el username del autor == username de la cuenta del webhook
+  // (la cuenta que publicó el post). Comparación case-insensitive.
+  const authorUser = (commenter.username ?? "").trim().toLowerCase();
+  const hookUser = (account?.username ?? "").trim().toLowerCase();
+  if (authorUser && hookUser && authorUser === hookUser) return true;
+
+  // Chequeo con la lista de cuentas conectadas: cubre posts publicados desde
+  // otra cuenta y casos donde el webhook no trae username del account.
+  try {
+    const accounts = await fetchZernioAccounts(env);
+    const authorId = (commenter.id ?? "").trim();
+    return accounts.some(
+      (a) =>
+        (authorId && a.id && a.id === authorId) ||
+        (authorUser && a.username && a.username.toLowerCase() === authorUser),
+    );
+  } catch (e) {
+    console.warn("[zernio] chequeo de cuenta propia falló:", e);
+    return false;
+  }
 }
 
 /** Solo para tests: limpia la caché de cuentas (evita contaminación entre casos). */
@@ -663,21 +772,97 @@ async function autoDmOnComment(body: ZernioWebhookBody, env: Env): Promise<void>
 
   const postId = encodeURIComponent(comment.postId ?? comment.platformPostId ?? "");
   const commentId = comment.id ?? "";
-  if (postId && commentId) {
-    await sendCommentActions(
-      matched,
-      accountId,
-      // La cuenta que publicó el post es la del webhook (la respuesta pública
-      // la exige; el DM usa el inbox resuelto arriba).
-      account.accountId ?? accountId,
-      postId,
-      commentId,
-      comment.author?.username ?? comment.author?.name,
-      comment.author?.id,
-      comment.text ?? undefined,
-      env,
+  if (!postId || !commentId) return;
+
+  // ── Tope diario de respuestas públicas (anti-flood de seguridad) ─────────
+  // Aunque la keyword matchee, nunca más de N respuestas públicas por cuenta
+  // en 24h. Red de seguridad: si algo vuelve a disparar en bucle (regla mal
+  // configurada, keyword demasiado amplia), el bot se frena solo.
+  try {
+    const { Db } = await import("../db/client");
+    const windowStart = Date.now() - 24 * 3600_000;
+    const row = await new Db(env.DB).first<{ n: number }>(
+      "SELECT COUNT(*) as n FROM comments WHERE account_id = ? AND public_reply_sent = 1 AND created_at > ?",
+      [account.accountId ?? "", windowStart],
     );
+    if ((row?.n ?? 0) >= MAX_PUBLIC_REPLIES_PER_DAY) {
+      console.warn(`[zernio] tope diario de respuestas públicas alcanzado (${row?.n}/24h) — se omite (${commentId})`);
+      try {
+        const { Db } = await import("../db/client");
+        const { DmLogsRepo } = await import("../db/dmLogs");
+        await new DmLogsRepo(new Db(env.DB)).log({
+          ruleId: matched.ruleId,
+          kind: "comment_dm_public",
+          platform: account.platform,
+          target: commentId,
+          username: comment.author?.username ?? comment.author?.name,
+          message: matched.replyToComment ?? matched.message,
+          status: "skipped",
+          error: `Tope diario de respuestas públicas alcanzado (${row?.n}/24h). Se omite para no inundar al público.`,
+        });
+      } catch (e) {
+        console.warn("[zernio] no se pudo registrar el skip por tope diario:", e);
+      }
+      return;
+    }
+  } catch (e) {
+    console.warn("[zernio] check tope diario falló — fail-open:", e);
   }
+
+  // ── Dedup por huella (post + autor + texto normalizado) ──────────────────
+  // Zernio a veces reentrega el MISMO comentario con un comment.id distinto
+  // (observado: hasta 7 ids para un mismo comentario). El dedup por id no lo
+  // detecta; la huella es estable entre entregas. El claim es atómico (PK con
+  // INSERT OR IGNORE): solo UNA ejecución gana → UN único mensaje de respuesta
+  // por comentario real, siempre.
+  const fp = commentFingerprint(
+    comment.postId ?? comment.platformPostId ?? "",
+    comment.author?.id ?? comment.author?.username ?? "",
+    comment.text ?? "",
+  );
+  try {
+    const { Db } = await import("../db/client");
+    const { FingerprintsRepo } = await import("../db/fingerprints");
+    const fpRepo = new FingerprintsRepo(new Db(env.DB));
+    if (!(await fpRepo.claim(fp, matched.ruleId ?? "", commentId, Date.now()))) {
+      console.warn(`[zernio] comentario ya respondido antes (misma huella post+autor+texto) — se omite (${commentId})`);
+      try {
+        const { Db } = await import("../db/client");
+        const { DmLogsRepo } = await import("../db/dmLogs");
+        await new DmLogsRepo(new Db(env.DB)).log({
+          ruleId: matched.ruleId,
+          kind: "comment_dm_public",
+          platform: account.platform,
+          target: commentId,
+          username: comment.author?.username ?? comment.author?.name,
+          message: matched.replyToComment ?? matched.message,
+          status: "skipped",
+          error: "Deduplicado por huella (post+autor+texto): este comentario ya recibió respuesta en una entrega previa (Zernio lo reenvió con otro id).",
+        });
+      } catch (e) {
+        console.warn("[zernio] no se pudo registrar el skip por huella:", e);
+      }
+      return;
+    }
+  } catch (e) {
+    // Si el claim por huella falla (DB caída), no bloqueamos: los demás
+    // controles (dedup por id, rate limit, tope diario) siguen activos.
+    console.warn("[zernio] claim por huella falló — fail-open:", e);
+  }
+
+  await sendCommentActions(
+    matched,
+    accountId,
+    // La cuenta que publicó el post es la del webhook (la respuesta pública
+    // la exige; el DM usa el inbox resuelto arriba).
+    account.accountId ?? accountId,
+    postId,
+    commentId,
+    comment.author?.username ?? comment.author?.name,
+    comment.author?.id,
+    comment.text ?? undefined,
+    env,
+  );
 }
 
 /**
@@ -966,6 +1151,28 @@ export async function parseZernioEvents(body: unknown, env: Env): Promise<Incomi
   }
 
   if (event === "comment.received") {
+    const comment = b.comment;
+    const account = b.account;
+
+    // ── Anti-bucle de auto-respuesta ──────────────────────────────────────
+    // Cuando el bot responde en público, Zernio reenvía ESA respuesta como un
+    // comment.received nuevo (con id nuevo en cada entrega). Si el texto de la
+    // respuesta contiene una keyword de la regla (ej. la marca "Kooni" en
+    // "...la info de Kooni"), el bot se respondía a sí mismo en loop infinito
+    // (observado: 85+ respuestas propias en producción). Se ignoran:
+    //   1) comentarios de NUESTRAS propias cuentas (autor = el bot/negocio)
+    //   2) comentarios que son RESPUESTAS a otro comentario (todo el loop son
+    //      respuestas; las keywords de clientes reales vienen en comentarios
+    //      de primer nivel del post)
+    if (comment?.author && (await isOwnCommenter(env, comment.author, account))) {
+      console.log(`[zernio] comentario de cuenta propia (${comment.author.username ?? comment.author.id}) — se ignora (anti-bucle)`);
+      return [];
+    }
+    if (comment?.isReply) {
+      console.log(`[zernio] comentario-respuesta (${comment.id}) — se ignora (anti-bucle)`);
+      return [];
+    }
+
     await recordZernioComment(b, env);
     await autoDmOnComment(b, env);
     return [];
