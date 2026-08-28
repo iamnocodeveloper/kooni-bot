@@ -452,7 +452,7 @@ export function renderUpgrade(env: Env, feature?: string): string {
         <div style="display:grid;gap:10px;margin-bottom:22px">${perks}</div>
         <div style="display:flex;align-items:center;gap:10px;padding:12px 16px;border:1px solid var(--linelit);background:var(--panel2);font-size:12.5px;color:var(--muted)">
           <i data-lucide="settings" width="16" height="16" style="color:var(--accent);flex:none"></i>
-          <span>Para activar Pro en esta instalación, pon <code style="color:var(--accent2)">BOT_TIER = "pro"</code> en <code style="color:var(--accent2)">wrangler.toml</code> y vuelve a desplegar.</span>
+          <span>Para activar Pro, pega tu código de licencia en <a href="/admin/licencia" style="color:var(--accent2);text-decoration:underline">Licencia</a> (te lo envía quien te vendió el bot).</span>
         </div>
       </div>
     </div>`;
