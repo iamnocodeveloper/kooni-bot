@@ -55,3 +55,6 @@ web/
 .trae
 .windsurf
 .commandcode/
+
+# Config temporal de despliegue de esta instalación (no commitear)
+wrangler.prod.toml
