@@ -525,6 +525,49 @@ async function sendCommentActions(
   }
 }
 
+// El webhook de comment.received trae account.id = id de la PUBLICACIÓN, no el
+// id de la cuenta social del inbox. private-reply exige el id social real (el
+// que devuelve GET /v1/accounts) o responde 404 account_not_found. Resolvemos
+// el id real por plataforma (+ username) con una caché corta de 5 min.
+let _accountsCache: { at: number; list: { id: string; platform: string; username?: string }[] } | null = null;
+
+async function resolveInboxAccountId(env: Env, platform?: string, username?: string): Promise<string | undefined> {
+  if (!platform) return undefined;
+  const { apiKey } = await resolveZernioCredentials(env);
+  if (!apiKey) return undefined;
+  const base = env.ZERNIO_API_BASE_URL ?? DEFAULT_BASE;
+  if (!_accountsCache || Date.now() - _accountsCache.at > 5 * 60_000) {
+    try {
+      const res = await fetch(`${base}/v1/accounts`, {
+        headers: { Authorization: `Bearer ${apiKey}` },
+        signal: AbortSignal.timeout(8000),
+      });
+      if (res.ok) {
+        const json = (await res.json()) as { accounts?: Array<{ _id?: string; platform?: string; username?: string }> };
+        _accountsCache = {
+          at: Date.now(),
+          list: (json.accounts ?? []).map((a) => ({
+            id: String(a._id ?? ""),
+            platform: String(a.platform ?? "").toLowerCase(),
+            username: a.username ? String(a.username) : undefined,
+          })),
+        };
+      }
+    } catch { /* cache miss → fallback al accountId del webhook */ }
+  }
+  const list = _accountsCache?.list ?? [];
+  const plat = platform.toLowerCase();
+  const hit =
+    (username && list.find((a) => a.platform === plat && a.username === username)) ||
+    list.find((a) => a.platform === plat);
+  return hit?.id;
+}
+
+/** Solo para tests: limpia la caché de cuentas (evita contaminación entre casos). */
+export function __resetZernioAccountsCache(): void {
+  _accountsCache = null;
+}
+
 /**
  * Guarda un comentario recibido en la tabla comments (pestaña "Comentarios"
  * del panel, como Zernio). Se llama en cada comment.received, ANTES de la regla.
@@ -565,7 +608,7 @@ async function recordZernioComment(body: ZernioWebhookBody, env: Env): Promise<v
 async function autoDmOnComment(body: ZernioWebhookBody, env: Env): Promise<void> {
   const comment = body.comment;
   const account = body.account;
-  if (!comment || !account?.accountId) return;
+  if (!comment || !account?.platform) return;
   const rules = await loadAutoDmRules(env);
   if (rules.length === 0) return;
 
@@ -575,12 +618,18 @@ async function autoDmOnComment(body: ZernioWebhookBody, env: Env): Promise<void>
   );
   if (!matched) return;
 
+  // El account del webhook de comentarios NO es el id social del inbox: lo
+  // resolvemos desde GET /v1/accounts solo cuando ya vamos a enviar
+  // (private-reply exige el id real o responde 404 account_not_found).
+  const accountId = (await resolveInboxAccountId(env, account.platform, account.username)) ?? account.accountId;
+  if (!accountId) return;
+
   const postId = encodeURIComponent(comment.postId ?? comment.platformPostId ?? "");
   const commentId = comment.id ?? "";
   if (postId && commentId) {
     await sendCommentActions(
       matched,
-      account.accountId,
+      accountId,
       postId,
       commentId,
       comment.author?.username ?? comment.author?.name,

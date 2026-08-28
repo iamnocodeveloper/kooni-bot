@@ -1,6 +1,8 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
-import { zernioAdapter, parseZernioEvents, verifyZernioSignature } from "../../src/channels/zernio";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
+import { zernioAdapter, parseZernioEvents, verifyZernioSignature, __resetZernioAccountsCache } from "../../src/channels/zernio";
 import type { Env } from "../../src/env";
+
+beforeEach(() => __resetZernioAccountsCache());
 
 // Payloads espejo de la API pública de Zernio (github.com/zernio-dev/chat-sdk-adapter).
 const dmPayload = {
@@ -76,15 +78,20 @@ describe("parseZernioEvents (message.received)", () => {
 
 describe("auto-DM por keyword en comentarios", () => {
   it("manda DM privado (private-reply) con mensaje y botón cuando el comentario trae la keyword", async () => {
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ success: true }), { status: 200 }));
+    const fetchMock = vi.fn(async (url: string) => {
+      if (String(url).includes("/v1/accounts")) {
+        return new Response(JSON.stringify({ accounts: [{ _id: "acct_1", platform: "instagram", username: "mi_negocio" }] }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ success: true }), { status: 200 });
+    });
     vi.stubGlobal("fetch", fetchMock);
 
     const out = await parseZernioEvents(commentPayload, envBase);
     // El comentario no entra al agente:
     expect(out).toHaveLength(0);
-    // Pero disparó el envío:
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    // accounts (resolución) + private-reply:
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const [url, init] = fetchMock.mock.calls[1] as unknown as [string, RequestInit];
     expect(url).toBe("https://zernio.com/api/v1/inbox/comments/post_1/cm_1/private-reply");
     expect(init.method).toBe("POST");
     expect((init.headers as Record<string, string>).Authorization).toBe("Bearer zkey_test");
@@ -114,7 +121,12 @@ describe("auto-DM por keyword en comentarios", () => {
   });
 
   it("soporta VARIAS reglas con varios mensajes (ZERNIO_AUTO_DM_RULES) y responde también en público", async () => {
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ success: true }), { status: 200 }));
+    const fetchMock = vi.fn(async (url: string) => {
+      if (String(url).includes("/v1/accounts")) {
+        return new Response(JSON.stringify({ accounts: [{ _id: "acct_1", platform: "instagram", username: "mi_negocio" }] }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ success: true }), { status: 200 });
+    });
     vi.stubGlobal("fetch", fetchMock);
     const envRules = {
       ...envBase,
@@ -136,13 +148,13 @@ describe("auto-DM por keyword en comentarios", () => {
       envRules,
     );
     expect(out).toHaveLength(0);
-    // DM privado + respuesta pública:
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    const [dmUrl, dmInit] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    // accounts + DM privado + respuesta pública:
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    const [dmUrl, dmInit] = fetchMock.mock.calls[1] as unknown as [string, RequestInit];
     expect(dmUrl).toBe("https://zernio.com/api/v1/inbox/comments/post_1/cm_1/private-reply");
     expect(JSON.parse(dmInit.body as string).message).toBe("Te mando el catálogo 👇");
     expect(JSON.parse(dmInit.body as string).buttons).toEqual([{ type: "url", title: "Ver catálogo", url: "https://kooni.app/catalogo" }]);
-    const [pubUrl, pubInit] = fetchMock.mock.calls[1] as unknown as [string, RequestInit];
+    const [pubUrl, pubInit] = fetchMock.mock.calls[2] as unknown as [string, RequestInit];
     expect(pubUrl).toBe("https://zernio.com/api/v1/inbox/comments/post_1");
     const pubBody = JSON.parse(pubInit.body as string);
     expect(pubBody.message).toBe("¡Gracias por preguntar! Te escribí por privado ✨");
@@ -150,7 +162,12 @@ describe("auto-DM por keyword en comentarios", () => {
   });
 
   it("elige la regla correcta según la keyword del comentario", async () => {
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ success: true }), { status: 200 }));
+    const fetchMock = vi.fn(async (url: string) => {
+      if (String(url).includes("/v1/accounts")) {
+        return new Response(JSON.stringify({ accounts: [{ _id: "acct_1", platform: "instagram", username: "mi_negocio" }] }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ success: true }), { status: 200 });
+    });
     vi.stubGlobal("fetch", fetchMock);
     const envRules = {
       ...envBase,
@@ -165,10 +182,27 @@ describe("auto-DM por keyword en comentarios", () => {
       { ...commentPayload, comment: { ...commentPayload.comment, text: "me interesa el precio" } },
       envRules,
     );
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const call = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const call = fetchMock.mock.calls[1] as unknown as [string, RequestInit];
     const body = JSON.parse(call[1].body as string);
     expect(body.message).toBe("Catálogo de precios");
+  });
+
+  it("usa el account social del inbox (no el id del webhook) al enviar private-reply", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (String(url).includes("/v1/accounts")) {
+        return new Response(JSON.stringify({ accounts: [{ _id: "inbox_acct_99", platform: "instagram", username: "mi_negocio" }] }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ success: true }), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await parseZernioEvents(commentPayload, envBase);
+    const dm = fetchMock.mock.calls.find((c) => String((c as [string])[0]).includes("/private-reply"));
+    expect(dm).toBeTruthy();
+    const body = JSON.parse(((dm as unknown as [string, RequestInit])[1]).body as string);
+    // El webhook trae account.id=acct_1, pero el id social real es inbox_acct_99.
+    expect(body.accountId).toBe("inbox_acct_99");
   });
 
 });
@@ -287,6 +321,9 @@ describe("follow gate (require_follow)", () => {
 
   it("si NO sigue: envía DM de follow gate con botón postback (no el link)", async () => {
     const fetchMock = vi.fn(async (url: string) => {
+      if (String(url).includes("/v1/accounts")) {
+        return new Response(JSON.stringify({ accounts: [{ _id: "acct_1", platform: "instagram" }] }), { status: 200 });
+      }
       if (String(url).includes("/follow-status/")) {
         return new Response(JSON.stringify({ isFollower: false }), { status: 200 });
       }
@@ -308,10 +345,10 @@ describe("follow gate (require_follow)", () => {
       env,
     );
     expect(out).toHaveLength(0);
-    // follow-status + private-reply (con botón postback)
+    // accounts + follow-status + private-reply (con botón postback)
     const calls = fetchMock.mock.calls as unknown as [string, RequestInit][];
-    expect(calls.length).toBe(2);
-    const dmCall = calls[1];
+    expect(calls.length).toBe(3);
+    const dmCall = calls[2];
     expect(String(dmCall[0])).toContain("/private-reply");
     const body = JSON.parse(dmCall[1].body as string);
     expect(body.message).toContain("Sígueme");
