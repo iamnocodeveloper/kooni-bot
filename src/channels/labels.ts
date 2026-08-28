@@ -4,6 +4,8 @@
  * so dashboard concerns don't touch the adapter contract.
  */
 import type { Env } from "../env";
+import { resolveZernioCredentials } from "./zernioCredentials";
+import { resolveTelegramToken } from "./telegramCredentials";
 
 /** channel id (as stored in conversations.channel) → label the owner reads. */
 export const CHANNEL_LABELS: Record<string, string> = {
@@ -27,13 +29,16 @@ export interface ConfiguredChannel {
   detail: string;
 }
 
-/** Channels with credentials configured — shown in Mi Agente even at 0 traffic. */
-export function configuredChannels(env: Env): ConfiguredChannel[] {
+/** Channels with credentials configured — shown in Mi Agente even at 0 traffic.
+ *  Telegram y Zernio se conectan DESDE el panel (D1 settings), así que se
+ *  resuelven igual que en runtime; el resto son secrets de wrangler. */
+export async function configuredChannels(env: Env): Promise<ConfiguredChannel[]> {
   const out: ConfiguredChannel[] = [];
   if (env.TWILIO_ACCOUNT_SID) {
     out.push({ id: "twilio", label: "WhatsApp", detail: "Twilio" });
   }
-  if (env.TELEGRAM_BOT_TOKEN) {
+  const telegramToken = await resolveTelegramToken(env);
+  if (telegramToken) {
     out.push({ id: "telegram", label: "Telegram", detail: "bot oficial" });
   }
   if (env.INSTAGRAM_ACCESS_TOKEN) {
@@ -45,7 +50,8 @@ export function configuredChannels(env: Env): ConfiguredChannel[] {
   if (env.MANYCHAT_API_KEY) {
     out.push({ id: "manychat", label: "ManyChat", detail: "IG/FB vía ManyChat" });
   }
-  if (env.ZERNIO_API_KEY) {
+  const zernio = await resolveZernioCredentials(env);
+  if (zernio.apiKey) {
     out.push({ id: "zernio", label: "Zernio", detail: "multicanal unificado" });
   }
   return out;

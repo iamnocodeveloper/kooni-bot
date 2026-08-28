@@ -467,8 +467,30 @@ adminApp.get("/conexiones", async (c) => {
 adminApp.post("/conexiones/zernio", async (c) => {
   const form = await c.req.formData();
   const repo = new SettingsRepo(new Db(c.env.DB));
+  const zBase = c.env.ZERNIO_API_BASE_URL ?? "https://zernio.com/api";
+  const baseUrl = (c.env.DASHBOARD_BASE_URL?.trim() || new URL(c.req.url).origin).replace(/\/$/, "");
+  const whUrl = `${baseUrl}/webhooks/zernio`;
+  const EVENTS = ["message.received", "comment.received", "reaction.received"];
 
   if (String(form.get("clear") ?? "") === "1") {
+    // Desregistrar el webhook de Zernio (best-effort) antes de borrar las creds.
+    const oldKey = await repo.get(SETTING_KEYS.zernioApiKey);
+    if (oldKey) {
+      try {
+        const listRes = await fetch(`${zBase}/v1/webhooks/settings`, {
+          headers: { Authorization: `Bearer ${oldKey}` },
+          signal: AbortSignal.timeout(8000),
+        });
+        const listJson = (await listRes.json().catch(() => ({}))) as { webhooks?: Array<{ _id: string; url?: string }> };
+        for (const w of (listJson.webhooks ?? []).filter((w) => w.url === whUrl)) {
+          await fetch(`${zBase}/v1/webhooks/settings?id=${encodeURIComponent(w._id)}`, {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${oldKey}` },
+            signal: AbortSignal.timeout(8000),
+          });
+        }
+      } catch { /* best-effort */ }
+    }
     await repo.set(SETTING_KEYS.zernioApiKey, "");
     await repo.set(SETTING_KEYS.zernioWebhookSecret, "");
     return c.redirect("/admin/conexiones?zernio=saved");
@@ -507,6 +529,34 @@ adminApp.post("/conexiones/zernio", async (c) => {
   if (webhookSecret) {
     await repo.set(SETTING_KEYS.zernioWebhookSecret, webhookSecret);
   }
+
+  // Registrar el webhook automáticamente (como Telegram): sin esto Zernio no
+  // entrega message.received/comment.received y las automatizaciones no corren.
+  if (keyToSave) {
+    const effSecret = webhookSecret || (await repo.get(SETTING_KEYS.zernioWebhookSecret)) || "";
+    const headers = { Authorization: `Bearer ${keyToSave}`, "Content-Type": "application/json" };
+    try {
+      const listRes = await fetch(`${zBase}/v1/webhooks/settings`, { headers, signal: AbortSignal.timeout(8000) });
+      const listJson = (await listRes.json().catch(() => ({}))) as { webhooks?: Array<{ _id: string; url?: string }> };
+      const mine = (listJson.webhooks ?? []).filter((w) => w.url === whUrl);
+      const body: Record<string, unknown> = { url: whUrl, events: EVENTS, isActive: true };
+      if (effSecret) body.secret = effSecret;
+      let regRes: Response;
+      if (mine.length > 0) {
+        body._id = mine[0]._id;
+        regRes = await fetch(`${zBase}/v1/webhooks/settings`, { method: "PUT", headers, body: JSON.stringify(body), signal: AbortSignal.timeout(8000) });
+      } else {
+        body.name = "Kooni";
+        regRes = await fetch(`${zBase}/v1/webhooks/settings`, { method: "POST", headers, body: JSON.stringify(body), signal: AbortSignal.timeout(8000) });
+      }
+      if (!regRes.ok) {
+        return c.redirect(`/admin/conexiones?zernio=error&msg=${encodeURIComponent("API key guardada, pero no pude registrar el webhook en Zernio (HTTP " + regRes.status + ").")}`);
+      }
+    } catch {
+      return c.redirect(`/admin/conexiones?zernio=error&msg=${encodeURIComponent("API key guardada, pero no pude contactar Zernio para registrar el webhook.")}`);
+    }
+  }
+
   return c.redirect("/admin/conexiones?zernio=saved");
 });
 

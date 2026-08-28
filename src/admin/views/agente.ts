@@ -141,7 +141,7 @@ async function loadAgenteData(env: Env): Promise<AgenteData> {
   );
   // Every channel with credentials configured appears in the canvas, even at
   // zero traffic — the owner must SEE what their bot is connected to.
-  for (const cfg of configuredChannels(env)) {
+  for (const cfg of await configuredChannels(env)) {
     if (!channels.some((c) => c.channel === cfg.id)) {
       channels.push({ channel: cfg.id, convs: 0, last: null });
     }

@@ -124,7 +124,7 @@ function channelStatuses(env: Env, zernioCreds: ZernioCredentials, telegramToken
         !has(zernioCreds.webhookSecret)
           ? "Sin ZERNIO_WEBHOOK_SECRET el webhook acepta todo (fail-open). Recomendado: ponlo para validar la firma."
           : undefined,
-      howTo: "zernio.com → copia tu API key y pégala aquí. Con eso el canal queda conectado; opcionalmente registra el webhook de abajo (eventos message.received + comment.received) y pon el webhook secret si quieres validar la firma.",
+      howTo: "zernio.com → copia tu API key y pégala aquí. El canal queda conectado y su webhook se registra automáticamente (message.received + comment.received); el webhook secret es opcional para validar la firma.",
     },
   ];
 }
@@ -324,7 +324,7 @@ export async function renderConexiones(
   const savedBanner = opts.savedKind === "telegram"
     ? `<div style="border:1px solid var(--ok);background:rgba(127,183,126,.1);color:var(--ok);padding:10px 14px;font-size:12.5px;font-weight:600">✓ Telegram conectado: webhook registrado automáticamente. Envía un mensaje a tu bot para probarlo.</div>`
     : opts.savedKind === "zernio"
-      ? `<div style="border:1px solid var(--ok);background:rgba(127,183,126,.1);color:var(--ok);padding:10px 14px;font-size:12.5px;font-weight:600">✓ Conexión guardada. Registra la URL del webhook en el proveedor para terminar.</div>`
+      ? `<div style="border:1px solid var(--ok);background:rgba(127,183,126,.1);color:var(--ok);padding:10px 14px;font-size:12.5px;font-weight:600">✓ Zernio conectado: webhook registrado automáticamente (message.received + comment.received). Los comentarios/DMs ya deberían fluir.</div>`
       : "";
   const errorBanner = opts.error
     ? `<div style="border:1px solid var(--danger,#e0654d);background:rgba(224,101,77,.1);color:var(--danger,#e0654d);padding:10px 14px;font-size:12.5px;font-weight:600">✕ ${esc(opts.error)}</div>`
