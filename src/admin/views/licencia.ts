@@ -5,6 +5,7 @@ import { Db } from "../../db/client";
 import { SettingsRepo, SETTING_KEYS } from "../../db/settings";
 import { verifyLicense } from "../../license";
 import { FREE_LIMITS } from "../../limits";
+import { PAID_MODULES, unlockedModules } from "../../modules";
 
 function esc(s: string): string {
   return s.replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]!));
@@ -48,6 +49,32 @@ export async function renderLicencia(env: Env, msg?: string, isError?: boolean):
     .map(([k, v]) => `<div style="display:flex;justify-content:space-between;border:1px solid var(--line);background:var(--panel2);padding:7px 10px;font-size:12px"><span class="text-muted">${esc(k)}</span><span class="font-mono text-cream">${esc(v)}</span></div>`)
     .join("");
 
+  // ── Módulos de pago (Forja+ a la carta) ──────────────────────────────────
+  const mods = await unlockedModules(env);
+  const moduleRows = PAID_MODULES.map((m) => {
+    const on = mods.has(m.id);
+    return `<div style="display:flex;align-items:flex-start;gap:12px;border:1px solid ${on ? "rgba(127,183,126,.4)" : "var(--line)"};background:var(--panel2);padding:11px 12px">
+      <span style="font-size:14px;flex:none;margin-top:1px">${on ? "🔓" : "🔒"}</span>
+      <div style="min-width:0;flex:1">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span class="text-[13px] font-semibold text-cream">${esc(m.nombre)}</span>
+          <span class="text-[9px] tracking-wide border px-1.5" style="color:var(--dim);border-color:var(--line)">${m.tipo === "pago_unico" ? "PAGO ÚNICO" : "MEMBRESÍA"}</span>
+          ${on ? `<span class="text-[9px] tracking-wide border px-1.5" style="color:var(--ok);border-color:var(--ok)">ACTIVO</span>` : `<span class="text-[9px] tracking-wide border px-1.5" style="color:var(--accent2);border-color:var(--accent2)">BLOQUEADO</span>`}
+        </div>
+        <p class="text-dim text-[11.5px]" style="margin:3px 0 0">${esc(m.descripcion)}</p>
+      </div>
+    </div>`;
+  }).join("");
+
+  const modulesCard = `
+    <div class="bg-panel border" style="padding:18px 20px;display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;flex-direction:column;gap:2px">
+        <h3 class="font-display font-semibold text-[13.5px] text-cream">Módulos de pago (a la carta)</h3>
+        <p class="text-muted text-[12px]">Features premium vendibles por separado. Un código Pro sin módulos activa TODO (licencia completa); un código con módulos activa solo los incluidos. ${payload?.modules ? `Tu código actual incluye: <span class="font-mono">${esc(payload.modules.join(", "))}</span>.` : ""}</p>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px">${moduleRows}</div>
+    </div>`;
+
   const body = `
     <div style="display:flex;flex-direction:column;gap:18px">
       <div style="display:flex;flex-direction:column;gap:2px">
@@ -67,6 +94,7 @@ export async function renderLicencia(env: Env, msg?: string, isError?: boolean):
           </div>
         </form>
       </div>
+      ${modulesCard}
       <div class="bg-panel border" style="padding:18px 20px;display:flex;flex-direction:column;gap:10px">
         <h3 class="font-display font-semibold text-[13.5px] text-cream">Límites del plan gratis</h3>
         <div style="display:flex;flex-direction:column;gap:6px">${limitsList}</div>

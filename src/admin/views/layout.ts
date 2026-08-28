@@ -9,7 +9,7 @@
 // breadcrumb and page title are derived here.
 
 import type { Env } from "../../env";
-import { isProUnlocked, PRO_ONLY_TABS } from "../../config";
+import { isProUnlocked, PRO_ONLY_TABS, isTabAllowed } from "../../config";
 import { getNiche } from "../../niches";
 import type { NichePack } from "../../niches";
 
@@ -297,8 +297,7 @@ function applyNiche(item: Item, niche: NichePack | null): Item {
 // SVG inline para no depender de lucide en el brand mark.
 const K_MARK = `<svg width="18" height="18" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M11 23V9h2.5l5 7.5 5-7.5H26v14h-3V15l-4.5 6.8L13 15v8h-2z" fill="var(--accent)"/><circle cx="23" cy="9" r="2" fill="var(--accent-2)"/></svg>`;
 
-function sidebar(activeTab: string, pro: boolean, niche: NichePack | null): string {
-  const locked = (id: string) => !pro && (PRO_ONLY_TABS as readonly string[]).includes(id);
+function sidebar(activeTab: string, locked: (id: string) => boolean, niche: NichePack | null, tierLabel: string): string {
   const sections = NAV.map((sec) => {
     const hasActive = sec.items.some((i) => i.id === activeTab);
     const labelColor = hasActive ? "var(--accent)" : "var(--dim)";
@@ -334,7 +333,7 @@ function sidebar(activeTab: string, pro: boolean, niche: NichePack | null): stri
         </div>
         <div style="line-height:1.05">
           <div style="font-family:'Space Grotesk';font-weight:700;font-size:15px;letter-spacing:-.02em">Kooni</div>
-          <div style="font-size:9.5px;letter-spacing:.22em;color:var(--dim);text-transform:uppercase">Panel · ${pro ? "Pro" : "Free"}</div>
+          <div style="font-size:9.5px;letter-spacing:.22em;color:var(--dim);text-transform:uppercase">Panel · ${tierLabel}</div>
         </div>
       </div>
     </div>
@@ -354,9 +353,16 @@ function sidebar(activeTab: string, pro: boolean, niche: NichePack | null): stri
 }
 
 export async function layout(opts: { title: string; activeTab: string; body: string; env?: Env }): Promise<string> {
-  // Tier: si se pasa env, el nav Pro se bloquea para free. Sin env (ej. notFound)
-  // se asume Pro para no ocultar nada por accidente.
-  const pro = opts.env ? await isProUnlocked(opts.env) : true;
+  // Tabs Pro: se bloquean según su MÓDULO (licencia con modules, tier pro o
+  // override del dueño). Sin env (ej. notFound) se asume todo abierto.
+  const lockedTabs = new Set<string>();
+  if (opts.env) {
+    for (const t of PRO_ONLY_TABS) {
+      if (!(await isTabAllowed(opts.env, t))) lockedTabs.add(t);
+    }
+  }
+  const lockedSync = (id: string) => lockedTabs.has(id);
+  const tierLabel = opts.env ? ((await isProUnlocked(opts.env)) ? "Pro" : "Free") : "Pro";
   const niche = opts.env ? getNiche(opts.env) : null;
   const section = NAV.find((s) => s.items.some((i) => i.id === opts.activeTab)) ?? NAV[0];
   const item = applyNiche(section.items.find((i) => i.id === opts.activeTab) ?? section.items[0], niche);
@@ -372,7 +378,7 @@ export async function layout(opts: { title: string; activeTab: string; body: str
 </head>
 <body class="scanlines">
   <div class="shell">
-    ${sidebar(opts.activeTab, pro, niche)}
+    ${sidebar(opts.activeTab, lockedSync, niche, tierLabel)}
     <div style="display:flex;flex-direction:column;min-width:0">
       <header style="position:sticky;top:0;z-index:30;background:rgba(13,18,24,.9);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);padding:14px 26px;display:flex;align-items:center;gap:20px">
         <div style="min-width:0">

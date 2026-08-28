@@ -11,7 +11,7 @@ import type { Env } from "../../src/env";
 afterEach(() => vi.restoreAllMocks());
 
 /** Stub D1 en memoria para las consultas del reporte. */
-function makeDbStub(overrides: Partial<Record<string, unknown>> = {}) {
+function makeDbStub(overrides: Partial<Record<string, unknown>> = {}, settings: Record<string, string> = {}) {
   const data = {
     clientes: { n: 14 },
     leads: { n: 4 },
@@ -35,7 +35,11 @@ function makeDbStub(overrides: Partial<Record<string, unknown>> = {}) {
     [/SELECT topics FROM conversation_insights/, data.topics],
   ];
   const self = {
-    async first<T = unknown>(sql: string): Promise<T | null> {
+    async first<T = unknown>(sql: string, params: unknown[] = []): Promise<T | null> {
+      if (/SELECT value FROM settings WHERE key = \?/.test(sql)) {
+        const v = settings[params[0] as string];
+        return (v !== undefined ? { value: v } : null) as T;
+      }
       const hit = resultsBySql.find(([re]) => re.test(sql));
       return (hit ? hit[1] : null) as T;
     },
@@ -53,7 +57,7 @@ function makeDbStub(overrides: Partial<Record<string, unknown>> = {}) {
         bind(..._params: unknown[]) {
           return {
             run: () => self.run(),
-            first: () => self.first(sql),
+            first: () => self.first(sql, _params),
             all: () => self.all(sql).then((rows) => ({ results: rows })),
           };
         },
@@ -67,8 +71,15 @@ function envWith(db: unknown, extra: Partial<Env> = {}): Env {
     DB: db as never,
     BUSINESS_NAME: "Salón Marcela",
     BOT_LANGUAGE: "es",
+    LICENSE_MASTER_KEY: "test-master",
+    BOT_INSTANCE_ID: "abc123",
     ...extra,
   } as unknown as Env;
+}
+
+/** Env con el módulo nightly_report desbloqueado (override del dueño). */
+function envWithReportUnlocked(extra: Partial<Env> = {}): Env {
+  return envWith(makeDbStub({}, { module_unlocks: JSON.stringify(["nightly_report"]) }), extra);
 }
 
 describe("buildNightlyReportData", () => {
@@ -146,13 +157,8 @@ describe("sendNightlyReport / sendReportTest", () => {
   it("envía por Telegram cuando está activado", async () => {
     const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => new Response(JSON.stringify({ ok: true }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
-    const db = makeDbStub();
-    // settings: enabled + canal telegram → el stub de first devuelve null para
-    // settings (no hay tabla), así que forzamos el default por env? No: los
-    // defaults vienen de la tabla settings. Usamos sendReportTest (fuerza envío)
-    // y validamos el fetch a Telegram.
     const res = await sendReportTest(
-      envWith(db, { TELEGRAM_BOT_TOKEN: "token123", OWNER_TELEGRAM_CHAT_ID: "12345" }),
+      envWithReportUnlocked({ TELEGRAM_BOT_TOKEN: "token123", OWNER_TELEGRAM_CHAT_ID: "12345" }),
       1_800_000_000_000,
     );
     expect(res.sentTo).toContain("telegram");
@@ -166,8 +172,20 @@ describe("sendNightlyReport / sendReportTest", () => {
   it("no envía por Telegram sin chat del dueño", async () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
-    const res = await sendReportTest(envWith(makeDbStub(), {}), 1_800_000_000_000);
+    const res = await sendReportTest(envWithReportUnlocked({}), 1_800_000_000_000);
     expect(res.sentTo).not.toContain("telegram");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("no envía si el módulo nightly_report está bloqueado (gate de pago)", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const res = await sendReportTest(
+      envWith(makeDbStub({}), { TELEGRAM_BOT_TOKEN: "t", OWNER_TELEGRAM_CHAT_ID: "1" }),
+      1_800_000_000_000,
+    );
+    expect(res.reason).toBe("module_locked");
+    expect(res.sentTo).toHaveLength(0);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });

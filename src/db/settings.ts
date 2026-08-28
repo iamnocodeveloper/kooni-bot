@@ -47,6 +47,9 @@ export const SETTING_KEYS = {
   // /admin/config → "Reporte nocturno".
   nightlyReportEnabled: "nightly_report_enabled", // "0" | "1"
   nightlyReportChannel: "nightly_report_channel", // telegram | email | both
+  // Módulos de pago desbloqueados por override del DUEÑO de la plataforma
+  // (JSON array de ids; se setea directo en D1 — no aparece en el panel).
+  moduleUnlocks: "module_unlocks",
 } as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[keyof typeof SETTING_KEYS];

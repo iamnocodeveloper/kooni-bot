@@ -36,6 +36,27 @@ export const PRO_ONLY_TOOLS = [
 // campañas — esos desbloquean con la comunidad.
 export const PRO_ONLY_TABS = ["insights", "stats", "costs", "mejoras", "campanas"] as const;
 
+// Cada tab Pro se vende como un MÓDULO (ver src/modules.ts). Un código de
+// licencia puede incluir módulos específicos; la licencia legada (sin modules)
+// y el tier pro los desbloquean todos.
+export const TAB_MODULE: Record<(typeof PRO_ONLY_TABS)[number], string> = {
+  insights: "analista",
+  stats: "metricas",
+  costs: "costos",
+  mejoras: "mejoras",
+  campanas: "campanas",
+};
+
+/**
+ * ¿El tab está permitido? Los tabs Pro dependen de su módulo (o de la licencia
+ * completa). Los tabs normales siempre están permitidos.
+ */
+export async function isTabAllowed(env: Env, tab: string): Promise<boolean> {
+  if (!(PRO_ONLY_TABS as readonly string[]).includes(tab)) return true;
+  const { isModuleUnlocked } = await import("./modules");
+  return isModuleUnlocked(env, TAB_MODULE[tab as keyof typeof TAB_MODULE]);
+}
+
 export function isToolAvailable(env: Env, toolName: string): boolean {
   if (!PRO_ONLY_TOOLS.includes(toolName as (typeof PRO_ONLY_TOOLS)[number])) return true;
   return isPro(env);

@@ -23,6 +23,9 @@ export interface LicensePayload {
   expiry?: number; // epoch_ms (monthly)
   bot?: string; // slug del bot (opcional)
   inst?: string; // uid de 6 chars de la instalación (opcional; liga el código a UNA instalación)
+  // Módulos de pago incluidos (ej. ["nightly_report", "analista"]).
+  // AUSENTE = licencia legada → Pro completo (todos los módulos).
+  modules?: string[];
 }
 
 export function encodeLicensePayload(payload: LicensePayload): string {

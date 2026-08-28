@@ -814,6 +814,10 @@ adminApp.get("/config", async (c) => {
 // resultado en la query para el banner de la sección.
 adminApp.post("/config/report-test", async (c) => {
   try {
+    const { isModuleUnlocked } = await import("../modules");
+    if (!(await isModuleUnlocked(c.env, "nightly_report"))) {
+      return c.redirect("/admin/config?report=" + encodeURIComponent("err:El módulo Reporte nocturno no está activado en esta instalación. Actívalo en la pestaña Licencia o pídelo a tu proveedor."));
+    }
     const { sendReportTest } = await import("../reports/nightly");
     const res = await sendReportTest(c.env);
     if (res.sentTo.length === 0) {
