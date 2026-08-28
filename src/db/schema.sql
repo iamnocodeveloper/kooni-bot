@@ -254,6 +254,21 @@ CREATE TABLE IF NOT EXISTS auto_rule_clicks (
 );
 CREATE INDEX IF NOT EXISTS idx_auto_rule_clicks_slug ON auto_rule_clicks(slug);
 
+-- Follow gate pendiente: al enviar el DM "Sígueme" con botón postback, Zernio NO
+-- reenvía el payload del botón al presionarlo (manda solo la ETIQUETA + prefijo
+-- "postback_" en platformMessageId). Guardamos aquí el estado para poder
+-- completar la entrega del link cuando el usuario toca "Ya te sigo".
+CREATE TABLE IF NOT EXISTS follow_gate_pending (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  account_id TEXT NOT NULL,
+  commenter_id TEXT NOT NULL,
+  rule_id TEXT NOT NULL,
+  comment_id TEXT,
+  post_id TEXT,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_fg_pending ON follow_gate_pending(account_id, commenter_id);
+
 -- Dedup de comentarios (port OpenReply): Meta permite UNA sola private reply
 -- por comentario, para siempre, a través de TODAS las reglas. Antes de enviar
 -- un DM se chequea si el comment_id ya recibió uno. Se registra el resultado.

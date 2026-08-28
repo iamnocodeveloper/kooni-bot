@@ -220,6 +220,7 @@ const BRAINS = {
   claude: { provider: "anthropic", secret: "ANTHROPIC_API_KEY", label: "Claude" },
   chatgpt: { provider: "openai", secret: "OPENAI_API_KEY", label: "ChatGPT" },
   grok: { provider: "xai", secret: "XAI_API_KEY", label: "Grok" },
+  minimax: { provider: "minimax", secret: "MINIMAX_API_KEY", label: "MiniMax" },
   gateway: { provider: "openai", secret: "OPENAI_API_KEY", label: "Gateway" },
 };
 
@@ -741,7 +742,7 @@ function writeDevVars(dir, answers, kbToken) {
 
 function collectAnswers(flags) {
   const rawBrain = String(flags.cerebro || flags.brain || "").trim().toLowerCase();
-  const brainKey = ({ claude: "claude", anthropic: "claude", chatgpt: "chatgpt", openai: "chatgpt", gpt: "chatgpt", grok: "grok", xai: "grok", gateway: "gateway" })[rawBrain] || null;
+  const brainKey = ({ claude: "claude", anthropic: "claude", chatgpt: "chatgpt", openai: "chatgpt", gpt: "chatgpt", grok: "grok", xai: "grok", minimax: "minimax", gateway: "gateway" })[rawBrain] || null;
   const tone = ({ cercano: "cercano", friendly: "cercano", formal: "formal", divertido: "divertido", playful: "divertido" })[String(flags.tono || "").trim().toLowerCase()] || null;
 
   // Lo que vino por flag se conserva; lo que NO vino queda undefined para que
@@ -793,7 +794,7 @@ async function onboarding(rl, answers, defaultDir) {
   // hace después desde el dashboard. Aquí solo fijamos el default.
   answers.tier = answers.tier || "free";
 
-  const brainKeys = ["claude", "chatgpt", "grok", "gateway"];
+  const brainKeys = ["claude", "chatgpt", "grok", "minimax", "gateway"];
   const brainIdx = await select(rl, t().brainQ, brainKeys.map((k) => ({
     key: k, label: BRAINS[k].label,
     desc: k === "claude" ? t().brainDesc : "",
@@ -1225,7 +1226,7 @@ async function cmdDeploy(flags, rest) {
     try {
       const wt = readFileSync(join(dir, "wrangler.toml"), "utf8");
       const p = (wt.match(/LLM_PROVIDER\s*=\s*"([^"]+)"/) || [])[1] || "anthropic";
-      brainKey = ({ anthropic: "claude", openai: "chatgpt", xai: "grok" })[p] || "claude";
+      brainKey = ({ anthropic: "claude", openai: "chatgpt", xai: "grok", minimax: "minimax" })[p] || "claude";
     } catch {}
     flags.brainKey = brainKey;
     await deployBot(dir, { flags, rl });

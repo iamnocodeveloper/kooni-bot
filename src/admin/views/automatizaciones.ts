@@ -12,9 +12,13 @@ const KIND_LABELS: Record<AutoRuleKind, { title: string; desc: string }> = {
     title: "Comentario → DM privado",
     desc: "Alguien comenta una keyword en tu post → le envías un DM privado (+ botón) y opcionalmente respondes su comentario en público.",
   },
+  comment_dm_public: {
+    title: "Comentario → respuesta pública + DM",
+    desc: "Alguien comenta una keyword → respondes su comentario en público Y le envías un DM privado. Ideal para promocionar y captar a la vez.",
+  },
   comment_reply: {
     title: "Comentario → respuesta pública",
-    desc: "Alguien comenta una keyword → respondes su comentario en público (visible para todos).",
+    desc: "Alguien comenta una keyword → respondes su comentario en público (visible para todos). Sin DM privado.",
   },
   dm_reply: {
     title: "DM → respuesta automática",
@@ -226,7 +230,7 @@ export async function renderAutomatizaciones(env: Env, saved?: boolean, error?: 
                 const color =
                   l.status === "sent" ? "var(--ok)" : l.status === "skipped" ? "var(--warn,#e9ad4f)" : "var(--bad)";
                 const when = new Date(l.createdAt).toLocaleString("es", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
-                const kindLabel = l.kind === "comment_dm" ? "comentario→DM" : l.kind === "comment_reply" ? "comentario→público" : "DM→respuesta";
+                const kindLabel = l.kind === "comment_dm" ? "comentario→DM" : l.kind === "comment_reply" ? "comentario→público" : l.kind === "comment_dm_public" ? "comentario→DM+público" : "DM→respuesta";
                 return `<div style="display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);background:var(--panel2);padding:8px 10px">
                   <span class="font-mono text-[10px]" style="color:${color};border:1px solid ${color};padding:2px 6px;flex:none">${esc(l.status.toUpperCase())}</span>
                   <span style="flex:1;min-width:0">

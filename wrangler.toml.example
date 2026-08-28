@@ -47,7 +47,7 @@ DASHBOARD_BASE_URL = "https://{{BOT_SLUG}}.workers.dev"
 # (las reglas se gestionan en el panel; aquí solo si quieres defaults por env)
 
 # Secrets (wrangler secret put <NAME> — nunca en git):
-#   ANTHROPIC_API_KEY | OPENAI_API_KEY | XAI_API_KEY   — llave de IA (al menos una)
+#   ANTHROPIC_API_KEY | OPENAI_API_KEY | XAI_API_KEY | MINIMAX_API_KEY   — llave de IA (al menos una)
 #   DASHBOARD_PASSWORD          — HTTP Basic Auth del panel (/admin, user: admin)
 #   KB_REINDEX_TOKEN            — protege POST /kb/reindex
 #   TELEGRAM_BOT_TOKEN          — canal Telegram

@@ -67,6 +67,7 @@ interface ZernioMessage {
   attachments?: { type?: string; url?: string }[];
   sender?: { id?: string; name?: string; username?: string };
   sentAt?: string;
+  platformMessageId?: string;
 }
 
 interface ZernioComment {
@@ -116,6 +117,7 @@ function firstUrl(body: { attachments?: { type?: string; url?: string }[] }): { 
 interface AutoDmRule {
   keywords: string[];
   message: string;
+  kind?: string;
   buttonLabel?: string;
   buttonUrl?: string;
   /** Respuesta pública al comentario (opcional). Si va vacío, no se responde en público. */
@@ -140,9 +142,10 @@ async function loadAutoDmRules(env: Env): Promise<AutoDmRule[]> {
     const { AutoRulesRepo } = await import("../db/autoRules");
     const rules = await new AutoRulesRepo(new Db(env.DB)).list({ onlyActive: true });
     const mapped: AutoDmRule[] = rules
-      .filter((r) => r.kind === "comment_dm" || r.kind === "comment_reply")
+      .filter((r) => r.kind === "comment_dm" || r.kind === "comment_reply" || r.kind === "comment_dm_public")
       .map((r) => ({
         ruleId: r.id,
+        kind: r.kind,
         keywords: r.keywords,
         message: r.message,
         buttonLabel: r.buttonLabel,
@@ -237,10 +240,17 @@ async function sendCommentActions(
   }
 
   const dmMessage = renderUsername(matched.message, commenterName);
-  // Respuesta pública: fija (replyToComment) o generada con IA (aiReplyPrompt).
-  let publicReply = matched.replyToComment?.trim()
-    ? renderUsername(matched.replyToComment.trim(), commenterName)
-    : undefined;
+  const kind = matched.kind ?? "comment_dm";
+  const publicOnly = kind === "comment_reply";
+  // Respuesta pública: para comment_reply el texto ES el campo message (público
+  // sin DM); para comment_dm / comment_dm_public viene de replyToComment.
+  let publicReply = publicOnly
+    ? (matched.message ?? "").trim()
+      ? renderUsername(matched.message, commenterName)
+      : undefined
+    : matched.replyToComment?.trim()
+      ? renderUsername(matched.replyToComment.trim(), commenterName)
+      : undefined;
   if (!publicReply && matched.aiReplyPrompt?.trim()) {
     try {
       const { generateAiPublicReply } = await import("../aiReply");
@@ -263,7 +273,7 @@ async function sendCommentActions(
   // postback (followcheck) en vez del link; cuando toque el botón, el webhook
   // message.received traerá el payload y entregaremos el link (ver autoReplyOnDm).
   let followGated = false;
-  if (matched.requireFollow && commenterId) {
+  if (!publicOnly && matched.requireFollow && commenterId) {
     try {
       const followRes = await fetch(
         `${base}/v1/accounts/${encodeURIComponent(accountId)}/follow-status/${encodeURIComponent(commenterId)}`,
@@ -309,7 +319,7 @@ async function sendCommentActions(
 
     // Rate limit por cuenta (Fase 5): si el DM NO se ha enviado aún, reservamos
     // slot. Si ya se envió, no gastamos cupo (solo reintentamos la pública).
-    if (!dmAlreadySent && !(await logs.reserveDmSlot(accountId))) {
+    if (!publicOnly && !dmAlreadySent && !(await logs.reserveDmSlot(accountId))) {
       const { used, windowStart } = await logs.currentHourUsage(accountId);
       console.warn(`[zernio] rate limit: cuenta ${accountId} agotó su cupo (${used}/hora) — se salta DM`);
       await logs.log({
@@ -327,7 +337,7 @@ async function sendCommentActions(
     }
 
     // Límite free de DMs automáticos / mes (solo si aún no se envió el DM).
-    if (!dmAlreadySent) {
+    if (!publicOnly && !dmAlreadySent) {
       try {
         const { checkLimit } = await import("../limits");
         const dmCheck = await checkLimit(env, "autoDmsThisMonth");
@@ -354,7 +364,11 @@ async function sendCommentActions(
     console.warn("[zernio] dedup/rate check falló (se procede sin control):", e);
   }
 
-  if (followGated) {
+  if (publicOnly) {
+    // comment_reply: solo respuesta pública — sin DM ni follow gate.
+    dmSent = false;
+    dmSkipped = false;
+  } else if (followGated) {
     // DM de follow gate: NO entrega el link; botón postback "Ya te sigo" con
     // payload followcheck:<ruleId>:<commentId>. Al tocarlo, llega por webhook.
     const prompt =
@@ -393,6 +407,18 @@ async function sendCommentActions(
         } else {
           dmSent = true;
           console.log(`[zernio] follow-gate DM enviado (link pendiente): ${matched.keywords.join(",")}`);
+          // Zernio NO reenvía el payload del botón al presionarlo (manda la
+          // etiqueta + prefijo postback_); guardamos el estado para completar
+          // la entrega cuando el usuario toque "Ya te sigo".
+          try {
+            const { Db } = await import("../db/client");
+            await new Db(env.DB).run(
+              `INSERT INTO follow_gate_pending (account_id, commenter_id, rule_id, comment_id, post_id, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+              [accountId, commenterId ?? "", matched.ruleId ?? "", commentId, postId, Date.now()],
+            );
+          } catch (e) {
+            console.warn("[zernio] no se pudo guardar el follow-gate pendiente:", e);
+          }
         }
       } catch (e) {
         dmError = String((e as Error)?.message ?? e);
@@ -650,21 +676,43 @@ async function autoReplyOnDm(body: ZernioWebhookBody, env: Env): Promise<boolean
   const conv = body.conversation;
   const account = body.account;
   if (!m || !conv?.id || !account?.accountId) return false;
+  // Zernio marca los botones presionados con prefijo "postback_" en
+  // platformMessageId (el payload del botón no viaja en el texto).
+  const isPostback = typeof m.platformMessageId === "string" && m.platformMessageId.startsWith("postback_");
   const text = (m.text ?? "").trim();
-  if (!text) return false;
+  if (!text && !isPostback) return false;
 
   const apiKey = (await resolveZernioCredentials(env)).apiKey;
   const base = env.ZERNIO_API_BASE_URL ?? DEFAULT_BASE;
   if (!apiKey) return false;
 
-  // ── Postback del follow gate (port OpenReply) ────────────────────────────
-  // El botón "Ya te sigo" del DM de follow gate trae payload
-  // `followcheck:<ruleId>:<commentId>`. Al tocarlo, llega como mensaje
-  // entrante: verificamos el follow de nuevo y, si ya sigue, entregamos el
-  // link (mensaje real de la regla + botón trackeado).
+  // ── Postback del follow gate ─────────────────────────────────────────────
+  // Al tocar "Ya te sigo", Zernio NO reenvía el payload followcheck:<rule>:<comment>
+  // (manda el TEXTO del botón + prefijo postback_). El estado se guardó al enviar
+  // el DM de follow gate (tabla follow_gate_pending); lo buscamos por cuenta +
+  // comentarista. El regex sigue como fallback (algunos canales sí envían el
+  // payload como texto).
   const fgMatch = text.match(/^followcheck:([^:]*):(.*)$/);
-  if (fgMatch) {
-    const ruleId = fgMatch[1];
+  let fgRuleId = fgMatch ? fgMatch[1] : "";
+  let fgCommentId = fgMatch ? fgMatch[2] : "";
+  if (!fgMatch && (isPostback || /ya te sigo|sígueme|sigueme|follow/i.test(text))) {
+    try {
+      const { Db } = await import("../db/client");
+      const row = await new Db(env.DB).first<{ rule_id: string; comment_id: string }>(
+        `SELECT rule_id, comment_id FROM follow_gate_pending WHERE account_id = ? AND commenter_id = ? ORDER BY id DESC LIMIT 1`,
+        [account.accountId, m.sender?.id ?? ""],
+      );
+      if (row) {
+        fgRuleId = row.rule_id;
+        fgCommentId = row.comment_id ?? "";
+      }
+    } catch (e) {
+      console.warn("[zernio] follow-gate pending lookup:", e);
+    }
+  }
+  if (fgMatch || fgRuleId) {
+    const ruleId = fgRuleId;
+    if (!ruleId) return true;
     try {
       const { Db } = await import("../db/client");
       const { AutoRulesRepo } = await import("../db/autoRules");
@@ -686,6 +734,15 @@ async function autoReplyOnDm(body: ZernioWebhookBody, env: Env): Promise<boolean
         console.warn("[zernio] followcheck re-check error:", e);
       }
 
+      // Limpiar el pendiente del follow gate (ya se procesó: entregamos o re-pedimos).
+      try {
+        const { Db } = await import("../db/client");
+        await new Db(env.DB).run(
+          `DELETE FROM follow_gate_pending WHERE account_id = ? AND commenter_id = ?`,
+          [account.accountId, m.sender?.id ?? ""],
+        );
+      } catch { /* best-effort */ }
+
       if (!isFollower) {
         // Aún no sigue → re-pedir con el mismo botón.
         const prompt = renderUsername(
@@ -693,7 +750,7 @@ async function autoReplyOnDm(body: ZernioWebhookBody, env: Env): Promise<boolean
           m.sender?.name ?? m.sender?.username,
         );
         const followBtn = [
-          { type: "postback", title: (rule.followButtonLabel || "Ya te sigo").slice(0, 20), payload: `followcheck:${ruleId}:${fgMatch[2]}` },
+          { type: "postback", title: (rule.followButtonLabel || "Ya te sigo").slice(0, 20), payload: `followcheck:${ruleId}:${fgCommentId}` },
         ];
         await fetch(`${base}/v1/inbox/conversations/${encodeURIComponent(conv.id)}/messages`, {
           method: "POST",
@@ -733,7 +790,7 @@ async function autoReplyOnDm(body: ZernioWebhookBody, env: Env): Promise<boolean
           ruleId,
           kind: "comment_dm",
           platform: account.platform,
-          target: fgMatch[2] || conv.id,
+          target: fgCommentId || conv.id,
           username: m.sender?.name ?? m.sender?.username,
           message: dm,
           status: "sent",

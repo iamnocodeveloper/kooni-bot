@@ -240,10 +240,20 @@ describe("follow gate (require_follow)", () => {
     const processed: any[] = [];
     const logs: any[] = [];
     const rates: any[] = [];
+    const pending: any[] = [];
     const self = {
       async run(sql: string, params: unknown[] = []) {
         if (/INSERT INTO processed_comments/.test(sql)) {
           processed.push({ comment_id: params[0], status: params[2] });
+          return { meta: { changes: 1 } };
+        }
+        if (/INSERT INTO follow_gate_pending/.test(sql)) {
+          pending.push({ account_id: params[0], commenter_id: params[1], rule_id: params[2], comment_id: params[3], post_id: params[4] });
+          return { meta: { changes: 1 } };
+        }
+        if (/DELETE FROM follow_gate_pending/.test(sql)) {
+          const idx = pending.findIndex((p) => p.account_id === params[0] && p.commenter_id === params[1]);
+          if (idx >= 0) pending.splice(idx, 1);
           return { meta: { changes: 1 } };
         }
         if (/INSERT INTO dm_logs/.test(sql)) {
@@ -274,6 +284,10 @@ describe("follow gate (require_follow)", () => {
         if (/SELECT count FROM dm_rate_limits/.test(sql)) {
           const row = rates.find((r) => r.account_id === params[0] && r.window_start === params[1]);
           return { count: row?.count ?? 0 } as T;
+        }
+        if (/SELECT rule_id, comment_id FROM follow_gate_pending/.test(sql)) {
+          const p = pending.find((x) => x.account_id === params[0] && x.commenter_id === params[1]);
+          return (p ? { rule_id: p.rule_id, comment_id: p.comment_id } : null) as T;
         }
         if (/SELECT \* FROM auto_rules WHERE id = \?/.test(sql)) {
           return rule as T;
@@ -318,6 +332,71 @@ describe("follow gate (require_follow)", () => {
     created_at: Date.now(),
     updated_at: Date.now(),
   };
+
+  it("comment_reply: responde solo en público, sin DM privado", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (String(url).includes("/v1/accounts")) {
+        return new Response(JSON.stringify({ accounts: [{ _id: "acct_1", platform: "instagram", username: "mi_negocio" }] }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ success: true }), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const env = {
+      ...envBase,
+      DB: makeDbStub({
+        id: "rule_pub", kind: "comment_reply", platform: "instagram",
+        keywords: JSON.stringify(["precio"]),
+        message: "¡Gracias por tu comentario! Te escribo por privado con más info ✨",
+        reply_to_comment: null, is_active: 1, whole_word_match: 1, require_follow: 0,
+        button_label: null, button_url: null, ai_reply_prompt: null,
+        follow_prompt_message: null, follow_button_label: null, created_at: Date.now(), updated_at: Date.now(),
+      }),
+    } as unknown as Env;
+    await parseZernioEvents(
+      { ...commentPayload, comment: { ...commentPayload.comment, text: "me interesa el precio" } },
+      env,
+    );
+    const calls = fetchMock.mock.calls as unknown as [string, RequestInit][];
+    const dm = calls.find((c) => String(c[0]).includes("/private-reply"));
+    expect(dm).toBeUndefined(); // comment_reply NO manda DM
+    const pub = calls.find((c) => /\/v1\/inbox\/comments\/post_1$/.test(String(c[0])));
+    expect(pub).toBeTruthy(); // pero sí responde en público
+  });
+
+  it("comment_dm_public: responde en público Y envía DM privado", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (String(url).includes("/v1/accounts")) {
+        return new Response(JSON.stringify({ accounts: [{ _id: "acct_1", platform: "instagram", username: "mi_negocio" }] }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ success: true }), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const env = {
+      ...envBase,
+      DB: makeDbStub({
+        id: "rule_both", kind: "comment_dm_public", platform: "instagram",
+        keywords: JSON.stringify(["precio"]),
+        message: "Te escribí por privado con la info 👇",
+        reply_to_comment: "¡Gracias por tu comentario! Mira tu privado ✨",
+        is_active: 1, whole_word_match: 1, require_follow: 0,
+        button_label: null, button_url: null, ai_reply_prompt: null,
+        follow_prompt_message: null, follow_button_label: null, created_at: Date.now(), updated_at: Date.now(),
+      }),
+    } as unknown as Env;
+    await parseZernioEvents(
+      { ...commentPayload, comment: { ...commentPayload.comment, text: "me interesa el precio" } },
+      env,
+    );
+    const calls = fetchMock.mock.calls as unknown as [string, RequestInit][];
+    const dm = calls.find((c) => String(c[0]).includes("/private-reply"));
+    expect(dm).toBeTruthy();
+    const dmBody = JSON.parse(((dm as unknown as [string, RequestInit])[1]).body as string);
+    expect(dmBody.message).toBe("Te escribí por privado con la info 👇");
+    const pub = calls.find((c) => /\/v1\/inbox\/comments\/post_1$/.test(String(c[0])));
+    expect(pub).toBeTruthy();
+    const pubBody = JSON.parse(((pub as unknown as [string, RequestInit])[1]).body as string);
+    expect(pubBody.message).toBe("¡Gracias por tu comentario! Mira tu privado ✨");
+  });
 
   it("si NO sigue: envía DM de follow gate con botón postback (no el link)", async () => {
     const fetchMock = vi.fn(async (url: string) => {
@@ -416,6 +495,60 @@ describe("follow gate (require_follow)", () => {
     const calls = fetchMock.mock.calls as unknown as [string, RequestInit][];
     // follow-status + envío del link
     const sendCall = calls.find((c) => String(c[0]).includes("/conversations/"));
+    expect(sendCall).toBeTruthy();
+    const body = JSON.parse((sendCall![1] as RequestInit).body as string);
+    expect(body.message).toBe("Aquí tienes el link:");
+  });
+
+  it("postback 'Ya te sigo' (platformMessageId postback_) completa el follow gate", async () => {
+    let followStatusCalls = 0;
+    const fetchMock = vi.fn(async (url: string) => {
+      if (String(url).includes("/follow-status/")) {
+        followStatusCalls++;
+        // 1ª llamada (comentario): no sigue → follow gate DM · 2ª (postback): ya sigue → entrega link
+        return new Response(JSON.stringify({ isFollower: followStatusCalls > 1 }), { status: 200 });
+      }
+      if (String(url).includes("/v1/accounts")) {
+        return new Response(JSON.stringify({ accounts: [{ _id: "acct_1", platform: "instagram", username: "mi_negocio" }] }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const env = {
+      ZERNIO_API_KEY: "zkey_test",
+      DB: makeDbStub(fgRule),
+      DASHBOARD_BASE_URL: "https://kooni.app",
+    } as unknown as Env;
+
+    // 1) comentario → no sigue → DM de follow gate con botón (guarda pendiente)
+    await parseZernioEvents(
+      {
+        event: "comment.received",
+        comment: { id: "cm_fg", postId: "post_1", platformPostId: "pp_1", text: "quiero el link", author: { id: "usr_fg", username: "pepe" } },
+        account: { id: "acct_1", accountId: "acct_1", platform: "instagram", username: "mi_negocio" },
+      },
+      env,
+    );
+
+    // 2) el usuario toca "Ya te sigo": Zernio manda la ETIQUETA como texto y
+    //    prefijo postback_ en platformMessageId (el payload NO viaja).
+    const out = await parseZernioEvents(
+      {
+        event: "message.received",
+        message: {
+          id: "m_pb", conversationId: "conv_fg", platform: "instagram", direction: "incoming",
+          text: "Ya te sigo", platformMessageId: "postback_1787887131308_1795756625172551",
+          sender: { id: "usr_fg", name: "pepe" },
+        },
+        conversation: { id: "conv_fg" },
+        account: { id: "acct_1", accountId: "acct_1", platform: "instagram" },
+      },
+      env,
+    );
+    expect(out).toHaveLength(0); // no entra al agente
+    const calls = fetchMock.mock.calls as unknown as [string, RequestInit][];
+    // el bot debe entregar el link en la conversación del postback
+    const sendCall = calls.find((c) => String(c[0]).includes("/conversations/conv_fg/messages"));
     expect(sendCall).toBeTruthy();
     const body = JSON.parse((sendCall![1] as RequestInit).body as string);
     expect(body.message).toBe("Aquí tienes el link:");

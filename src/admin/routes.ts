@@ -867,7 +867,7 @@ adminApp.post("/config", async (c) => {
     const v = String(provRaw).trim().toLowerCase();
     await repo.set(
       SETTING_KEYS.llmProvider,
-      v === "anthropic" || v === "openai" || v === "xai" ? v : "",
+      v === "anthropic" || v === "openai" || v === "xai" || v === "minimax" ? v : "",
     );
   }
   const modelRaw = form.get(SETTING_KEYS.llmModel);

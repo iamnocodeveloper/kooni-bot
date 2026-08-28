@@ -1,7 +1,7 @@
 import { Db } from "./client";
 
 /** Tipo de regla de automatización. */
-export type AutoRuleKind = "comment_dm" | "comment_reply" | "dm_reply";
+export type AutoRuleKind = "comment_dm" | "comment_reply" | "comment_dm_public" | "dm_reply";
 
 /**
  * Regla de automatización (flujo) configurada desde el panel /admin/flujos.

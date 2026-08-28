@@ -112,6 +112,7 @@ function renderLlmSection(settings: Record<string, string>, llmTest?: string): s
     { v: "anthropic", l: "Claude (Anthropic)" },
     { v: "openai", l: "ChatGPT (OpenAI)" },
     { v: "xai", l: "Grok (xAI)" },
+    { v: "minimax", l: "MiniMax" },
   ]
     .map((o) => `<option value="${o.v}" ${provider === o.v ? "selected" : ""}>${o.l}</option>`)
     .join("");
@@ -123,6 +124,9 @@ function renderLlmSection(settings: Record<string, string>, llmTest?: string): s
     .map((m) => `<option value="${esc(m.id)}" ${model === m.id ? "selected" : ""}>${esc(m.label)}</option>`)
     .join("");
   const xaiOpts = CURATED_MODELS.filter((m) => m.provider === "xai")
+    .map((m) => `<option value="${esc(m.id)}" ${model === m.id ? "selected" : ""}>${esc(m.label)}</option>`)
+    .join("");
+  const minimaxOpts = CURATED_MODELS.filter((m) => m.provider === "minimax")
     .map((m) => `<option value="${esc(m.id)}" ${model === m.id ? "selected" : ""}>${esc(m.label)}</option>`)
     .join("");
 
@@ -152,6 +156,7 @@ function renderLlmSection(settings: Record<string, string>, llmTest?: string): s
             <optgroup label="Claude (Anthropic)">${anthropicOpts}</optgroup>
             <optgroup label="ChatGPT (OpenAI)">${openaiOpts}</optgroup>
             <optgroup label="Grok (xAI)">${xaiOpts}</optgroup>
+            <optgroup label="MiniMax">${minimaxOpts}</optgroup>
           </select>
         </div>
       </div>

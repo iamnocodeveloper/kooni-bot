@@ -12,7 +12,7 @@ import type { Tier } from "../upgrade/modelSelector";
  * provider maps a tier to a concrete model id (env-overridable). Embeddings and
  * voice transcription stay on Cloudflare Workers AI regardless of this setting.
  */
-export type LlmProvider = "anthropic" | "openai" | "xai";
+export type LlmProvider = "anthropic" | "openai" | "xai" | "minimax";
 
 const ANTHROPIC_DEFAULTS: Record<Tier, string> = {
   fast: "claude-haiku-4-5-20251001",
@@ -27,6 +27,11 @@ const OPENAI_DEFAULTS: Record<Tier, string> = {
 const XAI_DEFAULTS: Record<Tier, string> = {
   fast: "grok-4-fast-non-reasoning",
   smart: "grok-4",
+};
+
+const MINIMAX_DEFAULTS: Record<Tier, string> = {
+  fast: "abab6.5s-chat",
+  smart: "MiniMax-Text-01",
 };
 
 /**
@@ -53,6 +58,8 @@ export const CURATED_MODELS: { id: string; label: string; provider: LlmProvider 
   { id: "grok-4-fast-non-reasoning", label: "Grok 4 Fast · rápido y barato", provider: "xai" },
   { id: "grok-3-mini", label: "Grok 3 mini · económico", provider: "xai" },
   { id: "grok-4", label: "Grok 4 · más capaz", provider: "xai" },
+  { id: "abab6.5s-chat", label: "MiniMax abab6.5s · económico", provider: "minimax" },
+  { id: "MiniMax-Text-01", label: "MiniMax Text-01 · capaz y barato", provider: "minimax" },
 ];
 
 /**
@@ -66,6 +73,7 @@ export function resolveProvider(env: Env): LlmProvider {
   // BUG FIX 2026-07-12: faltaba la rama xai — LLM_PROVIDER="xai" caía al
   // default (anthropic), dejando a Grok como mero fallback todo el tiempo.
   if (explicit === "xai") return "xai";
+  if (explicit === "minimax") return "minimax";
   if (!env.ANTHROPIC_API_KEY && env.OPENAI_API_KEY) return "openai";
   return "anthropic";
 }
@@ -79,6 +87,9 @@ export function modelIdFor(env: Env, provider: LlmProvider, tier: Tier): string 
   }
   if (provider === "xai") {
     return tier === "smart" ? XAI_DEFAULTS.smart : XAI_DEFAULTS.fast;
+  }
+  if (provider === "minimax") {
+    return tier === "smart" ? MINIMAX_DEFAULTS.smart : MINIMAX_DEFAULTS.fast;
   }
   const smart = env.ANTHROPIC_MODEL_SMART?.trim() || ANTHROPIC_DEFAULTS.smart;
   const fast = env.ANTHROPIC_MODEL_FAST?.trim() || ANTHROPIC_DEFAULTS.fast;
@@ -98,6 +109,7 @@ export interface ResolvedModel {
 function envKeyFor(env: Env, provider: LlmProvider): string | undefined {
   if (provider === "openai") return env.OPENAI_API_KEY;
   if (provider === "xai") return env.XAI_API_KEY;
+  if (provider === "minimax") return env.MINIMAX_API_KEY;
   return env.ANTHROPIC_API_KEY;
 }
 
@@ -112,16 +124,18 @@ export function createModel(env: Env, tier: Tier, ov?: LlmOverrides): ResolvedMo
   const ovProviderRaw = (ov?.provider ?? "").trim().toLowerCase();
 
   let provider: LlmProvider | null =
-    ovProviderRaw === "anthropic" || ovProviderRaw === "openai" || ovProviderRaw === "xai"
+    ovProviderRaw === "anthropic" || ovProviderRaw === "openai" || ovProviderRaw === "xai" || ovProviderRaw === "minimax"
       ? ovProviderRaw
       : null;
   // Modelo elegido sin proveedor explícito → dedúcelo del id.
   if (!provider && ovModel) {
     provider = /^grok/i.test(ovModel)
       ? "xai"
-      : /^(gpt|o\d)/i.test(ovModel)
-        ? "openai"
-        : "anthropic";
+      : /minimax|abab/i.test(ovModel)
+        ? "minimax"
+        : /^(gpt|o\d)/i.test(ovModel)
+          ? "openai"
+          : "anthropic";
   }
   if (!provider) provider = resolveProvider(env);
 
@@ -148,6 +162,13 @@ export function createModel(env: Env, tier: Tier, ov?: LlmOverrides): ResolvedMo
     return { provider, modelId, model: xai(modelId), supportsPromptCache: false };
   }
 
+  if (provider === "minimax") {
+    // MiniMax expone una API compatible con OpenAI (Chat Completions).
+    const baseURL = env.MINIMAX_API_BASE_URL?.trim() || "https://api.minimaxi.com/v1";
+    const minimax = createOpenAI({ apiKey, baseURL });
+    return { provider, modelId, model: minimax(modelId), supportsPromptCache: false };
+  }
+
   const anthropic = createAnthropic({ apiKey });
   return { provider, modelId, model: anthropic(modelId), supportsPromptCache: true };
 }
@@ -162,7 +183,7 @@ export function fallbackModel(
   tier: Tier,
   failedProvider: LlmProvider,
 ): ResolvedModel | null {
-  const order: LlmProvider[] = ["anthropic", "openai", "xai"];
+  const order: LlmProvider[] = ["anthropic", "openai", "xai", "minimax"];
   for (const p of order) {
     if (p === failedProvider) continue;
     if (!envKeyFor(env, p)) continue;

@@ -73,6 +73,8 @@ export interface Env {
   WHATSAPP_VERIFY_TOKEN?: string;     // handshake GET del webhook (si falta, usa META_VERIFY_TOKEN)
   WHATSAPP_APP_SECRET?: string;       // firma X-Hub-Signature-256 (si falta, usa META_APP_SECRET)
   XAI_API_KEY?: string;             // xAI (Grok) — proveedor LLM alterno (ver src/llm/provider.ts)
+  MINIMAX_API_KEY?: string;         // MiniMax — proveedor LLM (API compatible con OpenAI)
+  MINIMAX_API_BASE_URL?: string;    // override de https://api.minimaxi.com/v1
 
   // ── Zernio (proveedor unificado multicanal — IG/FB/X/TG/WhatsApp/…) ──────
   // Una sola api key para muchas redes (tipo ManyChat pero unificado).
