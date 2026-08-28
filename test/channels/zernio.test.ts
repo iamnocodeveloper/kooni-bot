@@ -252,7 +252,7 @@ describe("follow gate (require_follow)", () => {
           return { meta: { changes: 1 } };
         }
         if (/DELETE FROM follow_gate_pending/.test(sql)) {
-          const idx = pending.findIndex((p) => p.account_id === params[0] && p.commenter_id === params[1]);
+          const idx = pending.findIndex((p) => p.commenter_id === params[0]);
           if (idx >= 0) pending.splice(idx, 1);
           return { meta: { changes: 1 } };
         }
@@ -286,7 +286,7 @@ describe("follow gate (require_follow)", () => {
           return { count: row?.count ?? 0 } as T;
         }
         if (/SELECT rule_id, comment_id FROM follow_gate_pending/.test(sql)) {
-          const p = pending.find((x) => x.account_id === params[0] && x.commenter_id === params[1]);
+          const p = pending.find((x) => x.commenter_id === params[0]);
           return (p ? { rule_id: p.rule_id, comment_id: p.comment_id } : null) as T;
         }
         if (/SELECT \* FROM auto_rules WHERE id = \?/.test(sql)) {

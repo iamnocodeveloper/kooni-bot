@@ -712,9 +712,11 @@ async function autoReplyOnDm(body: ZernioWebhookBody, env: Env): Promise<boolean
   if (!fgMatch && (isPostback || /ya te sigo|sígueme|sigueme|follow/i.test(text))) {
     try {
       const { Db } = await import("../db/client");
+      // Buscamos por comentarista (no por cuenta): tras reconectar Zernio con
+      // otra API key/account, el account_id guardado puede no coincidir.
       const row = await new Db(env.DB).first<{ rule_id: string; comment_id: string }>(
-        `SELECT rule_id, comment_id FROM follow_gate_pending WHERE account_id = ? AND commenter_id = ? ORDER BY id DESC LIMIT 1`,
-        [account.accountId, m.sender?.id ?? ""],
+        `SELECT rule_id, comment_id FROM follow_gate_pending WHERE commenter_id = ? ORDER BY id DESC LIMIT 1`,
+        [m.sender?.id ?? ""],
       );
       if (row) {
         fgRuleId = row.rule_id;
@@ -752,15 +754,15 @@ async function autoReplyOnDm(body: ZernioWebhookBody, env: Env): Promise<boolean
       try {
         const { Db } = await import("../db/client");
         await new Db(env.DB).run(
-          `DELETE FROM follow_gate_pending WHERE account_id = ? AND commenter_id = ?`,
-          [account.accountId, m.sender?.id ?? ""],
+          `DELETE FROM follow_gate_pending WHERE commenter_id = ?`,
+          [m.sender?.id ?? ""],
         );
       } catch { /* best-effort */ }
 
       if (!isFollower) {
-        // Aún no sigue → re-pedir con el mismo botón.
+        // Aún no sigue → re-pedir con el mismo botón, sin saludar de nuevo.
         const prompt = renderUsername(
-          rule.followPromptMessage || "Hola {username}! Aún no veo tu follow. Sígueme y toca el botón 👇",
+          rule.followPromptMessage || "Oh, {username}, aún no me sigues 🙏 Sígueme y vuelve a tocar el botón para recibir el link 👇",
           m.sender?.name ?? m.sender?.username,
         );
         const followBtn = [
