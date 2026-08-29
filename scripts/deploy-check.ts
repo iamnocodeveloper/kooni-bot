@@ -22,11 +22,13 @@ export interface DeployConfig {
 export interface DeployCheckResult {
   ok: boolean;
   errors: string[];
+  warnings: string[];
 }
 
 /** Pure validator — easy to unit test, no process/network access. */
 export function validateDeployConfig(cfg: DeployConfig): DeployCheckResult {
   const errors: string[] = [];
+  const warnings: string[] = [];
 
   if (!cfg.ANTHROPIC_API_KEY) errors.push("Falta ANTHROPIC_API_KEY (Claude API).");
   if (!cfg.BOT_NAME) errors.push("Falta BOT_NAME.");
@@ -45,7 +47,18 @@ export function validateDeployConfig(cfg: DeployConfig): DeployCheckResult {
     errors.push("BOT_TIER=pro requiere DASHBOARD_PASSWORD (Basic Auth del dashboard).");
   }
 
-  return { ok: errors.length === 0, errors };
+  // Guard de gateway: con OPENAI_API_KEY que NO es de OpenAI directo, falta
+  // OPENAI_API_BASE_URL → el bot contesta "Algo falló de mi lado" (401).
+  if (cfg.OPENAI_API_KEY && !cfg.OPENAI_API_BASE_URL) {
+    const key = String(cfg.OPENAI_API_KEY);
+    // OpenAI directo: sk-proj-… (nuevo) o sk- + exactamente 48 alfanuméricos (clásico).
+    const directa = /^sk-proj-/.test(key) || /^sk-[A-Za-z0-9]{48}$/.test(key);
+    if (!directa) {
+      warnings.push("Tu OPENAI_API_KEY parece de un GATEWAY (AIsa/OpenRouter), no de OpenAI directo. Sin OPENAI_API_BASE_URL en [vars] de wrangler.toml, el bot contestará \"Algo falló de mi lado\". Agrega: OPENAI_API_BASE_URL = \"https://api.aisa.one/v1\" (o la URL de tu gateway).");
+    }
+  }
+
+  return { ok: errors.length === 0, errors, warnings };
 }
 
 // Run as a script: read from process.env and exit non-zero on failure.
@@ -94,6 +107,15 @@ if (isMain) {
   if (!cfg.DASHBOARD_PASSWORD) errors.push("Falta el secret DASHBOARD_PASSWORD (créalo: pnpm exec wrangler secret put DASHBOARD_PASSWORD).");
   if (!cfg.ANTHROPIC_API_KEY && !cfg.OPENAI_API_KEY && !cfg.XAI_API_KEY && !cfg.MINIMAX_API_KEY) {
     warnings.push("Aún no hay llave de IA como secret — el bot desplegará pero no contestará. Ponla con `wrangler secret put ANTHROPIC_API_KEY` (o desde el panel: Configuración → Modelo de IA).");
+  }
+  // Guard de gateway: con LLM_PROVIDER=openai y una key que NO es de OpenAI
+  // directo, falta OPENAI_API_BASE_URL → el bot contesta "Algo falló de mi lado".
+  if (cfg.OPENAI_API_KEY && !cfg.OPENAI_API_BASE_URL) {
+    const key = String(cfg.OPENAI_API_KEY);
+    const directa = /^sk-proj-/.test(key) || /^sk-[A-Za-z0-9]{40,}$/.test(key);
+    if (!directa) {
+      warnings.push("Tu OPENAI_API_KEY parece de un GATEWAY (AIsa/OpenRouter), no de OpenAI directo. Sin OPENAI_API_BASE_URL en [vars] de wrangler.toml, el bot contestará \"Algo falló de mi lado\". Agrega: OPENAI_API_BASE_URL = \"https://api.aisa.one/v1\" (o la URL de tu gateway).");
+    }
   }
   if (!cfg.TELEGRAM_BOT_TOKEN && !cfg.MANYCHAT_API_KEY && !cfg.TWILIO_ACCOUNT_SID && !cfg.META_PAGE_ACCESS_TOKEN && !cfg.ZERNIO_API_KEY) {
     warnings.push("Aún no hay canales conectados — normal antes de la FASE 3 (se conectan con el panel abierto en /admin/conexiones).");

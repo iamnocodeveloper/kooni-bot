@@ -33,6 +33,10 @@ index_name = "kooni_kb"
 
 [vars]
 LLM_PROVIDER = "openai"               # 'anthropic' | 'openai' | 'xai'
+# IMPORTANTE: si tu OPENAI_API_KEY es de un GATEWAY (AIsa, OpenRouter, etc.) y
+# NO de OpenAI directo (sk-proj-…), pega aquí la URL base del gateway — si no,
+# el bot contestará "Algo falló de mi lado". Vacío = OpenAI directo.
+#   AIsa:  https://api.aisa.one/v1
 OPENAI_API_BASE_URL = ""              # opcional: gateway (ej. api.aisa.one/v1)
 # BOT_INSTANCE_ID lo estampa el CLI con el uid de 6 chars; liga las licencias Pro
 # a UNA instalación concreta (no lo edites a mano).

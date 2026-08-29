@@ -11,7 +11,7 @@ describe("validateDeployConfig", () => {
   };
 
   it("passes with a complete Pro config", () => {
-    expect(validateDeployConfig(full)).toEqual({ ok: true, errors: [] });
+    expect(validateDeployConfig(full)).toEqual({ ok: true, errors: [], warnings: [] });
   });
 
   it("passes a Free config without DASHBOARD_PASSWORD", () => {
@@ -38,5 +38,22 @@ describe("validateDeployConfig", () => {
     const r = validateDeployConfig(rest);
     expect(r.ok).toBe(false);
     expect(r.errors.join(" ")).toContain("DASHBOARD_PASSWORD");
+  });
+
+  it("avisa con key de gateway sin OPENAI_API_BASE_URL", () => {
+    const r = validateDeployConfig({
+      ...full,
+      OPENAI_API_KEY: "sk-ais3e1414870f2dd09453ef8e3769e7c3ef3ec7f42e27bfa61caa",
+    });
+    expect(r.ok).toBe(true); // es un aviso, no un bloqueo
+    expect(r.warnings.join(" ")).toContain("OPENAI_API_BASE_URL");
+  });
+
+  it("no avisa con key directa de OpenAI (sk-proj-…)", () => {
+    const r = validateDeployConfig({
+      ...full,
+      OPENAI_API_KEY: "sk-proj-abc123def456ghi789jkl012mno345pqr678stu",
+    });
+    expect(r.warnings.join(" ")).not.toContain("OPENAI_API_BASE_URL");
   });
 });

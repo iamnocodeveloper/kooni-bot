@@ -22,7 +22,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 
-const CLI_VERSION = "0.2.11";
+const CLI_VERSION = "0.2.12";
 
 const REPO = process.env.KOONI_REPO || "iamnocodeveloper/kooni-bot";
 const BRANCH = process.env.KOONI_BRANCH || "main";
@@ -797,7 +797,9 @@ async function onboarding(rl, answers, defaultDir) {
   const brainKeys = ["claude", "chatgpt", "grok", "minimax", "gateway"];
   const brainIdx = await select(rl, t().brainQ, brainKeys.map((k) => ({
     key: k, label: BRAINS[k].label,
-    desc: k === "claude" ? t().brainDesc : "",
+    desc: k === "claude" ? t().brainDesc
+      : k === "chatgpt" ? "key directa de OpenAI (sk-proj-…)"
+      : k === "gateway" ? "AIsa / OpenRouter / cualquier gateway" : "",
   })), { value: answers.brainKey, default: 0 });
   answers.brainKey = brainKeys[brainIdx] || "claude";
   answers.provider = BRAINS[answers.brainKey].provider;
@@ -810,6 +812,20 @@ async function onboarding(rl, answers, defaultDir) {
   // deploy (se guarda como secret sin mostrarla). En no-interactivo se salta.
   if (!answers.apiKey) {
     answers.apiKey = await promptSecret(rl, t().qApiKey(BRAINS[answers.brainKey].label));
+  }
+
+  // Guard de gateway: si la key es de AIsa (o un gateway) y NO hay base URL, el
+  // bot desplegaría pero contestaría "Algo falló de mi lado" (401 contra OpenAI
+  // directo). Detectamos la key y la arreglamos o avisamos en el acto.
+  if (answers.provider === "openai" && !answers.baseUrl && answers.apiKey) {
+    const raw = String(answers.apiKey).trim();
+    const k = raw.toLowerCase();
+    if (k.startsWith("sk-ais") || k.includes("aisa")) {
+      answers.baseUrl = "https://api.aisa.one/v1";
+      console.log("  " + C.yellow("ℹ️  Detecté una key de AIsa — configuré OPENAI_API_BASE_URL=https://api.aisa.one/v1 automáticamente."));
+    } else if (!/^sk-proj-/.test(raw) && !/^sk-[A-Za-z0-9]{48}$/.test(raw)) {
+      console.warn("  " + C.yellow("⚠️  Tu key de OpenAI no parece directa (sk-proj-…). Si es de un gateway (AIsa/OpenRouter), el bot NO contestará sin OPENAI_API_BASE_URL en wrangler.toml — agrega el var o repite init eligiendo 'Gateway'."));
+    }
   }
 
   answers.what = answers.what ?? (await ask(rl, t().qWhat, undefined) || "");
