@@ -6,7 +6,10 @@ vi.mock("@ai-sdk/anthropic", () => ({
   createAnthropic: () => (modelId: string) => ({ p: "anthropic", modelId }),
 }));
 vi.mock("@ai-sdk/openai", () => ({
-  createOpenAI: () => (modelId: string) => ({ p: "openai", modelId }),
+  createOpenAI: () => ({
+    chat: (modelId: string) => ({ p: "openai", modelId }),
+    __callable: (modelId: string) => ({ p: "openai", modelId }),
+  }),
 }));
 
 import { resolveProvider, modelIdFor, createModel } from "../../src/llm/provider";

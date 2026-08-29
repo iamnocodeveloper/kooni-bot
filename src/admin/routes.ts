@@ -919,8 +919,12 @@ adminApp.post("/config", async (c) => {
     const v = String(provRaw).trim().toLowerCase();
     await repo.set(
       SETTING_KEYS.llmProvider,
-      v === "anthropic" || v === "openai" || v === "xai" || v === "minimax" ? v : "",
+      v === "anthropic" || v === "openai" || v === "xai" || v === "minimax" || v === "aisa" ? v : "",
     );
+  }
+  const baseUrlRaw = form.get(SETTING_KEYS.llmApiBaseUrl);
+  if (baseUrlRaw !== null) {
+    await repo.set(SETTING_KEYS.llmApiBaseUrl, String(baseUrlRaw).trim().slice(0, 200));
   }
   const modelRaw = form.get(SETTING_KEYS.llmModel);
   if (modelRaw !== null) {

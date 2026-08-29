@@ -22,7 +22,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 
-const CLI_VERSION = "0.2.12";
+const CLI_VERSION = "0.2.13";
 
 const REPO = process.env.KOONI_REPO || "iamnocodeveloper/kooni-bot";
 const BRANCH = process.env.KOONI_BRANCH || "main";
@@ -219,6 +219,7 @@ function normBotLang(v) {
 const BRAINS = {
   claude: { provider: "anthropic", secret: "ANTHROPIC_API_KEY", label: "Claude" },
   chatgpt: { provider: "openai", secret: "OPENAI_API_KEY", label: "ChatGPT" },
+  aisa: { provider: "openai", secret: "OPENAI_API_KEY", label: "AIsa" },
   grok: { provider: "xai", secret: "XAI_API_KEY", label: "Grok" },
   minimax: { provider: "minimax", secret: "MINIMAX_API_KEY", label: "MiniMax" },
   gateway: { provider: "openai", secret: "OPENAI_API_KEY", label: "Gateway" },
@@ -742,7 +743,7 @@ function writeDevVars(dir, answers, kbToken) {
 
 function collectAnswers(flags) {
   const rawBrain = String(flags.cerebro || flags.brain || "").trim().toLowerCase();
-  const brainKey = ({ claude: "claude", anthropic: "claude", chatgpt: "chatgpt", openai: "chatgpt", gpt: "chatgpt", grok: "grok", xai: "grok", minimax: "minimax", gateway: "gateway" })[rawBrain] || null;
+  const brainKey = ({ claude: "claude", anthropic: "claude", chatgpt: "chatgpt", openai: "chatgpt", gpt: "chatgpt", aisa: "aisa", grok: "grok", xai: "grok", minimax: "minimax", gateway: "gateway" })[rawBrain] || null;
   const tone = ({ cercano: "cercano", friendly: "cercano", formal: "formal", divertido: "divertido", playful: "divertido" })[String(flags.tono || "").trim().toLowerCase()] || null;
 
   // Lo que vino por flag se conserva; lo que NO vino queda undefined para que
@@ -794,18 +795,23 @@ async function onboarding(rl, answers, defaultDir) {
   // hace después desde el dashboard. Aquí solo fijamos el default.
   answers.tier = answers.tier || "free";
 
-  const brainKeys = ["claude", "chatgpt", "grok", "minimax", "gateway"];
+  const brainKeys = ["claude", "chatgpt", "aisa", "grok", "minimax", "gateway"];
   const brainIdx = await select(rl, t().brainQ, brainKeys.map((k) => ({
     key: k, label: BRAINS[k].label,
     desc: k === "claude" ? t().brainDesc
       : k === "chatgpt" ? "key directa de OpenAI (sk-proj-…)"
-      : k === "gateway" ? "AIsa / OpenRouter / cualquier gateway" : "",
+      : k === "aisa" ? "key de AIsa (sk-ais…) · gateway api.aisa.one/v1"
+      : k === "gateway" ? "OpenRouter / cualquier gateway" : "",
   })), { value: answers.brainKey, default: 0 });
   answers.brainKey = brainKeys[brainIdx] || "claude";
   answers.provider = BRAINS[answers.brainKey].provider;
   answers.secret = BRAINS[answers.brainKey].secret;
   if (answers.brainKey === "gateway" && !answers.baseUrl) {
     answers.baseUrl = await ask(rl, t().qBaseUrl, undefined) || "https://api.aisa.one/v1";
+  }
+  if (answers.brainKey === "aisa" && !answers.baseUrl) {
+    answers.baseUrl = "https://api.aisa.one/v1";
+    console.log("  " + C.yellow("ℹ️  AIsa configurado con OPENAI_API_BASE_URL=https://api.aisa.one/v1."));
   }
 
   // La API key se pide aquí, apenas se elige el cerebro — y se conserva para el
@@ -1242,7 +1248,7 @@ async function cmdDeploy(flags, rest) {
     try {
       const wt = readFileSync(join(dir, "wrangler.toml"), "utf8");
       const p = (wt.match(/LLM_PROVIDER\s*=\s*"([^"]+)"/) || [])[1] || "anthropic";
-      brainKey = ({ anthropic: "claude", openai: "chatgpt", xai: "grok", minimax: "minimax" })[p] || "claude";
+      brainKey = ({ anthropic: "claude", openai: "chatgpt", aisa: "aisa", xai: "grok", minimax: "minimax" })[p] || "claude";
     } catch {}
     flags.brainKey = brainKey;
     await deployBot(dir, { flags, rl });

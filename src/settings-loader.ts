@@ -49,6 +49,7 @@ export function llmOverridesFrom(settings: Record<string, string>): LlmOverrides
     provider: pick(SETTING_KEYS.llmProvider),
     apiKey: pick(SETTING_KEYS.llmApiKey),
     model: pick(SETTING_KEYS.llmModel),
+    baseUrl: pick(SETTING_KEYS.llmApiBaseUrl),
   };
 }
 

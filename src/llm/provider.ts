@@ -43,6 +43,8 @@ export interface LlmOverrides {
   provider?: string;
   apiKey?: string;
   model?: string;
+  /** URL base del gateway (AIsa/OpenRouter…) — editable desde el panel sin redeploy. */
+  baseUrl?: string;
 }
 
 /** Models offered in the dashboard picker. */
@@ -122,10 +124,13 @@ function envKeyFor(env: Env, provider: LlmProvider): string | undefined {
 export function createModel(env: Env, tier: Tier, ov?: LlmOverrides): ResolvedModel {
   const ovModel = (ov?.model ?? "").trim();
   const ovProviderRaw = (ov?.provider ?? "").trim().toLowerCase();
+  // "aisa" es un proveedor del panel que técnicamente es OpenAI (Chat
+  // Completions) apuntando al gateway api.aisa.one/v1.
+  const ovProviderNorm = ovProviderRaw === "aisa" ? "openai" : ovProviderRaw;
 
   let provider: LlmProvider | null =
-    ovProviderRaw === "anthropic" || ovProviderRaw === "openai" || ovProviderRaw === "xai" || ovProviderRaw === "minimax"
-      ? ovProviderRaw
+    ovProviderNorm === "anthropic" || ovProviderNorm === "openai" || ovProviderNorm === "xai" || ovProviderNorm === "minimax"
+      ? (ovProviderNorm as LlmProvider)
       : null;
   // Modelo elegido sin proveedor explícito → dedúcelo del id.
   if (!provider && ovModel) {
@@ -152,9 +157,13 @@ export function createModel(env: Env, tier: Tier, ov?: LlmOverrides): ResolvedMo
   const modelId = useOvModel || modelIdFor(env, provider, tier);
 
   if (provider === "openai") {
-    const baseURL = env.OPENAI_API_BASE_URL?.trim();
+    const baseURL = ((ov?.baseUrl ?? "").trim() || env.OPENAI_API_BASE_URL?.trim()) ?? "";
     const openai = createOpenAI({ apiKey, ...(baseURL ? { baseURL } : {}) });
-    return { provider, modelId, model: openai(modelId), supportsPromptCache: false };
+    // IMPORTANTE: usar openai.chat() → API de Chat Completions (/chat/completions).
+    // El default (openai(modelId)) usa la API de Responses (/responses), que
+    // gateways como AIsa/OpenRouter NO implementan bien: responden 200 con
+    // texto vacío → el bot decía "Algo falló de mi lado".
+    return { provider, modelId, model: openai.chat(modelId), supportsPromptCache: false };
   }
 
   if (provider === "xai") {
@@ -163,10 +172,11 @@ export function createModel(env: Env, tier: Tier, ov?: LlmOverrides): ResolvedMo
   }
 
   if (provider === "minimax") {
-    // MiniMax expone una API compatible con OpenAI (Chat Completions).
+    // MiniMax expone una API compatible con OpenAI (Chat Completions) — también
+    // requiere openai.chat() (no /responses).
     const baseURL = env.MINIMAX_API_BASE_URL?.trim() || "https://api.minimaxi.com/v1";
     const minimax = createOpenAI({ apiKey, baseURL });
-    return { provider, modelId, model: minimax(modelId), supportsPromptCache: false };
+    return { provider, modelId, model: minimax.chat(modelId), supportsPromptCache: false };
   }
 
   const anthropic = createAnthropic({ apiKey });

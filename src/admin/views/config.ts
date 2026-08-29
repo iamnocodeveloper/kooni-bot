@@ -111,6 +111,7 @@ function renderLlmSection(settings: Record<string, string>, llmTest?: string): s
     { v: "", l: "Automático (recomendado)" },
     { v: "anthropic", l: "Claude (Anthropic)" },
     { v: "openai", l: "ChatGPT (OpenAI)" },
+    { v: "aisa", l: "AIsa (gateway)" },
     { v: "xai", l: "Grok (xAI)" },
     { v: "minimax", l: "MiniMax" },
   ]
@@ -159,6 +160,12 @@ function renderLlmSection(settings: Record<string, string>, llmTest?: string): s
             <optgroup label="MiniMax">${minimaxOpts}</optgroup>
           </select>
         </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <label class="font-display font-semibold text-[12.5px] text-cream">URL base del gateway (solo si usas AIsa/OpenRouter)</label>
+        <p class="text-dim text-[11px]">Vacío = OpenAI directo o la config del deploy. Para AIsa: https://api.aisa.one/v1 — se cambia aquí sin re-desplegar.</p>
+        <input type="text" name="${SETTING_KEYS.llmApiBaseUrl}" value="${esc(settings[SETTING_KEYS.llmApiBaseUrl] ?? "")}"
+               placeholder="https://api.aisa.one/v1" style="${INPUT_STYLE}">
       </div>
       <div style="display:flex;flex-direction:column;gap:6px">
         <label class="font-display font-semibold text-[12.5px] text-cream">Tu API key (opcional)</label>
