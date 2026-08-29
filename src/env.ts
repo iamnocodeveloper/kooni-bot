@@ -95,6 +95,15 @@ export interface Env {
   //    {"keywords":["claude"],"message":"Aquí tienes el recurso"}]
   ZERNIO_AUTO_DM_RULES?: string;         // var: JSON array de reglas (tiene prioridad sobre el modo simple)
 
+  // ── WAHA (WhatsApp HTTP API — self-hosted, Docker) ─────────────────────
+  // Canal WhatsApp por instalación: SOLO se activa si esta instalación tiene
+  // WAHA_API_URL (un servidor WAHA corriendo en un VPS/Docker). Sin él, el
+  // webhook /webhooks/waha devuelve 401 y el canal está inactivo.
+  WAHA_API_URL?: string;       // var: http://<host>:3000 del servidor WAHA
+  WAHA_API_KEY?: string;       // secret: X-Api-Key de WAHA (si la configuraste)
+  WAHA_SESSION?: string;       // var: nombre de sesión (default "default")
+  WAHA_WEBHOOK_TOKEN?: string; // secret: ?token=... para validar el webhook entrante
+
   // ── Cal.com (agenda real para scheduleAppointment) ───────────────────────
   // Con estas vars, el bot consulta disponibilidad real y reserva en Cal.com.
   // Sin ellas, scheduleAppointment solo registra la cita para que el dueño la confirme.

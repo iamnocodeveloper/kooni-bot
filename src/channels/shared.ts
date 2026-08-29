@@ -1,4 +1,4 @@
-export type ChannelId = "manychat" | "telegram" | "twilio" | "messenger" | "instagram" | "whatsapp" | "zernio";
+export type ChannelId = "manychat" | "telegram" | "twilio" | "messenger" | "instagram" | "whatsapp" | "zernio" | "waha";
 
 export interface IncomingMessage {
   channel: ChannelId;
@@ -45,6 +45,7 @@ export const CHANNEL_CAPABILITIES: Record<ChannelId, { buttons: boolean; image: 
   whatsapp: { buttons: true, image: true, audio: true },
   messenger: { buttons: true, image: true, audio: true },
   instagram: { buttons: true, image: true, audio: true },
+  waha: { buttons: false, image: true, audio: true },
 };
 
 export interface ChannelAdapter {

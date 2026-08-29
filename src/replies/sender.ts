@@ -7,6 +7,7 @@ import { twilioAdapter } from "../channels/twilio";
 import { metaAdapter } from "../channels/meta";
 import { whatsappAdapter } from "../channels/whatsapp";
 import { zernioAdapter } from "../channels/zernio";
+import { wahaAdapter } from "../channels/waha";
 
 const MIN_DELAY_MS = 800;
 const MAX_DELAY_MS = 1500;
@@ -44,6 +45,7 @@ export function pickAdapter(channel: ChannelId): ChannelAdapter {
   if (channel === "whatsapp") return whatsappAdapter;
   if (channel === "messenger" || channel === "instagram") return metaAdapter;
   if (channel === "zernio") return zernioAdapter;
+  if (channel === "waha") return wahaAdapter;
   throw new Error(`unknown channel: ${channel}`);
 }
 

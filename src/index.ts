@@ -132,6 +132,25 @@ app.post("/webhooks/twilio", async (c) => {
   return new Response("<Response></Response>", { status: 200, headers: { "Content-Type": "text/xml" } });
 });
 
+// WAHA (WhatsApp HTTP API — self-hosted): canal por INSTALACIÓN. Sin
+// WAHA_API_URL el webhook devuelve 401 (canal apagado para esa instalación).
+// Los mensajes entrantes van al agente; las respuestas salen por /api/sendText.
+app.post("/webhooks/waha", async (c) => {
+  const { verifyWahaWebhook, wahaAdapter } = await import("./channels/waha");
+  if (!(await verifyWahaWebhook(c.req.raw, c.env))) {
+    return c.text("unauthorized", 401);
+  }
+  try {
+    const msg = await wahaAdapter.parseIncoming(c.req.raw, c.env);
+    const doId = c.env.AGENT.idFromName(`${msg.channel}:${msg.channelUserId}`);
+    await c.env.AGENT.get(doId).ingest(msg).catch((e) => console.error("waha ingest:", e));
+    return c.text("ok", 200);
+  } catch (e) {
+    console.warn("waha webhook ignorado (no es un mensaje entrante):", e);
+    return c.text("ok", 200); // ack para que WAHA no reintente en loop
+  }
+});
+
 // --- Meta oficial (Facebook Messenger + Instagram DMs, sin ManyChat) --------
 // GET = handshake de verificación de Meta: devuelve hub.challenge si el
 // hub.verify_token coincide con nuestro secreto. Se llama una vez al configurar
