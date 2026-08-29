@@ -63,6 +63,8 @@ export const SETTING_KEYS = {
   featureResenas: "feature_resenas_enabled", // "0" | "1"
   featureCobros: "feature_cobros_enabled", // "0" | "1"
   featureGaleria: "feature_galeria_enabled", // "0" | "1"
+  // ¿El bot se presenta como el DUEÑO mismo (primera persona) o como asistente?
+  agentPersona: "agent_persona", // "" (asistente) | "dueño"
   // Config de funciones de Extras (enlaces que el bot inyecta al prompt).
   reviewLink: "review_link", // link de reseñas de Google (Pide reseñas)
   paymentLink: "payment_link", // link de pago seguro (Cobros por WhatsApp)

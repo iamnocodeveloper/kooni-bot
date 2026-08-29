@@ -316,7 +316,13 @@ Regla del dueño (COBROS POR WHATSAPP): del sí al pagado sin salir del chat.
 export async function extrasForAgent(
   env: Env,
   settings: Record<string, string>,
-): Promise<{ extraInstructions: string[]; vigilanteEnabled: boolean; oidoVistaEnabled: boolean; galeriaEnabled: boolean }> {
+): Promise<{
+  extraInstructions: string[];
+  vigilanteEnabled: boolean;
+  oidoVistaEnabled: boolean;
+  galeriaEnabled: boolean;
+  multiIdiomaEnabled: boolean;
+}> {
   const mods = await unlockedModules(env, settings);
   const on = (key: string, modId: string) => settings[key] === "1" && mods.has(modId);
   const extraInstructions: string[] = [];
@@ -332,6 +338,7 @@ export async function extrasForAgent(
     vigilanteEnabled: on(FEATURE_KEYS.vigilante, "vigilante"),
     oidoVistaEnabled: on(FEATURE_KEYS.oidoVista, "oido_vista"),
     galeriaEnabled: on(FEATURE_KEYS.galeria, "galeria"),
+    multiIdiomaEnabled: on(FEATURE_KEYS.multiidioma, "multiidioma"),
   };
 }
 

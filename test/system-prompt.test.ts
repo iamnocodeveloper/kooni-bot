@@ -33,6 +33,34 @@ describe("renderSystemPrompt", () => {
     expect(prompt).not.toContain("}}");
   });
 
+  it("multi-idioma: el output_language sigue el idioma del cliente", () => {
+    const prompt = renderSystemPrompt({ ...input, multiIdioma: true });
+    expect(prompt).toContain("idioma del cliente");
+    expect(prompt).toContain("inglés o portugués");
+    // Ya NO fuerza el "CRITICAL OVERRIDE — siempre en es"
+    expect(prompt).not.toContain("CRITICAL OVERRIDE — APPLIES TO 100%");
+  });
+
+  it("multi-idioma apagado: mantiene el override crítico del idioma base", () => {
+    const prompt = renderSystemPrompt(input);
+    expect(prompt).toContain("CRITICAL OVERRIDE");
+  });
+
+  it("persona dueño: el bot habla como el dueño en primera persona", () => {
+    const prompt = renderSystemPrompt({ ...input, persona: "dueño" });
+    expect(prompt).toContain("TÚ eres");
+    expect(prompt).toContain("primera persona");
+    // Ya no se presenta como "el asistente de" ni prohíbe decir que es humano.
+    expect(prompt).not.toContain("el asistente de Barbería Centro");
+    expect(prompt).not.toContain("Nunca afirmes ser humano");
+  });
+
+  it("persona asistente (default): se presenta como asistente y no afirma ser humano", () => {
+    const prompt = renderSystemPrompt(input);
+    expect(prompt).toContain("el asistente de");
+    expect(prompt).toContain("Nunca afirmes ser humano");
+  });
+
   it("interpolates language, bot name and business name", () => {
     const prompt = renderSystemPrompt(input);
     expect(prompt).toContain("es");

@@ -147,6 +147,9 @@ export async function resolveAgentConfig(env: Env, toolNames: string[]): Promise
   const disabledTools = parseCsvList(get(SETTING_KEYS.disabledTools));
   const enabledToolNames = toolNames.filter((n) => !disabledTools.includes(n));
 
+  // ¿El bot se presenta como el DUEÑO (primera persona) o como asistente?
+  const persona: "dueño" | "asistente" = get(SETTING_KEYS.agentPersona) === "dueño" ? "dueño" : "asistente";
+
   const systemPrompt =
     systemPromptOverride ??
     systemPromptFromEnv(env, enabledToolNames, businessContext, niche.playbook || undefined, {
@@ -155,6 +158,8 @@ export async function resolveAgentConfig(env: Env, toolNames: string[]): Promise
       botName,
       lessons,
       customInstructions: finalInstructions,
+      multiIdioma: extras.multiIdiomaEnabled,
+      persona,
     });
 
   const bufferSecondsRaw = get(SETTING_KEYS.bufferSeconds);

@@ -907,6 +907,12 @@ adminApp.post("/config", async (c) => {
     await repo.set(key, String(raw).trim());
   }
 
+  // Persona del bot (¿asistente o el dueño mismo en primera persona?).
+  const personaRaw = form.get(SETTING_KEYS.agentPersona);
+  if (personaRaw !== null) {
+    await repo.set(SETTING_KEYS.agentPersona, String(personaRaw).trim() === "dueño" ? "dueño" : "");
+  }
+
   // BYO-LLM: proveedor y modelo se guardan tal cual (allow-list de valores).
   const provRaw = form.get(SETTING_KEYS.llmProvider);
   if (provRaw !== null) {

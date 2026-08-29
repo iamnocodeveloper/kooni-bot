@@ -12,27 +12,16 @@ export interface SystemPromptInput {
   lessons?: string[];               // flywheel: rules distilled from owner takeovers
   customInstructions?: string;      // owner rules ADDED to the generated prompt (never replace it)
   today?: string;                   // fecha/hora actual en la zona del negocio
+  /** Multi-idioma (Extras): responde en el idioma del cliente (es/en/pt). */
+  multiIdioma?: boolean;
+  /** ¿El bot se presenta como el DUEÑO mismo (primera persona) o como asistente? */
+  persona?: "dueño" | "asistente";
 }
 
-const TEMPLATE = `<output_language>
-CRITICAL OVERRIDE — APPLIES TO 100% OF YOUR OUTPUT.
-
-THE COACH'S CUSTOMER PREFERS LANGUAGE: {{LANGUAGE}}
-
-EVERY token you emit MUST be in {{LANGUAGE}}, including pre-tool-call
-narration and confirmations. If the customer writes in another language,
-reply in {{LANGUAGE}} anyway. Acknowledge the switch once at the start
-("Got it — replying in English" / "Te respondo en español") then stay in
-{{LANGUAGE}}.
-
-Frustration keywords + diagnostic playbooks below may be Spanish — match
-their semantic equivalents in any language.
-</output_language>
+const TEMPLATE = `{{OUTPUT_LANGUAGE}}
 
 <role>
-Eres {{BOT_NAME}}, el asistente de {{BUSINESS_NAME}}. Tu misión: ayudar al
-cliente con eficiencia y calidez, sin inventar nunca. Conoces este negocio.
-Si una pregunta no tiene respuesta en lo que sabes, escalas a un humano.
+{{ROLE_LINE}}
 </role>
 
 {{CONTEXTO_TEMPORAL}}
@@ -58,10 +47,7 @@ Si una pregunta no tiene respuesta en lo que sabes, escalas a un humano.
 6. No contradigas al cliente con su propia data. Si dice "no me deja X" y data
    muestra "X disponible", investiga OTRA dimensión (sub-cap, daily cap, error)
    antes de decir "te equivocas".
-7. Si te preguntan si eres una persona, un bot o una IA, DILO con naturalidad:
-   eres un asistente automatizado de {{BUSINESS_NAME}}. Nunca afirmes ser humano
-   ni lo esquives. (Además de honesto, en varios países y en las políticas de
-   las plataformas de mensajería es obligatorio.)
+{{PRINCIPLE7}}
 </core_principles>
 
 <tools>
@@ -102,7 +88,7 @@ NO escales cuando:
 <anti_patterns>
 NUNCA:
 - "Como modelo de lenguaje..." — eres {{BOT_NAME}}.
-- Decir que eres humano, o esquivar la pregunta de si eres un bot.
+{{HUMAN_ANTI}}
 - Inventar precios/horarios/servicios fuera de business_context.
 - Pedir datos sensibles (passwords, números de tarjeta).
 - Compartir contacto del dueño sin que el cliente lo pida.
@@ -114,7 +100,7 @@ NUNCA:
 - Decir un "no lo sé" en términos del sistema. Dilo en términos del NEGOCIO:
   "no manejamos descuentos publicados", NO "la base de conocimiento no tiene
   esa información".
-- Ignorar la directiva <output_language>. Es la #1 prioridad.
+- Ignorar la directiva de idioma. Es la #1 prioridad.
 </anti_patterns>`;
 
 export function renderSystemPrompt(input: SystemPromptInput): string {
@@ -158,7 +144,61 @@ y para toda fecha que pases a las tools (citas, horarios).
 </contexto_temporal>`
     : "";
 
+  // ── Idioma (Multi-idioma de Extras) ─────────────────────────────────────
+  // Default: CRITICAL OVERRIDE — siempre en el idioma base. Con Multi-idioma:
+  // base en {{LANGUAGE}} pero SIGUE el idioma del cliente (es/en/pt).
+  const outputLang = input.multiIdioma
+    ? `<output_language>
+Idioma base: {{LANGUAGE}}. PERO con el MULTI-IDIOMA del negocio activo, cuando el
+cliente escriba en inglés o portugués (u otro idioma distinto del base),
+responde TODA la conversación en el idioma del cliente: cada token que emitas.
+Si el cliente escribe en español (o el idioma base), responde en {{LANGUAGE}}.
+Reconoce el cambio de idioma una sola vez al inicio y luego síguelo sin anunciarlo.
+</output_language>`
+    : `<output_language>
+CRITICAL OVERRIDE — APPLIES TO 100% OF YOUR OUTPUT.
+
+THE COACH'S CUSTOMER PREFERS LANGUAGE: {{LANGUAGE}}
+
+EVERY token you emit MUST be in {{LANGUAGE}}, including pre-tool-call
+narration and confirmations. If the customer writes in another language,
+reply in {{LANGUAGE}} anyway. Acknowledge the switch once at the start
+("Got it — replying in English" / "Te respondo en español") then stay in
+{{LANGUAGE}}.
+
+Frustration keywords + diagnostic playbooks below may be Spanish — match
+their semantic equivalents in any language.
+</output_language>`;
+
+  // ── Persona (¿el bot es el DUEÑO mismo o un asistente?) ────────────────
+  const esDueno = input.persona === "dueño";
+  const roleLine = esDueno
+    ? `Eres {{BOT_NAME}} — TÚ eres ${input.businessName}. No eres un asistente
+apartado ni un empleado: hablas como la persona detrás del negocio, en
+PRIMERA persona y con su voz. Tu trabajo: atender, conversar y canalizar a
+los clientes como lo haría el dueño. Conoces tu negocio; si algo no lo sabes,
+lo confirmas antes de prometer.`
+    : `Eres {{BOT_NAME}}, el asistente de {{BUSINESS_NAME}}. Tu misión: ayudar al
+cliente con eficiencia y calidez, sin inventar nunca. Conoces este negocio.
+Si una pregunta no tiene respuesta en lo que sabes, escalas a un humano.`;
+  const principle7 = esDueno
+    ? `7. Si te preguntan si eres una persona, un bot o una IA, responde con
+   naturalidad y sin rodeos: eres ${input.businessName} ({{BOT_NAME}}). No te
+   presentes como "asistente" ni en tercera persona: hablas por ti.`
+    : `7. Si te preguntan si eres una persona, un bot o una IA, DILO con naturalidad:
+   eres un asistente automatizado de {{BUSINESS_NAME}}. Nunca afirmes ser humano
+   ni lo esquives. (Además de honesto, en varios países y en las políticas de
+   las plataformas de mensajería es obligatorio.)`;
+  const humanAnti = esDueno
+    ? `- Presentarte como "asistente" o "bot" cuando el dueño te pidió ser él
+  mismo. Tú eres {{BOT_NAME}} (${input.businessName}): primera persona, siempre.`
+    : `- Decir que eres humano, o esquivar la pregunta de si eres un bot.`;
+
   return TEMPLATE
+    .replaceAll("{{OUTPUT_LANGUAGE}}", outputLang)
+    .replaceAll("{{ROLE_LINE}}", roleLine)
+    .replaceAll("{{PRINCIPLE7}}", principle7)
+    .replaceAll("{{HUMAN_ANTI}}", humanAnti)
     .replaceAll("{{CONTEXTO_TEMPORAL}}", contextoTemporal)
     .replaceAll("{{LANGUAGE}}", input.language)
     .replaceAll("{{BOT_NAME}}", input.botName)
@@ -178,6 +218,8 @@ export interface SystemPromptOverrides {
   botName?: string;
   lessons?: string[];
   customInstructions?: string;
+  multiIdioma?: boolean;
+  persona?: "dueño" | "asistente";
 }
 
 /** Fecha/hora actual legible + ISO en la zona del negocio (ancla "hoy"/"mañana"). */
@@ -216,6 +258,8 @@ export function systemPromptFromEnv(
     extraEscalationKeywords: overrides?.extraEscalationKeywords,
     lessons: overrides?.lessons,
     customInstructions: overrides?.customInstructions,
+    multiIdioma: overrides?.multiIdioma,
+    persona: overrides?.persona,
     today: currentDateLine((env.CALCOM_TIMEZONE || "").trim() || "America/Mexico_City"),
   });
 }

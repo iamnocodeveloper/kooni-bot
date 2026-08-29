@@ -222,6 +222,15 @@ export async function renderConfig(
           placeholder: env.BOT_NAME ?? "Mi asistente",
         })}
 
+        <div style="display:flex;flex-direction:column;gap:6px;max-width:420px">
+          <label class="font-display font-semibold text-[12.5px] text-cream" for="${SETTING_KEYS.agentPersona}">¿Quién responde los chats?</label>
+          <p class="text-dim text-[11px]">Por defecto el bot se presenta como asistente del negocio. Si eliges “Tú mismo”, el bot habla en primera persona como el dueño (no dice “soy el asistente”).</p>
+          <select id="${SETTING_KEYS.agentPersona}" name="${SETTING_KEYS.agentPersona}" style="${SELECT_STYLE}">
+            <option value="" ${(settings[SETTING_KEYS.agentPersona] ?? "") !== "dueño" ? "selected" : ""}>Asistente del negocio</option>
+            <option value="dueño" ${settings[SETTING_KEYS.agentPersona] === "dueño" ? "selected" : ""}>Tú mismo (primera persona)</option>
+          </select>
+        </div>
+
         ${renderTextArea({
           name: SETTING_KEYS.businessContext,
           label: "Información del negocio",
