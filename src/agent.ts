@@ -30,6 +30,8 @@ export interface SupportAgentState {
   toolCallsInLast2Turns: number;
   lastSearchKbScore: number;
   imageRetryCount: number;
+  /** Para responder en el hilo del último mensaje entrante (Telegram grupos). */
+  lastReplyToMessageId?: number;
 }
 
 export interface AgentIncomingPayload {
@@ -40,6 +42,8 @@ export interface AgentIncomingPayload {
   audioUrl?: string;
   imageUrl?: string;
   isOwnerMessage?: boolean;
+  /** Para responder en el hilo (Telegram grupos). */
+  replyToMessageId?: number;
 }
 
 export class SupportAgent extends Agent<Env, SupportAgentState> {
@@ -72,6 +76,7 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
       channel: payload.channel,
       channelUserId: payload.channelUserId,
       conversationId: conv.id,
+      lastReplyToMessageId: payload.replyToMessageId,
     });
 
     // Registrar contacto (todos los que interactúan, separado de Leads).
@@ -537,6 +542,8 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
         channelUserId: this.state.channelUserId,
         chunks,
         interChunkDelayMs: cfg.interChunkDelayMs,
+        // En grupos de Telegram, responder en el hilo del mensaje entrante.
+        ...(this.state.lastReplyToMessageId != null ? { replyToMessageId: this.state.lastReplyToMessageId } : {}),
         ...(buttons && buttons.length ? { buttons } : {}),
       },
       this.env,

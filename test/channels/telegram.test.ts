@@ -48,6 +48,43 @@ describe("telegramAdapter.parseIncoming", () => {
     expect(msg.displayName).toBe("Ana");
   });
 
+  it("grupo: usa el id del grupo como destino y marca replyToMessageId", async () => {
+    const msg = await telegramAdapter.parseIncoming(
+      makeReq({
+        update_id: 2,
+        message: {
+          message_id: 42,
+          from: { id: 555, first_name: "Ana", is_bot: false },
+          chat: { id: -100123456789, type: "supergroup" },
+          date: 100,
+          text: "¿precios?",
+        },
+      }),
+      env,
+    );
+    expect(msg.channelUserId).toBe("g-100123456789");
+    expect(msg.replyToMessageId).toBe(42);
+    expect(msg.isOwnerMessage).toBe(false);
+  });
+
+  it("ignora mensajes de otros bots (evita loops bot↔bot)", async () => {
+    await expect(
+      telegramAdapter.parseIncoming(
+        makeReq({
+          update_id: 3,
+          message: {
+            message_id: 1,
+            from: { id: 999, first_name: "OtroBot", is_bot: true },
+            chat: { id: -100123456789, type: "supergroup" },
+            date: 100,
+            text: "hola",
+          },
+        }),
+        env,
+      ),
+    ).rejects.toThrow("another bot");
+  });
+
   it("resolves voice notes to a real download URL via getFile", async () => {
     mockGetFile("voice/file_5.oga");
     const msg = await telegramAdapter.parseIncoming(
@@ -144,6 +181,28 @@ describe("telegramAdapter.sendReply — botones y multimedia (Fase A)", () => {
       { text: "Precios", callback_data: "precios" },
       { text: "Web", url: "https://kooni.click" },
     ]);
+  });
+
+  it("grupo: envía al chat del grupo y responde en el hilo (reply_to_message_id)", async () => {
+    const fetchMock = vi.fn(async () => new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await telegramAdapter.sendReply(
+      {
+        channel: "telegram",
+        channelUserId: "g-100123456789",
+        chunks: ["Claro, los precios están en el menú"],
+        replyToMessageId: 42,
+      },
+      { TELEGRAM_BOT_TOKEN: "tok" } as any,
+    );
+
+    const calls = fetchMock.mock.calls as unknown as [string, RequestInit][];
+    const sendMsg = calls.find((c) => String(c[0]).includes("/sendMessage"));
+    expect(sendMsg).toBeTruthy();
+    const body = JSON.parse(sendMsg![1].body as string);
+    expect(body.chat_id).toBe("-100123456789"); // el grupo, no el usuario
+    expect(body.reply_to_message_id).toBe(42);
   });
 
   it("envía imagen con sendPhoto y el primer chunk como caption", async () => {

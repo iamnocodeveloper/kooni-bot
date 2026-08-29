@@ -37,7 +37,13 @@ export const telegramAdapter: ChannelAdapter = {
     const update = (await request.json()) as TgUpdate;
     const msg = update.message;
     if (!msg) throw new Error("not a message update");
-    const channelUserId = String(msg.from.id);
+    // Grupos: ignoramos mensajes de OTROS bots (evita loops bot↔bot).
+    if (msg.from?.is_bot) throw new Error("message from another bot — ignored");
+    const isGroup = msg.chat.type === "group" || msg.chat.type === "supergroup";
+    // channelUserId = id del chat al que responder:
+    //   privado → id del usuario (como antes)
+    //   grupo   → "g" + id del grupo (negativo en supergrupos)
+    const channelUserId = isGroup ? `g${msg.chat.id}` : String(msg.from.id);
     const displayName = msg.from.first_name;
     let text = msg.text;
     let audioUrl: string | undefined;
@@ -61,8 +67,11 @@ export const telegramAdapter: ChannelAdapter = {
       // The owner intervenes from their own Telegram account: detect by matching
       // the sender against OWNER_TELEGRAM_CHAT_ID (the same id used for handoff DMs).
       isOwnerMessage:
+        !isGroup &&
         env.OWNER_TELEGRAM_CHAT_ID != null &&
         channelUserId === String(env.OWNER_TELEGRAM_CHAT_ID),
+      // En grupos, la respuesta va EN el hilo de ese mensaje.
+      replyToMessageId: isGroup ? msg.message_id : undefined,
       receivedAt: Date.now(),
       rawPayload: update,
     };
@@ -72,6 +81,10 @@ export const telegramAdapter: ChannelAdapter = {
     const token = await resolveTelegramToken(env);
     if (!token) throw new Error("TELEGRAM_BOT_TOKEN not set");
 
+    // Grupo → chat_id real ("g" + id) y respondemos en el hilo del mensaje.
+    const isGroup = reply.channelUserId.startsWith("g");
+    const chatId = isGroup ? reply.channelUserId.slice(1) : reply.channelUserId;
+    const replyToMessageId = isGroup ? reply.replyToMessageId : undefined;
     // Teclado inline (botones) — se adjunta al ÚLTIMO chunk de texto.
     const replyMarkup =
       reply.buttons && reply.buttons.length > 0
@@ -96,9 +109,10 @@ export const telegramAdapter: ChannelAdapter = {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          chat_id: reply.channelUserId,
+          chat_id: chatId,
           photo: reply.imageUrl,
           caption: first.slice(0, 1024) || undefined,
+          ...(replyToMessageId ? { reply_to_message_id: replyToMessageId } : {}),
           ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
         }),
       }).catch((e) => console.error("telegram sendPhoto error:", e));
@@ -107,9 +121,10 @@ export const telegramAdapter: ChannelAdapter = {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          chat_id: reply.channelUserId,
+          chat_id: chatId,
           voice: reply.audioUrl,
           caption: first.slice(0, 1024) || undefined,
+          ...(replyToMessageId ? { reply_to_message_id: replyToMessageId } : {}),
           ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
         }),
       }).catch((e) => console.error("telegram sendVoice error:", e));
@@ -120,7 +135,7 @@ export const telegramAdapter: ChannelAdapter = {
       await fetch(`${TG_API}${token}/sendChatAction`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chat_id: reply.channelUserId, action: "typing" }),
+        body: JSON.stringify({ chat_id: chatId, action: "typing" }),
       }).catch(() => {});
       const delay = i === 0 ? 0 : reply.interChunkDelayMs ?? 1000;
       if (delay > 0) await new Promise((r) => setTimeout(r, delay));
@@ -129,8 +144,9 @@ export const telegramAdapter: ChannelAdapter = {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          chat_id: reply.channelUserId,
+          chat_id: chatId,
           text: textChunks[i],
+          ...(replyToMessageId ? { reply_to_message_id: replyToMessageId } : {}),
           ...(isLast && replyMarkup ? { reply_markup: replyMarkup } : {}),
         }),
       });
@@ -143,7 +159,7 @@ export const telegramAdapter: ChannelAdapter = {
     await fetch(`${TG_API}${token}/sendChatAction`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: channelUserId, action: "typing" }),
+      body: JSON.stringify({ chat_id: channelUserId.startsWith("g") ? channelUserId.slice(1) : channelUserId, action: "typing" }),
     }).catch(() => {});
   },
 };

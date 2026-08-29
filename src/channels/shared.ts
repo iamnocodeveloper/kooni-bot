@@ -10,6 +10,8 @@ export interface IncomingMessage {
   isOwnerMessage?: boolean;
   receivedAt: number;
   rawPayload: unknown;
+  /** Para responder en el hilo del mensaje entrante (Telegram grupos). */
+  replyToMessageId?: number;
 }
 
 export interface OutgoingReply {
@@ -23,6 +25,8 @@ export interface OutgoingReply {
   imageUrl?: string;
   /** URL de audio para adjuntar (si el canal lo soporta). */
   audioUrl?: string;
+  /** Para responder EN el hilo (Telegram grupos): message_id del mensaje entrante. */
+  replyToMessageId?: number;
 }
 
 /** Botón de respuesta (Telegram inline_keyboard / Zernio buttons / etc.). */
