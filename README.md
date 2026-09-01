@@ -53,6 +53,13 @@ Descarga el template, te hace unas preguntas sobre tu negocio y despliega tu bot
 en TU cuenta de Cloudflare. Al terminar tienes tu dashboard en
 `https://<slug>.workers.dev/admin`.
 
+> **Subdominio workers.dev:** si tu cuenta de Cloudflare aún no tiene uno, el CLI
+> (v0.2.14+) lo crea solo al desplegar y reintenta — no tienes que hacer nada.
+> Más detalle y fallback manual en [`docs/DESPLIEGUE.md §2.1`](docs/DESPLIEGUE.md).
+
+> **Cambiar contraseñas y llaves** (panel `/admin`, cerebro, canales): comandos en
+> [`docs/DESPLIEGUE.md §4.1`](docs/DESPLIEGUE.md).
+
 Actualizaciones sin perder datos:
 
 ```bash
@@ -89,6 +96,10 @@ pnpm run deploy
 ```
 
 Tu panel queda en `https://<tu-worker>.workers.dev/admin`.
+
+> **Subdominio workers.dev (error 10063):** Cloudflare lo exige para publicar.
+> Los instaladores `scripts/kooni-init.sh|ps1` lo crean solos si falta; a mano:
+> Workers & Pages → "Change" junto a "Your subdomain" (ver docs/DESPLIEGUE.md §2.1).
 
 > Paso a paso completo (con canales: Telegram, WhatsApp, Meta, ManyChat y avisos al
 > dueño): [`docs/DESPLIEGUE.md`](docs/DESPLIEGUE.md). Con Claude Code, el skill

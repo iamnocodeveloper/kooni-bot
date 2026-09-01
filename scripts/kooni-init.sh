@@ -53,6 +53,52 @@ info() { echo "── $1"; }
 ok()   { echo "  ✅ $1"; }
 warn() { echo "  ⚠️  $1"; }
 
+# workers.dev subdomain (Cloudflare error 10063): si la cuenta aún no tiene
+# subdominio, lo creamos vía API usando la sesión OAuth que wrangler ya guardó
+# en disco (sin pedirle nada al usuario). Imprime el subdominio si lo tiene/crea;
+# si no puede, devuelve vacío (el caller muestra los pasos manuales).
+ensure_workers_subdomain() {
+  local cfg="" c="" refresh="" tokjson="" acc="" newref="" account="" sub="" candidate=""
+  for c in \
+    "${APPDATA:-$HOME/AppData/Roaming}/xdg.config/.wrangler/config/default.toml" \
+    "$HOME/.config/.wrangler/config/default.toml" \
+    "$HOME/.wrangler/config/default.toml" \
+    "$HOME/AppData/Local/.wrangler/config/default.toml"; do
+    [ -f "$c" ] && cfg="$c" && break
+  done
+  [ -z "$cfg" ] && return 1
+  refresh="$(grep -E '^(refresh_token|oauth_token) = ' "$cfg" | head -1 | sed -E 's/^[^=]*= *"([^"]*)"/\1/')"
+  [ -z "$refresh" ] && return 1
+  tokjson="$(curl -s -X POST "https://dash.cloudflare.com/oauth2/token" \
+    -H "Content-Type: application/x-www-form-urlencoded" \
+    --data-urlencode "grant_type=refresh_token" \
+    --data-urlencode "refresh_token=$refresh" \
+    --data-urlencode "client_id=54d11594-84e4-41aa-b438-e81b8fa78ee7")"
+  acc="$(echo "$tokjson" | python -c "import sys,json;print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null)"
+  [ -z "$acc" ] && return 1
+  # Cloudflare ROTA el refresh token en cada uso: devuélvelo al config de wrangler
+  # (si no, la próxima sesión de wrangler muere con error 9109).
+  newref="$(echo "$tokjson" | python -c "import sys,json;print(json.load(sys.stdin).get('refresh_token',''))" 2>/dev/null)"
+  if [ -n "$newref" ]; then
+    sed -i.bak -E "s|^(refresh_token) = \"[^\"]*\"|\1 = \"$newref\"|" "$cfg" 2>/dev/null && rm -f "$cfg.bak"
+    sed -i.bak -E 's|^(expiration_time) = "[^"]*"|\1 = "2000-01-01T00:00:00.000Z"|' "$cfg" 2>/dev/null && rm -f "$cfg.bak"
+  fi
+  account="$(curl -s "https://api.cloudflare.com/client/v4/accounts" -H "Authorization: Bearer $acc" \
+    | python -c "import sys,json;r=json.load(sys.stdin).get('result',[]);print(r[0]['id'] if r else '')" 2>/dev/null)"
+  [ -z "$account" ] && return 1
+  sub="$(curl -s "https://api.cloudflare.com/client/v4/accounts/$account/workers/subdomain" -H "Authorization: Bearer $acc" \
+    | python -c "import sys,json;print(json.load(sys.stdin).get('result',{}).get('subdomain',''))" 2>/dev/null)"
+  if [ -n "$sub" ]; then echo "$sub"; return 0; fi
+  candidate="$(echo "${KOONI_SLUG:-kooni}" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9-' | sed -E 's/-+/-/g; s/^-|-$//g' | cut -c1-24)"
+  [ -z "$candidate" ] && candidate="kooni"
+  sub="$(curl -s -X PUT "https://api.cloudflare.com/client/v4/accounts/$account/workers/subdomain" \
+    -H "Authorization: Bearer $acc" -H "Content-Type: application/json" \
+    -d "{\"subdomain\":\"$candidate\"}" \
+    | python -c "import sys,json;print(json.load(sys.stdin).get('result',{}).get('subdomain',''))" 2>/dev/null)"
+  [ -n "$sub" ] && { echo "$sub"; return 0; }
+  return 1
+}
+
 echo ""
 echo "══════════════════════════════════════════════════════"
 echo "  🔨 KOONI · asistente de configuración"
@@ -117,8 +163,9 @@ XAI_API_KEY=${KOONI_API_KEY}
 ${KOONI_BASE_URL:+OPENAI_API_BASE_URL=${KOONI_BASE_URL}}
 DASHBOARD_PASSWORD=${KOONI_DASH_PASS}
 KB_REINDEX_TOKEN=${KOONI_KB_TOKEN}
+${KOONI_LICENSE_MASTER_KEY:+LICENSE_MASTER_KEY=${KOONI_LICENSE_MASTER_KEY}}
 VARS
-ok ".dev.vars escrito (secrets: IA, panel, reindex)"
+ok ".dev.vars escrito (secrets: IA, panel, reindex, licencias)"
 
 # wrangler.toml ([vars] + nombre del worker)
 python - "$KOONI_SLUG" "$KOONI_BUSINESS_NAME" "$KOONI_BOT_NAME" "$KOONI_LANGUAGE" "$KOONI_TIER" "$LLM_PROVIDER" <<'PY'
@@ -246,11 +293,27 @@ PY
     put_secret XAI_API_KEY "$(grep '^XAI_API_KEY=' .dev.vars | cut -d= -f2-)"
     put_secret DASHBOARD_PASSWORD "$(grep '^DASHBOARD_PASSWORD=' .dev.vars | cut -d= -f2-)"
     put_secret KB_REINDEX_TOKEN "$(grep '^KB_REINDEX_TOKEN=' .dev.vars | cut -d= -f2-)"
+    # Llave maestra de licencias (debe coincidir con la del panel de licencias).
+    # En .dev.vars si el instalador la trae; si no, definela: KOONI_LICENSE_MASTER_KEY=...
+    put_secret LICENSE_MASTER_KEY "$(grep '^LICENSE_MASTER_KEY=' .dev.vars | cut -d= -f2-)"
 
     info "   migraciones + deploy..."
     pnpm install >/dev/null 2>&1 || true
     pnpm db:apply:remote >/dev/null 2>&1 && ok "migraciones D1 aplicadas" || warn "db:apply:remote falló (¿D1 listo?)"
     pnpm run deploy 2>&1 | tee /tmp/kooni-deploy.log | grep -E "Uploaded|Deployed|workers.dev" | head -3
+    # Error 10063: la cuenta no tiene subdominio workers.dev → créalo solo y reintenta.
+    if ! grep -qE "Deployed kooni-bot" /tmp/kooni-deploy.log && grep -qE "10063|workers\.dev subdomain" /tmp/kooni-deploy.log; then
+      warn "tu cuenta de Cloudflare no tiene subdominio workers.dev — creándolo automáticamente…"
+      SUB="$(ensure_workers_subdomain)"
+      if [ -n "$SUB" ]; then
+        ok "subdominio listo: $SUB.workers.dev — reintentando deploy"
+        pnpm run deploy 2>&1 | tee /tmp/kooni-deploy.log | grep -E "Uploaded|Deployed|workers.dev" | head -3
+      else
+        warn "no pude crearlo solo. Hazlo manual (1 min):"
+        echo "    https://dash.cloudflare.com/?to=/:account/workers-and-pages  → Workers & Pages → 'Change' junto a 'Your subdomain'"
+        echo "    o crea un API token (Workers Scripts → Edit) y corre el PUT /workers/subdomain — ver docs/DESPLIEGUE.md §2.1"
+      fi
+    fi
     WORKER_URL="$(grep -oE 'https://[a-z0-9-]+\.workers\.dev' /tmp/kooni-deploy.log | head -1)"
     if [ -n "$WORKER_URL" ]; then
       python - "$WORKER_URL" <<'PY'

@@ -38,6 +38,19 @@ export interface Env {
   // uid de 6 chars de esta instalación (estampado por el CLI en wrangler.toml).
   // Sirve para ligar las licencias Pro a UNA instalación concreta.
   BOT_INSTANCE_ID?: string;
+  // URL de la función `registrar-uso` del panel de licencias del dueño. Si está
+  // definida, el cron nocturno envía métricas agregadas + costos de IA (usage.ts).
+  USAGE_PUSH_URL?: string;
+  // Token compartido de registro/uso (X-Kooni-Token) — estampado por el CLI.
+  KOONI_REGISTER_TOKEN?: string;
+  // Marca blanca del panel /admin (para revendedores): colores, nombre y logo.
+  BRAND_NAME?: string;
+  BRAND_LOGO_URL?: string;
+  BRAND_PRIMARY?: string;
+  BRAND_PRIMARY_SOFT?: string;
+  BRAND_ACCENT2?: string;
+  BRAND_BG?: string;
+  BRAND_PANEL?: string;
 
   // Secrets (member-set via wrangler secret put)
   ANTHROPIC_API_KEY: string;

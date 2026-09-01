@@ -19,10 +19,10 @@ import { realpathSync } from "node:fs";
 import { join, basename } from "node:path";
 import { homedir } from "node:os";
 import { execFileSync, spawnSync } from "node:child_process";
-import { randomUUID } from "node:crypto";
+import { randomUUID, createHmac } from "node:crypto";
 import { fileURLToPath } from "node:url";
 
-const CLI_VERSION = "0.2.13";
+const CLI_VERSION = "0.2.17";
 
 const REPO = process.env.KOONI_REPO || "iamnocodeveloper/kooni-bot";
 const BRANCH = process.env.KOONI_BRANCH || "main";
@@ -36,6 +36,19 @@ const CFG_FILE = join(CFG_DIR, "config.json");
 const INSTALLS_FILE = join(CFG_DIR, "installs.json");
 const MARKER = ".kooni-bot.json";
 const SKILL_DIR = join(homedir(), ".claude", "skills", "kooni");
+
+// Llave maestra de licencias (HMAC de los códigos KOONI-PRO-…). DEBE coincidir
+// con el secret LICENSE_MASTER_KEY del panel de licencias (InsForge kooni-licencias)
+// para que los códigos que genera el panel validen en TODAS las instalaciones.
+// Tradeoff conocido de la validación local HMAC: la llave viaja en cada worker.
+// La mejora recomendada (firma asimétrica, pública en el worker) está en PLAN.md.
+const LICENSE_MASTER_KEY = process.env.KOONI_LICENSE_MASTER_KEY || "KqQGmLK7yMl-MISS2JtMd0bCY5lws_a926ksFCIkZkk";
+
+// Token compartido de registro/uso (X-Kooni-Token). DEBE coincidir con el secret
+// REGISTER_TOKEN del panel de licencias (InsForge). Es "seguridad por oscuridad"
+// (vive en el CLI público y en cada worker — ver tarea S4 en PLAN.md): el blindaje
+// real lo dan la validación de formato y el rechazo de uids desconocidos.
+const KOONI_REGISTER_TOKEN = process.env.KOONI_REGISTER_TOKEN || "1f8740b841b71f21eba510eb12b8e6870b5949a916cf1162";
 
 // ── color ─────────────────────────────────────────────────────────────────────
 const C = {
@@ -122,6 +135,9 @@ const DICT = {
     // error
     templateMissing: "no encontré el instalador en el template.",
     deployFailed: "el deploy falló. Revisa los mensajes de arriba.",
+    noSubdomain: "tu cuenta de Cloudflare no tiene subdominio workers.dev — lo estoy creando automáticamente…",
+    subdomainOk: (s) => `subdominio listo: ${s}.workers.dev`,
+    subdomainManual: "no pude crear el subdominio automáticamente (no encontré tu sesión de Cloudflare). Hazlo manual, 1 min:",
     unknown: "comando desconocido:",
     helpIntro: "instala tu asistente de IA en Cloudflare",
   },
@@ -189,6 +205,9 @@ const DICT = {
     qEmail: "Your email? (optional, for support)",
     templateMissing: "installer not found in template.",
     deployFailed: "deploy failed. Check the messages above.",
+    noSubdomain: "your Cloudflare account has no workers.dev subdomain yet — creating it automatically…",
+    subdomainOk: (s) => `subdomain ready: ${s}.workers.dev`,
+    subdomainManual: "couldn't create the subdomain automatically (I couldn't find your Cloudflare session). Do it manually, 1 min:",
     unknown: "unknown command:",
     helpIntro: "install your AI assistant on Cloudflare",
   },
@@ -651,6 +670,13 @@ function stampWrangler(dir, answers, botUid) {
     s = s.replace(/^(\s*\[vars\][^\n]*\n)/m, `$1BOT_INSTANCE_ID = "${uid}"\n`);
   }
 
+  // Token compartido de registro/uso (panel de licencias del dueño).
+  if (hasInVars("KOONI_REGISTER_TOKEN")) {
+    set(/KOONI_REGISTER_TOKEN\s*=\s*"[^"]*"/g, `KOONI_REGISTER_TOKEN = "${KOONI_REGISTER_TOKEN}"`);
+  } else {
+    s = s.replace(/^(\s*\[vars\][^\n]*\n)/m, `$1KOONI_REGISTER_TOKEN = "${KOONI_REGISTER_TOKEN}"\n`);
+  }
+
   if (answers.provider !== "anthropic") {
     if (hasInVars("LLM_PROVIDER")) {
       set(/LLM_PROVIDER\s*=\s*"[^"]*"/g, `LLM_PROVIDER = "${answers.provider}"`);
@@ -738,6 +764,11 @@ function writeDevVars(dir, answers, kbToken) {
   lines.push("# " + answers.secret + "=<tu-api-key>  ← para wrangler dev local, pégalo aquí (o usa el panel)");
   lines.push(`DASHBOARD_PASSWORD=${answers.dashPassword || "kooni-local-password"}`);
   lines.push(`KB_REINDEX_TOKEN=${kbToken}`);
+  // Llave maestra de licencias: igual en todas las instalaciones (debe coincidir
+  // con la del panel de licencias para que los códigos KOONI-PRO validen).
+  lines.push(`LICENSE_MASTER_KEY=${LICENSE_MASTER_KEY}`);
+  // Token compartido de registro/uso (X-Kooni-Token para el panel de licencias).
+  lines.push(`KOONI_REGISTER_TOKEN=${KOONI_REGISTER_TOKEN}`);
   writeFileSync(join(dir, ".dev.vars"), lines.join("\n") + "\n");
 }
 
@@ -771,6 +802,7 @@ function collectAnswers(flags) {
     reglas: String(flags.reglas || "").trim() || undefined,
     tone,
     email: String(flags.email || "").trim() || undefined,
+    licenseCode: String(flags.license || "").trim() || undefined,
   };
 }
 
@@ -851,7 +883,58 @@ async function onboarding(rl, answers, defaultDir) {
   ], { value: answers.tone, default: 0 });
   answers.tone = ["cercano", "formal", "divertido"][toneIdx] || "cercano";
 
+  // Correo del dueño: se pide SIEMPRE (registra la instalación en el panel de
+  // licencias y es el canal de contacto/renovación). En interactivo se exige un
+  // valor (con reintento); en modo agente/CI viene por --email.
+  if (!answers.email) {
+    while (interactive()) {
+      const em = (await ask(rl, t().qEmail, undefined)).trim();
+      if (em) { answers.email = em; break; }
+      console.log("  " + C.yellow("⚠") + " " + m("el correo es obligatorio para registrar tu instalación.", "email is required to register your install."));
+    }
+  }
+
+  // Licencia Pro: si el usuario dice que es Pro, pide el código y lo valida
+  // localmente (HMAC con la master key). Si es válido se guarda tras el deploy
+  // (settings pro_license → límites quitados). Si es inválido, se avisa y sigue gratis.
+  const wantsPro = interactive()
+    ? await confirm(rl, m("¿Tu bot será Pro (tienes una licencia)?", "Will your bot be Pro (do you have a license)?"))
+    : !!(flags.license || answers.licenseCode);
+  if (wantsPro) {
+    const code = answers.licenseCode || (interactive()
+      ? await ask(rl, m("Pega tu código KOONI-PRO-…:", "Paste your KOONI-PRO-… code:"), undefined)
+      : String(flags.license || "").trim());
+    if (code && verifyKooniLicense(code)) {
+      answers.licenseCode = code.trim();
+      console.log("  " + C.green("✓") + " " + m("licencia válida — se activará al terminar la instalación.", "valid license — it will be activated when the install finishes."));
+    } else if (code) {
+      console.log("  " + C.yellow("⚠") + " " + m("ese código no es válido. Puedes corregirlo luego en el panel → Licencia.", "that code isn't valid. You can fix it later in the panel → Licencia."));
+    }
+  }
+
   return answers;
+}
+
+// ── licencia Pro ─────────────────────────────────────────────────────────────
+// Valida un código KOONI-PRO-… localmente (mismo formato que src/license.ts del
+// bot): HMAC-SHA256(payload, LICENSE_MASTER_KEY). No exige que esté ligado a
+// esta instalación (eso lo revalida el panel al leerlo).
+function verifyKooniLicense(code) {
+  const trimmed = String(code || "").trim();
+  const prefix = "KOONI-PRO-";
+  if (!trimmed.startsWith(prefix)) return false;
+  const rest = trimmed.slice(prefix.length);
+  const dot = rest.lastIndexOf(".");
+  if (dot <= 0) return false;
+  const enc = rest.slice(0, dot);
+  const sig = rest.slice(dot + 1);
+  try {
+    const calc = createHmac("sha256", LICENSE_MASTER_KEY).update(enc).digest("hex");
+    if (calc !== sig) return false;
+    const payload = JSON.parse(Buffer.from(enc, "base64url").toString("utf8"));
+    if (payload.kind === "monthly" && payload.expiry && Date.now() > payload.expiry) return false;
+    return true;
+  } catch { return false; }
 }
 
 // ── deploy ───────────────────────────────────────────────────────────────────
@@ -883,6 +966,114 @@ function patchWranglerFile(dir, fn) {
   if (!existsSync(wt)) return;
   const s = readFileSync(wt, "utf8");
   writeFileSync(wt, fn(s));
+}
+
+// ── workers.dev subdomain (Cloudflare error 10063) ───────────────────────────
+// Cuando la cuenta aún no tiene subdominio workers.dev, `wrangler deploy` falla
+// con [code: 10063]. Lo resolvemos SOLO con la API de Cloudflare reutilizando la
+// sesión OAuth que wrangler ya guardó en disco (sin pedirle nada al usuario); si
+// no es posible, mostramos los pasos manuales + la opción de API token.
+const CF_OAUTH_CLIENT_ID = "54d11594-84e4-41aa-b438-e81b8fa78ee7"; // cliente OAuth público de wrangler
+
+function wranglerConfigCandidates() {
+  const h = homedir();
+  const appdata = process.env.APPDATA || join(h, "AppData", "Roaming");
+  return [
+    join(appdata, "xdg.config", ".wrangler", "config", "default.toml"),
+    join(h, ".config", ".wrangler", "config", "default.toml"),
+    join(h, ".wrangler", "config", "default.toml"),
+    join(h, "AppData", "Local", ".wrangler", "config", "default.toml"),
+  ].filter((p) => existsSync(p));
+}
+
+// Access token OAuth temporal a partir de la sesión guardada de wrangler.
+// IMPORTANTE: Cloudflare ROTA el refresh token en cada intercambio. Si no lo
+// devolvemos al config, invalidamos la sesión de wrangler (error 9109 al
+// siguiente deploy). Por eso: 1) si el access token almacenado aún no expiró,
+// se usa directo (sin tocar el refresh); 2) si hay que refrescar, se persiste
+// el par nuevo de vuelta al config, igual que hace wrangler.
+async function cfOAuthAccessToken() {
+  const cfgPath = wranglerConfigCandidates()[0];
+  if (!cfgPath) return null;
+  let raw = "";
+  try { raw = readFileSync(cfgPath, "utf8"); } catch { return null; }
+  const pick = (k) => {
+    const line = raw.split(/\r?\n/).find((l) => l.trim().startsWith(k + " "));
+    if (!line) return "";
+    const m = line.match(/=\s*"([^"]*)"/);
+    return m ? m[1] : "";
+  };
+  const storedAccess = pick("oauth_token");
+  const exp = pick("expiration_time");
+  // 1) Access token almacenado aún vigente → úsalo directo (cero rotación).
+  if (storedAccess && exp && new Date(exp).getTime() > Date.now()) {
+    try {
+      const probe = await fetchRetry("https://api.cloudflare.com/client/v4/accounts", { headers: { Authorization: "Bearer " + storedAccess } }, { ms: 8000, tries: 1 });
+      if (probe.ok) return storedAccess;
+    } catch {}
+  }
+  // 2) Refrescar: intercambia el refresh token y PERSISTE el par nuevo.
+  const refresh = pick("refresh_token") || pick("oauth_token");
+  if (!refresh) return null;
+  try {
+    const res = await fetchRetry("https://dash.cloudflare.com/oauth2/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: refresh, client_id: CF_OAUTH_CLIENT_ID }),
+    }, { ms: 10000, tries: 2 });
+    if (!res.ok) return null;
+    const j = await res.json().catch(() => ({}));
+    if (!j.access_token) return null;
+    try {
+      const nextRefresh = j.refresh_token || refresh;
+      const expIso = new Date(Date.now() + (j.expires_in || 3599) * 1000).toISOString();
+      const out = raw
+        .replace(/^oauth_token\s*=\s*"[^"]*"/m, `oauth_token = "${j.access_token}"`)
+        .replace(/^refresh_token\s*=\s*"[^"]*"/m, `refresh_token = "${nextRefresh}"`)
+        .replace(/^expiration_time\s*=\s*"[^"]*"/m, `expiration_time = "${expIso}"`);
+      if (out !== raw) writeFileSync(cfgPath, out);
+    } catch {}
+    return j.access_token;
+  } catch { return null; }
+}
+
+async function cfApi(access, path, method = "GET", body) {
+  const res = await fetchRetry("https://api.cloudflare.com/client/v4" + path, {
+    method,
+    headers: { Authorization: "Bearer " + access, "Content-Type": "application/json" },
+    body: body ? JSON.stringify(body) : undefined,
+  }, { ms: 15000, tries: 2 });
+  const json = await res.json().catch(() => ({}));
+  return { status: res.status, json };
+}
+
+// Nombre candidato para el subdominio, derivado del slug del bot.
+function proposeSubdomain(slug) {
+  const s = sanitizeSlug(slug || "kooni").replace(/[^a-z0-9-]/g, "").replace(/-+/g, "-").replace(/^-|-$/g, "");
+  return (s.slice(0, 24).replace(/-+$/, "") || "kooni");
+}
+
+async function ensureWorkersDevSubdomain(dir) {
+  const slug = (readMarker(dir) || {}).slug || basename(dir);
+  const access = await cfOAuthAccessToken();
+  if (!access) return { ok: false, reason: "no-oauth" };
+  try {
+    const acc = await cfApi(access, "/accounts");
+    const accounts = (acc.json && acc.json.result) || [];
+    if (!accounts.length) return { ok: false, reason: "no-account" };
+    const account = accounts[0];
+    const sub = await cfApi(access, `/accounts/${account.id}/workers/subdomain`);
+    const existing = sub.json && sub.json.result && sub.json.result.subdomain;
+    if (existing) return { ok: true, subdomain: existing, accountId: account.id, accountName: account.name, via: "existing" };
+    const candidate = proposeSubdomain(slug);
+    const put = await cfApi(access, `/accounts/${account.id}/workers/subdomain`, "PUT", { subdomain: candidate });
+    const created = put.json && put.json.result && put.json.result.subdomain;
+    if (put.status < 300 && created) return { ok: true, subdomain: created, accountId: account.id, accountName: account.name, via: "created" };
+    const msg = (put.json && put.json.errors && put.json.errors[0] && put.json.errors[0].message) || `HTTP ${put.status}`;
+    return { ok: false, reason: "create-failed", message: msg, candidate, accountId: account.id };
+  } catch (e) {
+    return { ok: false, reason: "api-error", message: e.message || String(e) };
+  }
 }
 
 async function deployBot(dir, { flags = {}, rl } = {}) {
@@ -974,6 +1165,33 @@ async function deployBot(dir, { flags = {}, rl } = {}) {
     }
   } catch {}
 
+  // Licencia Pro capturada en el onboarding: se activa después del deploy
+  // escribiendo el código en settings (key pro_license), igual que el panel.
+  const licenseCode = (flags.license || "") ? String(flags.license).trim() : (flags._licenseCode || "");
+  if (flags._licenseCode) {
+    try {
+      const code = String(flags._licenseCode).trim();
+      const now = Date.now();
+      const sql = `INSERT INTO settings (key, value, updated_at) VALUES ('pro_license', '${code.replace(/'/g, "''")}', ${now}) ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at;`;
+      const tmp = join(dir, ".kooni-license.sql");
+      writeFileSync(tmp, sql);
+      wrangler(dir, ["d1", "execute", dbName, "--file=" + tmp, "--remote"], { capture: true });
+      rmSync(tmp, { force: true });
+      console.log("  " + C.green("✓") + " " + m("licencia Pro activada (código guardado)", "Pro license activated (code saved)"));
+    } catch (e) {
+      console.log("  " + C.yellow("⚠") + " " + m("no pude guardar la licencia automáticamente — pégala en el panel → Licencia.", "couldn't save the license automatically — paste it in the panel → Licencia."));
+    }
+  }
+
+  // Llave maestra de licencias: TODAS las instalaciones la llevan, para que los
+  // códigos KOONI-PRO-… generados desde el panel validen aquí.
+  if (LICENSE_MASTER_KEY && LICENSE_MASTER_KEY !== "KqQGmLK7yMl-MISS2JtMd0bCY5lws_a926ksFCIkZkk") {
+    try {
+      wrangler(dir, ["secret", "put", "LICENSE_MASTER_KEY"], { input: LICENSE_MASTER_KEY, capture: true });
+      console.log("  " + C.green("✓") + " " + t().secretOk("LICENSE_MASTER_KEY"));
+    } catch {}
+  }
+
   // dependencias + migraciones + deploy (progreso visible en vivo)
   console.log("\n  " + C.dim(t().installing));
   console.log("  " + C.dim(m("esto puede tardar unos minutos la primera vez (descarga el runtime y compila dependencias).", "this may take a few minutes the first time (downloads the runtime and builds native deps).")));
@@ -985,17 +1203,49 @@ async function deployBot(dir, { flags = {}, rl } = {}) {
   console.log("  " + C.green("✓") + " " + m("migraciones aplicadas", "migrations applied"));
 
   console.log("  " + C.dim(t().deploying));
-  let url = "";
-  try {
+  const deployOnce = () => {
     const dep = runPnpm(dir, ["run", "deploy"], { capture: true });
     // La URL real incluye el subdominio de la cuenta: <worker>.<cuenta>.workers.dev
-    url = (dep.match(/https:\/\/[a-z0-9-]+(?:\.[a-z0-9-]+)*\.workers\.dev/) || [])[0] || "";
+    return (dep.match(/https:\/\/[a-z0-9-]+(?:\.[a-z0-9-]+)*\.workers\.dev/) || [])[0] || "";
+  };
+  const deployErrorText = (e) => ((e && (e.stderr || e.stdout || e.message)) || "").toString();
+
+  let url = "";
+  try {
+    url = deployOnce();
   } catch (e) {
-    // Muestra el detalle real del deploy en vez de tragarlo: así el usuario ve
-    // qué falló (deploy-check, binding, auth…) y puede corregirlo.
-    const tail = ((e && (e.stderr || e.stdout || e.message)) || "").toString().trim().split("\n").slice(-12).join("\n");
-    if (tail) console.log(C.red("  ✗ " + tail));
-    throw new Error(t().deployFailed);
+    const errText = deployErrorText(e);
+    if (/10063|workers\.dev subdomain/.test(errText)) {
+      // La cuenta no tiene subdominio workers.dev: lo creamos automáticamente
+      // con la sesión OAuth de wrangler y reintentamos el deploy.
+      console.log("  " + C.yellow("⚠") + " " + t().noSubdomain);
+      const fix = await ensureWorkersDevSubdomain(dir);
+      if (fix.ok) {
+        console.log("  " + C.green("✓") + " " + t().subdomainOk(fix.subdomain));
+        try {
+          url = deployOnce();
+        } catch (e2) {
+          const tail2 = deployErrorText(e2).trim().split("\n").slice(-12).join("\n");
+          if (tail2) console.log(C.red("  ✗ " + tail2));
+          throw new Error(t().deployFailed);
+        }
+      } else {
+        // Fallback: instrucciones manuales + opción de API token.
+        console.log(C.red("  ✗ " + t().subdomainManual));
+        if (fix.message) console.log("    " + C.dim(fix.message));
+        console.log("    " + C.cyan("https://dash.cloudflare.com/?to=/:account/workers-and-pages") + "  " + C.dim(m("→ Workers & Pages → 'Change' junto a 'Your subdomain'", "→ Workers & Pages → 'Change' next to 'Your subdomain'")));
+        console.log("    " + m("o crea un API token (Workers Scripts → Edit) y corre:", "or create an API token (Workers Scripts → Edit) and run:"));
+        console.log("    " + C.cyan(`curl -X PUT "https://api.cloudflare.com/client/v4/accounts/${fix.accountId || "<ACCOUNT_ID>"}/workers/subdomain" -H "Authorization: Bearer <TU_TOKEN>" -H "Content-Type: application/json" -d '{"subdomain":"${fix.candidate || "kooni"}"'`));
+        console.log("    " + m("Luego reintenta: npx kooni-bot deploy", "Then retry: npx kooni-bot deploy"));
+        throw new Error(t().deployFailed);
+      }
+    } else {
+      // Muestra el detalle real del deploy en vez de tragarlo: así el usuario ve
+      // qué falló (deploy-check, binding, auth…) y puede corregirlo.
+      const tail = errText.trim().split("\n").slice(-12).join("\n");
+      if (tail) console.log(C.red("  ✗ " + tail));
+      throw new Error(t().deployFailed);
+    }
   }
   if (url) {
     patchWranglerFile(dir, (s) => s.replace(/DASHBOARD_BASE_URL\s*=\s*"[^"]*"/g, `DASHBOARD_BASE_URL = "${url}"`));
@@ -1016,7 +1266,7 @@ async function checkin(dir, answers, version) {
     const slug = answers.slug || marker.slug || basename(dir);
     await fetchTimeout(CHECKIN_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "X-Kooni-Token": KOONI_REGISTER_TOKEN },
       body: JSON.stringify({
         email: answers.email || undefined,
         slug,
@@ -1083,6 +1333,11 @@ Si dudas: **member/ es sagrado, src/ se actualiza.**
 2. \`npx kooni-bot deploy\` (login de Cloudflare, D1/Vectorize/R2, secrets, migraciones, deploy).
 3. Abrir el panel en \`https://<worker>.workers.dev/admin\` (usuario \`admin\` + \`DASHBOARD_PASSWORD\`).
 4. Conectar canales DESPUÉS del primer deploy (Telegram primero, ~5 min) desde \`/admin/conexiones\`.
+
+## Subdominio workers.dev (error 10063)
+- Si el deploy falla con \`[code: 10063]\` ("You need a workers.dev subdomain"), el CLI **lo crea solo** usando la sesión OAuth de wrangler y reintenta el deploy automáticamente — no hay que hacer nada manual.
+- Si el CLI no pudo (sin sesión de Cloudflare), el usuario hace: dashboard → Workers & Pages → **Change** junto a "Your subdomain" → guardar. O crea un API token con permiso **Workers Scripts → Edit** en dash.cloudflare.com/profile/api-tokens y corre el curl que el propio CLI imprime.
+- El subdominio es ÚNICO por cuenta de Cloudflare (no por bot); se crea una sola vez.
 
 ## Secrets y vars (referencia rápida)
 - Secrets: \`ANTHROPIC_API_KEY\` / \`OPENAI_API_KEY\` / \`XAI_API_KEY\` (cerebro), \`DASHBOARD_PASSWORD\` (panel), \`KB_REINDEX_TOKEN\` (reindex).
@@ -1202,9 +1457,13 @@ async function cmdInit(flags, rest) {
       kbName: meta && meta.kbName,
     });
 
+    // Check-in al panel de licencias ANTES del deploy: así TODAS las instalaciones
+    // (gratis o pagas) quedan registradas aunque el deploy falle (ej. error 10063).
+    await checkin(dir, answers, version);
+
     // deploy (si no lo deshabilitan)
     if (!flags["no-deploy"] && !process.env.KOONI_NO_DEPLOY) {
-      const deployFlags = { ...flags, brainKey: answers.brainKey, "api-key": answers.apiKey || "" };
+      const deployFlags = { ...flags, brainKey: answers.brainKey, "api-key": answers.apiKey || "", _licenseCode: answers.licenseCode || "" };
       const url = await deployBot(dir, { flags: deployFlags, rl });
       if (url) {
         console.log("\n  " + C.green(C.b(m("🎉 BOT EN LÍNEA", "🎉 BOT LIVE"))));
@@ -1252,6 +1511,8 @@ async function cmdDeploy(flags, rest) {
     } catch {}
     flags.brainKey = brainKey;
     await deployBot(dir, { flags, rl });
+    // Re-registrar tras un deploy exitoso (URL real del worker + tier/provider).
+    try { await checkin(dir, {}, readPkgVersion(dir) || "0.0.0"); } catch {}
   } catch (e) {
     console.log("\n  " + C.red("✗ " + (e.message || e)) + "\n");
     process.exit(1);
@@ -1448,11 +1709,13 @@ ${C.cyan("kooni-bot")} — ${t().helpIntro}
   ${C.cyan("npx kooni-bot doctor [dir]")}  ${m("diagnóstico del bot instalado", "diagnose the installed bot")}
   ${C.cyan("npx kooni-bot version")}       ${m("versión del CLI", "CLI version")}
 
+${C.dim("  Subdominio workers.dev: si tu cuenta no lo tiene, el deploy lo crea solo y reintenta.")}
+
 ${C.dim("  Flags de init (modo no-interactivo, para agentes):")}
 ${C.dim("    --yes  --slug <slug>  --negocio <nombre>  --bot-name <nombre>  --lang es-MX|es-ES|en|pt-BR")}
 ${C.dim("    --tier free|pro  --cerebro claude|chatgpt|grok|gateway  --base-url <url>")}
 ${C.dim("    --que --ofrece --horario --ubicacion --telefono --web --pagos --faq --reglas --tono")}
-${C.dim("    --no-deploy  --no-agent-skill  --email <correo>")}
+${C.dim("    --no-deploy  --no-agent-skill  --email <correo>  --license <codigo-KOONI-PRO>")}
 `);
 }
 
@@ -1482,4 +1745,4 @@ if (IS_MAIN) {
   });
 }
 
-export { parseFlags, renderMemberConfig, stampWrangler, sanitizeSlug, normBotLang, collectAnswers };
+export { parseFlags, renderMemberConfig, stampWrangler, sanitizeSlug, normBotLang, collectAnswers, cfOAuthAccessToken, ensureWorkersDevSubdomain };

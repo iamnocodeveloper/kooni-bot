@@ -59,6 +59,47 @@ function Exec([string]$cmd, [string[]]$ArgsList) {
   $out = & $cmd @ArgsList 2>&1 | Out-String
   return $out
 }
+
+# workers.dev subdomain (Cloudflare error 10063): si la cuenta aún no tiene
+# subdominio, lo creamos vía API usando la sesión OAuth que wrangler ya guardó
+# en disco. Devuelve el subdominio (o ya existía / recién creado) o $null.
+function Ensure-WorkersSubdomain {
+  $cands = @(
+    (Join-Path $env:APPDATA "xdg.config\.wrangler\config\default.toml"),
+    (Join-Path $HOME ".config\.wrangler\config\default.toml"),
+    (Join-Path $HOME ".wrangler\config\default.toml"),
+    (Join-Path $env:LOCALAPPDATA ".wrangler\config\default.toml")
+  )
+  $cfg = $cands | Where-Object { Test-Path $_ } | Select-Object -First 1
+  if (-not $cfg) { return $null }
+  $raw = Get-Content $cfg -Raw -Encoding utf8
+  $m = [regex]::Match($raw, '^(?:refresh_token|oauth_token)\s*=\s*"([^"]*)"', [Text.RegularExpressions.RegexOptions]::Multiline)
+  if (-not $m.Success) { return $null }
+  $refresh = $m.Groups[1].Value
+  try {
+    $tok = Invoke-RestMethod -Method Post -Uri "https://dash.cloudflare.com/oauth2/token" -ContentType "application/x-www-form-urlencoded" -Body @{ grant_type="refresh_token"; refresh_token=$refresh; client_id="54d11594-84e4-41aa-b438-e81b8fa78ee7" }
+    $acc = $tok.access_token
+    if (-not $acc) { return $null }
+    # Cloudflare ROTA el refresh token en cada uso: devuélvelo al config de wrangler
+    # (si no, la próxima sesión de wrangler muere con error 9109).
+    if ($tok.refresh_token) {
+      $raw = [regex]::Replace($raw, '^(refresh_token)\s*=\s*"[^"]*"', ('$1 = "' + $tok.refresh_token + '"'), 1, [Text.RegularExpressions.RegexOptions]::Multiline)
+      $raw = [regex]::Replace($raw, '^(expiration_time)\s*=\s*"[^"]*"', '$1 = "2000-01-01T00:00:00.000Z"', 1, [Text.RegularExpressions.RegexOptions]::Multiline)
+      [IO.File]::WriteAllText($cfg, $raw, (New-Object Text.UTF8Encoding $false))
+    }
+    $hdr = @{ Authorization = "Bearer $acc" }
+    $accounts = (Invoke-RestMethod -Uri "https://api.cloudflare.com/client/v4/accounts" -Headers $hdr).result
+    if (-not $accounts -or $accounts.Count -eq 0) { return $null }
+    $accountId = $accounts[0].id
+    $sub = (Invoke-RestMethod -Uri "https://api.cloudflare.com/client/v4/accounts/$accountId/workers/subdomain" -Headers $hdr).result.subdomain
+    if ($sub) { return $sub }
+    $clean = $Slug.ToLower() -replace '[^a-z0-9-]','' -replace '-+','-'
+    $candidate = ($clean.Trim('-')).Substring(0, [Math]::Min(24, $clean.Trim('-').Length))
+    if (-not $candidate) { $candidate = "kooni" }
+    $put = Invoke-RestMethod -Method Put -Uri "https://api.cloudflare.com/client/v4/accounts/$accountId/workers/subdomain" -Headers $hdr -ContentType "application/json" -Body (@{ subdomain = $candidate } | ConvertTo-Json)
+    return $put.result.subdomain
+  } catch { return $null }
+}
 function Find-Exe([string]$name) {
   foreach ($c in @("$name.cmd", "$name.exe", "$name.ps1", $name)) {
     if (Get-Command $c -ErrorAction SilentlyContinue) { return $c }
@@ -139,9 +180,10 @@ XAI_API_KEY=$ApiKey
 $($(if ($BaseURL) { "OPENAI_API_BASE_URL=$BaseURL" }))
 DASHBOARD_PASSWORD=$DashPass
 KB_REINDEX_TOKEN=$KbToken
+$(if ($env:KOONI_LICENSE_MASTER_KEY) { "LICENSE_MASTER_KEY=$($env:KOONI_LICENSE_MASTER_KEY)" })
 "@
 [IO.File]::WriteAllText((Join-Path $Root ".dev.vars"), $devVars, (New-Object Text.UTF8Encoding $false))
-OK ".dev.vars escrito (secrets: IA, panel, reindex)"
+OK ".dev.vars escrito (secrets: IA, panel, reindex, licencias)"
 
 $toml = Get-Content "wrangler.toml" -Raw -Encoding utf8
 $toml = [regex]::Replace($toml, 'name = "kooni-bot-[^"]*"', 'name = "kooni-bot-' + $Slug + '"')
@@ -274,11 +316,26 @@ if ($Mode -eq "deploy") {
   Put-Secret "XAI_API_KEY" $map["XAI_API_KEY"]
   Put-Secret "DASHBOARD_PASSWORD" $map["DASHBOARD_PASSWORD"]
   Put-Secret "KB_REINDEX_TOKEN" $map["KB_REINDEX_TOKEN"]
+  # Llave maestra de licencias (debe coincidir con la del panel de licencias).
+  Put-Secret "LICENSE_MASTER_KEY" $map["LICENSE_MASTER_KEY"]
 
   Step 6 6 "Migraciones + Deploy (publicar)"
   Exec $PNPM @("install") | Out-Null
   Exec $PNPM @("db:apply:remote") | Out-Null
   $dep = Exec $PNPM @("run","deploy")
+  # Error 10063: la cuenta no tiene subdominio workers.dev → créalo solo y reintenta.
+  if ($dep -notmatch "Deployed kooni-bot" -and $dep -match "10063|workers\.dev subdomain") {
+    Warn "tu cuenta de Cloudflare no tiene subdominio workers.dev — creándolo automáticamente…"
+    $Sub = Ensure-WorkersSubdomain
+    if ($Sub) {
+      OK "subdominio listo: $Sub.workers.dev — reintentando deploy"
+      $dep = Exec $PNPM @("run","deploy")
+    } else {
+      Warn "no pude crearlo solo. Hazlo manual (1 min):"
+      Write-Host "    https://dash.cloudflare.com/?to=/:account/workers-and-pages  → Workers & Pages → 'Change' junto a 'Your subdomain'"
+      Write-Host "    o crea un API token (Workers Scripts → Edit) y corre el PUT /workers/subdomain — ver docs/DESPLIEGUE.md §2.1"
+    }
+  }
   $url = [regex]::Match($dep, 'https://[a-z0-9-]+\.workers\.dev').Value
   if ($url) {
     $toml = Get-Content "wrangler.toml" -Raw -Encoding utf8

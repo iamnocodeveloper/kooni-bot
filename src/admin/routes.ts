@@ -119,6 +119,20 @@ adminApp.get("/upgrade", async (c) => c.html(await renderUpgrade(c.env)));
 // Root → default tab.
 adminApp.get("/", (c) => c.redirect("/admin/overview"));
 
+// Cerrar sesión (Basic Auth): al recibir 401 + WWW-Authenticate, el navegador
+// limpia las credenciales guardadas de este realm y pedirá login en la próxima
+// visita. Es el equivalente a "logout" para autenticación básica.
+adminApp.get("/logout", (c) =>
+  new Response("Sesión cerrada. Vuelve a entrar cuando quieras (usuario admin).", {
+    status: 401,
+    headers: {
+      "WWW-Authenticate": 'Basic realm="Kooni", charset="UTF-8"',
+      "Content-Type": "text/plain; charset=utf-8",
+      "Cache-Control": "no-store",
+    },
+  }),
+);
+
 // Selector de proyectos (header): instancia actual + hermanas de PEER_BOTS.
 adminApp.get("/projects", (c) =>
   c.json({ current: c.env.BOT_NAME ?? "Mi bot", peers: parsePeerBots(c.env) }),

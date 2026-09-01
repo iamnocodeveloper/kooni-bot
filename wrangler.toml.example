@@ -47,6 +47,23 @@ BOT_LANGUAGE = "es"
 BOT_TIER = "free"                     # 'free' | 'pro' — pro se activa con licencia en el panel
 BUFFER_SECONDS = "15"
 DASHBOARD_BASE_URL = "https://{{BOT_SLUG}}.workers.dev"
+# Reporte de uso al panel de licencias del dueño (kooni-licencias): el cron
+# nocturno envía métricas agregadas + costos de IA a esta función (registrar-uso).
+# Vacío = no se envía nada. El CLI del dueño lo estampa automáticamente.
+USAGE_PUSH_URL = ""
+# Token compartido de registro/uso (X-Kooni-Token) — lo estampa el CLI; debe
+# coincidir con el secret REGISTER_TOKEN del panel de licencias del dueño.
+KOONI_REGISTER_TOKEN = ""
+# ── Marca blanca del panel /admin (revendedores) ──────────────────────────────
+# Sin estas vars, el panel usa la identidad Kooni. Con ellas, un revendedor
+# puede ofrecer el mismo bot con SU nombre, logo y colores (reseller white-label).
+# BRAND_NAME = "Mi Agencia"
+# BRAND_LOGO_URL = "https://midominio.com/logo.png"
+# BRAND_PRIMARY = "#2dd4bf"
+# BRAND_PRIMARY_SOFT = "rgba(45,212,191,.13)"
+# BRAND_ACCENT2 = "#6ee7b7"
+# BRAND_BG = "#0d1218"
+# BRAND_PANEL = "#141b24"
 # Zernio (multicanal — IG/FB/TG/WhatsApp…): automatizaciones desde el panel /admin/automatizaciones.
 # (las reglas se gestionan en el panel; aquí solo si quieres defaults por env)
 

@@ -193,6 +193,16 @@ wrangler secret put DASHBOARD_PASSWORD
 wrangler deploy
 ```
 
+> **Subdominio workers.dev (error 10063):** si el deploy falla con
+> "You need a workers.dev subdomain [code: 10063]", la cuenta aún no tiene
+> subdominio `workers.dev`. Es un requisito de Cloudflare, se crea **una sola vez
+> por cuenta**, y el CLI `npx kooni-bot` (v0.2.14+) / los instaladores
+> `scripts/kooni-init.*` lo crean solos y reintentan. A mano: dashboard →
+> Workers & Pages → **Change** junto a "Your subdomain" → guardar, y volver a
+> `wrangler deploy`. (Detalle + opción con API token: `docs/DESPLIEGUE.md §2.1`.)
+> Si en cambio falla con "Invalid access token [code: 9109]", la sesión OAuth se
+> invalidó: corre `wrangler login` otra vez.
+
 Captura la **URL del Worker** que imprime el deploy (ej. `https://<bot-slug>.<cuenta>.workers.dev`). La vamos a usar en todo lo que sigue.
 
 Después, **actualiza `DASHBOARD_BASE_URL`** en `wrangler.toml` con la URL real del Worker y vuelve a correr `wrangler deploy` si cambió (para que los enlaces del panel apunten bien).

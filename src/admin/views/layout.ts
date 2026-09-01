@@ -301,7 +301,27 @@ function applyNiche(item: Item, niche: NichePack | null): Item {
 // SVG inline para no depender de lucide en el brand mark.
 const K_MARK = `<svg width="18" height="18" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M11 23V9h2.5l5 7.5 5-7.5H26v14h-3V15l-4.5 6.8L13 15v8h-2z" fill="var(--accent)"/><circle cx="23" cy="9" r="2" fill="var(--accent-2)"/></svg>`;
 
-function sidebar(activeTab: string, locked: (id: string) => boolean, niche: NichePack | null, tierLabel: string): string {
+// ── Marca blanca (revendedores) ──────────────────────────────────────────────
+// El panel hereda la identidad de Kooni salvo que el instalador/revendedor
+// defina vars BRAND_* (ver wrangler.toml y env.ts). Colores = CSS custom
+// properties con override; nombre/logo van en la sidebar.
+interface Brand { name: string; logo: string; primary: string; primarySoft: string; accent2: string; bg: string; panel: string; }
+function resolveBrand(env?: Env): Brand {
+  return {
+    name: env?.BRAND_NAME || "Kooni",
+    logo: env?.BRAND_LOGO_URL || "",
+    primary: env?.BRAND_PRIMARY || "#2dd4bf",
+    primarySoft: env?.BRAND_PRIMARY_SOFT || "rgba(45,212,191,.13)",
+    accent2: env?.BRAND_ACCENT2 || "#6ee7b7",
+    bg: env?.BRAND_BG || "#0d1218",
+    panel: env?.BRAND_PANEL || "#141b24",
+  };
+}
+function brandOverrides(b: Brand): string {
+  return `:root{--bg:${b.bg};--panel:${b.panel};--accent:${b.primary};--accent-2:${b.accent2};--accent-soft:${b.primarySoft}}`;
+}
+
+function sidebar(activeTab: string, locked: (id: string) => boolean, niche: NichePack | null, tierLabel: string, brand: Brand = { name: "Kooni", logo: "", primary: "#2dd4bf", primarySoft: "rgba(45,212,191,.13)", accent2: "#6ee7b7", bg: "#0d1218", panel: "#141b24" }): string {
   const sections = NAV.map((sec) => {
     const hasActive = sec.items.some((i) => i.id === activeTab);
     const labelColor = hasActive ? "var(--accent)" : "var(--dim)";
@@ -333,10 +353,10 @@ function sidebar(activeTab: string, locked: (id: string) => boolean, niche: Nich
     <div class="sb-brand" style="padding:20px 18px 16px;border-bottom:1px solid var(--line)">
       <div style="display:flex;align-items:center;gap:10px">
         <div style="width:34px;height:34px;flex:none;border:1.5px solid var(--accent);display:flex;align-items:center;justify-content:center;background:var(--accent-soft);box-shadow:3px 3px 0 var(--linelit)">
-          ${K_MARK}
+          ${brand.logo ? `<img src="${brand.logo}" alt="" style="width:20px;height:20px;object-fit:contain">` : K_MARK}
         </div>
         <div style="line-height:1.05">
-          <div style="font-family:'Space Grotesk';font-weight:700;font-size:15px;letter-spacing:-.02em">Kooni</div>
+          <div style="font-family:'Space Grotesk';font-weight:700;font-size:15px;letter-spacing:-.02em">${brand.name}</div>
           <div style="font-size:9.5px;letter-spacing:.22em;color:var(--dim);text-transform:uppercase">Panel · ${tierLabel}</div>
         </div>
       </div>
@@ -379,10 +399,11 @@ export async function layout(opts: { title: string; activeTab: string; body: str
   <title>${opts.title}</title>
   ${HEAD_ASSETS}
   ${GLOBAL_STYLE}
+  ${opts.env ? `<style>${brandOverrides(resolveBrand(opts.env))}</style>` : ""}
 </head>
 <body class="scanlines">
   <div class="shell">
-    ${sidebar(opts.activeTab, lockedSync, niche, tierLabel)}
+    ${sidebar(opts.activeTab, lockedSync, niche, tierLabel, resolveBrand(opts.env))}
     <div style="display:flex;flex-direction:column;min-width:0">
       <header style="position:sticky;top:0;z-index:30;background:rgba(13,18,24,.9);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);padding:14px 26px;display:flex;align-items:center;gap:20px">
         <div style="min-width:0">
@@ -394,6 +415,7 @@ export async function layout(opts: { title: string; activeTab: string; body: str
           <span style="width:8px;height:8px;border-radius:50%;background:var(--ok);animation:pulse 1.8s ease-in-out infinite,ring 2s infinite"></span>
           <span style="font-size:11px;font-weight:600;letter-spacing:.04em">BOT EN LÍNEA</span>
         </div>
+        <a href="/admin/logout" title="Cerrar sesión: limpia las credenciales guardadas del navegador" style="display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600;letter-spacing:.04em;color:var(--dim);border:1px solid var(--line);padding:7px 12px;text-decoration:none">Cerrar sesión</a>
       </header>
       <main style="padding:22px 26px;min-width:0">${opts.body}</main>
     </div>

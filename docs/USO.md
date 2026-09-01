@@ -12,7 +12,9 @@ https://<tu-worker>.workers.dev/admin
 ```
 
 - **usuario:** `admin`
-- **contraseña:** la que definiste con `DASHBOARD_PASSWORD`
+- **contraseña:** la que definiste con `DASHBOARD_PASSWORD`. Para **cambiarla**:
+  `cd <carpeta-del-bot>` → `npx wrangler secret put DASHBOARD_PASSWORD` (aplica al
+  instante, sin redeploy). Detalle de todos los secrets en `docs/DESPLIEGUE.md §4.1`.
 - (Alternativa: magic link — entra con tu email si `admin_emails` lo contiene.)
 
 El panel está en español, tema oscuro Kooni (tinta + teal). De izquierda a derecha:
@@ -123,8 +125,15 @@ Con `BOT_NICHE` en `wrangler.toml` el panel se re-etiqueta (ej. "Leads" →
 | `pnpm db:apply:remote` | Migraciones D1 en la nube |
 | `pnpm run deploy` | Publicar |
 | `pnpm kb:reindex` | Reindexar `member/kb/*.md` (no es el camino normal — usa el panel) |
-| `npx wrangler secrets list` | Ver qué secrets existen (sin valores) |
+| `npx wrangler secret list` | Ver qué secrets existen (sin valores) |
+| `npx wrangler secret put <NOMBRE>` | **Cambiar/crear un secret** (contraseña del panel, llaves de IA, tokens de canales) — te la pide en entrada oculta; aplica al instante sin redeploy |
+| `npx wrangler secret delete <NOMBRE>` | Borrar un secret (ej. desactivar un canal) |
+| `npx wrangler secret bulk secrets.json` | Poner varios secrets a la vez desde un JSON (no lo commitees) |
 | `npx wrangler tail` | Logs en vivo del worker |
+
+> Los secrets de Cloudflare **no se pueden leer de vuelta** (solo sobrescribir o
+> borrar). Los secrets locales para `wrangler dev` viven en `.dev.vars`. Guía
+> completa de qué secret es cada canal: `docs/DESPLIEGUE.md §4.1`.
 
 ---
 

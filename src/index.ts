@@ -316,6 +316,23 @@ app.post("/kb/reindex", async (c) => {
 
 app.notFound((c) => c.text("not found", 404));
 
+// La raíz del worker redirige al panel: en cualquier dispositivo, entrar a la
+// URL del bot sin /admin ya no da "not found" — va al login del panel.
+app.get("/", (c) => c.redirect("/admin", 302));
+
+// Trigger manual del reporte de uso (mismo token que /kb/reindex): permite al
+// dueño forzar el envío al panel de licencias sin esperar el cron nocturno.
+app.post("/usage/push", async (c) => {
+  const provided = c.req.header("X-Reindex-Token") ?? "";
+  const expected = c.env.KB_REINDEX_TOKEN ?? "";
+  if (!expected || !tokensMatch(provided, expected)) {
+    return c.json({ ok: false, error: "unauthorized" }, 401);
+  }
+  const { pushUsage } = await import("./usage");
+  const r = await pushUsage(c.env);
+  return c.json({ ok: r.ok, detail: r.detail }, r.ok ? 200 : 500);
+});
+
 export default {
   // Bind so Hono keeps its `this` when invoked as `worker.fetch(req, env, ctx)`
   // (both by the Cloudflare runtime and by tests). Passing `app.fetch` unbound
@@ -381,5 +398,9 @@ export default {
     } catch (e) {
       console.error("copiloto:", e);
     }
+    // Uso del sistema → panel de licencias del dueño (si USAGE_PUSH_URL está
+    // definida): métricas agregadas + costos de IA. Fire-and-forget.
+    const { pushUsage } = await import("./usage");
+    await pushUsage(env);
   },
 } satisfies ExportedHandler<Env>;

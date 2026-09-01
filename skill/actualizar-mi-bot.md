@@ -195,6 +195,36 @@ fi
 (Guardarlo en `.dev.vars` —local y gitignored— hace que las próximas actualizaciones
 reutilicen el mismo token sin rotarlo.)
 
+## Paso 8.5 — Cambiar contraseñas y secrets (a pedido del dueño)
+
+Cuando el dueño pida "cambiar la contraseña del panel" o "actualizar una llave/token",
+corre los comandos **dentro de la carpeta del bot**; aplican al instante sin redeploy.
+Los secrets de Cloudflare **no se pueden leer de vuelta**: solo sobrescribir (`put`)
+o borrar (`delete`).
+
+```bash
+# Contraseña del panel /admin (usuario: admin) — pega la nueva en la entrada oculta
+wrangler secret put DASHBOARD_PASSWORD
+
+# Llave del cerebro (IA)
+wrangler secret put ANTHROPIC_API_KEY   # Claude
+wrangler secret put OPENAI_API_KEY      # ChatGPT / AIsa / Gateway
+wrangler secret put XAI_API_KEY         # Grok
+
+# Tokens de canales (lista completa por canal: docs/DESPLIEGUE.md §4.1)
+wrangler secret put TELEGRAM_BOT_TOKEN
+wrangler secret put ZERNIO_API_KEY
+
+# Ver / borrar
+wrangler secret list
+wrangler secret delete <NOMBRE>
+```
+
+Reglas: **nunca pegues el valor en el chat** (el dueño lo escribe en la entrada
+oculta de `secret put` o en `.dev.vars`); si el dueño quiere una contraseña nueva
+para el panel, pídele que la escriba él (o genérala y muéstrasela una sola vez);
+si sincronizas dev local, actualiza también la línea correspondiente en `.dev.vars`.
+
 **8.3 — Publica:**
 ```bash
 pnpm run deploy

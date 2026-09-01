@@ -27,6 +27,18 @@ Cloudflare (~gratis, ~$5/mes con tráfico) y el cerebro es su propia llave de IA
 > Nota: Kooni se despliega directo con `git`/`pnpm run deploy` — NO se usa el CLI
 > (el CLI legacy de referencia apunta a servidores externos — no usar).
 
+> **Subdominio workers.dev (error 10063):** Cloudflare lo exige para publicar (una
+> sola vez por cuenta). El CLI `npx kooni-bot` (v0.2.14+) y los instaladores
+> `scripts/kooni-init.sh|ps1` lo crean solos con tu sesión OAuth y reintentan. Si
+> aparece "Invalid access token [code: 9109]", la sesión se invalidó → `wrangler
+> login`. Detalle: `docs/DESPLIEGUE.md §2.1`.
+
+> **Cambiar contraseñas / secrets** (panel, cerebro, canales): `npx wrangler secret
+> put <NOMBRE>` dentro de la carpeta del bot (aplica al instante, sin redeploy).
+> No se pueden leer de vuelta; lista completa por secret en `docs/DESPLIEGUE.md
+> §4.1`. Cuando el dueño pida cambiar su contraseña, pídele que la escriba él y
+> guárdala con `secret put` (nunca pegarla en el chat).
+
 ## Reglas
 
 - **Habla en español sencillo (LATAM)**, una pregunta a la vez.

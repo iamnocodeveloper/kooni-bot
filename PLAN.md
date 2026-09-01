@@ -8,7 +8,7 @@
 ## 🏁 CIERRE DE ETAPA — BETA
 
 > **Estado:** bot de Joel en producción (`kooni-bot-joel-nocode-ec53aa.joeldavidar.workers.dev`),
-> template `v1.0.9` · CLI `0.2.9`. El dueño entra en **pruebas + lanzamiento beta**.
+> template `v1.0.9` · CLI `0.2.14`. El dueño entra en **pruebas + lanzamiento beta**.
 
 ### Entregado y verificado en esta etapa
 
@@ -19,7 +19,7 @@
 | Automatizaciones | 4 tipos: comentario→DM, comentario→público, comentario→DM+público, DM→respuesta + **follow gate completo** (botón "Ya te sigo", postback, re-pedido). |
 | Zernio | DM por cuenta de inbox, respuesta pública por cuenta de publicación; rate limit + dedup + links trackeados + `{username}`. |
 | IA | Proveedores: Claude, ChatGPT, Grok, **MiniMax**, Gateway. |
-| CLI | `init` / `deploy` / `update --all` / `doctor` / `version`; fix de detección de URL del worker (`<worker>.<cuenta>.workers.dev`). |
+| CLI | `init` / `deploy` / `update --all` / `doctor` / `version`; fix de detección de URL del worker (`<worker>.<cuenta>.workers.dev`). **v0.2.14**: auto-crea el subdominio `workers.dev` (error 10063) con la sesión OAuth de wrangler y reintenta el deploy; fallback manual + API token. Igual en `scripts/kooni-init.sh|ps1`. |
 | Sitio web | kooni.click: sección **CLI** en nav, footer con legal/ayuda, **Términos y Privacidad editables desde el panel** (con fecha de actualización). |
 | Calidad | **564/564 tests** verdes + typecheck OK. |
 
@@ -30,11 +30,29 @@
 - Activación de licencia en instalación nueva (`npx kooni-bot init` → panel → pegar código).
 - `npx kooni-bot update` sin pérdida de `member/` ni datos D1.
 
+### Sistema de licencias — arreglos hechos (2026-08-31)
+
+| # | Tarea | Estado |
+|---|---|---|
+| L1 | **Cardealer**: `BOT_TIER=pro` (premium sin licencia, como joeldavidar), `LICENSE_MASTER_KEY` seteada en el worker y registrada en `instalaciones` del panel de licencias (faltaba el check-in). | ✅ Hecho |
+| L2 | **Código inválido**: causa raíz = worker sin `LICENSE_MASTER_KEY` (la validación es HMAC local). Con la llave puesta, el código "daniel medrazi" (lifetime) ya firma válido y activa Pro en cualquier instalación. | ✅ Verificado |
+| L3 | **Correo en licencias gratis**: columna `correo` en `clientes` + `generar-licencia` exige correo válido cuando `precio=0` (y lo valida siempre que venga) + UI del panel con campo `Correo *`. | ✅ Hecho y desplegado |
+| L4 | **Registro de TODAS las instalaciones**: CLI 0.2.15 hace check-in ANTES del deploy (aunque falle) y re-registra tras deploy/update. Instalaciones gratis o pagas — todas aparecen en el panel. | ✅ En código |
+| L5 | **Master key en todas las instalaciones**: CLI 0.2.15 la pone como secret en cada instalación (`.dev.vars` + worker). Instaladores `kooni-init.sh|ps1` la leen de `.dev.vars`/env. | ✅ En código |
+| L6 | **CLI 0.2.16 — correo siempre + licencia Pro en el instalador**: `init` pide el correo del dueño (obligatorio) y pregunta si el bot será Pro; si pega un `KOONI-PRO-…` lo valida localmente (HMAC) y lo activa al terminar (settings `pro_license`, sin redeploy). Flags para agentes: `--email`, `--license`. | ✅ En código |
+| L7 | **Métricas del sistema en el panel de licencias**: worker → `registrar-uso` (cron nocturno + trigger `POST /usage/push` protegido), tabla `uso_instalaciones`, `listar-licencias` las incluye, UI con tarjeta "📊 Estadísticas del sistema" (mensajes, bot, conversaciones, leads, canales, contacto + **costo IA 30d**). Cardealer ya reporta con datos reales. | ✅ Hecho y verificado |
+| L8 | **Marca blanca del panel** (revendedores): vars `BRAND_*` (`BRAND_NAME`, `BRAND_LOGO_URL`, `BRAND_PRIMARY`, `BRAND_ACCENT2`, `BRAND_BG`, `BRAND_PANEL`…) → sidebar + paleta del `/admin` con la marca del revendedor; defaults = identidad Kooni. | ✅ En código |
+| L9 | **Dominio propio**: guía en `docs/DESPLIEGUE.md §4.5` (custom domain en dashboard/wrangler, `DASHBOARD_BASE_URL`, `workers_dev=false`, re-registro de webhooks). | ✅ Documentado |
+| L10 | **Health-checks por instalación**: función `healthcheck` (pingea `/health` de cada worker, marca `ok`/`caido`/`sin_verificar` + `ultimo_chequeo`) protegida con `X-Health-Token` (secret `HEALTH_TOKEN`), schedule cada 15 min, y badge de estado + última verificación en la tabla Instalaciones del panel. | ✅ Hecho y verificado (3 instalaciones `ok`) |
+| L11 | **UI del panel de licencias**: formulario con campo `instUid` (liga la licencia a una instalación, verificado: código con `inst=948b8b` valida en cardealer y se rechaza en otra), columna Correo en Clientes, columna Instalación en Licencias. | ✅ Hecho y desplegado |
+| L12 | **Acceso al panel desde cualquier dispositivo**: la raíz `/` ya no da "not found" — redirige a `/admin` (login). Botón **Cerrar sesión** en el header (ruta `/admin/logout` que responde 401 + `WWW-Authenticate realm="Kooni"` → el navegador limpia las credenciales guardadas; realm explícito en `adminAuth`). | ✅ Hecho y verificado |
+
 ### Pendientes menores / bloqueados
 
 | # | Tarea | Estado |
 |---|---|---|
-| I8 | Publicar CLI en npm (`kooni-bot@0.2.9`). | ⏳ El paquete ya existe (v0.2.8, dueño `nocodeveloper`); falta `npm login` con esa cuenta + `npm publish` (hoy dio 404 por sesión de otra cuenta). |
+| I8 | Publicar CLI en npm (`kooni-bot@0.2.17`). | ⏳ **HECHO**: 0.2.16 y 0.2.17 publicados (npm latest = 0.2.17). |
+| J1 | **Joel-nocode** (`kooni-bot-joel-nocode-ec53aa`, cuenta `joeldavidar` = 29074eb8): los fixes del panel (logout, raíz→/admin, realm) YA están en su `src/` pero **no se pueden desplegar** con la sesión actual (solo cubre b579b154/cardealerdani). Pendiente: `wrangler login` autorizando la cuenta joeldavidar (29074eb8) → `wrangler deploy`. | ⏳ Requiere login con la otra cuenta de Cloudflare |
 | F2 | Re-probar handoff en vivo. | ⏳ En pruebas. |
 
 ## Siguientes mejoras (roadmap post-beta)
@@ -48,6 +66,22 @@
    - **Imágenes en chat** (visión ya existe en Pro; pulir multiimagen y respuestas con imagen).
    - **Respuestas multimedia** (imagen/audio/botones) — hay base (`enviarRecurso`, `resource_library`).
 4. **Licencias estilo Forja** (sección F) — login por email + registro de dispositivo + dashboard de cuentas, cuando se necesite recurrencia/facturación real.
+5. **Validación asimétrica de licencias (Ed25519)** — recomendado para eliminar el tradeoff de la llave maestra: el worker solo lleva la **clave pública** (segura para distribuir en el CLI), el panel firma con la **privada** (solo en InsForge). Impide falsificar códigos aunque alguien tenga el CLI. Requiere: cambiar `src/license.ts` + `generar-licencia` + `scripts/gen-license.ts`, y versionar el formato de código (ej. `KOONI-PRO-V2-…`).
+6. **UI del panel de licencias** — exponer campos `botSlug` / `instUid` (instalación) en el formulario de generación, y mostrar el `correo` en la tabla de clientes.
+7. **Modelo de revendedores (marca blanca + recurrencia)** — licencias por agencia/revendedor: el revendedor paga una cuota/mensualidad (recurrencia real) y a cambio instala bots con su marca (`BRAND_*` ya implementado), con límites y reporte de su cartera desde el panel de licencias (rol `revendedor` en `profiles`, comisión/cuota por instalación activa).
+
+## Seguridad — auditoría 2026-08-31 (arreglos + pendientes)
+
+| # | Hallazgo | Severidad | Estado |
+|---|---|---|---|
+| S1 | **Credenciales de admin hardcodeadas en el HTML público** del panel de licencias (kooniadmin2026 / pass). | 🔴 Crítico | ✅ Eliminadas del deploy. **Pendiente (tú): rotar la contraseña** en dash.insforge.dev → Auth → usuarios (las viejas ya son públicas). |
+| S2 | **`LICENSE_MASTER_KEY` embebida en el CLI público** (kooni-bot en npm). Quien tenga el paquete puede falsificar códigos KOONI-PRO. | 🔴 Crítico | ⏳ Fix recomendado: **firma asimétrica Ed25519** (pública en worker, privada en InsForge) — tarea #5 del roadmap. |
+| S3 | **CORS `*`** en funciones con auth (auth-login, generar-licencia, listar-licencias, registrar-pago, crear-admin, estado-admin). | 🟡 Medio | ✅ Restringido a `https://f5gacw7g.insforge.site`. |
+| S4 | `registrar-instalacion` / `registrar-uso` públicos (spoofeables; el check-in envía email/PII). | 🟡 Medio | ✅ **Hecho (CLI 0.2.17 + funciones v2)**: token compartido `X-Kooni-Token` (secret `REGISTER_TOKEN`, fail-closed), rate-limit por IP (reusa `auth_attempts`), validación de formato (email/uid/worker_name) y **rechazo de uids no registrados** en `registrar-uso` + límite de payload. `updated_at` se refresca en el upsert. |
+| S5 | Sin rate-limit en `auth-login` (fuerza bruta sobre el admin). | 🟡 Medio | ⏳ Pendiente: limitar intentos por IP (intervalo corto). |
+| S6 | SQL de activación de licencia en el CLI (escape manual de comillas). | 🟢 Bajo | ✅ Código KOONI-PRO solo contiene base64url+hex (sin comillas); aun así, migrar a valores parametrizados cuando el CLI lo soporte. |
+
+**Buenas prácticas ya verificadas:** compare de tokens en tiempo constante (`src/http-auth.ts`), `.gitignore` cubre `.dev.vars`/`.env`/`.wrangler`, API keys vía `wrangler secret put` por stdin (nunca en disco ni en logs), sin secrets en logs del bot, RLS en InsForge (solo admin lee clientes/licencias/pagos), fail-closed en `/api/*` con `CONTROL_PLANE_TOKEN`.
 5. **Panel y métricas** — pulir Resumen, Insights, Costos.
 6. **Landing / marketing** — terminar la landing (E7) y preparar el lanzamiento público.
 

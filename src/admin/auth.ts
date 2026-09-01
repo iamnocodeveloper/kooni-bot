@@ -21,6 +21,7 @@ export function adminAuth(env: Env): MiddlewareHandler {
   return basicAuth({
     username: ADMIN_USERNAME,
     password: env.DASHBOARD_PASSWORD,
+    realm: "Kooni",
   });
 }
 
