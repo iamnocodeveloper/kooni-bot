@@ -580,7 +580,14 @@ middleware de `routes.ts:93` sin probar los 7 tests de Basic Auth después.
 
 ---
 
-## P. Comentarios → respuesta pública (nunca DM automático) ✅ (01-sep)
+## P. Comentarios → respuesta pública (nunca DM automático) ✅ (01-sep, v1.13.0 en origin/main)
+
+> **Publicado:** commit `702212b` (v1.13.0) empujado a `origin/main` junto con §O.
+> Falta desplegar cada instalación real (`/actualizar-mi-bot` desde su carpeta):
+>   - **cardealer_dani** (cuenta b579b154) — carpeta en la máquina del otro dueño.
+>   - **Joel-nocode** (cuenta 29074eb8) — carpeta `OneDrive/Escritorio/Joel-nocode`
+>     está en v1.11.0 y **no es repo git** → hay que `git init` + remote antes de
+>     poder actualizar (bloqueante relacionado con J1).
 
 > **Pedido del operador:** el bot mandaba DM privado a quien comentaba una
 > keyword. Un DM no pedido molesta y las plataformas lo penalizan. Ahora un
