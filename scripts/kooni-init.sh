@@ -163,9 +163,8 @@ XAI_API_KEY=${KOONI_API_KEY}
 ${KOONI_BASE_URL:+OPENAI_API_BASE_URL=${KOONI_BASE_URL}}
 DASHBOARD_PASSWORD=${KOONI_DASH_PASS}
 KB_REINDEX_TOKEN=${KOONI_KB_TOKEN}
-${KOONI_LICENSE_MASTER_KEY:+LICENSE_MASTER_KEY=${KOONI_LICENSE_MASTER_KEY}}
 VARS
-ok ".dev.vars escrito (secrets: IA, panel, reindex, licencias)"
+ok ".dev.vars escrito (secrets: IA, panel, reindex)"
 
 # wrangler.toml ([vars] + nombre del worker)
 python - "$KOONI_SLUG" "$KOONI_BUSINESS_NAME" "$KOONI_BOT_NAME" "$KOONI_LANGUAGE" "$KOONI_TIER" "$LLM_PROVIDER" <<'PY'
@@ -293,9 +292,8 @@ PY
     put_secret XAI_API_KEY "$(grep '^XAI_API_KEY=' .dev.vars | cut -d= -f2-)"
     put_secret DASHBOARD_PASSWORD "$(grep '^DASHBOARD_PASSWORD=' .dev.vars | cut -d= -f2-)"
     put_secret KB_REINDEX_TOKEN "$(grep '^KB_REINDEX_TOKEN=' .dev.vars | cut -d= -f2-)"
-    # Llave maestra de licencias (debe coincidir con la del panel de licencias).
-    # En .dev.vars si el instalador la trae; si no, definela: KOONI_LICENSE_MASTER_KEY=...
-    put_secret LICENSE_MASTER_KEY "$(grep '^LICENSE_MASTER_KEY=' .dev.vars | cut -d= -f2-)"
+    # (v2) Sin secret de licencias: el worker verifica los códigos KOONI-PRO-V2-…
+    # con la clave PÚBLICA que trae embebida en su código. Nada que instalar.
 
     info "   migraciones + deploy..."
     pnpm install >/dev/null 2>&1 || true

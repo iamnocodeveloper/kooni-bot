@@ -170,11 +170,6 @@ export async function unlockedModules(env: Env, settingsSnapshot?: Record<string
   const out = new Set<string>();
   const all = () => PAID_MODULES.forEach((m) => out.add(m.id));
 
-  if (env.BOT_TIER === "pro") {
-    all();
-    return out;
-  }
-
   try {
     const { SettingsRepo, SETTING_KEYS } = await import("./db/settings");
     const settings = settingsSnapshot ?? (await new SettingsRepo(new Db(env.DB)).all());

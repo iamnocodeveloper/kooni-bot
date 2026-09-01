@@ -1,10 +1,13 @@
 import { describe, it, expect } from "vitest";
 import { unlockedModules, isModuleUnlocked, PAID_MODULES } from "../src/modules";
-import { generateLicense } from "../src/license";
+import { generateLicenseV2 } from "../src/license";
 import type { Env } from "../src/env";
 import type { D1Database } from "@cloudflare/workers-types";
 
-const MASTER = "test-master-key";
+const { generateKeyPairSync } = await import("node:crypto");
+const { privateKey, publicKey } = generateKeyPairSync("ed25519");
+const PRIV = privateKey.export({ format: "der", type: "pkcs8" }).toString("base64");
+const PUB = publicKey.export({ format: "der", type: "spki" }).toString("base64");
 
 /** Stub D1 en memoria con la tabla settings. */
 function makeDb(settings: Record<string, string>): D1Database {
@@ -44,7 +47,7 @@ function makeDb(settings: Record<string, string>): D1Database {
 function env(settings: Record<string, string>, extra: Partial<Env> = {}): Env {
   return {
     DB: makeDb(settings) as never,
-    LICENSE_MASTER_KEY: MASTER,
+    LICENSE_PUBLIC_KEY: PUB,
     BOT_INSTANCE_ID: "abc123",
     ...extra,
   } as unknown as Env;
@@ -55,19 +58,19 @@ describe("unlockedModules", () => {
     expect((await unlockedModules(env({}))).size).toBe(0);
   });
 
-  it("BOT_TIER=pro → todos los módulos", async () => {
+  it("BOT_TIER=pro ya NO desbloquea módulos (solo licencia v2)", async () => {
     const mods = await unlockedModules(env({}, { BOT_TIER: "pro" }));
-    expect(mods.size).toBe(PAID_MODULES.length);
+    expect(mods.size).toBe(0);
   });
 
   it("licencia legada (sin modules) → todos los módulos", async () => {
-    const code = generateLicense(MASTER, { kind: "lifetime" });
+    const code = generateLicenseV2(PRIV, { kind: "lifetime" });
     const mods = await unlockedModules(env({ pro_license: code }));
     expect(mods.size).toBe(PAID_MODULES.length);
   });
 
   it("licencia con modules → solo los incluidos", async () => {
-    const code = generateLicense(MASTER, { kind: "lifetime", modules: ["nightly_report"] });
+    const code = generateLicenseV2(PRIV, { kind: "lifetime", modules: ["nightly_report"] });
     const mods = await unlockedModules(env({ pro_license: code }));
     expect(mods.has("nightly_report")).toBe(true);
     expect(mods.has("analista")).toBe(false);
@@ -81,7 +84,7 @@ describe("unlockedModules", () => {
   });
 
   it("override + licencia se suman", async () => {
-    const code = generateLicense(MASTER, { kind: "monthly", expiry: Date.now() + 86_400_000, modules: ["analista"] });
+    const code = generateLicenseV2(PRIV, { kind: "monthly", expiry: Date.now() + 86_400_000, modules: ["analista"] });
     const mods = await unlockedModules(env({ pro_license: code, module_unlocks: JSON.stringify(["nightly_report"]) }));
     expect(mods.has("analista")).toBe(true);
     expect(mods.has("nightly_report")).toBe(true);
@@ -89,13 +92,13 @@ describe("unlockedModules", () => {
   });
 
   it("licencia vencida → no desbloquea", async () => {
-    const code = generateLicense(MASTER, { kind: "monthly", expiry: Date.now() - 1000, modules: ["analista"] });
+    const code = generateLicenseV2(PRIV, { kind: "monthly", expiry: Date.now() - 1000, modules: ["analista"] });
     const mods = await unlockedModules(env({ pro_license: code }));
     expect(mods.size).toBe(0);
   });
 
   it("ignora ids desconocidos en el override y en la licencia", async () => {
-    const code = generateLicense(MASTER, { kind: "lifetime", modules: ["no_existe"] });
+    const code = generateLicenseV2(PRIV, { kind: "lifetime", modules: ["no_existe"] });
     const mods = await unlockedModules(env({ pro_license: code, module_unlocks: JSON.stringify(["tampoco"]) }));
     expect(mods.size).toBe(0);
   });

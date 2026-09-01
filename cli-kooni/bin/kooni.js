@@ -19,7 +19,7 @@ import { realpathSync } from "node:fs";
 import { join, basename } from "node:path";
 import { homedir } from "node:os";
 import { execFileSync, spawnSync } from "node:child_process";
-import { randomUUID, createHmac } from "node:crypto";
+import { randomUUID, createPublicKey, verify as edVerify } from "node:crypto";
 import { fileURLToPath } from "node:url";
 
 const CLI_VERSION = "0.2.17";
@@ -37,12 +37,14 @@ const INSTALLS_FILE = join(CFG_DIR, "installs.json");
 const MARKER = ".kooni-bot.json";
 const SKILL_DIR = join(homedir(), ".claude", "skills", "kooni");
 
-// Llave maestra de licencias (HMAC de los códigos KOONI-PRO-…). DEBE coincidir
-// con el secret LICENSE_MASTER_KEY del panel de licencias (InsForge kooni-licencias)
-// para que los códigos que genera el panel validen en TODAS las instalaciones.
-// Tradeoff conocido de la validación local HMAC: la llave viaja en cada worker.
-// La mejora recomendada (firma asimétrica, pública en el worker) está en PLAN.md.
-const LICENSE_MASTER_KEY = process.env.KOONI_LICENSE_MASTER_KEY || "KqQGmLK7yMl-MISS2JtMd0bCY5lws_a926ksFCIkZkk";
+// Clave PÚBLICA de licencias (Ed25519). Verifica códigos KOONI-PRO-V2-… pero NO
+// puede firmarlos: es segura de publicar en npm — ese es el punto de la v2.
+// DEBE ser la misma que está embebida en src/license.ts del bot. La PRIVADA vive
+// solo en el panel de licencias (InsForge, secret LICENSE_PRIVATE_KEY).
+//
+// v2 (2026-09-01): reemplaza a LICENSE_MASTER_KEY (HMAC), que viajaba en este
+// mismo archivo público y permitía falsificar licencias — hallazgo S2 del PLAN.
+const LICENSE_PUBLIC_KEY = process.env.KOONI_LICENSE_PUBLIC_KEY || "MCowBQYDK2VwAyEAqpP9OBrju8ebMWjQM4uYLsUV5yqWG8k8ieozT8Me8EQ=";
 
 // Token compartido de registro/uso (X-Kooni-Token). DEBE coincidir con el secret
 // REGISTER_TOKEN del panel de licencias (InsForge). Es "seguridad por oscuridad"
@@ -764,9 +766,8 @@ function writeDevVars(dir, answers, kbToken) {
   lines.push("# " + answers.secret + "=<tu-api-key>  ← para wrangler dev local, pégalo aquí (o usa el panel)");
   lines.push(`DASHBOARD_PASSWORD=${answers.dashPassword || "kooni-local-password"}`);
   lines.push(`KB_REINDEX_TOKEN=${kbToken}`);
-  // Llave maestra de licencias: igual en todas las instalaciones (debe coincidir
-  // con la del panel de licencias para que los códigos KOONI-PRO validen).
-  lines.push(`LICENSE_MASTER_KEY=${LICENSE_MASTER_KEY}`);
+  // (v2) Ya NO se escribe ninguna llave de licencias: el bot verifica con la
+  // clave pública que trae embebida y no necesita ningún secret para eso.
   // Token compartido de registro/uso (X-Kooni-Token para el panel de licencias).
   lines.push(`KOONI_REGISTER_TOKEN=${KOONI_REGISTER_TOKEN}`);
   writeFileSync(join(dir, ".dev.vars"), lines.join("\n") + "\n");
@@ -902,7 +903,7 @@ async function onboarding(rl, answers, defaultDir) {
     : !!(flags.license || answers.licenseCode);
   if (wantsPro) {
     const code = answers.licenseCode || (interactive()
-      ? await ask(rl, m("Pega tu código KOONI-PRO-…:", "Paste your KOONI-PRO-… code:"), undefined)
+      ? await ask(rl, m("Pega tu código KOONI-PRO-V2-…:", "Paste your KOONI-PRO-V2-… code:"), undefined)
       : String(flags.license || "").trim());
     if (code && verifyKooniLicense(code)) {
       answers.licenseCode = code.trim();
@@ -916,12 +917,13 @@ async function onboarding(rl, answers, defaultDir) {
 }
 
 // ── licencia Pro ─────────────────────────────────────────────────────────────
-// Valida un código KOONI-PRO-… localmente (mismo formato que src/license.ts del
-// bot): HMAC-SHA256(payload, LICENSE_MASTER_KEY). No exige que esté ligado a
-// esta instalación (eso lo revalida el panel al leerlo).
+// Valida un código KOONI-PRO-V2-… localmente (mismo formato que src/license.ts
+// del bot): firma Ed25519 verificada con la clave PÚBLICA. No exige que esté
+// ligado a esta instalación (eso lo revalida el panel al leerlo).
+// Sin red: la verificación es puramente local, igual que antes.
 function verifyKooniLicense(code) {
   const trimmed = String(code || "").trim();
-  const prefix = "KOONI-PRO-";
+  const prefix = "KOONI-PRO-V2-";
   if (!trimmed.startsWith(prefix)) return false;
   const rest = trimmed.slice(prefix.length);
   const dot = rest.lastIndexOf(".");
@@ -929,8 +931,12 @@ function verifyKooniLicense(code) {
   const enc = rest.slice(0, dot);
   const sig = rest.slice(dot + 1);
   try {
-    const calc = createHmac("sha256", LICENSE_MASTER_KEY).update(enc).digest("hex");
-    if (calc !== sig) return false;
+    const pub = createPublicKey({
+      key: Buffer.from(LICENSE_PUBLIC_KEY, "base64"),
+      format: "der",
+      type: "spki",
+    });
+    if (!edVerify(null, Buffer.from(enc, "utf8"), pub, Buffer.from(sig, "hex"))) return false;
     const payload = JSON.parse(Buffer.from(enc, "base64url").toString("utf8"));
     if (payload.kind === "monthly" && payload.expiry && Date.now() > payload.expiry) return false;
     return true;
@@ -1183,14 +1189,8 @@ async function deployBot(dir, { flags = {}, rl } = {}) {
     }
   }
 
-  // Llave maestra de licencias: TODAS las instalaciones la llevan, para que los
-  // códigos KOONI-PRO-… generados desde el panel validen aquí.
-  if (LICENSE_MASTER_KEY && LICENSE_MASTER_KEY !== "KqQGmLK7yMl-MISS2JtMd0bCY5lws_a926ksFCIkZkk") {
-    try {
-      wrangler(dir, ["secret", "put", "LICENSE_MASTER_KEY"], { input: LICENSE_MASTER_KEY, capture: true });
-      console.log("  " + C.green("✓") + " " + t().secretOk("LICENSE_MASTER_KEY"));
-    } catch {}
-  }
+  // (v2) No hay secret de licencias que instalar: el worker verifica los códigos
+  // con la clave PÚBLICA embebida en su propio código. Una llave menos viajando.
 
   // dependencias + migraciones + deploy (progreso visible en vivo)
   console.log("\n  " + C.dim(t().installing));
@@ -1715,7 +1715,7 @@ ${C.dim("  Flags de init (modo no-interactivo, para agentes):")}
 ${C.dim("    --yes  --slug <slug>  --negocio <nombre>  --bot-name <nombre>  --lang es-MX|es-ES|en|pt-BR")}
 ${C.dim("    --tier free|pro  --cerebro claude|chatgpt|grok|gateway  --base-url <url>")}
 ${C.dim("    --que --ofrece --horario --ubicacion --telefono --web --pagos --faq --reglas --tono")}
-${C.dim("    --no-deploy  --no-agent-skill  --email <correo>  --license <codigo-KOONI-PRO>")}
+${C.dim("    --no-deploy  --no-agent-skill  --email <correo>  --license <codigo-KOONI-PRO-V2>")}
 `);
 }
 

@@ -74,7 +74,9 @@ KOONI_REGISTER_TOKEN = ""
 #   TELEGRAM_BOT_TOKEN          — canal Telegram
 #   ZERNIO_API_KEY              — canal Zernio (multicanal)
 #   ZERNIO_WEBHOOK_SECRET       — firma de webhooks Zernio
-#   LICENSE_MASTER_KEY          — opcional: firma de códigos Pro (uso interno del dueño)
+#   LICENSE_PUBLIC_KEY          — opcional: clave pública Ed25519 para verificar códigos KOONI-PRO-V2-…
+#                                 (sin esta var se usa la pública embebida por defecto en src/license.ts;
+#                                 la privada NUNCA va en el worker — vive solo en el panel de licencias)
 #   OWNER_TELEGRAM_CHAT_ID      — avisos de handoff al dueño
 
 [triggers]

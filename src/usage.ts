@@ -11,7 +11,11 @@ export interface UsageReport {
   uid: string;
   workerUrl: string;
   botName: string;
+  /** Tier REAL (licencia v2 verificada), no la var BOT_TIER. */
   tier: string;
+  /** Ids de módulos de pago desbloqueados en esta instalación. Sirve para ver,
+   *  a través de todas las instalaciones, qué módulos se usan de verdad. */
+  modulos: string[];
   fecha: string;
   conteos: {
     conversaciones30: number;
@@ -89,11 +93,25 @@ export async function collectUsage(env: Env): Promise<UsageReport> {
     porModelo.set(r.model_used, m);
   }
 
+  // Tier real = licencia v2 válida (BOT_TIER ya no desbloquea nada; ver PLAN.md
+  // § Licencias v2). Fail-open a "free" para no romper nunca el cron de uso.
+  let proReal = false;
+  let modulosActivos = new Set<string>();
+  try {
+    const { isProUnlocked } = await import("./config");
+    const { unlockedModules } = await import("./modules");
+    proReal = await isProUnlocked(env);
+    modulosActivos = await unlockedModules(env);
+  } catch (e) {
+    console.warn("[usage] no se pudo leer el tier real:", e);
+  }
+
   return {
     uid: env.BOT_INSTANCE_ID || "",
     workerUrl: env.DASHBOARD_BASE_URL || "",
     botName: env.BOT_NAME || "",
-    tier: env.BOT_TIER || "free",
+    tier: proReal ? "pro" : "free",
+    modulos: [...modulosActivos].sort(),
     fecha: new Date().toISOString(),
     conteos: {
       conversaciones30: convs30?.n ?? 0,

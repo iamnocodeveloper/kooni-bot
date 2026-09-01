@@ -74,7 +74,6 @@ function envWith(db: unknown, extra: Partial<Env> = {}): Env {
     DB: db as never,
     BUSINESS_NAME: "Salón Marcela",
     BOT_LANGUAGE: "es",
-    LICENSE_MASTER_KEY: "test-master",
     BOT_INSTANCE_ID: "abc123",
     ...extra,
   } as unknown as Env;

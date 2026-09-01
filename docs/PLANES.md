@@ -14,8 +14,10 @@
   Costos, Mejoras (flywheel), Campañas, catálogo de productos, y los **giros
   (niche packs)** con panel a la medida.
 
-> El tier lo controla `BOT_TIER` por bot (o una licencia Pro local); los giros son
-> archivos propios en `src/niches/` (sin servidor de licencias externo).
+> El tier real lo controla una **licencia Pro** (código `KOONI-PRO-V2-…`, firma Ed25519)
+> pegada en `/admin/licencia`. `BOT_TIER` en `wrangler.toml` es solo informativo desde la
+> migración v2 — ya no desbloquea nada por sí solo. Los giros son archivos propios en
+> `src/niches/` (sin servidor de licencias externo).
 
 ## 2. Qué incluye cada tier (código real)
 
@@ -45,7 +47,7 @@
 
 | Mecanismo | Cómo |
 |---|---|
-| **Tier del bot** | `BOT_TIER = "free" \| "pro"` en `wrangler.toml` → `[vars]` |
+| **Tier del bot** | Licencia Pro (`KOONI-PRO-V2-…`, Ed25519) pegada en `/admin/licencia`. `BOT_TIER` en `wrangler.toml` es solo informativo. |
 | **Panel** | En Pro se ven Análisis/Campañas; en Free se ven bloqueados con candado |
 | **Tools** | `catalogQuery` solo existe en Pro; las demás son libres |
 | **Nota de upgrade** | La página de upgrade explica cómo activar Pro (sin links externos) |
@@ -60,8 +62,8 @@ Cuando quieras cobrar, las piezas ya preparadas son:
 1. **Giros premium como producto.** Crear `src/niches/*.ts` por giro (barbería,
    restaurante, clínica…) y ofrecerlos como el diferenciador de pago
    (patrón: `docs/FLUJOS.md` § Nivel 3).
-2. **Licencias por bot.** El tier se decide por bot: el plan pago activa
-   `BOT_TIER="pro"` + giros. Opciones:
+2. **Licencias por bot.** El tier se decide por bot: el plan pago activa una
+   licencia Pro (`KOONI-PRO-V2-…`) + giros. Opciones:
    - **Simple (hoy):** entregar el repo/config al cliente con su tier y su
      propia Cloudflare (self-host).
    - **Con dashboard central (después):** el bot ya trae `/api/*` (conteos,

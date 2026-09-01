@@ -148,9 +148,11 @@ redeploy. Cada card muestra su webhook URL (con botón copiar) — aunque
   brutalista). El contrato visual completo: `docs/design-system.md`.
 - **Vistas:** Resumen, Conversaciones, Leads, Tickets, Campañas, Flujo, Conocimiento
   (KB), Mejoras, Conexiones, Configuración, Insights, Estadísticas, Costos.
-- **Tier:** `BOT_TIER = "free" | "pro"` en `wrangler.toml`. En free se ocultan
-  Insights/Estadísticas/Costos/Mejoras/Campañas y `scheduleAppointment`/
-  `catalogQuery`. El panel no tiene CTA de venta (uso interno).
+- **Tier:** decidido por una **licencia Pro** (`KOONI-PRO-V2-…`, firma Ed25519,
+  `/admin/licencia`) — `BOT_TIER` en `wrangler.toml` es solo informativo desde la
+  migración v2. En free se ocultan Insights/Estadísticas/Costos/Mejoras/Campañas
+  y `catalogQuery` (`scheduleAppointment` no está gateado). El panel no tiene CTA
+  de venta (uso interno).
 - **Nicho:** `BOT_NICHE` selecciona el niche pack (re-etiqueta "Leads" → ej.
   "Reservaciones" y agrega playbook/columnas). El pack `generico` es el default.
 

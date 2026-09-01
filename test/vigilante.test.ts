@@ -55,7 +55,6 @@ function env(extra: Partial<Env> = {}): Env {
     OWNER_TELEGRAM_CHAT_ID: "1",
     RESEND_API_KEY: "",
     OWNER_EMAIL: "",
-    LICENSE_MASTER_KEY: "k",
     ...extra,
   } as unknown as Env;
 }

@@ -1,8 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { createTestMiniflare } from "../helpers/miniflareSetup";
 import { Db } from "../../src/db/client";
+import { SettingsRepo, SETTING_KEYS } from "../../src/db/settings";
 import { ConversationsRepo } from "../../src/db/conversations";
 import { handoffHumanTool } from "../../src/tools/handoffHuman";
+import { testLicense, proCode } from "../helpers/license";
 
 /**
  * Task 9.1 — owner notification on handoff (Pro).
@@ -26,6 +28,7 @@ beforeEach(async () => {
   convId = conv.id;
   env = {
     DB: d1,
+    LICENSE_PUBLIC_KEY: testLicense.pub,
     OWNER_EMAIL: "hugo@hugohair.com",
     BUSINESS_NAME: "Hugo Hair",
     DASHBOARD_BASE_URL: "https://dash.test",
@@ -36,6 +39,8 @@ beforeEach(async () => {
     TWILIO_WA_FROM: "+5215511112222",
     TWILIO_HANDOFF_CONTENT_SID: "HXtemplate",
   };
+  // Pro por LICENCIA v2 (el bypass de BOT_TIER ya no existe): pega un código válido.
+  await new SettingsRepo(new Db(d1)).set(SETTING_KEYS.proLicense, proCode());
 });
 
 afterEach(() => {

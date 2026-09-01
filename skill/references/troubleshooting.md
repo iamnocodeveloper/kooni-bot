@@ -110,7 +110,7 @@ bindings creados. Si falta algo, se detiene y te dice qué.
 | El bot responde en el idioma equivocado | `BOT_LANGUAGE` mal configurado | edita `BOT_LANGUAGE` en `wrangler.toml` y redeploya |
 | `streamText failed: 401` / `invalid x-api-key` | la llave de Claude es inválida o expiró | renueva en console.anthropic.com y vuelve a poner `pnpm wrangler secret put ANTHROPIC_API_KEY` |
 | El bot ignora notas de voz | falta transcripción o canal sin audio | la transcripción usa Whisper de Workers AI; confirma que el binding **AI** exista en `wrangler.toml` |
-| El bot no "ve" imágenes | función Pro de visión no activa | la lectura de imágenes usa Haiku (solo Pro); confirma `BOT_TIER=pro` y que llegue la imagen del canal |
+| El bot no "ve" imágenes | función Pro de visión no activa | la lectura de imágenes usa Haiku (solo Pro); confirma que haya una **licencia Pro activa en `/admin/licencia`** (BOT_TIER ya no la desbloquea) y que llegue la imagen del canal |
 
 ### Handoff / avisos al dueño
 

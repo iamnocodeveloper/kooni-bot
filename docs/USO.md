@@ -26,8 +26,9 @@ El panel está en español, tema oscuro Kooni (tinta + teal). De izquierda a der
 | **Mi Agente** | Flujo (cómo piensa el bot), Conocimiento (KB), Mejoras (flywheel), Conexiones, Configuración. |
 | **Análisis** *(Pro)* | Insights (IA), Estadísticas, Costos. |
 
-> Las secciones de **Análisis** y **Campañas/Mejoras** requieren `BOT_TIER = "pro"`
-> en `wrangler.toml`. En free se ven bloqueadas con un candado.
+> Las secciones de **Análisis** y **Campañas/Mejoras** requieren una **licencia Pro**
+> activa en `/admin/licencia` (código `KOONI-PRO-V2-…`). En free se ven bloqueadas con
+> un candado.
 
 ---
 

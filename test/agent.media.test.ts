@@ -32,6 +32,7 @@ import { ConversationsRepo } from "../src/db/conversations";
 import { MessagesRepo } from "../src/db/messages";
 import { SettingsRepo } from "../src/db/settings";
 import * as senderMod from "../src/replies/sender";
+import { makeDb, testLicense, proCode } from "./helpers/license";
 
 // resolveAgentConfig() (used by both ingest() and alarm()) reads the D1
 // `settings` table via SettingsRepo. These tests run against a fake env.DB ({}),
@@ -78,7 +79,8 @@ function makeAgent(opts?: { tier?: "free" | "pro"; aiText?: string }) {
   const storage = { setAlarm: vi.fn(), getAlarm: vi.fn() };
 
   const env: any = {
-    DB: {},
+    DB: opts?.tier === "pro" ? makeDb({ pro_license: proCode() }) : {},
+    LICENSE_PUBLIC_KEY: testLicense.pub,
     AI: { run: vi.fn(async () => ({ text: opts?.aiText ?? "" })) },
     ANTHROPIC_API_KEY: "sk-test",
     BOT_TIER: opts?.tier ?? "free",

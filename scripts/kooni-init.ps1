@@ -180,10 +180,9 @@ XAI_API_KEY=$ApiKey
 $($(if ($BaseURL) { "OPENAI_API_BASE_URL=$BaseURL" }))
 DASHBOARD_PASSWORD=$DashPass
 KB_REINDEX_TOKEN=$KbToken
-$(if ($env:KOONI_LICENSE_MASTER_KEY) { "LICENSE_MASTER_KEY=$($env:KOONI_LICENSE_MASTER_KEY)" })
 "@
 [IO.File]::WriteAllText((Join-Path $Root ".dev.vars"), $devVars, (New-Object Text.UTF8Encoding $false))
-OK ".dev.vars escrito (secrets: IA, panel, reindex, licencias)"
+OK ".dev.vars escrito (secrets: IA, panel, reindex)"
 
 $toml = Get-Content "wrangler.toml" -Raw -Encoding utf8
 $toml = [regex]::Replace($toml, 'name = "kooni-bot-[^"]*"', 'name = "kooni-bot-' + $Slug + '"')
@@ -316,8 +315,8 @@ if ($Mode -eq "deploy") {
   Put-Secret "XAI_API_KEY" $map["XAI_API_KEY"]
   Put-Secret "DASHBOARD_PASSWORD" $map["DASHBOARD_PASSWORD"]
   Put-Secret "KB_REINDEX_TOKEN" $map["KB_REINDEX_TOKEN"]
-  # Llave maestra de licencias (debe coincidir con la del panel de licencias).
-  Put-Secret "LICENSE_MASTER_KEY" $map["LICENSE_MASTER_KEY"]
+  # (v2) Sin secret de licencias: el worker verifica los códigos KOONI-PRO-V2-…
+  # con la clave PÚBLICA embebida en su código. Nada que instalar.
 
   Step 6 6 "Migraciones + Deploy (publicar)"
   Exec $PNPM @("install") | Out-Null

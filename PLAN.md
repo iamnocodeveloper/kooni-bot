@@ -47,6 +47,41 @@
 | L11 | **UI del panel de licencias**: formulario con campo `instUid` (liga la licencia a una instalación, verificado: código con `inst=948b8b` valida en cardealer y se rechaza en otra), columna Correo en Clientes, columna Instalación en Licencias. | ✅ Hecho y desplegado |
 | L12 | **Acceso al panel desde cualquier dispositivo**: la raíz `/` ya no da "not found" — redirige a `/admin` (login). Botón **Cerrar sesión** en el header (ruta `/admin/logout` que responde 401 + `WWW-Authenticate realm="Kooni"` → el navegador limpia las credenciales guardadas; realm explícito en `adminAuth`). | ✅ Hecho y verificado |
 
+### Licencias v2 — Ed25519, reemplaza HMAC (2026-09-01)
+
+> Encontrada a medio terminar en el working tree (sin commitear) al revisar el
+> proyecto; se completó, se verificó y se documenta acá. Cierra el hallazgo
+> crítico S2 de la auditoría del 31-ago (llave maestra embebida en el CLI
+> público). **NO se desplegó ni se commiteó** — queda en el working tree para
+> que decidas cuándo.
+
+| # | Tarea | Estado |
+|---|---|---|
+| M1 | `src/license.ts` reescrito: códigos `KOONI-PRO-V2-<payload>.<sig>` firmados/verificados con **Ed25519** (`node:crypto`, sync — mismo patrón que ya usaba el HMAC viejo, compatible con Workers). El formato v1 (HMAC) queda **desactivado**: `verifyLicense` rechaza cualquier código que no empiece con el prefijo v2. | ✅ Hecho |
+| M2 | **Ya NO hay bypass por `BOT_TIER=pro`**: `isPro()` devuelve `false` siempre; `isProUnlocked()` (tabs, tools, imagen, handoff WhatsApp, límites) SOLO mira la licencia v2 en `settings.pro_license`. Antes, poner `BOT_TIER="pro"` en `wrangler.toml` alcanzaba — eso era exactamente el hueco de seguridad (cualquiera con el repo público podía auto-otorgarse Pro). | ✅ Hecho |
+| M3 | `env.LICENSE_MASTER_KEY` eliminado de `src/env.ts`; agregado `env.LICENSE_PUBLIC_KEY?` (opcional — sin él, se usa la pública embebida por defecto en `license.ts`). | ✅ Hecho |
+| M4 | **Bug encontrado y corregido**: `isToolAvailable()` (en `config.ts`) seguía llamando al `isPro()` síncrono ya neutralizado — con la licencia v2 puesta, igual habría devuelto `false` para `scheduleAppointment`/`catalogQuery`. Pasada a `async` y ahora usa `isProUnlocked()`. (No se usa en producción todavía — quedó huérfana de una limpieza anterior — pero se deja consistente para quien la use.) | ✅ Hecho |
+| M5 | Tests: `test/license.test.ts`, `test/modules.test.ts`, `test/tools/index.test.ts`, `test/tools/handoffHuman.wa-dm.test.ts`, `test/admin/agente.test.ts`, `test/admin/dashboard-tier.test.ts`, `test/agent.media.test.ts` actualizados a v2 (par Ed25519 de prueba vía `test/helpers/license.ts`, nuevo). Se auditaron los ~19 archivos de test restantes que ponen `BOT_TIER: "pro"`: ninguno ejercita `isProUnlocked`/`isPro`/gating de tabs o tools, así que no necesitan cambios (confirmado leyendo cada uno, no solo por grep). Se quitaron 3 referencias sueltas a `LICENSE_MASTER_KEY` en tests (`features.test.ts`, `reports/nightly.test.ts`, `vigilante.test.ts`) que ya no aplican. | ✅ Hecho |
+| M6 | **Verificación**: la sesión anterior no pudo correr `pnpm test`/`pnpm typecheck` tal cual (problema de entorno) y los validó por fuera del framework. **01-sep, sesión siguiente: corridos de verdad** en la máquina del dueño — `pnpm test` → **625 tests, 89 archivos, todos verdes**; `pnpm typecheck` → **`tsc --noEmit` sin errores**. Bloqueante #4 cerrado. | ✅ Verificado con `pnpm test`/`pnpm typecheck` reales |
+| M7 | **Instalaciones desplegadas se caen a Free al desplegar** (ya no hay bypass por `BOT_TIER=pro`). **Decisión del dueño (01-sep): que queden en Free por ahora** y se emita después una licencia correcta y completa por instalación. O sea: desplegar es seguro, solo hay que saber que Insights/Costos/Campañas/Mejoras/imagen/handoff-WA desaparecen del panel hasta pegar la licencia v2. | ✅ Decidido: quedan en Free |
+| M8 | ~~Pendiente fuera de este repo~~ — **corrección**: la edge function `generar-licencia` **SÍ vive en el repo**, en `admin-pagos/` (gitignored, por eso no aparecía en `git grep`). **Ya migrada a Ed25519**: firma con `LICENSE_PRIVATE_KEY` (secret de InsForge) vía WebCrypto de Deno (`crypto.subtle` con `Ed25519`), emite el prefijo `KOONI-PRO-V2-` y devuelve error claro si falta el secret. Verificado: se replicó su algoritmo exacto y los códigos que produce los acepta el `verifyLicense` del worker en las 4 formas (lifetime, mensual, ligada a `inst`, con `modules`). **Falta desplegarla en InsForge + cargar el secret.** | ✅ Migrada · ⏳ falta desplegar |
+| M9 | **🔴 La clave privada de la pública embebida NO existía**: la pública que había quedado en `src/license.ts` (`MCowBQYDK2VwAyEAvt7c…`) era **huérfana** — su privada se generó en la sesión inconclusa y se perdió (no está en `.dev.vars`, `.env.local`, ni en ningún lado). Con ella, nadie habría podido emitir una licencia válida nunca. **Resuelto**: se generó un par Ed25519 nuevo **en la máquina del dueño** (la privada nunca pasó por el chat), la pública nueva quedó embebida en `src/license.ts`, y la privada quedó en `admin-pagos/CLAVE-PRIVADA-LICENCIAS.txt` (carpeta gitignored). Verificado de punta a punta: firma con esa privada → valida contra la pública embebida. | ✅ Resuelto |
+| M10 | **`src/usage.ts` reportaba el tier equivocado**: mandaba `tier: env.BOT_TIER` al panel de licencias, que tras la migración diría "pro" en instalaciones que en realidad quedaron Free. Ahora reporta el tier REAL (`isProUnlocked`) y además la lista de **módulos desbloqueados** por instalación — con eso el panel puede mostrar, a través de toda la cartera, qué módulos se usan de verdad (ver § "Antes de construir el módulo 15"). Fail-open: si falla la lectura, reporta `free` y no rompe el cron. | ✅ Hecho |
+
+| M11 | **🔴 El CLI público de npm era el agujero real de S2 — corregido**: `cli-kooni/bin/kooni.js` traía la llave maestra **escrita como literal** (línea 45), la escribía en el `.dev.vars` de cada instalación y la instalaba como secret en cada worker. Además validaba los códigos pegados en `init` con HMAC v1 → **le habría rechazado al cliente el código nuevo que le mandes**. Migrado: la llave maestra desaparece por completo del CLI y de los instaladores (`scripts/kooni-init.sh|ps1`), y la validación pasa a Ed25519 con la clave PÚBLICA embebida (segura de publicar en npm). CLI **0.3.0**. Verificado con la función real extraída del archivo: acepta lifetime y mensual vigente, rechaza vencida, formato v1, código inventado y **licencia falsificada con otra llave** (lo que antes era imposible de evitar). | ✅ Hecho |
+| M12 | **⚠️ `admin-pagos/` local está DESACTUALIZADO respecto a InsForge**: faltan las funciones `registrar-uso` y `healthcheck` (tareas L7 y L10, marcadas como desplegadas y verificadas), y `listar-licencias.ts` local (27-ago) todavía no lee `uso_instalaciones`. **Desplegar la carpeta entera haría un rollback** y se perdería el trabajo de métricas y health-checks. Al desplegar la licencia v2: **subir SOLO `generar-licencia.ts`**. Aparte, conviene bajar de InsForge las versiones vivas para que el repo vuelva a ser la fuente de verdad. | ⚠️ Ojo al desplegar |
+| M13 | **Pendiente de limpieza #10 cerrado**: `PRO_ONLY_TOOLS` (`config.ts`) todavía listaba `scheduleAppointment` como Pro, pero `src/tools/index.ts` la registra siempre (a propósito, para que el modelo no invente reservas — ver su comentario). No causaba bugs porque `isToolAvailable()` no se usa en producción (H4/M4), pero era una trampa para quien la use después. Ahora `PRO_ONLY_TOOLS` solo tiene `catalogQuery`, alineada con el código real. Verificado: sin referencias en tests, `pnpm test`/`typecheck` siguen verdes. | ✅ Hecho (01-sep) |
+| M14 | **`admin-pagos/functions/generar-licencia.ts` local e InsForge habían divergido** — la desplegada tenía CORS restringido y capturaba `correo`, pero no soportaba licencias por módulo; la local soportaba `modulos` pero con CORS `*` (regresión de S3) y sin capturar `correo` (regresión de la columna del panel). Reconciliado: se restauró el CORS restringido y la captura/validación de `correo`, conservando el soporte de `modulos` y la codificación base64url más robusta. Migración nueva `add-modulos-to-licencias` (la tabla `licencias` no tenía esa columna — habría roto cualquier licencia con módulos). **Desplegado y verificado** (`functions code` tras el deploy es idéntico al archivo local). | ✅ Hecho y desplegado (01-sep) |
+| M15 | **Bloqueante #6 (parcial): cadena emitir→verificar probada con la clave privada real vigente.** `generateLicenseV2` (firmando con la privada de `admin-pagos/CLAVE-PRIVADA-LICENCIAS.txt`) → `verifyLicense`/`verifyLicenseFor` (con la pública embebida en `src/license.ts`) — 7 casos, todos correctos: lifetime, monthly+modules, vencida, ligada a `inst` (acepta/rechaza), payload manipulado, formato v1. Corrido dentro de vitest (test descartable, no quedó en el repo) porque `generateLicenseV2`/`verifyEd25519` usan `require("node:crypto")` inline — funciona bajo el bundler de Workers y bajo vitest, pero NO en un script suelto de Node/tsx sin ese shim (así se manifestó al principio: "todo falla" no era la llave, era el runner). **Falta para cerrar del todo el #6**: emitir desde el panel real (`/admin-pagos` UI, con login de admin) y pegar el código en `/admin/licencia` de un bot desplegado. | ⚠️ Cadena criptográfica probada; falta el paso manual por el panel |
+
+#### 🔑 Cuidar la clave privada (una sola cosa que no se puede deshacer)
+
+`admin-pagos/CLAVE-PRIVADA-LICENCIAS.txt` es **la única copia** de la llave que firma
+todas las licencias. Pasala a tu gestor de contraseñas y borrá el archivo (además
+está dentro de OneDrive, o sea que hoy se sincroniza a la nube). Si se pierde:
+ningún bot ya desplegado vuelve a aceptar una licencia nueva sin re-desplegarlo con
+otra pública. La pública, en cambio, es segura de publicar — ese es el punto de v2.
+
 ### Pendientes menores / bloqueados
 
 | # | Tarea | Estado |
@@ -66,7 +101,7 @@
    - **Imágenes en chat** (visión ya existe en Pro; pulir multiimagen y respuestas con imagen).
    - **Respuestas multimedia** (imagen/audio/botones) — hay base (`enviarRecurso`, `resource_library`).
 4. **Licencias estilo Forja** (sección F) — login por email + registro de dispositivo + dashboard de cuentas, cuando se necesite recurrencia/facturación real.
-5. **Validación asimétrica de licencias (Ed25519)** — recomendado para eliminar el tradeoff de la llave maestra: el worker solo lleva la **clave pública** (segura para distribuir en el CLI), el panel firma con la **privada** (solo en InsForge). Impide falsificar códigos aunque alguien tenga el CLI. Requiere: cambiar `src/license.ts` + `generar-licencia` + `scripts/gen-license.ts`, y versionar el formato de código (ej. `KOONI-PRO-V2-…`).
+5. **Validación asimétrica de licencias (Ed25519)** — ✅ **HECHO en el worker (2026-09-01, sin desplegar)**: `src/license.ts` genera/verifica códigos `KOONI-PRO-V2-<payload>.<sig>` con Ed25519 (`node:crypto`, sync, compatible con Workers). El worker solo lleva la clave PÚBLICA (embebida en el código, con override opcional vía `env.LICENSE_PUBLIC_KEY`); la PRIVADA nunca toca el repo. `scripts/gen-license.ts` (gitignored, uso interno) ya firma en v2. El formato v1 (HMAC/`LICENSE_MASTER_KEY`) queda desactivado — `verifyLicense` rechaza cualquier código que no empiece con `KOONI-PRO-V2-`. **Pendiente para cerrar del todo:** (a) actualizar la edge function `generar-licencia` en InsForge para firmar con Ed25519 (privada como secret `LICENSE_PRIVATE_KEY`) — vive fuera de este repo, no se pudo tocar desde aquí; (b) generar y pegar un código v2 en el panel de **cada bot ya desplegado** (ver aviso operativo abajo); (c) correr `pnpm test && pnpm typecheck` y desplegar.
 6. **UI del panel de licencias** — exponer campos `botSlug` / `instUid` (instalación) en el formulario de generación, y mostrar el `correo` en la tabla de clientes.
 7. **Modelo de revendedores (marca blanca + recurrencia)** — licencias por agencia/revendedor: el revendedor paga una cuota/mensualidad (recurrencia real) y a cambio instala bots con su marca (`BRAND_*` ya implementado), con límites y reporte de su cartera desde el panel de licencias (rol `revendedor` en `profiles`, comisión/cuota por instalación activa).
 
@@ -75,7 +110,7 @@
 | # | Hallazgo | Severidad | Estado |
 |---|---|---|---|
 | S1 | **Credenciales de admin hardcodeadas en el HTML público** del panel de licencias (kooniadmin2026 / pass). | 🔴 Crítico | ✅ Eliminadas del deploy. **Pendiente (tú): rotar la contraseña** en dash.insforge.dev → Auth → usuarios (las viejas ya son públicas). |
-| S2 | **`LICENSE_MASTER_KEY` embebida en el CLI público** (kooni-bot en npm). Quien tenga el paquete puede falsificar códigos KOONI-PRO. | 🔴 Crítico | ⏳ Fix recomendado: **firma asimétrica Ed25519** (pública en worker, privada en InsForge) — tarea #5 del roadmap. |
+| S2 | **`LICENSE_MASTER_KEY` embebida en el CLI público** (kooni-bot en npm). Quien tenga el paquete puede falsificar códigos KOONI-PRO. | 🔴 Crítico | ✅ **Corregido en el worker** (tarea #5 del roadmap, Ed25519 v2 — ver detalle ahí). ⏳ Falta: migrar `generar-licencia` (InsForge) a firmar con la privada y reemplazar `LICENSE_MASTER_KEY` por `LICENSE_PRIVATE_KEY` ahí; después, **rotar**: la vieja `LICENSE_MASTER_KEY` ya circulaba en el paquete npm y debe darse por comprometida (cualquier código v1 firmado con ella ya no es válido de todas formas, porque `verifyLicense` v2 los rechaza). |
 | S3 | **CORS `*`** en funciones con auth (auth-login, generar-licencia, listar-licencias, registrar-pago, crear-admin, estado-admin). | 🟡 Medio | ✅ Restringido a `https://f5gacw7g.insforge.site`. |
 | S4 | `registrar-instalacion` / `registrar-uso` públicos (spoofeables; el check-in envía email/PII). | 🟡 Medio | ✅ **Hecho (CLI 0.2.17 + funciones v2)**: token compartido `X-Kooni-Token` (secret `REGISTER_TOKEN`, fail-closed), rate-limit por IP (reusa `auth_attempts`), validación de formato (email/uid/worker_name) y **rechazo de uids no registrados** en `registrar-uso` + límite de payload. `updated_at` se refresca en el upsert. |
 | S5 | Sin rate-limit en `auth-login` (fuerza bruta sobre el admin). | 🟡 Medio | ⏳ Pendiente: limitar intentos por IP (intervalo corto). |
@@ -283,6 +318,199 @@ paso posterior (`pair`) donde el usuario la pega explícitamente.
 `<worker>.<cuenta>.workers.dev` (antes `[a-z0-9-]+\.workers\.dev` fallaba con el subdominio), y
 `DASHBOARD_BASE_URL` se estampa bien tras el deploy. El bot de Joel quedó con la URL correcta
 (`kooni-bot-joel-nocode-ec53aa.joeldavidar.workers.dev`).
+
+---
+
+## L. Scraping web con Decodo → KB del agente (PEDIDO DE UN CLIENTE ÚNICO) ⏳
+
+> Objetivo: el bot de **un** cliente responde con información sacada de un sitio
+> web, actualizada sola. **No es para todas las instalaciones** — el código viaja
+> en el template (inerte) pero solo se enciende en esa instalación.
+
+### Idea clave: no hay que tocar al agente
+
+La KB ya existe y ya alimenta al agente: `searchKb` (tool) busca en Vectorize, y
+`src/kb/docs.ts` sabe guardar un documento en D1 (`kb_docs`) e indexarlo al
+instante (`indexDoc` → borra los vectores viejos del doc → re-embebe → upsert).
+
+Entonces el scraping **no necesita plumbing nuevo en el agente**: basta con
+escribir lo scrapeado como un documento de KB más. El agente lo encuentra solo,
+en el siguiente mensaje del cliente. Todo lo demás (prompt, tools, citas) queda
+igual.
+
+```
+Decodo API → HTML → texto limpio → kb_docs (id "web:<slug>") → indexDoc()
+                                                                    ↓
+                                        Vectorize ← searchKb ← el agente responde
+```
+
+### Cómo se aísla a UNA sola instalación (dos candados independientes)
+
+El repo ya tiene el mecanismo exacto para esto; **no hay que forkear** (un fork
+rompería `/actualizar-mi-bot`, que es justamente la promesa del producto).
+
+1. **Módulo de pago** nuevo (`src/modules.ts`, id `web_sync`). Se activa por
+   instalación con el setting `module_unlocks` de D1 — el override del dueño que
+   ya existe y está pensado para esto: *"activa módulos a mano por instalación
+   sin generar códigos"*. En cualquier otra instalación el módulo está bloqueado
+   y la función no hace nada.
+2. **Credenciales** de Decodo como secret (`DECODO_USER` / `DECODO_PASS`) puestas
+   **solo en ese worker**. Sin ellas, la función se apaga sola.
+
+Los dos candados fallan cerrados y son independientes: aunque alguien active el
+módulo por error, sin credenciales no scrapea nada.
+
+### API de Decodo (contrato real, verificado en su repo)
+
+- `POST https://scraper-api.decodo.com/v2/scrape`
+- Auth: **Basic** (`Authorization: Basic base64(user:pass)`)
+- Body: `{ target: "universal", url, headless: "html", geo?, locale?, device_type? }`
+- Respuesta: `{ results: [{ content, status_code, url, task_id, created_at, updated_at }] }`
+- `content` viene **HTML crudo** (no hay parseo ni markdown) → hay que limpiarlo.
+- Códigos: `200` ok · `204` job pendiente · `401` credenciales · `429` rate limit · `524` timeout.
+
+> `headless: "html"` ejecuta JavaScript (necesario si el sitio arma el contenido
+> en el cliente). Cuesta más por request — usarlo solo si el sitio lo necesita.
+
+### Archivos a tocar (concreto)
+
+| Archivo | Qué |
+|---|---|
+| `src/integrations/decodo.ts` *(nuevo)* | Cliente del API + limpieza HTML→texto. Modelo a seguir: `src/integrations/calcom.ts`. |
+| `src/kb/webSync.ts` *(nuevo)* | Orquesta: por cada URL configurada → scrapea → limpia → compara hash → `KbDocsRepo.upsert` → `indexDoc`. |
+| `src/modules.ts` | Alta del módulo `web_sync` en `PAID_MODULES`. |
+| `src/features.ts` | Card en Extras con `config` (URLs, cada cuánto). El patrón de campos extra ya existe. |
+| `src/db/settings.ts` | `SETTING_KEYS`: urls, último hash por URL, última corrida. |
+| `src/env.ts` | `DECODO_USER?`, `DECODO_PASS?` (opcionales — ausentes = apagado). |
+| `src/index.ts` | Llamar `webSync` **dentro del tick nocturno** que ya existe. |
+| `test/integrations/decodo.test.ts`, `test/kb/webSync.test.ts` *(nuevos)* | Modelo: `test/integrations/calcom.test.ts`. |
+
+### Decisiones de diseño (el por qué, para no repensarlo después)
+
+1. **HTML→texto con `HTMLRewriter`**, no con una librería. Es nativo de Workers,
+   streaming, cero dependencias nuevas. Se descartan `<script>`, `<style>`,
+   `<nav>`, `<footer>`; se conserva el texto de `<main>`/`<article>` si existen.
+2. **NO agregar un cron nuevo.** `src/crons/schedule.ts` documenta la trampa: el
+   tick nocturno se identifica por el literal `DAILY_CRON = "0 3 * * *"` y
+   `test/crons/schedule.test.ts` falla si `wrangler.toml` se desalinea. El sync
+   va **dentro** del tick nocturno que ya corre.
+3. **Hash antes de re-embeber.** Guardar un hash del texto por URL; si no cambió,
+   no se re-indexa. Embeber cuesta (Workers AI) y re-indexar sin cambios es tirar
+   plata y cuota. Este es el detalle que decide si la función es barata o cara.
+4. **Respetar los límites de la KB que ya existen**: `MAX_DOC_CHARS = 24_000` y
+   `MAX_CHUNKS = 24` por documento (`src/kb/docs.ts`). Si una página es más
+   larga, se trunca — o se parte en varios docs `web:<slug>#<n>`.
+5. **Un doc por URL, id namespaceado `web:<slug>`.** Así el dueño ve y puede
+   borrar lo scrapeado desde `/admin/kb` como cualquier otro documento, y nunca
+   colisiona con los suyos (`dash:…`) ni con los fixtures del repo.
+6. **Fail-open y silencioso.** Si Decodo falla, se loguea (`console.warn`) y el
+   bot sigue exactamente igual. Un scraper caído jamás puede tumbar respuestas —
+   misma convención que `modules.ts` y `limits.ts`.
+7. **Tope de páginas** (ej. 20) y de frecuencia. Sin tope, un sitemap grande se
+   come el presupuesto de Decodo y de embeddings en una noche.
+
+### Antes de escribir código, definir con el cliente
+
+- **Qué URLs exactamente** (lista fija) vs. **seguir enlaces** (crawl). Empezar
+  con lista fija: es 10× más simple y suele alcanzar.
+- **Cada cuánto** cambia esa información de verdad (diario, semanal). Casi
+  siempre alcanza semanal.
+- **Qué preguntas** debería poder contestar el bot con eso. Si no hay 5 preguntas
+  concretas, probablemente el cliente no necesita scraping sino cargar 2 docs a
+  mano en `/admin/kb` — y eso es gratis y ya funciona hoy.
+- **Permiso**: que sea el sitio del propio cliente o uno que tenga derecho a
+  scrapear; respetar `robots.txt`. Vale una línea en el contrato.
+
+### Fases sugeridas
+
+| Fase | Qué | Por qué en este orden |
+|---|---|---|
+| 1 | `decodo.ts`: scrapear **una** URL y devolver texto limpio + test | Aísla el riesgo del API externo antes de tocar la KB. |
+| 2 | `webSync.ts`: una URL → `kb_doc` → `indexDoc`, disparado a mano | Prueba el pipeline completo con el bot real respondiendo. |
+| 3 | Lista de URLs + hash + tope + tick nocturno | Recién acá se automatiza, con el pipeline ya probado. |
+| 4 | Módulo `web_sync` + card en Extras + activar `module_unlocks` en ESA instalación | El candado se pone al final: primero que funcione. |
+
+> **Si después lo quieren todos**: no hay que reescribir nada — es agregar el
+> módulo al catálogo vendible y activarlo por licencia. Ese es el beneficio de
+> hacerlo como módulo desde el día uno en vez de como parche para un cliente.
+
+---
+
+## M. La siguiente tarea (recomendación) — cerrar el círculo de licencias
+
+> Todo lo demás depende de esto. Hoy el sistema está a mitad de camino: el worker
+> ya solo acepta v2, pero **nadie puede emitir un v2 todavía** hasta que InsForge
+> tenga la privada. Mientras eso no pase, no se puede vender ni activar nada.
+
+| # | Paso | Dónde |
+|---|---|---|
+| 1 | Guardar la privada en el gestor de contraseñas y **borrar** `admin-pagos/CLAVE-PRIVADA-LICENCIAS.txt`. | Tu máquina |
+| 2 | Cargar el secret `LICENSE_PRIVATE_KEY` con ese valor. | InsForge |
+| 3 | Desplegar **solo** la función `generar-licencia` (¡no la carpeta entera — ver M12!). | InsForge |
+| 4 | Borrar las licencias viejas (todas son v1 → el worker ya las rechaza; ver nota abajo). | Panel InsForge / dashboard |
+| 5 | ~~`pnpm test && pnpm typecheck`~~ **✅ Hecho (01-sep): 625 tests OK, typecheck limpio.** Falta el "y, si pasa, desplegar el worker" — sigue pendiente, decisión tuya de cuándo. | Tu máquina |
+| 5b | Publicar el CLI **0.3.0** en npm (`cd cli-kooni && npm publish`). Sin esto, quien instale desde npm sigue bajando la versión que trae la llave filtrada y que rechaza los códigos nuevos. | npm |
+| 6 | Emitir **una** licencia real desde el panel y activarla en un bot → confirmar que desbloquea. | Panel + `/admin/licencia` |
+
+Recién con el paso 6 verde el círculo está cerrado: se puede firmar, emitir,
+activar y cobrar. Antes de eso, cualquier feature nueva (incluida la de Decodo)
+no se puede monetizar.
+
+> **Sobre borrar las licencias viejas:** no hace falta —ni conviene— construir un
+> endpoint de borrado para una limpieza de una sola vez. El sistema acaba de pasar
+> una auditoría de seguridad; agregar una API que borra filas es superficie nueva
+> para siempre a cambio de un uso único. Se borra a mano desde el dashboard de
+> InsForge (tabla `licencias`). Ojo: `generar-licencia` crea **también** una fila
+> en `clientes` — si borrás solo las licencias, quedan clientes huérfanos en la
+> lista; decidí si esos también se van.
+
+---
+
+## N. Antes de construir el módulo 15 — medir, no adivinar
+
+> Respuesta corta a "¿qué otras mejoras integrar sin volverlo un complejo de
+> funciones sin sentido?": **el mayor riesgo del producto hoy no es que le falten
+> funciones — es que le sobren.** Hay 14 módulos de pago en `src/modules.ts` y
+> ningún dato de cuáles se usan.
+
+`src/usage.ts` ya reporta al panel de licencias, por instalación, los conteos, los
+canales y hasta **qué tools usó el bot** (`tools30`). Desde el 01-sep reporta
+además **qué módulos están desbloqueados** (tarea M10). Con dos o tres semanas de
+esos datos vas a saber, con números y no con intuición:
+
+- qué módulos nadie enciende → **candidatos a borrar o fusionar** (menos código,
+  menos panel, menos soporte),
+- qué módulos enciende todo el mundo → **candidatos a subir al plan base** (o a
+  subirles el precio),
+- qué tools dispara el bot de verdad → dónde vale la pena invertir.
+
+Falta un paso chico para cerrarlo: mostrar esa agregación en el panel de
+licencias (ya recibe el dato). Es la mejora de mayor retorno por línea de código
+que tiene el sistema hoy, porque decide todas las demás.
+
+### Mejoras que sí valen (pocas, y aterrizadas en APIs que ya usás)
+
+| # | Mejora | Por qué vale | Costo |
+|---|---|---|---|
+| N1 | **Usar `reaction.received` de Zernio.** Hoy el webhook lo recibe y lo tira (`src/channels/zernio.ts`: *"reaction.received → ack, se ignora"*). Un ❤️ a un DM es la señal más barata que existe de "este cliente está contento / sigue tibio": alimenta **Pide reseñas** (pedir la reseña de Google justo en ese momento) y **Cazador** (no re-escribir a quien acaba de reaccionar). | Reusa dos módulos que ya existen y ya se venden. No agrega superficie al panel. | Bajo |
+| N2 | **Generalizar el web-sync de Decodo** (sección L) a "tu web siempre al día en el bot". | Es el mismo código, ya escrito para el cliente único: pasa de parche a módulo vendible con solo activarlo. Resuelve el dolor #1 real de la KB: que envejece. | Cero extra si L se hace como módulo |
+| N3 | **Catálogo/precios por el mismo pipeline.** Mismo scraping, otro parser, alimentando `catalogQuery` (que ya existe y ya es Pro-only) en vez de la KB de texto. | Convierte "el bot sabe de la web" en "el bot cotiza" — que es lo que la gente paga. | Medio, y **solo cuando un cliente lo pida** |
+
+### Qué NO construir (el filtro)
+
+- **Más canales.** Ya hay Telegram, Zernio (IG/FB/X/TG/WhatsApp/Bluesky/Reddit),
+  Twilio, ManyChat, Meta, WAHA. El siguiente canal no mueve la aguja.
+- **Módulos nuevos "por si acaso".** Ver arriba: primero medir cuáles de los 14
+  se usan. Cada módulo nuevo es panel, docs, soporte y superficie de bugs para
+  siempre.
+- **Un constructor visual de automatizaciones / flujos.** Es un producto entero,
+  no una feature; y los 4 tipos de automatización que ya existen cubren el caso
+  real de estos clientes.
+- **Más tableros.** Ya hay Insights, Estadísticas y Costos. Si `usage.ts` muestra
+  que casi nadie los abre, la conclusión es quitar, no agregar.
+- **Login/dispositivo estilo Forja** (sección F): sigue sin justificarse hasta que
+  haya recurrencia real que facturar. La licencia por código ya resuelve el 100%
+  del caso de hoy.
 
 ---
 

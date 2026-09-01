@@ -1,10 +1,12 @@
 import { describe, it, expect } from "vitest";
 import { buildTools, type ToolContext } from "../../src/tools/index";
+import { makeDb, testLicense, proCode } from "../helpers/license";
 
 function makeCtx(tier: "free" | "pro", calcom?: boolean): ToolContext {
   const env = {
     BOT_TIER: tier,
-    DB: {} as any,
+    DB: tier === "pro" ? (makeDb({ pro_license: proCode() }) as any) : ({} as any),
+    LICENSE_PUBLIC_KEY: testLicense.pub,
     AI: {} as any,
     BUSINESS_NAME: "Test",
     OWNER_EMAIL: "owner@test.com",

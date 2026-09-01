@@ -1,8 +1,12 @@
 import { describe, it, expect } from "vitest";
 import { layout, renderUpgrade } from "../../src/admin/views/layout";
+import { makeDb, testLicense } from "../helpers/license";
 import type { Env } from "../../src/env";
 
-const envOf = (tier: "free" | "pro") => ({ BOT_TIER: tier }) as unknown as Env;
+const envOf = (tier: "free" | "pro") =>
+  tier === "pro"
+    ? { DB: makeDb({ pro_license: testLicense.code }), LICENSE_PUBLIC_KEY: testLicense.pub } as unknown as Env
+    : ({ DB: makeDb({}) } as unknown as Env);
 const page = async (tier: "free" | "pro") =>
   await layout({ title: "Test", activeTab: "overview", body: "<p>body</p>", env: envOf(tier) });
 

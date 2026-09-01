@@ -15,7 +15,7 @@ export async function renderLicencia(env: Env, msg?: string, isError?: boolean):
   const repo = new SettingsRepo(new Db(env.DB));
   const code = (await repo.get(SETTING_KEYS.proLicense).catch(() => null)) ?? "";
   const payload = code ? verifyLicense(code, env) : null;
-  const isPro = payload !== null || env.BOT_TIER === "pro";
+  const isPro = payload !== null;
 
   const banner = msg
     ? `<div style="border:1px solid ${isError ? "var(--bad)" : "var(--ok)"};color:${isError ? "var(--bad)" : "var(--ok)"};padding:10px 14px;font-size:12px;background:${isError ? "rgba(248,113,113,.06)" : "rgba(52,211,153,.06)"}">${esc(msg)}</div>`

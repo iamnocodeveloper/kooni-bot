@@ -46,7 +46,6 @@ function makeDb(settings: Record<string, string>): D1Database {
 function env(settings: Record<string, string>, extra: Partial<Env> = {}): Env {
   return {
     DB: makeDb(settings) as never,
-    LICENSE_MASTER_KEY: "test-master",
     BOT_INSTANCE_ID: "abc123",
     ...extra,
   } as unknown as Env;

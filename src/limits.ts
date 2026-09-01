@@ -45,7 +45,6 @@ export const PRO_LIMITS: Limits = {
 
 /** ¿Es Pro? Lee el setting pro_license del panel (código HMAC validado) o BOT_TIER=pro. */
 export async function isProLicense(env: Env): Promise<boolean> {
-  if (env.BOT_TIER === "pro") return true;
   try {
     const { SettingsRepo, SETTING_KEYS } = await import("./db/settings");
     const code = await new SettingsRepo(new Db(env.DB)).get(SETTING_KEYS.proLicense);

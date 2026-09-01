@@ -9,6 +9,8 @@
 | [`USO.md`](./USO.md) | El panel `/admin` y el día a día (bandeja, KB, conexiones, análisis). Incluye cómo cambiar la contraseña del panel y los comandos de secrets. |
 | [`PRUEBA-LOCAL.md`](./PRUEBA-LOCAL.md) | **Runbook local**: arrancar `wrangler dev`, probar canales y un flujo de IA real, verificar en D1. |
 | [`PLANES.md`](./PLANES.md) | **Free vs Pro**: qué desbloquea cada tier y camino al modelo de pago. |
+| [`LICENCIAS.md`](./LICENCIAS.md) | **Cómo funcionan las licencias** (v2, Ed25519): formato del código, qué desbloquea, cómo emitir y activar, y las llaves. |
+| [`BITACORA-2026-09-01.md`](./BITACORA-2026-09-01.md) | Bitácora de la migración de licencias a Ed25519: cambios, hallazgos y pendientes. |
 | `scripts/kooni-init.sh` | **Instalador interactivo**: te pregunta todo y escribe `.dev.vars`/`wrangler.toml`/`member`; modos `local` y `deploy`. |
 | [`design-system.md`](./design-system.md) | Contrato visual del panel (tokens, componentes, tipografía) — para devs. |
 

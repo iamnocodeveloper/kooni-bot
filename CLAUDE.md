@@ -46,7 +46,9 @@ Cloudflare (~gratis, ~$5/mes con tráfico) y el cerebro es su propia llave de IA
 - **No toques `member/`** más allá de lo que indican los skills (ahí viven los datos del
   negocio del usuario; se respetan en cada actualización).
 - **Uso interno**: no agregues CTAs a servicios externos.
-  ni vínculos de venta. El tier (free/pro) se controla con `BOT_TIER` en `wrangler.toml`.
+  ni vínculos de venta. El tier real (free/pro) lo controla una **licencia Ed25519**
+  pegada en `/admin/licencia` (`src/license.ts`) — `BOT_TIER` en `wrangler.toml` es solo
+  informativo desde la migración v2 (ver `PLAN.md` § Licencias v2).
 - Package manager: **pnpm** — `pnpm dev`, `pnpm run deploy`, `pnpm typecheck`, `pnpm test`,
   `pnpm db:apply:remote`. Corre `pnpm test` antes de cualquier deploy si tocaste `src/`.
 

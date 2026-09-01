@@ -5,15 +5,13 @@ export function getBufferMs(env: Env): number {
 }
 
 export function isPro(env: Env): boolean {
-  return env.BOT_TIER === "pro";
+  return false; // Pro ya NO se activa por var BOT_TIER — solo con licencia (v2 Ed25519)
 }
 
-/** ¿Pro desbloqueado? BOT_TIER=pro O una licencia válida pegada en el panel.
- *  La licencia vive en D1 (settings) y se valida con HMAC, por eso es async.
- *  Úsala en los gates de tier (tabs del panel, tools del agente, imagen, etc.);
- *  `isPro` queda como fast-path síncrono para BOT_TIER. */
+/** ¿Pro desbloqueado? SOLO con una licencia válida pegada en el panel (v2).
+ *  Quien instale el template sin licencia queda en free — no hay bypass por var.
+ *  La licencia vive en D1 (settings) y se valida con firma Ed25519, por eso async. */
 export async function isProUnlocked(env: Env): Promise<boolean> {
-  if (env.BOT_TIER === "pro") return true;
   try {
     const { isProLicense } = await import("./limits");
     return await isProLicense(env);
@@ -22,13 +20,11 @@ export async function isProUnlocked(env: Env): Promise<boolean> {
   }
 }
 
-// Tools reservadas al tier Pro. captureLead NO está aquí a propósito: el bot
-// Starter (free) captura leads — es su valor central. Lo Pro son las tools más
-// avanzadas por nicho (agendar citas, consultar catálogo/inventario).
-export const PRO_ONLY_TOOLS = [
-  "scheduleAppointment",
-  "catalogQuery",
-] as const;
+// Tools reservadas al tier Pro. captureLead y scheduleAppointment NO están acá
+// a propósito: el bot Starter (free) captura leads Y agenda citas — es su valor
+// central (ver src/tools/index.ts, se registran siempre). Lo Pro es consultar
+// catálogo/inventario y las tools avanzadas por nicho.
+export const PRO_ONLY_TOOLS = ["catalogQuery"] as const;
 
 // Tabs del dashboard reservadas al tier Pro (Análisis + growth). El tier free
 // ve un panel funcional (Resumen, Conversaciones, Leads, Tickets, Flujo, KB,
@@ -57,7 +53,7 @@ export async function isTabAllowed(env: Env, tab: string): Promise<boolean> {
   return isModuleUnlocked(env, TAB_MODULE[tab as keyof typeof TAB_MODULE]);
 }
 
-export function isToolAvailable(env: Env, toolName: string): boolean {
+export async function isToolAvailable(env: Env, toolName: string): Promise<boolean> {
   if (!PRO_ONLY_TOOLS.includes(toolName as (typeof PRO_ONLY_TOOLS)[number])) return true;
-  return isPro(env);
+  return isProUnlocked(env);
 }

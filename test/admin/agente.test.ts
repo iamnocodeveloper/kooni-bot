@@ -9,6 +9,7 @@ import { adminApp } from "../../src/admin/routes";
 import { Db } from "../../src/db/client";
 import { SettingsRepo, SETTING_KEYS } from "../../src/db/settings";
 import { ConversationsRepo } from "../../src/db/conversations";
+import { testLicense, proCode } from "../helpers/license";
 import type { Env } from "../../src/env";
 
 const PASSWORD = "secret123";
@@ -32,6 +33,7 @@ beforeEach(async () => {
   const d1 = (await mf.getD1Database("DB")) as any;
   env = {
     DB: d1,
+    LICENSE_PUBLIC_KEY: testLicense.pub,
     ANTHROPIC_API_KEY: "sk-test",
     BOT_NAME: "TestBot",
     BUSINESS_NAME: "Negocio de Prueba",
@@ -41,6 +43,8 @@ beforeEach(async () => {
     DASHBOARD_PASSWORD: PASSWORD,
   } as unknown as Env;
   settings = new SettingsRepo(new Db(d1));
+  // Pro por LICENCIA v2 (el bypass de BOT_TIER ya no existe).
+  await settings.set(SETTING_KEYS.proLicense, proCode());
 });
 
 describe("Mi Agente — page and canvas", () => {

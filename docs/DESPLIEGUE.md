@@ -265,7 +265,8 @@ En `wrangler.toml` → `[vars]`:
 BOT_NAME = "Asistente"
 BUSINESS_NAME = "Mi Negocio"
 BOT_LANGUAGE = "es"            # es, en, pt-BR…
-BOT_TIER = "pro"               # free | pro (pro desbloquea insights, costos, campañas…)
+BOT_TIER = "pro"               # free | pro — SOLO informativo desde v2; para desbloquear insights,
+                                # costos, campañas… activa una licencia en /admin/licencia (§4.6)
 BOT_NICHE = ""                 # ej. "restaurante" (ver docs/ARQUITECTURA.md §7)
 BUFFER_SECONDS = "15"
 ```
@@ -399,7 +400,7 @@ Cada código `KOONI-PRO-...` puede ligarse a una instalación concreta (su `uid`
 6 caracteres). Para generarlo por instalación:
 
 ```bash
-npx tsx scripts/gen-license.ts --secret <LICENSE_MASTER_KEY> --kind lifetime --inst <uid>
+npx tsx scripts/gen-license.ts --privkey <clave privada Ed25519> --kind lifetime --inst <uid>
 ```
 
 Ese código solo funciona en la instalación con ese `uid`; si lo pegas en otra, el

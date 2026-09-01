@@ -133,10 +133,12 @@ export interface Env {
   // Username is always "admin". Set via `wrangler secret put DASHBOARD_PASSWORD`.
   DASHBOARD_PASSWORD: string;
 
-  // ── Licencias Pro (códigos HMAC locales, sin servidor) ───────────────────
-  // Master key con la que el dueño firma códigos KOONI-PRO-... (ver
-  // scripts/gen-license.ts y src/license.ts). Sin ella, no hay códigos válidos.
-  LICENSE_MASTER_KEY?: string; // secret: firma de códigos de licencia
+  // ── Licencias Pro (firma asimétrica Ed25519 v2, sin servidor) ────────────
+  // Clave PÚBLICA con la que el worker verifica códigos KOONI-PRO-V2-...
+  // (ver scripts/gen-license.ts y src/license.ts). Opcional: sin esta var, se
+  // usa la pública embebida por defecto en src/license.ts. La PRIVADA nunca
+  // vive aquí — solo en InsForge (secret LICENSE_PRIVATE_KEY del panel).
+  LICENSE_PUBLIC_KEY?: string;
 
   // "1" = panel admin PÚBLICO (sin Basic Auth). Solo cuando el dueño lo decide
   // explícitamente (var en wrangler.toml); sin la var, el guard queda activo.
