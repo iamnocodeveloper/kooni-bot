@@ -449,7 +449,7 @@ módulo por error, sin credenciales no scrapea nada.
 | 3 | Desplegar **solo** la función `generar-licencia` (¡no la carpeta entera — ver M12!). | InsForge |
 | 4 | Borrar las licencias viejas (todas son v1 → el worker ya las rechaza; ver nota abajo). | Panel InsForge / dashboard |
 | 5 | ~~`pnpm test && pnpm typecheck`~~ **✅ Hecho (01-sep): 625 tests OK, typecheck limpio.** Falta el "y, si pasa, desplegar el worker" — sigue pendiente, decisión tuya de cuándo. | Tu máquina |
-| 5b | Publicar el CLI **0.3.0** en npm (`cd cli-kooni && npm publish`). Sin esto, quien instale desde npm sigue bajando la versión que trae la llave filtrada y que rechaza los códigos nuevos. | npm |
+| 5b | ~~Publicar el CLI 0.3.0 en npm~~ **✅ Hecho (01-sep): `kooni-bot@0.3.1` es `latest`.** Se publicó 0.3.0 primero; al verificar con `npx kooni-bot version` se encontró que `CLI_VERSION` estaba **hardcodeada** en el código (`"0.2.17"`, nunca actualizada en la migración) — afectaba también la telemetría `cliVersion` enviada a `registrar-instalacion`. Corregido para leer del `package.json` en runtime y republicado como 0.3.1. | npm |
 | 6 | ~~Emitir **una** licencia real desde el panel y activarla en un bot~~ **✅ Hecho (01-sep) — con un cliente real** (ver M15): Daniel (cardealer-dani) recibió y activó su código v2 tras la migración. | Panel + `/admin/licencia` |
 
 Recién con el paso 6 verde el círculo está cerrado: se puede firmar, emitir,
