@@ -85,7 +85,9 @@ Archivos: `assets/kooni-logo.svg` (64px) y `assets/kooni-favicon.svg` (32px).
 - **Punto:** un nodo menta `#6ee7b7` en la esquina superior derecha — "el bot
   encendido / en línea".
 - **Uso en dashboard:** dentro del cuadro de marca (34px) del sidebar y en la
-  página de login, se renderiza el glifo K con el punto (ver `layout.ts`).
+  página de login de dos columnas (`loginPage()` en `layout.ts`), se renderiza
+  el glifo K con el punto. En marca blanca lo reemplaza el logo del revendedor
+  (`BRAND_LOGO_URL`).
 
 ---
 

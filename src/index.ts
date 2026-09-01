@@ -273,7 +273,8 @@ app.post("/webhooks/learn/:channel", async (c) => {
   return c.json({ ok: true, captured: kind, channel }, 200);
 });
 
-// Admin dashboard — Basic Auth guarded sub-app mounted at /admin/*.
+// Admin dashboard — sub-app en /admin/*, con login propio (cookie de sesión) o
+// Basic Auth. Ver src/admin/auth.ts.
 app.route("/admin", adminApp);
 
 // Control-plane API — Bearer-guarded (CONTROL_PLANE_TOKEN) read-only sub-app

@@ -3,7 +3,7 @@
 > **Qué es esto:** la guía para entender — y sobre todo **replicar** — la lógica de
 > agentes que responden mensajes DM y **encadenan flujos** (una pregunta → espera →
 > otra pregunta → captura → cierra), más las **automatizaciones de contenido**
-> (follow-ups, campañas, comentario → DM, mejoras automáticas).
+> (follow-ups, campañas, comentario → respuesta pública, mejoras automáticas).
 >
 > **Principio rector: simplicidad.** No hay máquinas de estados ni builders
 > visuales. El flujo lo dirige el **LLM con instrucciones claras + herramientas
@@ -205,10 +205,14 @@ El mensaje lo redacta el modelo rápido con la voz del bot.
 - Segmentos listos: interesados que escribieron "QUIERO" sin clicar, etiquetas de
   interés/objeción (`conv_labels`), keywords (`keyword_hits`).
 
-### 5.3 Comentario → DM automático (Zernio)
-`ZERNIO_AUTO_DM_KEYWORD` + mensaje + botón: alguien comenta tu keyword en un post
-(IG, TikTok…) → DM privado inmediato con tu recurso. Los DMs posteriores los
-contesta la IA. (Ver `skill/references/channel-setup-guides/zernio-webhook.md`.)
+### 5.3 Comentario → respuesta pública automática (Zernio)
+`ZERNIO_AUTO_DM_KEYWORD` + mensaje (+ link opcional): alguien comenta tu keyword
+en un post (IG, TikTok…) → el bot le **responde el comentario en público** al
+instante; si hay link, se agrega al final del texto (los comentarios no admiten
+botones). **Nunca DM automático** — un DM no pedido molesta y las plataformas lo
+penalizan. Si la persona luego escribe por privado, ahí sí contesta la IA. Las
+reglas se editan en el panel → **Automatizaciones**. (Ver
+`skill/references/channel-setup-guides/zernio-webhook.md`.)
 
 ### 5.4 Flywheel — el bot mejora solo (`src/flywheel/`)
 El Analista detecta preguntas que la KB no respondió (`missed_kb`) y **propone**
@@ -274,5 +278,5 @@ dueño. **No quites ese cron** (ver `src/crons/schedule.ts`).
 | Follow-up | `src/followup/run.ts` | 1 mensaje, 3–20h, anti-duplicado |
 | Campañas/segmentos | `src/campaigns.ts` / `src/segments.ts` | Ventana 24h + plantillas |
 | Mejoras automáticas | `src/flywheel/` | KB propuesta por la IA |
-| Auto-DM por keyword | `src/channels/zernio.ts` | Comentario → DM con botón |
+| Auto-respuesta por keyword | `src/channels/zernio.ts` | Comentario → respuesta pública (+ link en el texto) |
 | Config del negocio | `member/config.local.ts` | Nunca se pisa en updates |

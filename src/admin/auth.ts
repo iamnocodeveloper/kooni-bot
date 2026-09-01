@@ -1,29 +1,27 @@
 /**
- * Admin dashboard authentication — HTTP Basic Auth.
+ * Admin dashboard authentication — sesión por cookie (página propia) + HTTP
+ * Basic Auth (compat: scripts, healthchecks y ~7 archivos de test que
+ * autentican con un header `Authorization: Basic ...`).
  *
- * The dashboard is guarded by a single password (username is always "admin").
- * The password lives in the `DASHBOARD_PASSWORD` secret. There is no login
- * form, no cookie, no magic link and no email-based flow: the browser's native
- * Basic Auth dialog handles credential entry.
+ * El navegador humano ve una página de login real (`GET/POST /admin/login`,
+ * ver `views/layout.ts` y `routes.ts`) que abre una sesión por cookie firmada
+ * — sin tabla nueva en D1: el HMAC usa `DASHBOARD_PASSWORD` como llave, así
+ * que rotar la contraseña invalida todas las sesiones viejas solas. Cualquier
+ * request que ya traiga `Authorization: Basic admin:<password>` válido sigue
+ * entrando igual que antes (no se tocó ese camino).
  */
-import { basicAuth } from "hono/basic-auth";
-import type { MiddlewareHandler } from "hono";
+import type { Context, MiddlewareHandler } from "hono";
+import { getCookie, setCookie, deleteCookie } from "hono/cookie";
 import type { Env } from "../env";
 
 /** Fixed username for the admin dashboard. */
 export const ADMIN_USERNAME = "admin";
 
-/**
- * Hono middleware factory enforcing HTTP Basic Auth on admin routes.
- * Mount it on the `/admin/*` group, e.g. `app.use("/admin/*", adminAuth(env))`.
- */
-export function adminAuth(env: Env): MiddlewareHandler {
-  return basicAuth({
-    username: ADMIN_USERNAME,
-    password: env.DASHBOARD_PASSWORD,
-    realm: "Kooni",
-  });
-}
+/** Nombre de la cookie de sesión del panel. */
+export const SESSION_COOKIE = "kooni_admin_session";
+
+/** Duración de la sesión: 30 días desde el login. */
+export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 
 /**
  * Constant-time string comparison to avoid leaking length/content via timing.
@@ -87,4 +85,90 @@ export function checkBasicCredentials(
   const userOk = timingSafeEqual(username, ADMIN_USERNAME);
   const passOk = timingSafeEqual(password, env.DASHBOARD_PASSWORD ?? "");
   return userOk && passOk;
+}
+
+/**
+ * ¿El password del formulario de login (`POST /admin/login`) coincide con
+ * `DASHBOARD_PASSWORD`? Comparación en tiempo constante (mismo helper que Basic
+ * Auth). El usuario es fijo ("admin"), así que solo se compara la contraseña.
+ */
+export function verifyDashboardPassword(env: Env, password: string): boolean {
+  return timingSafeEqual(password ?? "", env.DASHBOARD_PASSWORD ?? "");
+}
+
+/** HMAC-SHA256(DASHBOARD_PASSWORD, expiry) en hex. Sync — mismo patrón que license.ts. */
+function sessionSignature(env: Env, expiry: number): string {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { createHmac } = require("node:crypto");
+  return createHmac("sha256", env.DASHBOARD_PASSWORD ?? "").update(String(expiry)).digest("hex");
+}
+
+/** Valor de la cookie de sesión: `<expiry_epoch_ms>.<hmac_hex>`. Sin estado en D1. */
+export function buildSessionCookieValue(env: Env): string {
+  const expiry = Date.now() + SESSION_MAX_AGE_SECONDS * 1000;
+  return `${expiry}.${sessionSignature(env, expiry)}`;
+}
+
+/** ¿La cookie de sesión es válida y no venció? Rotar DASHBOARD_PASSWORD la invalida sola. */
+export function verifySessionCookie(env: Env, value: string | undefined | null): boolean {
+  if (!value) return false;
+  const dot = value.lastIndexOf(".");
+  if (dot <= 0) return false;
+  const expiry = Number(value.slice(0, dot));
+  const sig = value.slice(dot + 1);
+  if (!Number.isFinite(expiry) || Date.now() > expiry) return false;
+  return timingSafeEqual(sig, sessionSignature(env, expiry));
+}
+
+/** Pone la cookie de sesión tras un login correcto. */
+export function setSessionCookie(c: Context, env: Env): void {
+  setCookie(c, SESSION_COOKIE, buildSessionCookieValue(env), {
+    httpOnly: true,
+    secure: true,
+    sameSite: "Lax",
+    path: "/",
+    maxAge: SESSION_MAX_AGE_SECONDS,
+  });
+}
+
+/** Borra la cookie de sesión (logout). */
+export function clearSessionCookie(c: Context): void {
+  deleteCookie(c, SESSION_COOKIE, { path: "/" });
+}
+
+/**
+ * ¿Esta request ya está autenticada? Sesión por cookie O Basic Auth — el
+ * primero que valga gana. No mira `/admin/login` (esa ruta es pública).
+ * Exportada para que `GET /admin/login` mande al panel si ya hay sesión.
+ */
+export function isAdminAuthenticated(c: Context, env: Env): boolean {
+  const cookie = getCookie(c, SESSION_COOKIE);
+  if (verifySessionCookie(env, cookie)) return true;
+  return checkBasicCredentials(c.req.header("Authorization"), env);
+}
+
+/**
+ * Hono middleware factory: exige sesión por cookie O Basic Auth en las rutas
+ * admin. `/admin/login` (GET y POST) queda afuera — se registra antes en
+ * `routes.ts` y ahí no se llama a este guard.
+ *
+ * Navegación real de navegador sin credenciales → redirige a `/admin/login`
+ * (UX humana). Cualquier otra request (htmx, scripts, tests) sin credenciales
+ * → 401 igual que siempre, para no romper nada que ya dependa de eso.
+ */
+export function adminAuth(env: Env): MiddlewareHandler {
+  return async (c, next) => {
+    if (isAdminAuthenticated(c, env)) return next();
+
+    const accept = c.req.header("Accept") ?? "";
+    const isHtmx = c.req.header("HX-Request") === "true";
+    if (!isHtmx && accept.includes("text/html")) {
+      return c.redirect("/admin/login", 302);
+    }
+
+    return new Response("Unauthorized", {
+      status: 401,
+      headers: { "WWW-Authenticate": 'Basic realm="Kooni", charset="UTF-8"' },
+    });
+  };
 }

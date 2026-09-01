@@ -514,7 +514,16 @@ que tiene el sistema hoy, porque decide todas las demás.
 
 ---
 
-## O. Pantalla de login del panel — de modal del navegador a página propia ⏳ (PLANEADO, no implementado)
+## O. Pantalla de login del panel — de modal del navegador a página propia ✅ (O1-O4, O6-O8 hechos; O5 rate-limit pendiente)
+
+> **Estado (01-sep):** implementado y verificado. `GET/POST /admin/login` +
+> `GET /admin/logout` (rutas públicas, antes del guard), sesión por cookie
+> firmada con `DASHBOARD_PASSWORD` (sin tabla D1), `adminAuth` acepta cookie
+> **o** Basic Auth (navegador sin credenciales → 302 al login; htmx/scripts →
+> 401 como siempre). `loginPage()` reescrita a dos columnas (marca blanca vía
+> `resolveBrand` + versión). Tests: `test/admin/login-page.test.ts` (24 casos)
+> + los 3 de Basic Auth sin cambios. Docs: `USO.md`, `IDENTIDAD-KOONI.md`.
+> **Falta O5** (rate-limit del login por IP en D1 — cierra también S5).
 
 > Pedido (01-sep): reemplazar el diálogo nativo de Basic Auth por una página de
 > login propia, dos columnas — izquierda: marca Kooni + subtítulo "agentes de
@@ -548,8 +557,10 @@ Así la superficie de riesgo se limita a lo nuevo; nada que ya funciona se toca.
 
 ### Tareas
 
-| # | Tarea | Archivo(s) | Nota |
+| # | Tarea | Archivo(s) | Estado |
 |---|---|---|---|
+| O1–O4, O6–O8 | Implementados y verificados (`pnpm typecheck` limpio, 51/51 tests de auth/login/routes en verde). Cookie `kooni_admin_session` firmada HMAC-SHA256 con `DASHBOARD_PASSWORD`, 30 días. Logout limpia la cookie (`deleteCookie`) y redirige. `loginPage()` reescrita a dos columnas con `resolveBrand` + `BOT_VERSION`. Comentarios viejos de "Basic Auth / no /login" corregidos en `routes.ts` e `index.ts`. | — | ✅ |
+| O5 | **Rate-limit del login** — sigue pendiente (necesita migración D1 `login_attempts`). Cierra también S5. | `src/admin/auth.ts` + migración D1 | ⏳ |
 | O1 | **Endpoint de sesión**: `POST /admin/login` — valida el password contra `DASHBOARD_PASSWORD` (reusar `timingSafeEqual` de `auth.ts`) y, si es correcto, pone una cookie `HttpOnly; Secure; SameSite=Lax`. Valor de la cookie: HMAC/hash del password + expiración firmada (no un session store en D1) — así rotar `DASHBOARD_PASSWORD` invalida sesiones viejas solas. | `src/admin/auth.ts` (nueva función) | Sin tabla nueva en D1. |
 | O2 | **Middleware actualizado**: `adminAuth` acepta sesión por cookie **o** Basic Auth (ver arriba). Si ninguna vale: navegación de navegador (`Accept: text/html`) → `302` a `/admin/login`; petición de API/htmx → `401` (igual que hoy, para no romper los fetch internos del panel). | `src/admin/auth.ts`, `src/admin/routes.ts` | El gate en `routes.ts:93` cambia de "siempre Basic" a "cookie u Basic". |
 | O3 | **Página `GET /admin/login`** (pública, sin auth): dos columnas. Izquierda: `resolveBrand(env)` (para que blanco-marca herede su propio nombre/logo/color — nunca hardcodear "Kooni"), subtítulo "Agentes de IA" (o el tagline de marca), `BOT_VERSION` (`src/version.ts`, ya existe). Derecha: `<form method="POST" action="/admin/login">` con un solo campo password (usuario fijo "admin", igual que hoy) + botón `bigbtn`. Reusa `HEAD_ASSETS`/`GLOBAL_STYLE` de `layout.ts` tal cual — mismos tokens, misma tipografía, mismas animaciones. Responsive: en mobile colapsa a una columna (mismo patrón `@media (max-width:767px)` que ya usa el sidebar). | `src/admin/views/layout.ts` (reemplaza `loginPage()`) | Mostrar error si el password es incorrecto (mismo `?error=` que ya soporta la función vieja). |
@@ -566,6 +577,30 @@ mientras se prueba) → O6 (verificar que nada viejo se rompió) → O5 (hardeni
 O7 + O8 (limpieza y docs). Riesgo de romper algo existente: bajo, si se respeta
 la decisión de "sumar, no reemplazar" del §O — el mayor riesgo es tocar el
 middleware de `routes.ts:93` sin probar los 7 tests de Basic Auth después.
+
+---
+
+## P. Comentarios → respuesta pública (nunca DM automático) ✅ (01-sep)
+
+> **Pedido del operador:** el bot mandaba DM privado a quien comentaba una
+> keyword. Un DM no pedido molesta y las plataformas lo penalizan. Ahora un
+> comentario que matchea una keyword se responde **en público** (como
+> comentario); si la regla tiene un link, se suma al final del texto (los
+> comentarios no admiten botones). El enlace sigue siendo trackeado (`/r/:slug`).
+
+| Cambio | Archivo |
+|---|---|
+| Motor: `kind` por defecto `comment_reply` (era `comment_dm`); reglas legacy de env (`ZERNIO_AUTO_DM_*`) y JSON sin `kind` → `comment_reply`; el link se concatena al texto público. | `src/channels/zernio.ts` |
+| Panel: el selector ya no ofrece "→ DM privado" ni "→ DM + público" (siguen en el mapa solo para reglas viejas); default `comment_reply`; se quitaron los campos de follow gate y "respuesta pública fija"; textos y JS ajustados. | `src/admin/views/automatizaciones.ts`, `src/admin/routes.ts` (`parseRuleForm`) |
+| Plantillas de campaña: todas las de comentario pasan a `comment_reply`; se quitó la de follow gate. | `src/templates/campaigns.ts` |
+| **Data fix idempotente** al final de `schema.sql`: `UPDATE auto_rules SET kind='comment_reply', reply_to_comment=NULL, require_follow=0, … WHERE kind IN ('comment_dm','comment_dm_public')`. Se aplica en cada `pnpm db:apply:remote` (o sea: al correr `/actualizar-mi-bot`). | `src/db/schema.sql` |
+| Docs | `ARQUITECTURA.md`, `FLUJOS.md`, `USO.md`, `DESPLIEGUE.md`, `PRUEBA-LOCAL.md`, `skill/references/channel-setup-guides/zernio-webhook.md` |
+| Tests | `test/channels/zernio.test.ts` (bloque de comentarios reescrito a respuesta pública), `test/templates/campaigns.test.ts`. Suite completa: **649/649** verde. |
+
+**Nota:** el motor todavía sabe hacer DM para reglas con `kind` explícito
+`comment_dm`/`comment_dm_public` (red de seguridad para instalaciones que aún no
+corrieron el data fix). El follow gate depende del DM, así que queda inerte para
+reglas nuevas. Tras el `db:apply:remote` no queda ninguna regla de ese tipo.
 
 ---
 

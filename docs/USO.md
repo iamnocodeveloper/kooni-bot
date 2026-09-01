@@ -11,11 +11,19 @@
 https://<tu-worker>.workers.dev/admin
 ```
 
-- **usuario:** `admin`
+Te recibe la **página de login de Kooni** (marca + versión a la izquierda,
+formulario a la derecha):
+
+- **usuario:** `admin` (fijo).
 - **contraseña:** la que definiste con `DASHBOARD_PASSWORD`. Para **cambiarla**:
   `cd <carpeta-del-bot>` → `npx wrangler secret put DASHBOARD_PASSWORD` (aplica al
-  instante, sin redeploy). Detalle de todos los secrets en `docs/DESPLIEGUE.md §4.1`.
-- (Alternativa: magic link — entra con tu email si `admin_emails` lo contiene.)
+  instante, sin redeploy). Cambiarla cierra todas las sesiones abiertas. Detalle
+  de todos los secrets en `docs/DESPLIEGUE.md §4.1`.
+
+Al entrar se abre una sesión que dura 30 días en ese navegador. El botón
+**Cerrar sesión** (arriba a la derecha) la termina y te devuelve al login.
+Scripts y healthchecks pueden seguir usando HTTP Basic Auth (`admin` + la misma
+contraseña) sin pasar por la página.
 
 El panel está en español, tema oscuro Kooni (tinta + teal). De izquierda a derecha:
 
@@ -84,8 +92,9 @@ El panel está en español, tema oscuro Kooni (tinta + teal). De izquierda a der
 ### Conexiones
 - Estado de cada canal: **verde** = conectado, **gris** = no configurado.
 - **Zernio** (si está configurado): multicanal unificado — un solo canal verde cubre
-  IG, Messenger, X, Telegram, WhatsApp, etc. El **comentario → DM por keyword** se
-  configura con `ZERNIO_AUTO_DM_KEYWORD` (ver `docs/DESPLIEGUE.md`).
+  IG, Messenger, X, Telegram, WhatsApp, etc. El **comentario → respuesta pública
+  por keyword** se configura en **Automatizaciones** (o con `ZERNIO_AUTO_DM_KEYWORD`;
+  ver `docs/DESPLIEGUE.md`). El bot responde el comentario en público, nunca por DM.
 - Webhooks y secrets asociados (los secrets no se muestran, solo si existen).
 - Aquí se ve si falta un secret (ej. `TELEGRAM_BOT_TOKEN` sin setear).
 

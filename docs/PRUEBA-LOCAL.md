@@ -146,7 +146,7 @@ npx wrangler d1 execute kooni_db --local --command \
 | Canal | POST a | Payload de prueba |
 |---|---|---|
 | Zernio (DM) | `/webhooks/zernio` | `{"event":"message.received","message":{"direction":"incoming","text":"hola"},"conversation":{"id":"c1"},"account":{"id":"a1"}}` |
-| Zernio (comentario→DM) | `/webhooks/zernio` | `{"event":"comment.received","comment":{"postId":"p1","text":"claude"},"account":{"id":"a1"}}` con `ZERNIO_AUTO_DM_KEYWORD=claude` |
+| Zernio (comentario→respuesta pública) | `/webhooks/zernio` | `{"event":"comment.received","comment":{"postId":"p1","text":"claude"},"account":{"id":"a1"}}` con `ZERNIO_AUTO_DM_KEYWORD=claude` → el bot responde el comentario en público |
 | Meta | `/webhooks/meta` | GET de handshake con `hub.verify_token`, luego POST de `messaging` |
 | Twilio | `/webhooks/twilio` | form-urlencoded `Body`, `From`, `FromCountry` |
 

@@ -1,13 +1,16 @@
 /**
  * Admin dashboard routes (Hono sub-app mounted at `/admin`).
  *
- * Auth is HTTP Basic Auth (owner override of the original magic-link plan):
- * every route is guarded by `adminAuth(env)`, which prompts the browser's
- * native Basic Auth dialog. Username is always "admin", password lives in the
- * `DASHBOARD_PASSWORD` secret. There are NO /login or /logout routes — Basic
- * Auth does not need them.
+ * Auth: sesión por cookie firmada (el humano, vía la página propia
+ * `GET/POST /admin/login`) **o** HTTP Basic Auth (scripts, healthchecks y los
+ * tests que mandan `Authorization: Basic ...`). Lo hace `adminAuth(env)` — ver
+ * `auth.ts`. Usuario fijo "admin", contraseña en el secret `DASHBOARD_PASSWORD`;
+ * la cookie se firma con esa misma contraseña, así que rotarla cierra todas las
+ * sesiones. `/admin/login` y `/admin/logout` se registran ANTES del guard para
+ * quedar fuera de él (en Hono un `app.use()` solo envuelve lo registrado
+ * después).
  *
- * Because the Basic Auth middleware needs the per-request `Env` (to read
+ * Because the auth middleware needs the per-request `Env` (to read
  * `DASHBOARD_PASSWORD` from the binding), it is applied inside a wildcard
  * middleware that has access to `c.env` rather than at module-init time.
  */
@@ -17,8 +20,8 @@ import { generateText } from "ai";
 import { createModel } from "../llm/provider";
 import { loadLlmOverrides } from "../settings-loader";
 import type { Env } from "../env";
-import { adminAuth } from "./auth";
-import { layout, renderUpgrade } from "./views/layout";
+import { adminAuth, isAdminAuthenticated, verifyDashboardPassword, setSessionCookie, clearSessionCookie } from "./auth";
+import { layout, renderUpgrade, loginPage } from "./views/layout";
 import { isProUnlocked } from "../config";
 import { renderOverview } from "./views/overview";
 import { renderStats } from "./views/stats";
@@ -52,7 +55,7 @@ import { AutoRulesRepo, type AutoRuleKind } from "../db/autoRules";
 
 /** Parsea el form de una automatización (crear o editar) a un objeto de regla. */
 function parseRuleForm(form: FormData) {
-  const kind = String(form.get("kind") ?? "comment_dm") as AutoRuleKind;
+  const kind = String(form.get("kind") ?? "comment_reply") as AutoRuleKind;
   const platform = String(form.get("platform") ?? "all").trim() || "all";
   const keywords = String(form.get("keywords") ?? "")
     .split(",")
@@ -85,7 +88,41 @@ import { renderBusinessContext } from "../businessContext";
 
 export const adminApp = new Hono<{ Bindings: Env }>();
 
-// Guard every admin route with Basic Auth. The middleware factory needs the
+// --- Login del panel (rutas PÚBLICAS — van antes del guard de abajo) ---------
+// El humano entra por aquí: `GET /admin/login` pinta la página propia (dos
+// columnas: marca + formulario, ver `loginPage` en views/layout.ts) y
+// `POST /admin/login` valida el password contra `DASHBOARD_PASSWORD` y abre la
+// sesión por cookie firmada. Basic Auth sigue funcionando en paralelo para
+// scripts y tests (no pasan por acá).
+adminApp.get("/login", (c) => {
+  // Si ya hay sesión (cookie viva o Basic Auth), no tiene sentido pedir login.
+  if (isAdminAuthenticated(c, c.env)) return c.redirect("/admin/overview", 302);
+  const error = c.req.query("error");
+  return c.html(loginPage({ env: c.env, error: error || undefined }));
+});
+
+adminApp.post("/login", async (c) => {
+  const form = await c.req.formData().catch(() => null);
+  const password = String(form?.get("password") ?? "");
+  if (!verifyDashboardPassword(c.env, password)) {
+    return c.redirect(
+      "/admin/login?error=" + encodeURIComponent("Contraseña incorrecta. Prueba de nuevo."),
+      302,
+    );
+  }
+  setSessionCookie(c, c.env);
+  return c.redirect("/admin/overview", 302);
+});
+
+// Cerrar sesión: limpia la cookie y manda al login. (Para una sesión de Basic
+// Auth no hay "logout" real — el navegador reenvía la credencial solo; el
+// humano usa la cookie.)
+adminApp.get("/logout", (c) => {
+  clearSessionCookie(c);
+  return c.redirect("/admin/login", 302);
+});
+
+// Guard every admin route with cookie session OR Basic Auth. The middleware factory needs the
 // request-scoped Env to read DASHBOARD_PASSWORD, so build it per request here.
 // DASHBOARD_PUBLIC="1" (wrangler.toml de esta instancia) apaga el guard —
 // el panel es público a propósito (decisión de diseño de la instancia).
@@ -118,20 +155,6 @@ adminApp.get("/upgrade", async (c) => c.html(await renderUpgrade(c.env)));
 
 // Root → default tab.
 adminApp.get("/", (c) => c.redirect("/admin/overview"));
-
-// Cerrar sesión (Basic Auth): al recibir 401 + WWW-Authenticate, el navegador
-// limpia las credenciales guardadas de este realm y pedirá login en la próxima
-// visita. Es el equivalente a "logout" para autenticación básica.
-adminApp.get("/logout", (c) =>
-  new Response("Sesión cerrada. Vuelve a entrar cuando quieras (usuario admin).", {
-    status: 401,
-    headers: {
-      "WWW-Authenticate": 'Basic realm="Kooni", charset="UTF-8"',
-      "Content-Type": "text/plain; charset=utf-8",
-      "Cache-Control": "no-store",
-    },
-  }),
-);
 
 // Selector de proyectos (header): instancia actual + hermanas de PEER_BOTS.
 adminApp.get("/projects", (c) =>
@@ -1100,8 +1123,8 @@ function escapeHtml(s: string): string {
 // send manually via WhatsApp). It does NOT send anything to the customer — it
 // only returns an HTML fragment for HTMX to swap into the suggestion area.
 //
-// Auth: already enforced by the wildcard Basic Auth middleware above, so there
-// is no per-route auth check here (no magic-link `requireAuth`).
+// Auth: already enforced by the wildcard `adminAuth` middleware above (cookie
+// session or Basic Auth), so there is no per-route auth check here.
 adminApp.post("/conversations/:id/suggest", async (c) => {
   const msgs = new MessagesRepo(new Db(c.env.DB));
   const history = await msgs.lastN(c.req.param("id"), 20);

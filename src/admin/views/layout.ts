@@ -9,6 +9,7 @@
 // breadcrumb and page title are derived here.
 
 import type { Env } from "../../env";
+import { BOT_VERSION } from "../../version";
 import { isProUnlocked, PRO_ONLY_TABS, isTabAllowed } from "../../config";
 import { getNiche } from "../../niches";
 import type { NichePack } from "../../niches";
@@ -491,36 +492,74 @@ export async function renderUpgrade(env: Env, feature?: string): Promise<string>
   return layout({ title: "Pro", activeTab: "overview", body, env });
 }
 
-export function loginPage(error?: string): string {
+/**
+ * Página de login del panel — dos columnas. Izquierda: marca (blanca-marca
+ * respetada vía `resolveBrand`), tagline y versión del bot. Derecha: el
+ * formulario (`POST /admin/login`, ver `routes.ts`; abre la sesión por cookie
+ * de `auth.ts`). En mobile colapsa a una sola columna (mismo breakpoint que
+ * usa el shell del panel).
+ */
+export function loginPage(opts: { error?: string; env?: Env } = {}): string {
+  const brand = resolveBrand(opts.env);
+  const businessName = opts.env?.BUSINESS_NAME?.trim();
+
   return `<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Login</title>
+  <title>Ingresar · ${brand.name}</title>
   ${HEAD_ASSETS}
   ${GLOBAL_STYLE}
+  <style>${brandOverrides(brand)}</style>
+  <style>
+    .login-shell{min-height:100vh;display:grid;grid-template-columns:1fr 1fr}
+    .login-brand{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;justify-content:center;padding:48px;position:relative;overflow:hidden}
+    .login-brand::before{content:"";position:absolute;inset:0;background:
+      linear-gradient(135deg,transparent 0%,var(--accent-soft) 100%);opacity:.5;pointer-events:none}
+    .login-form-side{display:flex;align-items:center;justify-content:center;padding:32px}
+    @media (max-width:900px){
+      .login-shell{grid-template-columns:1fr}
+      .login-brand{border-right:none;border-bottom:1px solid var(--line);padding:32px 24px}
+    }
+  </style>
 </head>
-<body class="scanlines" style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:1rem">
-  <form method="POST" action="/admin/auth/request" style="background:var(--panel);border:1px solid var(--linelit);box-shadow:8px 8px 0 var(--linelit);padding:32px;max-width:360px;width:100%">
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px">
-      <div style="width:34px;height:34px;flex:none;border:1.5px solid var(--accent);display:flex;align-items:center;justify-content:center;background:var(--accent-soft);box-shadow:3px 3px 0 var(--linelit)">
-        ${K_MARK}
-      </div>
-      <div>
-        <h1 style="font-family:'Space Grotesk';font-weight:700;font-size:18px;margin:0;letter-spacing:-.02em">Panel Kooni</h1>
-        <p style="font-size:11px;color:var(--dim);margin:2px 0 0">Te mandamos un link a tu email para entrar.</p>
+<body class="scanlines">
+  <div class="login-shell">
+    <div class="login-brand">
+      <div style="position:relative;display:flex;flex-direction:column;gap:18px;max-width:380px">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div style="width:44px;height:44px;flex:none;border:1.5px solid var(--accent);display:flex;align-items:center;justify-content:center;background:var(--accent-soft);box-shadow:4px 4px 0 var(--linelit)">
+            ${brand.logo ? `<img src="${brand.logo}" alt="" style="width:26px;height:26px;object-fit:contain">` : K_MARK}
+          </div>
+          <div style="font-family:'Space Grotesk';font-weight:700;font-size:24px;letter-spacing:-.02em">${brand.name}</div>
+        </div>
+        <p style="font-size:14px;color:var(--muted);line-height:1.6;margin:0">
+          Agentes de IA que atienden tu negocio 24/7 — WhatsApp, Instagram, Messenger y Telegram, desde tu propia infraestructura.
+        </p>
+        ${businessName ? `<div style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)">Panel de <span style="color:var(--accent-2)">${escLogin(businessName)}</span></div>` : ""}
+        <div style="font-size:10.5px;font-family:'JetBrains Mono';color:var(--dim);letter-spacing:.04em">v${escLogin(BOT_VERSION)}</div>
       </div>
     </div>
-    ${error ? `<p style="color:var(--bad);font-size:12px;margin:0 0 12px">${error}</p>` : ""}
-    <input name="email" type="email" required placeholder="tu@email.com"
-      style="width:100%;background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:10px 12px;font-size:13px;outline:none;margin-bottom:14px">
-    <button class="bigbtn" type="submit"
-      style="width:100%;background:var(--accent);border:1px solid var(--accent);color:#1a1206;box-shadow:4px 4px 0 var(--linelit);padding:11px;font-family:'Space Grotesk';font-weight:700;font-size:13px;cursor:pointer">
-      Mandar link
-    </button>
-  </form>
+    <div class="login-form-side">
+      <form method="POST" action="/admin/login" style="background:var(--panel);border:1px solid var(--linelit);box-shadow:8px 8px 0 var(--linelit);padding:32px;max-width:360px;width:100%">
+        <h1 style="font-family:'Space Grotesk';font-weight:700;font-size:18px;margin:0 0 4px;letter-spacing:-.02em">Ingresar</h1>
+        <p style="font-size:12px;color:var(--dim);margin:0 0 18px">Usuario: <span style="color:var(--muted)">admin</span></p>
+        ${opts.error ? `<p style="color:var(--bad);font-size:12px;margin:0 0 12px">${escLogin(opts.error)}</p>` : ""}
+        <input name="password" type="password" required autofocus placeholder="Contraseña"
+          style="width:100%;background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:10px 12px;font-size:13px;outline:none;margin-bottom:14px">
+        <button class="bigbtn" type="submit"
+          style="width:100%;background:var(--accent);border:1px solid var(--accent);color:#1a1206;box-shadow:4px 4px 0 var(--linelit);padding:11px;font-family:'Space Grotesk';font-weight:700;font-size:13px;cursor:pointer">
+          Entrar
+        </button>
+      </form>
+    </div>
+  </div>
   ${GLOBAL_SCRIPT}
 </body>
 </html>`;
+}
+
+function escLogin(s: string): string {
+  return s.replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]!));
 }
