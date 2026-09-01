@@ -16,13 +16,24 @@ import { emitKeypressEvents } from "node:readline";
 import { stdin as input, stdout as output } from "node:process";
 import { mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, readdirSync, statSync, cpSync } from "node:fs";
 import { realpathSync } from "node:fs";
-import { join, basename } from "node:path";
+import { join, basename, dirname } from "node:path";
 import { homedir } from "node:os";
 import { execFileSync, spawnSync } from "node:child_process";
 import { randomUUID, createPublicKey, verify as edVerify } from "node:crypto";
 import { fileURLToPath } from "node:url";
 
-const CLI_VERSION = "0.2.17";
+// Leída del package.json publicado junto a este archivo — nunca hardcodeada,
+// para que --version y la telemetría (cliVersion) no se desincronicen del
+// número real publicado en npm (bug encontrado: quedó fija en "0.2.17" tras
+// el bump a 0.3.0).
+const CLI_VERSION = (() => {
+  try {
+    const pkgPath = join(dirname(fileURLToPath(import.meta.url)), "..", "package.json");
+    return JSON.parse(readFileSync(pkgPath, "utf8")).version || "0.0.0";
+  } catch {
+    return "0.0.0";
+  }
+})();
 
 const REPO = process.env.KOONI_REPO || "iamnocodeveloper/kooni-bot";
 const BRANCH = process.env.KOONI_BRANCH || "main";
