@@ -514,6 +514,61 @@ que tiene el sistema hoy, porque decide todas las demás.
 
 ---
 
+## O. Pantalla de login del panel — de modal del navegador a página propia ⏳ (PLANEADO, no implementado)
+
+> Pedido (01-sep): reemplazar el diálogo nativo de Basic Auth por una página de
+> login propia, dos columnas — izquierda: marca Kooni + subtítulo "agentes de
+> IA" + número de versión; derecha: el formulario. **Todo lo demás queda igual**
+> (funciones, íconos, navegación). Este documento es el análisis + plan de
+> tareas; no se tocó código todavía.
+
+### Por qué no es solo CSS
+
+Hoy `/admin/*` está protegido por **HTTP Basic Auth** (`src/admin/auth.ts`,
+`hono/basic-auth`): el navegador muestra su propio diálogo nativo — Kooni no
+renderiza esa UI, así que no hay "pantalla" que rediseñar todavía. Para que
+exista una página real hay que reemplazar el mecanismo: de "credenciales en un
+header por request, sin estado" a "un formulario POST que abre una sesión".
+
+**Dato a favor:** ya existe una función `loginPage()` en `src/admin/views/layout.ts`
+(líneas 494-526) — código muerto de un diseño de magic-link por email que nunca
+se conectó (no hay ninguna ruta `/admin/auth/request`). Sirve de referencia de
+estilo (usa los mismos tokens, el glifo K), pero es de una sola columna y para
+el flujo equivocado (email, no password) — hay que reemplazarla, no solo
+conectarla.
+
+### Decisión de diseño clave: sumar, no reemplazar
+
+Reescribir el auth para que TODO pase por cookie rompería `checkBasicCredentials`
+y los ~7 archivos de test que autentican contra `adminApp` con un header
+`Authorization: Basic ...` (`test/admin/routes.test.ts`, `auth.test.ts`, y 5
+más). **Recomendación: que el middleware acepte los dos** — sesión por cookie
+(la persona, vía la página nueva) O header Basic (scripts/tests, sin cambios).
+Así la superficie de riesgo se limita a lo nuevo; nada que ya funciona se toca.
+
+### Tareas
+
+| # | Tarea | Archivo(s) | Nota |
+|---|---|---|---|
+| O1 | **Endpoint de sesión**: `POST /admin/login` — valida el password contra `DASHBOARD_PASSWORD` (reusar `timingSafeEqual` de `auth.ts`) y, si es correcto, pone una cookie `HttpOnly; Secure; SameSite=Lax`. Valor de la cookie: HMAC/hash del password + expiración firmada (no un session store en D1) — así rotar `DASHBOARD_PASSWORD` invalida sesiones viejas solas. | `src/admin/auth.ts` (nueva función) | Sin tabla nueva en D1. |
+| O2 | **Middleware actualizado**: `adminAuth` acepta sesión por cookie **o** Basic Auth (ver arriba). Si ninguna vale: navegación de navegador (`Accept: text/html`) → `302` a `/admin/login`; petición de API/htmx → `401` (igual que hoy, para no romper los fetch internos del panel). | `src/admin/auth.ts`, `src/admin/routes.ts` | El gate en `routes.ts:93` cambia de "siempre Basic" a "cookie u Basic". |
+| O3 | **Página `GET /admin/login`** (pública, sin auth): dos columnas. Izquierda: `resolveBrand(env)` (para que blanco-marca herede su propio nombre/logo/color — nunca hardcodear "Kooni"), subtítulo "Agentes de IA" (o el tagline de marca), `BOT_VERSION` (`src/version.ts`, ya existe). Derecha: `<form method="POST" action="/admin/login">` con un solo campo password (usuario fijo "admin", igual que hoy) + botón `bigbtn`. Reusa `HEAD_ASSETS`/`GLOBAL_STYLE` de `layout.ts` tal cual — mismos tokens, misma tipografía, mismas animaciones. Responsive: en mobile colapsa a una columna (mismo patrón `@media (max-width:767px)` que ya usa el sidebar). | `src/admin/views/layout.ts` (reemplaza `loginPage()`) | Mostrar error si el password es incorrecto (mismo `?error=` que ya soporta la función vieja). |
+| O4 | **Logout**: cambiar `/admin/logout` — hoy fuerza un 401 con `WWW-Authenticate` (el truco de Basic Auth para que el navegador "olvide" la credencial); con cookie, pasa a limpiar la cookie (`Set-Cookie` con `Max-Age=0`) y redirigir a `/admin/login`. | `src/admin/routes.ts:125-134` | El botón "Cerrar sesión" del header (`layout.ts:418`) sigue apuntando ahí sin cambios. |
+| O5 | **Rate-limit del login** (opcional, recomendado): sin esto, un formulario propio es un blanco más cómodo para fuerza bruta que el diálogo nativo (que al menos frena con reintentos molestos del navegador). Reusar el patrón ya probado en `admin-pagos/functions/auth-login.ts` (contador simple, ventana de 15 min) pero en D1 en vez de la tabla de InsForge — es el hallazgo **S5** pendiente del PLAN, así que esta tarea lo cierra de paso. | `src/admin/auth.ts` + tabla D1 nueva (`login_attempts`) | Fail-open: si D1 falla, no bloquear el login. |
+| O6 | **Tests**: nuevos para O1/O2 (sesión válida/inválida/expirada, cookie tamperada) y para el render de O3 (branding correcto, versión visible). Los 7 archivos existentes con `Authorization: Basic` **no deberían necesitar cambios** — es justo el punto de la decisión de diseño de arriba; confirmarlo corriendo `pnpm test` completo al terminar, no solo los nuevos. | `test/admin/auth.test.ts`, nuevo `test/admin/login-page.test.ts` | — |
+| O7 | **Limpieza**: borrar la `loginPage()` vieja (o reescribirla in-place, a gusto), y el comentario desactualizado en `routes.ts:4-8` ("Auth is HTTP Basic Auth... There are NO /login or /logout routes"). | `src/admin/views/layout.ts`, `src/admin/routes.ts` | — |
+| O8 | **Docs**: `docs/USO.md`/`docs/DESPLIEGUE.md` si mencionan el diálogo nativo del navegador como el login; `docs/IDENTIDAD-KOONI.md:88` ya anticipa una página de login con el glifo K — actualizar la referencia a la implementación real. | `docs/USO.md`, `docs/DESPLIEGUE.md`, `docs/IDENTIDAD-KOONI.md` | — |
+
+### Orden sugerido
+
+O1 → O2 → O3 → O4 (mecanismo primero, con Basic Auth como red de seguridad
+mientras se prueba) → O6 (verificar que nada viejo se rompió) → O5 (hardening) →
+O7 + O8 (limpieza y docs). Riesgo de romper algo existente: bajo, si se respeta
+la decisión de "sumar, no reemplazar" del §O — el mayor riesgo es tocar el
+middleware de `routes.ts:93` sin probar los 7 tests de Basic Auth después.
+
+---
+
 ## Orden recomendado de ejecución
 
 1. **Fase 1-2 OpenReply** — matcher avanzado + `{username}` + links trackeados (mayor valor). | ✅ HECHO (v d59c390c)
