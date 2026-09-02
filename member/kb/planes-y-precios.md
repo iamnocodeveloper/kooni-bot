@@ -1,5 +1,9 @@
 # Planes y precios de Kooni
 
+> Estos son los precios de la LICENCIA de Kooni. El servicio de montaje y
+> configuración (dejarle el bot funcionando a un cliente) se cotiza aparte,
+> según el proyecto — igual que el resto de desarrollos.
+
 Todas las funciones están disponibles en el plan gratis, con límites de uso. La
 licencia Pro quita los límites.
 

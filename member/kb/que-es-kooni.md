@@ -1,5 +1,10 @@
 # Qué es Kooni
 
+> Kooni es uno de los servicios que ofrece el negocio: montar un asistente de IA
+> para un cliente. El montaje y la configuración se cotizan según el proyecto;
+> los precios de más abajo son los de la licencia de Kooni, no el costo del
+> servicio de montaje.
+
 Kooni es un asistente de IA multicanal con panel (dashboard) incluido. Atiende
 WhatsApp, Instagram, Messenger y Telegram desde un solo bot y una sola bandeja.
 
