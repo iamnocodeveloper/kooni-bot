@@ -413,6 +413,14 @@ export default {
     } catch (e) {
       console.error("copiloto:", e);
     }
+    // Purga de avisos push viejos (>7 días) — la tabla es una cola chica.
+    try {
+      const { PushEventsRepo } = await import("./db/push");
+      await new PushEventsRepo(new Db(env.DB)).purgeOld(Date.now() - 7 * 86_400_000);
+    } catch (e) {
+      console.warn("push_events purge:", e);
+    }
+
     // Web Sync (módulo web_sync, una instalación): scrapea las páginas
     // configuradas → KB. No-op si el módulo está bloqueado o falta DECODO_AUTH.
     try {

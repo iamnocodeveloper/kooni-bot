@@ -240,6 +240,24 @@ tope, decenas de Miniflare arrancaban en paralelo y el proxy tronaba con
 `TypeError: fetch failed` (rojos falsos distintos en cada corrida). Ahora
 **691/691 estable y más rápido** (145s vs 300s).
 
+## 2026-09-02 · v1.16.0 — Avisos push en la PWA (Fase 1)
+
+Joel pidió los avisos push. Implementado:
+
+| Archivo | Qué |
+|---|---|
+| `src/push.ts` | JWT VAPID (ES256, WebCrypto) + `notifyOwnerPush()`. Push **sin cuerpo** — el SW pide `/admin/push/latest` al recibirlo. Evita la cifra RFC 8291. |
+| `src/db/push.ts` + `schema.sql` | `push_subscriptions` (dispositivos del dueño) + `push_events` (cola, purga a 7 días). |
+| `src/admin/routes.ts` | `/push/config`, `/push/subscribe`, `/push/unsubscribe`, `/push/latest`, `/push/test`. |
+| `src/admin/pwa.ts` + `layout.ts` | Botón campana en el header. Aparece solo si el worker tiene VAPID. Suscribe este dispositivo + manda aviso de prueba. SW actualizado. |
+| `src/tools/handoffHuman.ts`, `captureLead.ts` | Disparan push: ticket/handoff y nuevo prospecto. |
+
+**Llaves VAPID (las dio Joel):** `VAPID_PUBLIC_KEY` + `VAPID_SUBJECT` van como
+vars en `wrangler.toml`; `VAPID_PRIVATE_KEY` como secret. Mismo par sirve para
+las dos instalaciones. Joel puede rotarlas cuando quiera (regenera y re-pone).
+
+Tests: `test/push.test.ts` (verifica la firma ES256), `test/admin/pwa.test.ts`. 710/710.
+
 ## 2026-09-02 · v1.15.0 — Módulo "Sincronizar sitio web" (Decodo) para cardealer
 
 **Pedido:** el cliente cardealer-daniel2 ("Daniel autos") quiere que el bot

@@ -13,6 +13,12 @@ const env = {
 
 const req = (path: string, init?: RequestInit) => new Request(`https://bot.test${path}`, init);
 
+const AUTH = {
+  Authorization: `Basic ${Buffer.from("admin:x").toString("base64")}`,
+};
+const areq = (path: string, init: RequestInit = {}) =>
+  new Request(`https://bot.test${path}`, { ...init, headers: { ...AUTH, ...(init.headers ?? {}) } });
+
 describe("pwa module", () => {
   it("manifest: standalone, scope /admin/, ícono svg", () => {
     const m = JSON.parse(manifest(env));
@@ -76,5 +82,35 @@ describe("pwa routes (públicas, sin auth)", () => {
     const res = await adminApp.fetch(req("/icon.svg"), env);
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toContain("image/svg+xml");
+  });
+});
+
+describe("push routes", () => {
+  it("GET /admin/push/config informa si hay VAPID", async () => {
+    const off = await adminApp.fetch(areq("/push/config"), env);
+    expect(await off.json()).toMatchObject({ configured: false });
+
+    const on = await adminApp.fetch(areq("/push/config"), {
+      ...env,
+      VAPID_PUBLIC_KEY: "BPUB",
+      VAPID_PRIVATE_KEY: "priv",
+      VAPID_SUBJECT: "mailto:x@y.com",
+    } as Env);
+    expect(await on.json()).toMatchObject({ configured: true, publicKey: "BPUB" });
+  });
+
+  it("POST /admin/push/subscribe valida el cuerpo", async () => {
+    const bad = await adminApp.fetch(
+      areq("/push/subscribe", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }),
+      env,
+    );
+    expect(bad.status).toBe(400);
+  });
+
+  it("GET /admin/push/latest devuelve un fallback cuando no hay eventos", async () => {
+    const res = await adminApp.fetch(areq("/push/latest"), env);
+    expect(res.status).toBe(200);
+    const j = (await res.json()) as { title: string; url: string };
+    expect(j.url).toBe("/admin/overview");
   });
 });

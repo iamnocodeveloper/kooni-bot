@@ -388,3 +388,27 @@ CREATE TABLE IF NOT EXISTS contacts (
   UNIQUE (channel, channel_user_id)
 );
 CREATE INDEX IF NOT EXISTS idx_contacts_last ON contacts(last_interaction_at);
+
+-- PWA: suscripciones push de los dispositivos del dueno (panel instalado como
+-- app). endpoint es unico por navegador y dispositivo. p256dh y auth son las
+-- claves del cliente en base64url que devuelve pushManager.subscribe
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+  endpoint TEXT PRIMARY KEY,
+  p256dh TEXT NOT NULL,
+  auth TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  last_ok_at INTEGER
+);
+
+-- PWA: cola de avisos. El push que se manda NO lleva cuerpo (evita la cifra de
+-- RFC 8291) y el service worker, al recibirlo, pide /admin/push/latest y muestra
+-- el mas reciente. shown se marca cuando el SW lo consumio.
+CREATE TABLE IF NOT EXISTS push_events (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  body TEXT NOT NULL,
+  url TEXT NOT NULL DEFAULT '/admin/overview',
+  created_at INTEGER NOT NULL,
+  shown INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_push_events_created ON push_events(created_at);

@@ -130,6 +130,12 @@ export interface Env {
   // Credencial de Decodo Scraper API: "user:pass" o el base64 ya hecho. Ausente
   // = el módulo no scrapea nada (segundo candado, además de module_unlocks).
   DECODO_AUTH?: string;                    // secret
+
+  // ── Web Push (avisos al celular del dueño con el panel instalado como PWA) ─
+  // Sin las tres, no se manda ningún push (pushConfigured() = false).
+  VAPID_PUBLIC_KEY?: string;               // var (base64url) — también va al cliente
+  VAPID_PRIVATE_KEY?: string;              // secret (base64url, 32 bytes)
+  VAPID_SUBJECT?: string;                  // var ("mailto:tu@correo")
   OWNER_EMAIL: string;  // for handoff notifications (email)
   OWNER_TELEGRAM_CHAT_ID?: string;  // for handoff notifications (default channel)
   OWNER_WA_NUMBER?: string;  // for Pro handoff WhatsApp DM (requires template)

@@ -101,6 +101,19 @@ export async function handoffNotifyStatus(env: Env): Promise<{ ok: boolean; chan
 export async function notifyOwner(env: Env, notice: HandoffNotice): Promise<void> {
   const ticketUrl = `${env.DASHBOARD_BASE_URL}/admin/tickets`;
 
+  // --- Push a la PWA del dueño (best-effort) — ANTES del guard de canales:
+  // puede ser el único canal de aviso configurado.
+  try {
+    const { notifyOwnerPush } = await import("../push");
+    await notifyOwnerPush(env, {
+      title: `🚨 Ticket: ${notice.reason}`,
+      body: notice.summary.slice(0, 140),
+      url: "/admin/tickets",
+    });
+  } catch (e) {
+    console.warn("[notifyOwner] push falló:", e);
+  }
+
   // El SID de la plantilla puede venir del secret O del setting que escribe el
   // setup del panel. Se resuelve ANTES del guard: si vive solo en settings, el
   // guard sync (env-only) diría "sin canal" y saldríamos sin avisar a nadie.

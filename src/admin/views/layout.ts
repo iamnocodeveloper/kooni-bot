@@ -471,6 +471,10 @@ export async function layout(opts: { title: string; activeTab: string; body: str
           <h1 style="font-family:'Space Grotesk';font-weight:700;font-size:22px;margin:2px 0 0;letter-spacing:-.02em">${item.label}</h1>
         </div>
         <div id="proj-switcher" class="hide-mobile" style="margin-left:auto"></div>
+        <button type="button" id="kooni-push" hidden title="Avisos en este dispositivo"
+          style="flex:none;width:36px;height:36px;background:var(--panel2);border:1px solid var(--line);color:var(--muted);cursor:pointer;display:inline-flex;align-items:center;justify-content:center">
+          <i data-lucide="bell" width="16" height="16"></i>
+        </button>
         <div class="live-pill">
           <span style="width:8px;height:8px;border-radius:50%;background:var(--ok);animation:pulse 1.8s ease-in-out infinite,ring 2s infinite"></span>
           <span style="font-size:11px;font-weight:600;letter-spacing:.04em">BOT EN LÍNEA</span>

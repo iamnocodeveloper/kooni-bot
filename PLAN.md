@@ -104,7 +104,7 @@ otra pública. La pública, en cambio, es segura de publicar — ese es el punto
 5. **Validación asimétrica de licencias (Ed25519)** — ✅ **HECHO en el worker (2026-09-01, sin desplegar)**: `src/license.ts` genera/verifica códigos `KOONI-PRO-V2-<payload>.<sig>` con Ed25519 (`node:crypto`, sync, compatible con Workers). El worker solo lleva la clave PÚBLICA (embebida en el código, con override opcional vía `env.LICENSE_PUBLIC_KEY`); la PRIVADA nunca toca el repo. `scripts/gen-license.ts` (gitignored, uso interno) ya firma en v2. El formato v1 (HMAC/`LICENSE_MASTER_KEY`) queda desactivado — `verifyLicense` rechaza cualquier código que no empiece con `KOONI-PRO-V2-`. **Pendiente para cerrar del todo:** (a) actualizar la edge function `generar-licencia` en InsForge para firmar con Ed25519 (privada como secret `LICENSE_PRIVATE_KEY`) — vive fuera de este repo, no se pudo tocar desde aquí; (b) generar y pegar un código v2 en el panel de **cada bot ya desplegado** (ver aviso operativo abajo); (c) correr `pnpm test && pnpm typecheck` y desplegar.
 6. **UI del panel de licencias** — exponer campos `botSlug` / `instUid` (instalación) en el formulario de generación, y mostrar el `correo` en la tabla de clientes.
 7. **Modelo de revendedores (marca blanca + recurrencia)** — licencias por agencia/revendedor: el revendedor paga una cuota/mensualidad (recurrencia real) y a cambio instala bots con su marca (`BRAND_*` ya implementado), con límites y reporte de su cartera desde el panel de licencias (rol `revendedor` en `profiles`, comisión/cuota por instalación activa).
-8. **PWA del panel — Fases 1-3** (`§ Q`). Fase 0 (instalable + offline básico) ✅ en v1.14.0. Pendiente: **Fase 1 = avisos push con VAPID** (nuevo lead / ticket / alerta del Vigilante; la más valiosa), Fase 2 = lectura offline de datos (endpoints JSON + cache del SW), Fase 3 = bandeja móvil (inbox pensado para celular, reusa `POST /admin/conversations/:id/reply`).
+8. **PWA del panel — Fases 1-3** (`§ Q`). Fase 0 ✅ v1.14.0 · **Fase 1 (avisos push con VAPID) ✅ v1.16.0** — botón campana en el header, se dispara con nuevo prospecto / ticket / handoff. Pendiente: Fase 2 = lectura offline (endpoints JSON + cache del SW), Fase 3 = bandeja móvil (ya casi cubierta por § S2).
 9. **Atribución y rendimiento de campañas** (`§ R`) — ⏸️ **en espera**. Se retoma cuando la instalación esté en **Meta oficial** o **ManyChat** (Zernio no entrega el `referral` del anuncio). Orden: panel solo-lectura de comentario→DM (Fase 1, ya sirve) → stamp de origen en la conversación (Fase 2) → `referral` de anuncios (Fase 3, Meta/ManyChat).
 10. **Panel — filtros de conversaciones, responsive y PWA install** (`§ S`). ✅ S1 (filtros canal/fecha/texto) v1.14.5 · S2 Fase 1 (shell+nav+bandeja) v1.14.3 · S2 Fase 2-3 (vistas, modales, iOS) v1.14.5. Queda: probar en dispositivos reales; formularios angostos → se cierran con § T.
 11. **Scraping web → KB** (`§ L`) — ✅ código en v1.15.0. Falta activar en cardealer: actualizar a ≥v1.15.0, `secret put DECODO_AUTH`, `module_unlocks += web_sync`, cargar URLs en Extras.
@@ -684,10 +684,32 @@ middleware de `routes.ts:93` sin probar los 7 tests de Basic Auth después.
 El service worker ya trae los handlers `push` y `notificationclick` — la Fase 1
 solo agrega el emisor y la tabla de suscripciones.
 
-### Fase 1 — Notificaciones push (Web Push + VAPID)
+### Fase 1 — Notificaciones push ✅ (v1.16.0)
 
-Cloudflare Workers puede mandar Web Push sin infra extra: se firma un JWT VAPID
-(ES256 con WebCrypto) y se hace `fetch` al endpoint del navegador.
+**Cómo quedó:**
+- `src/push.ts`: `vapidJwt()` (ES256 con WebCrypto — reconstruye el JWK desde
+  pública+privada) + `notifyOwnerPush()`. **Push SIN cuerpo** — el SW, al
+  recibirlo, pide `/admin/push/latest` y muestra el aviso. Así se evita toda la
+  cifra RFC 8291.
+- `src/db/push.ts`: `push_subscriptions` + `push_events` (cola). Purga a 7 días
+  en el tick nocturno.
+- Rutas: `GET /admin/push/config`, `POST /admin/push/subscribe` · `/unsubscribe`
+  · `/test`, `GET /admin/push/latest` (lo llama el SW con `credentials:include`).
+- UI: botón campana en el header (`#kooni-push`), aparece solo si el worker
+  tiene VAPID. Suscribe/desuscribe este dispositivo; manda un aviso de prueba al
+  activar.
+- Disparadores: `notifyOwner()` (handoff/ticket) y `captureLead` (nuevo prospecto).
+  Falta: sumar el Vigilante.
+- **Config por instalación:** `VAPID_PUBLIC_KEY` + `VAPID_SUBJECT` (vars en
+  `wrangler.toml`), `VAPID_PRIVATE_KEY` (secret). Sin las 3 → botón oculto, no
+  se manda nada.
+
+Tests: `test/push.test.ts` (incluye verificar la firma ES256 con la pública),
+`test/admin/pwa.test.ts`.
+
+⚠️ **iOS:** el push solo llega con la PWA instalada en pantalla de inicio (iOS 16.4+).
+
+### (histórico) plan original de la Fase 1
 
 1. **Claves VAPID** (una vez): NO se piden a ningún servicio — se generan. Un par
    ECDSA P-256. En la carpeta del bot:

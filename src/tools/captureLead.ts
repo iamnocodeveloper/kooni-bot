@@ -37,6 +37,16 @@ export function captureLeadTool(env: Env, getConversationId: () => string | null
       // Optional external export — Pro-tier feature, skipped if no creds
       // (Implementation deferred to Task 7.4 — adds Google Sheets export)
 
+      // Push a la PWA del dueño (best-effort).
+      try {
+        const { notifyOwnerPush } = await import("../push");
+        await notifyOwnerPush(env, {
+          title: "💰 Nuevo prospecto",
+          body: `${name ? name + " — " : ""}${intent}`.slice(0, 140),
+          url: "/admin/leads",
+        });
+      } catch { /* nunca bloquea la captura */ }
+
       return { leadId, message: "Lead capturado." };
     },
   });

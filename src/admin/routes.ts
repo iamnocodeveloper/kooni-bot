@@ -301,6 +301,50 @@ adminApp.post("/kb/reindex", async (c) => {
   return c.redirect(`/admin/kb?reindexed=${r.indexed}`);
 });
 
+// ── PWA push (avisos al celular del dueño) ───────────────────────────────────
+adminApp.get("/push/config", async (c) => {
+  const { pushConfigured, vapidPublicKey } = await import("../push");
+  return c.json({ configured: pushConfigured(c.env), publicKey: vapidPublicKey(c.env) });
+});
+
+adminApp.post("/push/subscribe", async (c) => {
+  const body = await c.req.json().catch(() => null) as { endpoint?: string; keys?: { p256dh?: string; auth?: string } } | null;
+  const endpoint = body?.endpoint;
+  const p256dh = body?.keys?.p256dh;
+  const auth = body?.keys?.auth;
+  if (!endpoint || !p256dh || !auth) return c.json({ ok: false }, 400);
+  const { PushSubsRepo } = await import("../db/push");
+  await new PushSubsRepo(new Db(c.env.DB)).upsert({ endpoint, p256dh, auth });
+  return c.json({ ok: true });
+});
+
+adminApp.post("/push/unsubscribe", async (c) => {
+  const body = await c.req.json().catch(() => null) as { endpoint?: string } | null;
+  if (body?.endpoint) {
+    const { PushSubsRepo } = await import("../db/push");
+    await new PushSubsRepo(new Db(c.env.DB)).remove(body.endpoint);
+  }
+  return c.json({ ok: true });
+});
+
+// El service worker lo pide al recibir un push (que va sin cuerpo).
+adminApp.get("/push/latest", async (c) => {
+  const { PushEventsRepo } = await import("../db/push");
+  const ev = await new PushEventsRepo(new Db(c.env.DB)).takeLatest();
+  return c.json(
+    ev
+      ? { title: ev.title, body: ev.body, url: ev.url }
+      : { title: c.env.BRAND_NAME || "Kooni", body: "Tienes una novedad en el panel.", url: "/admin/overview" },
+  );
+});
+
+// Aviso de prueba (botón "Enviar aviso de prueba").
+adminApp.post("/push/test", async (c) => {
+  const { notifyOwnerPush } = await import("../push");
+  await notifyOwnerPush(c.env, { title: "Prueba ✓", body: "Los avisos funcionan en este dispositivo.", url: "/admin/overview" });
+  return c.json({ ok: true });
+});
+
 // Web Sync manual (módulo web_sync): scrapea ya las páginas configuradas.
 adminApp.post("/kb/web-sync", async (c) => {
   const { runWebSync } = await import("../kb/webSync");

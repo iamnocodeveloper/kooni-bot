@@ -129,18 +129,24 @@ self.addEventListener('fetch', (e) => {
 });
 
 // ── Fase 1: notificaciones push ────────────────────────────────────────────
+// El push llega SIN cuerpo (no ciframos el payload). Al recibirlo, pedimos el
+// aviso más reciente a /admin/push/latest y lo mostramos.
 self.addEventListener('push', (e) => {
-  let data = {};
-  try { data = e.data ? e.data.json() : {}; } catch (_) { data = { body: e.data && e.data.text() }; }
-  const title = data.title || 'Kooni';
-  const options = {
-    body: data.body || 'Tienes una novedad en el panel.',
-    icon: '/admin/icon.svg',
-    badge: '/admin/icon.svg',
-    tag: data.tag || 'kooni',
-    data: { url: data.url || '/admin/overview' },
-  };
-  e.waitUntil(self.registration.showNotification(title, options));
+  e.waitUntil((async () => {
+    let n = { title: 'Kooni', body: 'Tienes una novedad en el panel.', url: '/admin/overview' };
+    try {
+      const r = await fetch('/admin/push/latest', { credentials: 'include' });
+      if (r.ok) { const j = await r.json(); n = { title: j.title || n.title, body: j.body || n.body, url: j.url || n.url }; }
+    } catch (_) {}
+    return self.registration.showNotification(n.title, {
+      body: n.body,
+      icon: '/admin/icon.svg',
+      badge: '/admin/icon.svg',
+      tag: 'kooni',
+      renotify: true,
+      data: { url: n.url },
+    });
+  })());
 });
 
 self.addEventListener('notificationclick', (e) => {
@@ -227,6 +233,55 @@ export function pwaHeadTags(env: Env): string {
       if (/iphone|ipad|ipod/i.test(navigator.userAgent) && !standalone) {
         window.addEventListener('load', btn);
       }
+    })();
+
+    // Botón campana (avisos push). Aparece en el header (#kooni-push) solo si el
+    // worker tiene VAPID configurado. Suscribe/desuscribe este dispositivo.
+    (function () {
+      function b64urlToU8(s) {
+        var p = '='.repeat((4 - s.length % 4) % 4);
+        var b = atob((s + p).replace(/-/g, '+').replace(/_/g, '/'));
+        var u = new Uint8Array(b.length);
+        for (var i = 0; i < b.length; i++) u[i] = b.charCodeAt(i);
+        return u;
+      }
+      async function init() {
+        var el = document.getElementById('kooni-push');
+        if (!el || !('serviceWorker' in navigator) || !('PushManager' in window)) return;
+        var cfg;
+        try { cfg = await (await fetch('/admin/push/config')).json(); } catch (_) { return; }
+        if (!cfg || !cfg.configured || !cfg.publicKey) return;
+        var reg = await navigator.serviceWorker.ready;
+        var sub = await reg.pushManager.getSubscription();
+        el.hidden = false;
+        paint(el, !!sub);
+        el.onclick = async function () {
+          el.disabled = true;
+          try {
+            if (sub) {
+              await fetch('/admin/push/unsubscribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ endpoint: sub.endpoint }) });
+              await sub.unsubscribe();
+              sub = null;
+            } else {
+              var perm = await Notification.requestPermission();
+              if (perm !== 'granted') { alert('Activa los permisos de notificación del navegador para recibir avisos.'); el.disabled = false; return; }
+              sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64urlToU8(cfg.publicKey) });
+              var j = sub.toJSON();
+              await fetch('/admin/push/subscribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ endpoint: j.endpoint, keys: j.keys }) });
+              fetch('/admin/push/test', { method: 'POST' });
+            }
+            paint(el, !!sub);
+          } catch (e) { console.warn('push:', e); alert('No se pudo cambiar los avisos: ' + e.message); }
+          el.disabled = false;
+        };
+      }
+      function paint(el, on) {
+        el.title = on ? 'Avisos activados en este dispositivo — toca para apagar' : 'Activar avisos en este dispositivo';
+        el.style.color = on ? (${JSON.stringify(b.accent)}) : 'var(--muted)';
+        var i = el.querySelector('[data-lucide]');
+        if (i) { i.setAttribute('data-lucide', on ? 'bell-ring' : 'bell'); if (window.lucide) window.lucide.createIcons(); }
+      }
+      window.addEventListener('load', function () { setTimeout(init, 300); });
     })();
   </script>`;
 }
