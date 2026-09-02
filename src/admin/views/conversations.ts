@@ -470,7 +470,8 @@ export async function renderInbox(env: Env, p: InboxParams): Promise<string> {
   }
 
   const body = `
-    <div class="flex flex-wrap items-center gap-2" style="margin-bottom:14px">
+   <div class="inbox" data-view="${p.selectedId ? "thread" : "list"}">
+    <div class="inbox-filters flex flex-wrap items-center gap-2" style="margin-bottom:14px">
       ${filterPill(inboxUrl({ selectedId: p.selectedId }), `Todas · ${totalConvs}`, !p.filter, "var(--accent)")}
       ${filterPill(inboxUrl({ filter: "leads", selectedId: p.selectedId }), `💰 Leads · ${totalLeads}`, p.filter === "leads", "var(--accent)")}
       ${filterPill(inboxUrl({ filter: "atencion", selectedId: p.selectedId }), `🔔 Atención · ${needAttention}`, p.filter === "atencion", "var(--bad)")}
@@ -485,17 +486,23 @@ export async function renderInbox(env: Env, p: InboxParams): Promise<string> {
       </form>
     </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-[320px_1fr] overflow-hidden" style="border:1px solid var(--line);background:var(--panel);height:calc(100vh - 200px);min-height:480px">
-      <div class="border-r border-line flex flex-col" style="min-height:0">
+    <div class="inbox-grid grid grid-cols-1 md:grid-cols-[320px_1fr] overflow-hidden" style="border:1px solid var(--line);background:var(--panel);height:calc(100vh - 200px);min-height:480px">
+      <div class="inbox-list border-r border-line flex flex-col" style="min-height:0">
         <div id="conv-list" class="overflow-y-auto flex-1"
              hx-get="${listPollUrl}" hx-trigger="every 10s[window.puedeRefrescar('conv-list')]" hx-swap="innerHTML">
           ${list}
         </div>
       </div>
-      <div class="flex flex-col" style="min-height:0;background:var(--bg)">
+      <div class="inbox-pane flex flex-col" style="min-height:0;background:var(--bg)">
+        ${
+          p.selectedId
+            ? `<a href="${inboxUrl({ filter: p.filter, search: p.search })}" class="inbox-back" style="align-items:center;gap:7px;padding:11px 14px;border-bottom:1px solid var(--line);background:var(--panel);font-size:12.5px;font-weight:600;color:var(--accent)"><i data-lucide="arrow-left" width="15" height="15"></i> Conversaciones</a>`
+            : ""
+        }
         ${rightPane}
       </div>
-    </div>`;
+    </div>
+   </div>`;
 
   return layout({ title: "Conversaciones", activeTab: "conversations", body, env });
 }

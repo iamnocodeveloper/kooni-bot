@@ -46,4 +46,12 @@ describe("los scripts en línea del panel", () => {
     expect(html).toContain("indexOf(&#39;http&#39;)");
     expect(html).not.toContain("indexOf('http')");
   });
+
+  it("trae el cajón de navegación móvil: hamburguesa, backdrop y toggle", () => {
+    expect(html).toContain('class="hburger"');
+    expect(html).toContain("data-nav-open");
+    expect(html).toContain('class="nav-backdrop"');
+    expect(html).toContain("data-nav-close");
+    expect(html).toContain('classList.add("nav-open")');
+  });
 });

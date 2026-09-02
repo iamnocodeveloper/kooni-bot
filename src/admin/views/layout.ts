@@ -132,6 +132,7 @@ const GLOBAL_STYLE = `
   *{box-sizing:border-box}
   html,body{margin:0;padding:0;background:var(--bg);color:var(--cream);
     font-family:'JetBrains Mono',ui-monospace,monospace;-webkit-font-smoothing:antialiased}
+  body{overflow-x:clip;max-width:100vw}
   a{color:var(--accent);text-decoration:none}
   a:hover{color:var(--accent-2)}
   ::-webkit-scrollbar{width:10px;height:10px}
@@ -206,15 +207,47 @@ const GLOBAL_STYLE = `
   .sb-nav{padding:14px 12px;display:flex;flex-direction:column;gap:2px;flex:1;overflow-y:auto}
   .sb-sec{font-size:9.5px;letter-spacing:.24em;text-transform:uppercase;padding:14px 10px 6px}
   .live-pill{display:flex;align-items:center;gap:9px;background:var(--panel);border:1px solid var(--line);padding:8px 13px}
+  /* hamburguesa + fondo del drawer: solo se ven en móvil */
+  .hburger{display:none}
+  .nav-backdrop{display:none}
 
   @media (max-width:767px){
+    /* Nav = cajón deslizable (off-canvas). El grid queda de una sola columna
+       y la barra sale de flujo con position:fixed. */
     .shell{grid-template-columns:1fr}
-    .sb{position:sticky;top:0;height:auto;flex-direction:row;align-items:center;border-right:none;border-bottom:1px solid var(--line);overflow-x:auto}
-    .sb-brand{flex:none;border-bottom:none !important;border-right:1px solid var(--line)}
-    .sb-nav{flex-direction:row;align-items:center;gap:4px;padding:8px 10px;overflow-y:visible;overflow-x:auto}
-    .sb-sec{display:none}
-    .sb-foot{display:none}
-    .navlink{border-left:none !important;white-space:nowrap;border-bottom:2px solid transparent}
+    .sb{position:fixed;left:0;top:0;z-index:60;width:82vw;max-width:320px;height:100vh;height:100dvh;
+      flex-direction:column;overflow-y:auto;transform:translateX(-100%);
+      transition:transform .22s cubic-bezier(.16,1,.3,1);box-shadow:2px 0 24px rgba(0,0,0,.5)}
+    .shell.nav-open .sb{transform:none}
+    .shell.nav-open .nav-backdrop{display:block;position:fixed;inset:0;z-index:55;background:rgba(2,6,10,.6)}
+    .hburger{display:inline-flex;align-items:center;justify-content:center;flex:none;
+      width:40px;height:40px;background:var(--panel2);border:1px solid var(--line);color:var(--cream);cursor:pointer}
+    .navlink{min-height:44px}
+    /* iOS Safari hace zoom al enfocar inputs < 16px — evitarlo en móvil. */
+    input:not([type="range"]):not([type="checkbox"]):not([type="radio"]),select,textarea{font-size:16px !important}
+    main{padding:14px 12px !important}
+    header .crumb{display:none}
+    header h1{font-size:17px !important}
+    header .live-pill{margin-left:auto;padding:8px}
+    .live-pill span:last-child{display:none}
+    .hide-mobile{display:none !important}
+  }
+  @media (prefers-reduced-motion:reduce){ .sb{transition:none} }
+
+  /* contenedor de scroll horizontal para tablas/anchos que no caben en móvil */
+  .xscroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+
+  /* Bandeja: en móvil se ve UNA cosa a la vez — la lista, o el hilo (con
+     "volver"). En escritorio, las dos columnas como siempre. */
+  .inbox-back{display:none}
+  @media (max-width:767px){
+    .inbox[data-view="thread"] .inbox-list{display:none}
+    .inbox[data-view="thread"] .inbox-filters{display:none}
+    .inbox[data-view="list"] .inbox-pane{display:none}
+    .inbox-grid{grid-template-columns:1fr !important;height:calc(100dvh - 128px) !important;min-height:0 !important}
+    .inbox-filters{flex-wrap:nowrap !important;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:4px}
+    .inbox-filters form{min-width:170px !important}
+    .inbox-back{display:flex}
   }
 
   @media (prefers-reduced-motion:reduce){
@@ -254,6 +287,19 @@ const GLOBAL_SCRIPT = `
       if (root) root.innerHTML = "";
     }
   });
+  // Cajón de navegación en móvil: hamburguesa abre, backdrop / link / Escape cierra.
+  (function(){
+    var shell = document.querySelector(".shell");
+    if (!shell) return;
+    function open(){ shell.classList.add("nav-open"); }
+    function close(){ shell.classList.remove("nav-open"); }
+    document.querySelectorAll("[data-nav-open]").forEach(function(b){ b.addEventListener("click", open); });
+    document.querySelectorAll("[data-nav-close]").forEach(function(b){ b.addEventListener("click", close); });
+    var sb = document.querySelector(".sb");
+    if (sb) sb.addEventListener("click", function(e){ if (e.target.closest("a.navlink")) close(); });
+    document.addEventListener("keydown", function(e){ if (e.key === "Escape") close(); });
+  })();
+
   // Acordeón del sidebar: secciones colapsables (Inbox).
   document.querySelectorAll("button[data-acc]").forEach(function(btn){
     btn.addEventListener("click", function(){
@@ -407,18 +453,22 @@ export async function layout(opts: { title: string; activeTab: string; body: str
 <body class="scanlines">
   <div class="shell">
     ${sidebar(opts.activeTab, lockedSync, niche, tierLabel, resolveBrand(opts.env))}
+    <div class="nav-backdrop" data-nav-close></div>
     <div style="display:flex;flex-direction:column;min-width:0">
-      <header style="position:sticky;top:0;z-index:30;background:rgba(13,18,24,.9);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);padding:14px 26px;display:flex;align-items:center;gap:20px">
+      <header style="position:sticky;top:0;z-index:30;background:rgba(13,18,24,.9);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);padding:14px 26px;display:flex;align-items:center;gap:14px">
+        <button type="button" class="hburger" data-nav-open aria-label="Abrir menú">
+          <i data-lucide="menu" width="20" height="20"></i>
+        </button>
         <div style="min-width:0">
-          <div style="font-size:10px;letter-spacing:.22em;color:var(--dim);text-transform:uppercase">${section.label} / ${item.label}</div>
+          <div class="crumb" style="font-size:10px;letter-spacing:.22em;color:var(--dim);text-transform:uppercase">${section.label} / ${item.label}</div>
           <h1 style="font-family:'Space Grotesk';font-weight:700;font-size:22px;margin:2px 0 0;letter-spacing:-.02em">${item.label}</h1>
         </div>
-        <div id="proj-switcher" style="margin-left:auto"></div>
+        <div id="proj-switcher" class="hide-mobile" style="margin-left:auto"></div>
         <div class="live-pill">
           <span style="width:8px;height:8px;border-radius:50%;background:var(--ok);animation:pulse 1.8s ease-in-out infinite,ring 2s infinite"></span>
           <span style="font-size:11px;font-weight:600;letter-spacing:.04em">BOT EN LÍNEA</span>
         </div>
-        <a href="/admin/logout" title="Cerrar sesión y volver a la pantalla de ingreso" style="display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600;letter-spacing:.04em;color:var(--dim);border:1px solid var(--line);padding:7px 12px;text-decoration:none">Cerrar sesión</a>
+        <a href="/admin/logout" title="Cerrar sesión y volver a la pantalla de ingreso" class="hide-mobile" style="display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600;letter-spacing:.04em;color:var(--dim);border:1px solid var(--line);padding:7px 12px;text-decoration:none">Cerrar sesión</a>
       </header>
       <main style="padding:22px 26px;min-width:0">${opts.body}</main>
     </div>

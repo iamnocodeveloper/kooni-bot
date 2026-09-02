@@ -149,6 +149,35 @@ Test nuevo en `test/index.test.ts` (token válido → embebe también `kb_docs`)
   se ven como el contador "N fragmentos precargados del repo", no editables ahí.
   La instalación de Joel ya no usa esta vía (carpeta vacía).
 
+### Mejora 5 — v1.14.3 — Responsive móvil: navegación, bandeja, tamaños (Fase 1)
+
+**Qué se observó (Joel, en el celular):** el panel no se usa bien en móvil — la
+navegación era una tira de iconos con scroll horizontal, el header se
+amontonaba, y en Conversaciones la lista y el hilo competían por un espacio
+minúsculo.
+
+**Qué se cambió** (`layout.ts`, `conversations.ts`):
+
+- **Navegación → cajón deslizable.** Botón hamburguesa en el header; la barra
+  entra desde la izquierda con un backdrop; cierra al tocar un link, el fondo o
+  Escape. Se conservan las secciones, el acordeón y el pie (antes se perdían).
+- **Header compacto en móvil:** sin breadcrumb, título más chico, "BOT EN LÍNEA"
+  solo el punto, el selector de proyecto y "Cerrar sesión" se ocultan.
+- **Bandeja de conversaciones = una vista a la vez:** en móvil se ve la lista, o
+  el hilo con una barra "← Conversaciones". Los filtros van en fila con scroll
+  horizontal y se ocultan al abrir un hilo. Altura `100dvh`.
+- **Tamaños:** inputs a 16px en móvil (sin el zoom de iOS), tap targets de nav
+  ≥ 44px, menos padding, `body{overflow-x:clip}`, utilidad `.xscroll`.
+
+Fases 2 y 3 (pase por vista: tablas → tarjetas, gráficas, formularios, modales;
+detalles de iOS/perf) en `PLAN.md § S2`.
+
+**Verificación:** `pnpm test` (suite completa flakea por un problema conocido de
+miniflare + vitest 4 —`TypeError: fetch failed` al crear instancias en
+paralelo—; los archivos afectados pasan al correrse aislados y
+`test/admin/` pasa 146/146). Tests nuevos en `test/admin/layout-scripts.test.ts`
+(cajón de nav) y `test/admin/pwa.test.ts`.
+
 ### Pendiente para Joel (en el panel)
 
 - El bot corre con `model_override = "haiku"` (modelo barato). Si el playbook de

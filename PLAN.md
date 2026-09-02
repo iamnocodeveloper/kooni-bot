@@ -106,7 +106,7 @@ otra pública. La pública, en cambio, es segura de publicar — ese es el punto
 7. **Modelo de revendedores (marca blanca + recurrencia)** — licencias por agencia/revendedor: el revendedor paga una cuota/mensualidad (recurrencia real) y a cambio instala bots con su marca (`BRAND_*` ya implementado), con límites y reporte de su cartera desde el panel de licencias (rol `revendedor` en `profiles`, comisión/cuota por instalación activa).
 8. **PWA del panel — Fases 1-3** (`§ Q`). Fase 0 (instalable + offline básico) ✅ en v1.14.0. Pendiente: **Fase 1 = avisos push con VAPID** (nuevo lead / ticket / alerta del Vigilante; la más valiosa), Fase 2 = lectura offline de datos (endpoints JSON + cache del SW), Fase 3 = bandeja móvil (inbox pensado para celular, reusa `POST /admin/conversations/:id/reply`).
 9. **Atribución y rendimiento de campañas** (`§ R`) — ⏸️ **en espera**. Se retoma cuando la instalación esté en **Meta oficial** o **ManyChat** (Zernio no entrega el `referral` del anuncio). Orden: panel solo-lectura de comentario→DM (Fase 1, ya sirve) → stamp de origen en la conversación (Fase 2) → `referral` de anuncios (Fase 3, Meta/ManyChat).
-10. **Panel — filtros de conversaciones, responsive y PWA install** (`§ S`).
+10. **Panel — filtros de conversaciones, responsive y PWA install** (`§ S`). S2 Fase 1 (shell + nav + bandeja móvil) ✅ v1.14.3. Pendiente: S1 (filtros canal/fecha), S2 Fase 2 (pase por vista) y Fase 3 (detalles iOS/perf).
 
 ## Seguridad — auditoría 2026-08-31 (arreglos + pendientes)
 
@@ -825,17 +825,38 @@ Archivos: `conversations.ts` (`InboxParams`, `buildWhere`, barra de filtros),
 `routes.ts` (`/conversations` y `/conversations/list-fragment` leen los nuevos
 query params). Tests: `test/admin/inbox.test.ts`.
 
-### S2 — Responsive / menús en móvil
+### S2 — Responsive / menús en móvil — plan por fases
 
-- El shell tiene sidebar fija de 248px (`layout.ts`). En móvil debe colapsar a
-  un menú hamburguesa (drawer). Revisar el breakpoint que ya usa el login
-  (`max-width:900px`).
-- Bandeja de conversaciones: en móvil, lista y hilo compiten por el ancho —
-  pasar a una vista de una columna (lista → toca → hilo, con "volver").
-- Tablas anchas (Prospectos, Costos, Estadísticas) → scroll horizontal contenido
-  o tarjetas apiladas en móvil.
-- Header sticky: revisar que los botones (proyecto, cerrar sesión) no se
-  amontonen en pantallas chicas.
+Breakpoint del panel: `max-width:767px` (el login usa 900; se deja como está).
+
+**Fase 1 — Shell, navegación y bandeja ✅ (v1.14.3)**
+
+| Cambio | Archivo |
+|---|---|
+| Sidebar → **cajón deslizable** (off-canvas) en móvil. Botón hamburguesa en el header; backdrop; cierra al tocar link / backdrop / Escape. Se conservan secciones, acordeón y pie (antes en móvil era una tira de iconos con scroll horizontal). | `layout.ts` (`GLOBAL_STYLE`, `GLOBAL_SCRIPT`, header markup) |
+| Header compacto en móvil: sin breadcrumb, título 17px, "BOT EN LÍNEA" → solo el punto, proyecto/cerrar-sesión ocultos (`.hide-mobile`; cerrar sesión queda en el pie del cajón). | `layout.ts` |
+| **Bandeja = una vista a la vez** en móvil: la lista, o el hilo con barra "← Conversaciones". `.inbox[data-view]` + CSS. Filtros en fila con scroll horizontal; se ocultan al abrir un hilo. Altura `100dvh`. | `conversations.ts`, `layout.ts` |
+| Inputs a 16px en móvil (evita el zoom de iOS al enfocar). Tap targets de nav ≥ 44px. `main` con menos padding. `body{overflow-x:clip}`. Utilidad `.xscroll`. | `layout.ts` |
+
+**Fase 2 — Pase por vista (pendiente)**
+
+- **Prospectos / Contactos / Tickets**: las tablas anchas → envolver en `.xscroll`
+  o, mejor, tarjetas apiladas en móvil (`< 640px`).
+- **Costos / Estadísticas / Insights**: las gráficas y grids de KPIs → 1 columna
+  en móvil; revisar que las barras SVG no desborden.
+- **Configuración / KB editor / Automatizaciones**: formularios anchos → ancho
+  completo, `max-width` solo en desktop; el editor de KB con `textarea` alto.
+- **Resumen (overview)**: los cuadros de KPI → grid `repeat(auto-fit,minmax(150px,1fr))`.
+- **Modales** (`.modal-card`): en móvil casi pantalla completa, con scroll interno.
+- **Composer del hilo** (`renderComposer`): sticky abajo, que el teclado no lo tape
+  (`env(safe-area-inset-bottom)` + `position:sticky`).
+
+**Fase 3 — Detalles**
+
+- `<meta name="viewport">` con `viewport-fit=cover` para las safe-areas de iOS.
+- Quitar el overlay `.scanlines` en móvil (coste de pintado) o bajarlo a `opacity:.2`.
+- `100dvh` vs `100vh` — auditar dónde queda contenido bajo la barra del navegador.
+- Probar en iOS Safari y Android Chrome reales (no solo el emulador).
 
 ### S3 — PWA: botón de instalar visible ✅ (v1.14.1)
 
