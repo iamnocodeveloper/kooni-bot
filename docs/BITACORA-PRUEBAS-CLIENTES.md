@@ -286,18 +286,59 @@ simple que el plan de `§ L`.
 commiteó ni quedó en código — va solo como `wrangler secret` en el worker de
 cardealer. Conviene que Joel la rote en el panel de Decodo por las dudas.
 
-### 2026-09-02 — Estado tras las pruebas de Joel
+---
 
-- **Aprobado por Joel:** el bot ya responde con los precios reales de Kooni tras
-  el fix del `custom_instructions`. Cierra la Mejora 6.
-- **Modelo:** Joel cambió a **gpt-4o-mini** desde el panel (OpenAI). Aplica al
-  instante (setting D1). Con proveedor OpenAI el override `haiku`/`sonnet` se
-  ignora — conviene dejar "Modelo" en **Automático** para no confundir.
-- **Deploy de v1.14.4 / v1.14.5 a joel-nocode:** NO entró desde esta máquina
-  (la red corta las descargas grandes; ~13 intentos). Joel lo corre él mismo
-  con `npx kooni-bot update --yes` en su carpeta. El worker sigue en v1.14.3
-  (móvil ya live); falta la caja "Probar búsqueda" y los filtros nuevos.
-- **cardealer-daniel2 ("Daniel autos"):** está en **v1.12.0** (5 minors atrás).
-  Es el **cliente del scraping de autos** (`§ L`). Actualizar con cuidado:
-  worker en `cardealerdani.workers.dev` (posible otra cuenta de Cloudflare) —
-  confirmar `wrangler whoami` antes. Hacer joel-nocode primero.
+## Estado al cierre — 2026-09-02
+
+### Versiones
+
+- **`origin/main`**: v1.16.0.
+- **`kooni-bot-joel-nocode-ec53aa`** (Joel Araujo / Nocodeveloper): **v1.16.0**, desplegado y verificado.
+- **`kooni-bot-cardealer-daniel2-948b8b`** (Daniel autos, cuenta `Info@dmezzadri.com`): **v1.16.0**, desplegado.
+- **CLI / npm**: sin cambios en `cli-kooni/` en toda la sesión → no hubo publicación.
+
+### Qué se entregó (v1.14.0 → v1.16.0)
+
+| Área | Estado |
+|---|---|
+| Niche `agencia-ia` (flujo de venta conversacional) + KB de Kooni | ✅ · aprobado por Joel |
+| Fix "el bot dice que no tiene la info" (`custom_instructions` en Joel) | ✅ · aprobado |
+| CRM registra respuestas hechas desde la app nativa (`ownerEcho`) | ✅ |
+| PWA instalable + botón "Instalar" + offline básico (Fase 0) | ✅ |
+| **PWA avisos push (Fase 1)** — botón campana, dispara con prospecto/ticket | ✅ código · **cada quien activa en su celular** |
+| "Probar búsqueda" en `/admin/kb` (ve lo que ve el bot + score) | ✅ |
+| Filtros de conversaciones: canal, fecha, texto de mensajes | ✅ |
+| Responsive móvil: navegación en cajón, bandeja de una vista, tablas, modales, iOS | ✅ Fases 1-3 |
+| **Módulo "Sincronizar sitio web" (Decodo → KB)** | ✅ código · **activar en cardealer** (secret + `module_unlocks` + URLs) |
+| Fix `/kb/reindex` (ignoraba los docs del panel) | ✅ |
+| `vitest maxWorkers: 2` (arregla el flakeo de la suite) | ✅ · 710/710 estable |
+
+### Config aplicada en las instalaciones
+
+- **Joel:** `BOT_NICHE = "agencia-ia"`, `custom_instructions` (KB de Kooni oficial),
+  KB migrados a `kb_docs`, modelo **gpt-4o-mini** (elección de Joel), VAPID vars
+  en `wrangler.toml` + secret `VAPID_PRIVATE_KEY`.
+- **cardealer:** VAPID vars + secret. `DECODO_AUTH` puesto. **Pendiente de
+  verificar:** que `module_unlocks` incluya `web_sync` (Joel se topó con el
+  escape de comillas de PowerShell — se le dio la versión con `.sql` file). Si
+  la licencia de Daniel es legada (todos los módulos), ya está activo.
+
+### Pendientes
+
+**Joel:**
+1. Verificar que en cardealer el botón "Sincronizar sitio ahora" aparezca en
+   `/admin/kb`. Si no → correr el `.sql` de activación (ver mensaje / `PLAN.md § L`).
+2. Cargar en el panel de Daniel las URLs del inventario (Extras → Sincronizar
+   sitio web) + primera sincronización.
+3. Pedirle a Daniel las 5 preguntas que el bot debe poder contestar.
+4. Activar el push en cada celular (instalar PWA → 🔔 → permitir).
+5. Rotar la credencial de Decodo y el par VAPID (ambos se pegaron en el chat).
+6. Aprobar el rumbo del rediseño visual (`§ T` — claro/oscuro + morado/fucsia).
+7. Dejar "Modelo" en **Automático** en el panel de Joel (el override haiku/sonnet
+   no aplica con OpenAI).
+
+**Claude:**
+- Rediseño visual `§ T` (cuando Joel apruebe el rumbo).
+- Sumar el Vigilante a los disparadores de push.
+- Campañas `§ R` — en pausa hasta Meta oficial / ManyChat.
+- Web Sync Fase 2 (crawl / paginación) si el volumen lo pide — hoy: lista fija de URLs.

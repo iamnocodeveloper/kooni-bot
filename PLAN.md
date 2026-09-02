@@ -107,8 +107,8 @@ otra pública. La pública, en cambio, es segura de publicar — ese es el punto
 8. **PWA del panel — Fases 1-3** (`§ Q`). Fase 0 ✅ v1.14.0 · **Fase 1 (avisos push con VAPID) ✅ v1.16.0** — botón campana en el header, se dispara con nuevo prospecto / ticket / handoff. Pendiente: Fase 2 = lectura offline (endpoints JSON + cache del SW), Fase 3 = bandeja móvil (ya casi cubierta por § S2).
 9. **Atribución y rendimiento de campañas** (`§ R`) — ⏸️ **en espera**. Se retoma cuando la instalación esté en **Meta oficial** o **ManyChat** (Zernio no entrega el `referral` del anuncio). Orden: panel solo-lectura de comentario→DM (Fase 1, ya sirve) → stamp de origen en la conversación (Fase 2) → `referral` de anuncios (Fase 3, Meta/ManyChat).
 10. **Panel — filtros de conversaciones, responsive y PWA install** (`§ S`). ✅ S1 (filtros canal/fecha/texto) v1.14.5 · S2 Fase 1 (shell+nav+bandeja) v1.14.3 · S2 Fase 2-3 (vistas, modales, iOS) v1.14.5. Queda: probar en dispositivos reales; formularios angostos → se cierran con § T.
-11. **Scraping web → KB** (`§ L`) — ✅ código en v1.15.0. Falta activar en cardealer: actualizar a ≥v1.15.0, `secret put DECODO_AUTH`, `module_unlocks += web_sync`, cargar URLs en Extras.
-12. **Rediseño visual del panel** (`§ T`) — identidad Kooni propia, diferenciar de Forja. Bloque dedicado, no urgente. Legalmente MIT ya lo permite (no es obligatorio).
+11. **Scraping web → KB** (`§ L`) — ✅ código v1.15.0, ambas instalaciones en v1.16.0. Falta en cardealer: verificar `module_unlocks += web_sync` (o que la licencia lo cubra) + cargar URLs en Extras + primera sync. `DECODO_AUTH` ya puesto.
+12. **Rediseño visual del panel** (`§ T`) — **APROBADO por Joel** (claro/oscuro + morado/fucsia). Bloque dedicado. Antes de codear: proponer 1 mockup de paleta + toggle para aprobar el rumbo.
 
 ## Seguridad — auditoría 2026-08-31 (arreglos + pendientes)
 
@@ -1013,5 +1013,8 @@ de "quedar a medias" si se apura.
 4. **F2** — prueba del handoff con el dueño.
 5. **Fases 3-7 OpenReply** — follow gate, dedup, rate limit, logs, plantillas. | 🎉 PLAN COMPLETO (v86b83401): follow gate ✅ + dedup ✅ + rate limit ✅ + logs ✅ + plantillas ✅
 6. **E7** — generar la landing con los prompts de `sitio-web/`.
-7. **PWA Fase 1** (`§ Q`, roadmap 8) — avisos push con VAPID. Fase 0 ✅ en v1.14.0.
-8. **Campañas** (`§ R`, roadmap 9) — ⏸️ en espera hasta Meta oficial / ManyChat.
+7. **PWA Fase 1** (`§ Q`) — avisos push. ✅ v1.16.0.
+8. **Móvil + filtros** (`§ S`) — ✅ v1.14.3–v1.14.5.
+9. **Scraping web → KB** (`§ L`) — ✅ código v1.15.0; falta activar URLs en cardealer.
+10. **Rediseño visual** (`§ T`) — aprobado, siguiente bloque. Proponer paleta primero.
+11. **Campañas** (`§ R`) — ⏸️ en espera hasta Meta oficial / ManyChat.
