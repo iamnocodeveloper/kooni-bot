@@ -689,8 +689,16 @@ solo agrega el emisor y la tabla de suscripciones.
 Cloudflare Workers puede mandar Web Push sin infra extra: se firma un JWT VAPID
 (ES256 con WebCrypto) y se hace `fetch` al endpoint del navegador.
 
-1. **Claves VAPID** (una vez): generar par P-256. Pública → var `VAPID_PUBLIC_KEY`.
-   Privada → `wrangler secret put VAPID_PRIVATE_KEY`. `VAPID_SUBJECT` = `mailto:` del dueño.
+1. **Claves VAPID** (una vez): NO se piden a ningún servicio — se generan. Un par
+   ECDSA P-256. En la carpeta del bot:
+   `npx web-push generate-vapid-keys` (o `node scripts/gen-vapid.mjs` — script
+   nuevo, ~10 líneas con `node:crypto`). Da dos strings base64url:
+   - **pública** → va como var `VAPID_PUBLIC_KEY` en `wrangler.toml` (o la
+     embebe el worker; es pública por diseño, va en el JS del cliente).
+   - **privada** → `wrangler secret put VAPID_PRIVATE_KEY` (nunca en git).
+   - `VAPID_SUBJECT` = `mailto:<correo del dueño>`.
+   > Se puede hacer por instalación (cada bot su par) o un par global del
+   > template. Por instalación es más limpio.
 2. **Tabla D1** `push_subscriptions` (endpoint TEXT PK, p256dh, auth, created_at) en `src/db/schema.sql`
    + `PushSubscriptionsRepo` en `src/db/pushSubs.ts`.
 3. **`src/push.ts`**: `vapidJwt(env, audience)` + `sendPush(env, sub, payload)`.
@@ -920,8 +928,12 @@ Configuración) en vez del flotante, si molesta.
 
 ## T. Rediseño visual del panel — identidad propia (diferenciar de Forja)
 
-> **Pedido (2026-09-02):** que el sistema NO se vea igual a Forja, "para evitar
-> cualquier inconveniente".
+> **Pedido (2026-09-02):** que el sistema NO se vea igual a Forja. Aunque la
+> licencia MIT lo permite, Joel quiere identidad propia para los videos y el
+> marketing — "que no digan que me lo copié". Dirección que dio:
+> - **Modo claro + modo oscuro** con toggle (persistido).
+> - Acento **morado / fucsia**, colores resaltantes.
+> - Look de producto único.
 
 ### Lo legal primero (para no rediseñar por miedo)
 
@@ -940,31 +952,34 @@ urge, no bloquea nada. Conviene hacerlo igual, por estas razones:
   botones brutalistas, sombras `Npx Npx 0`).
 - Un look propio hace el producto más vendible.
 
-### Recomendación: dejarlo así POR AHORA, hacerlo en un bloque dedicado
+### Plan de ejecución (bloque dedicado — APROBADO, siguiente)
 
-No mezclarlo con los arreglos de móvil (§ S) ni con features. Es un pase por
-**todas** las vistas y el sistema de tokens — hacerlo a medias se ve peor que no
-hacerlo. Cuando se agarre:
+Es un pase por **todas** las vistas + el sistema de tokens — hacerlo a medias se
+ve peor que no hacerlo. Orden:
 
-1. **Sistema de diseño** (`layout.ts` `GLOBAL_STYLE`): definir la paleta y la
-   tipografía de `IDENTIDAD-KOONI.md` como tokens. Cambiar el par de fuentes
-   (Space Grotesk + JetBrains Mono → algo propio; mantener una mono solo para
-   datos/código). Quitar o suavizar el overlay `.scanlines`. Repensar los
-   botones brutalistas (sombra dura → algo más limpio) — es la firma visual más
-   reconocible de Forja.
-2. **Marca en el shell**: logo (la K de nodo ya existe como `K_MARK`), colores
-   del sidebar, el "BOT EN LÍNEA".
-3. **Componentes**: `.card`, `.chip`, `.node`, filas de tablas, modales, toasts
-   — todos usan las clases del mockup de Forja. Reestilizar sobre los mismos
-   nombres de clase (no renombrar → menos diff).
-4. **Marca blanca**: ya hay `BRAND_*` (`resolveBrand`). Asegurar que el
-   rediseño respete esos overrides para revendedores.
-5. **Sitio web / landing** (`web/`, `sitio-web/`): alinear con el panel nuevo.
-6. **`docs/IDENTIDAD-KOONI.md`**: actualizar con las decisiones finales; es el
-   contrato que siguen las vistas.
+1. **Sistema de temas** (`layout.ts` `GLOBAL_STYLE` + un `<script>` chico):
+   tokens CSS en `:root` (oscuro) y `:root[data-theme="light"]` (claro).
+   Toggle en el header que setea `data-theme` en `<html>` y lo guarda en
+   `localStorage`; respeta `prefers-color-scheme` la primera vez. Default oscuro.
+2. **Paleta nueva**: acento morado/fucsia (ej. `--accent:#c026d3` fucsia +
+   `--accent-2:#a855f7` violeta, ajustar contraste en claro). Reemplaza el
+   teal/menta actual. Actualizar también el `tailwind.config` inline y
+   `resolveBrand` (defaults).
+3. **Fuentes**: cambiar el par (Space Grotesk + JetBrains Mono → algo propio;
+   mono solo para datos/código). Es lo que más "despega" del look de Forja.
+4. **Botones y superficies**: la sombra dura `Npx Npx 0` (brutalista) → algo más
+   limpio (sombra suave / borde). Quitar el overlay `.scanlines` (o dejarlo
+   como opción off por defecto).
+5. **Componentes**: `.card`, `.chip`, `.node`, filas, modales, toasts — reestilar
+   sobre los MISMOS nombres de clase (no renombrar → menos diff).
+6. **Marca blanca**: `BRAND_*` (`resolveBrand`) tiene que seguir funcionando —
+   probar con overrides.
+7. **Login + landing** (`web/`, `sitio-web/`): alinear.
+8. **`docs/IDENTIDAD-KOONI.md`**: actualizar con las decisiones finales.
 
-Esfuerzo: 1-2 días enfocados. Sin cambios de comportamiento, solo CSS + assets.
-Riesgo: bajo (visual), pero alto de "quedar a medias" si se hace apurado.
+Antes de codear todo: proponer 1 mockup de la paleta + toggle en el Resumen
+para que Joel apruebe el rumbo. Esfuerzo: 1-2 días. Riesgo: bajo (visual), alto
+de "quedar a medias" si se apura.
 
 ---
 
