@@ -75,7 +75,7 @@ export function manifest(env: Env): string {
  */
 export function serviceWorker(): string {
   return `/* Kooni PWA service worker — Fase 0 */
-const CACHE = 'kooni-admin-v1';
+const CACHE = 'kooni-admin-v2'; // subir en cada rediseño para tirar la caché vieja
 
 self.addEventListener('install', (e) => {
   self.skipWaiting();
