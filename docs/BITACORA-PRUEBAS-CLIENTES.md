@@ -325,65 +325,90 @@ vistas del panel:
 Nuevos tokens en ambos temas: `--warn`, `--warn-soft`, `--ok-soft`, `--bad-soft`,
 `--danger` (alias de `--bad`). `pnpm test` 711/711.
 
-**Pendiente:** los SVG de `assets/kooni-*.svg` siguen en teal (actualizar cuando
-haya un momento); `docs/design-system.md` (referencia interna, baja prioridad).
+### v1.18.1 / v1.18.2 — remates del rediseño + saga de deploy
+
+- **v1.18.1:** el service worker cacheaba páginas bajo `kooni-admin-v1` y no se
+  invalidaban tras el rediseño → nombre `v2` (el `activate` borra la vieja).
+- **v1.18.2 (bug):** Joel dijo *"veo las alertas pero NO veo el diseño ni el
+  toggle"*. Dos causas:
+  1. **El worker seguía en v1.16.0.** `kooni-bot update` extrae los archivos
+     nuevos pero su paso de `pnpm run deploy` va en `try/catch` — si falla (red),
+     imprime *"Actualizado a vX"* igual y el worker queda viejo. Se forzó con
+     `npx wrangler deploy` directo → ambas a v1.18.0, luego v1.18.2.
+  2. **`src/admin/pwa.ts` tenía sus PROPIOS defaults teal** (`#2dd4bf` / `#6ee7b7`
+     / `#0d1218`), separados de `layout.ts` → el ícono de la PWA, el
+     `<meta theme-color>` y el botón "Instalar" seguían teal aunque el panel ya
+     estuviera rediseñado. Corregido a `#e05fd8` / `#a679f6` / `#0f0e17`.
+- **SVG de `assets/` y `web/assets/`:** recoloreados a fucsia/violeta.
+- `docs/design-system.md`: aviso de que describe el sistema viejo.
+
+**Aprendizaje operativo:** con la red inestable, `kooni-bot update` NO es
+confiable para desplegar (traga el error del deploy). La vía segura:
+`npx wrangler deploy` en la carpeta, y confirmar la versión abajo del login.
+
+**Pendiente menor:** `web/*.html` (landing) sigue en teal — pase de landing
+aparte; `docs/design-system.md` reescritura completa (baja prioridad).
 
 ---
 
-## Estado al cierre — 2026-09-02
+## Estado al cierre — 2026-09-02 (actualizado)
 
 ### Versiones
 
-- **`origin/main`**: v1.16.0.
-- **`kooni-bot-joel-nocode-ec53aa`** (Joel Araujo / Nocodeveloper): **v1.16.0**, desplegado y verificado.
-- **`kooni-bot-cardealer-daniel2-948b8b`** (Daniel autos, cuenta `Info@dmezzadri.com`): **v1.16.0**, desplegado.
+- **`origin/main`**: **v1.18.2**.
+- **`kooni-bot-joel-nocode-ec53aa`** (Joel Araujo / Nocodeveloper): **v1.18.2**, desplegado y verificado (fucsia/Sora/toggle, cero teal).
+- **`kooni-bot-cardealer-daniel2-948b8b`** (Daniel autos, cuenta `Info@dmezzadri.com`): **v1.18.2**, desplegado.
 - **CLI / npm**: sin cambios en `cli-kooni/` en toda la sesión → no hubo publicación.
 
-### Qué se entregó (v1.14.0 → v1.16.0)
+### Qué se entregó (v1.14.0 → v1.18.2)
 
 | Área | Estado |
 |---|---|
-| Niche `agencia-ia` (flujo de venta conversacional) + KB de Kooni | ✅ · aprobado por Joel |
-| Fix "el bot dice que no tiene la info" (`custom_instructions` en Joel) | ✅ · aprobado |
+| Niche `agencia-ia` (flujo de venta conversacional) + KB de Kooni | ✅ aprobado |
+| Fix "el bot dice que no tiene la info" (`custom_instructions` en Joel) | ✅ aprobado |
 | CRM registra respuestas hechas desde la app nativa (`ownerEcho`) | ✅ |
 | PWA instalable + botón "Instalar" + offline básico (Fase 0) | ✅ |
-| **PWA avisos push (Fase 1)** — botón campana, dispara con prospecto/ticket | ✅ código · **cada quien activa en su celular** |
-| "Probar búsqueda" en `/admin/kb` (ve lo que ve el bot + score) | ✅ |
+| **PWA avisos push (Fase 1)** — botón campana, dispara con prospecto / ticket / **Vigilante** | ✅ · **cada quien activa en su celular** |
+| "Probar búsqueda" en `/admin/kb` | ✅ |
 | Filtros de conversaciones: canal, fecha, texto de mensajes | ✅ |
-| Responsive móvil: navegación en cajón, bandeja de una vista, tablas, modales, iOS | ✅ Fases 1-3 |
-| **Módulo "Sincronizar sitio web" (Decodo → KB)** | ✅ código · **activar en cardealer** (secret + `module_unlocks` + URLs) |
-| **Rediseño visual — base** (claro/oscuro, Sora, morado/fucsia) v1.17.0 | ✅ base · **Joel revisa el rumbo** · falta Fase 2 (pase por vista) |
-| Fix `/kb/reindex` (ignoraba los docs del panel) | ✅ |
-| `vitest maxWorkers: 2` (arregla el flakeo de la suite) | ✅ · 711/711 estable |
+| Responsive móvil (nav en cajón, bandeja de una vista, tablas, modales, iOS) | ✅ |
+| **Módulo "Sincronizar sitio web" (Decodo → KB)** | ✅ código · **falta cargar URLs en cardealer** |
+| **Rediseño visual completo** (claro/oscuro, Sora, morado/fucsia, tokens en 12 vistas, SVG, PWA) | ✅ · **desplegado y visto por Joel** |
+| Fix `/kb/reindex` · `vitest maxWorkers: 2` · SW cache `v2` | ✅ · 711/711 |
 
 ### Config aplicada en las instalaciones
 
 - **Joel:** `BOT_NICHE = "agencia-ia"`, `custom_instructions` (KB de Kooni oficial),
-  KB migrados a `kb_docs`, modelo **gpt-4o-mini** (elección de Joel), VAPID vars
-  en `wrangler.toml` + secret `VAPID_PRIVATE_KEY`.
-- **cardealer:** VAPID vars + secret. `DECODO_AUTH` puesto. **Pendiente de
-  verificar:** que `module_unlocks` incluya `web_sync` (Joel se topó con el
-  escape de comillas de PowerShell — se le dio la versión con `.sql` file). Si
-  la licencia de Daniel es legada (todos los módulos), ya está activo.
+  KB migrados a `kb_docs`, modelo **gpt-4o-mini** (elección de Joel), VAPID
+  (`wrangler.toml` vars + secret `VAPID_PRIVATE_KEY`).
+- **cardealer:** VAPID (vars + secret), `DECODO_AUTH` puesto. **Falta verificar:**
+  que `module_unlocks` incluya `web_sync` (o que la licencia de Daniel lo cubra) —
+  el botón "Sincronizar sitio ahora" en `/admin/kb` lo confirma.
 
 ### Pendientes
 
 **Joel:**
-1. Verificar que en cardealer el botón "Sincronizar sitio ahora" aparezca en
-   `/admin/kb`. Si no → correr el `.sql` de activación (ver mensaje / `PLAN.md § L`).
-2. Cargar en el panel de Daniel las URLs del inventario (Extras → Sincronizar
-   sitio web) + primera sincronización.
-3. Pedirle a Daniel las 5 preguntas que el bot debe poder contestar.
-4. Activar el push en cada celular (instalar PWA → 🔔 → permitir).
-5. Rotar la credencial de Decodo y el par VAPID (ambos se pegaron en el chat).
-6. **Revisar la base del rediseño (v1.17.0)** — actualizar una instalación, abrir
-   el panel, probar el toggle claro/oscuro, y decir si el rumbo (Sora +
-   morado/fucsia) va. La paleta se ajusta en 6 líneas.
-7. Dejar "Modelo" en **Automático** en el panel de Joel (el override haiku/sonnet
-   no aplica con OpenAI).
+1. **cardealer / Web Sync:** ¿aparece "Sincronizar sitio ahora" en `/admin/kb`?
+   Si no → `.sql` de activación (`PLAN.md § L`). Luego cargar las URLs del
+   inventario en Extras + primera sync.
+2. Pedirle a Daniel las 5 preguntas que el bot debe contestar sobre autos.
+3. Activar el push en cada celular (PWA → 🔔 → permitir).
+4. **Rotar** la credencial de Decodo y el par VAPID (se pegaron en el chat).
+5. "Modelo" → **Automático** en el panel de Joel (el override haiku/sonnet no
+   aplica con gpt-4o-mini).
+6. (Opcional) ajustar la paleta del rediseño si el fucsia no convence — son 6
+   líneas de tokens en `layout.ts`.
 
 **Claude:**
-- Rediseño `§ T` **Fase 2** — pase fino por vista + `docs/IDENTIDAD-KOONI.md` (cuando Joel dé el OK al rumbo).
-- Sumar el Vigilante a los disparadores de push.
-- Campañas `§ R` — **PAUSADO TOTALMENTE** (no se retoma salvo pedido explícito de Joel).
-- Web Sync Fase 2 (crawl / paginación) si el volumen lo pide — hoy: lista fija de URLs.
+- **Web Sync Fase 2** (paginación / crawl del inventario) — solo si el volumen de
+  Daniel lo pide; hoy: lista fija de URLs.
+- **Rediseño — remates:** `web/*.html` (landing, sigue en teal), reescritura de
+  `docs/design-system.md`.
+- **PWA Fase 2** — lectura offline de datos (endpoints JSON + caché del SW).
+- Campañas `§ R` — **PAUSADO TOTALMENTE** (no se retoma salvo pedido explícito).
+
+### Roadmap sin tocar (post-beta)
+
+Comunidad tipo Forja · Licencias por email+dispositivo (cuando haya facturación
+recurrente) · Modelo de revendedores (marca blanca + cuota) · Seguridad: rotar
+contraseña admin de InsForge (S1), migrar `generar-licencia` a Ed25519 (S2).

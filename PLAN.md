@@ -108,7 +108,7 @@ otra pública. La pública, en cambio, es segura de publicar — ese es el punto
 9. **Atribución y rendimiento de campañas** (`§ R`) — ⏸️ **PAUSADO TOTALMENTE** (decisión de Joel, 2026-09-02). No se toca hasta que Joel lo reactive explícitamente. El plan queda escrito en `§ R` por si se retoma.
 10. **Panel — filtros de conversaciones, responsive y PWA install** (`§ S`). ✅ S1 (filtros canal/fecha/texto) v1.14.5 · S2 Fase 1 (shell+nav+bandeja) v1.14.3 · S2 Fase 2-3 (vistas, modales, iOS) v1.14.5. Queda: probar en dispositivos reales; formularios angostos → se cierran con § T.
 11. **Scraping web → KB** (`§ L`) — ✅ código v1.15.0, ambas instalaciones en v1.16.0. Falta en cardealer: verificar `module_unlocks += web_sync` (o que la licencia lo cubra) + cargar URLs en Extras + primera sync. `DECODO_AUTH` ya puesto.
-12. **Rediseño visual del panel** (`§ T`) — **BASE ✅ v1.17.0 + Fase 2 ✅ v1.18.0** (Sora + IBM Plex Mono, morado/fucsia, tema claro+oscuro, sombras suaves, colores hardcodeados de las 12 vistas → tokens, `docs/IDENTIDAD-KOONI.md`). Queda: SVG de `assets/` (aún teal), `docs/design-system.md`.
+12. **Rediseño visual del panel** (`§ T`) — ✅ **HECHO y desplegado** (v1.17.0–v1.18.2). Sora + IBM Plex Mono, morado/fucsia, tema claro+oscuro con toggle, sombras suaves, 12 vistas + SVG + PWA (ícono, theme-color, botón instalar) en tokens. Ambas instalaciones en v1.18.2, visto por Joel. **Queda solo:** `web/*.html` (landing, sigue teal — pase aparte) y reescribir `docs/design-system.md`.
 
 ## Seguridad — auditoría 2026-08-31 (arreglos + pendientes)
 
@@ -975,19 +975,27 @@ urge, no bloquea nada. Conviene hacerlo igual, por estas razones:
   botones brutalistas, sombras `Npx Npx 0`).
 - Un look propio hace el producto más vendible.
 
-### Estado: BASE HECHA (v1.17.0), falta Fase 2
+### Estado: ✅ HECHO Y DESPLEGADO (v1.17.0 → v1.18.2)
 
-**Fase 1 ✅ (v1.17.0)** — sistema de temas (claro + oscuro, toggle en el header,
-`data-theme` + `localStorage`, anti-FOUC), paleta morado/fucsia como CSS custom
-properties, fuentes **Sora + IBM Plex Mono**, sombras suaves, scanlines fuera,
-`#1a1206` → `var(--on-accent)`, `resolveBrand` solo emite lo que el revendedor
-setea. Todo en `src/admin/views/layout.ts`. 711/711.
+**v1.17.0 — sistema de temas + paleta.** Claro + oscuro, toggle en el header
+(`data-theme` + `localStorage`, anti-FOUC), morado/fucsia como CSS custom
+properties, **Sora + IBM Plex Mono**, sombras suaves, scanlines fuera,
+`#1a1206` → `var(--on-accent)`, `resolveBrand` solo emite lo que el revendedor setea.
 
-**Fase 2 ✅ (v1.18.0)** — colores hardcodeados de las 12 vistas del panel
-migrados a tokens (`--ok-soft`, `--warn`, `--warn-soft`, `--bad-soft`, `--danger`
-nuevos); `stats.ts` heatmap con `color-mix`; `docs/IDENTIDAD-KOONI.md` con la
-paleta clara+oscura, tipografía y logo. Queda: los SVG de `assets/kooni-*.svg`
-(aún en teal) y `docs/design-system.md`.
+**v1.18.0 — Fase 2, pase por vista.** Colores hardcodeados de las 12 vistas →
+tokens (`--ok-soft`, `--warn`, `--warn-soft`, `--bad-soft`, `--danger` nuevos);
+`stats.ts` heatmap con `color-mix`; `docs/IDENTIDAD-KOONI.md`. Push del Vigilante.
+
+**v1.18.1 — SW cache `v1`→`v2`** (tirar la caché vieja del rediseño).
+
+**v1.18.2 — bug: `src/admin/pwa.ts` tenía sus propios defaults teal** → el ícono
+de la PWA, `<meta theme-color>` y el botón "Instalar" seguían teal. Corregido.
+SVG de `assets/` + `web/assets/` recoloreados.
+
+**Cero teal en el panel.** Ambas instalaciones en v1.18.2, visto por Joel.
+
+**Queda solo:** `web/*.html` (landing, sigue teal — pase de landing aparte) y
+reescribir `docs/design-system.md` (baja prioridad).
 
 **Fase 2 — plan original (referencia):**
 - Pase por vista: buscar inline styles con color hardcodeado (no `var(--x)`).

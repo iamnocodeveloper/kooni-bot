@@ -1,4 +1,4 @@
-# 🟢 Identidad de marca — KOONI
+# 🟣 Identidad de marca — KOONI
 
 > Documento de identidad del proyecto **Kooni**. Define nombre, significado, paleta,
 > tipografía, logo, voz y reglas de uso. Es la fuente de verdad para cualquier pieza
