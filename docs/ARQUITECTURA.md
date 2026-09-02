@@ -202,8 +202,7 @@ purga de mensajes >90 días, análisis de insights, flywheel y reporte al dueño
 
 - **Nuevo canal:** crea un adaptador en `src/channels/`, una ruta en `src/index.ts`
   y los secrets en `env.ts`. Ejemplo completo ya resuelto: `src/channels/zernio.ts`
-  (webhook firmado + `message.received` → agente + `comment.received` → respuesta
-  pública automática por keyword).
+  (webhook firmado + `message.received` → agente + `comment.received` → auto-DM).
 - **Nueva tool:** archivo en `src/tools/`, regístrala en `tools/index.ts` y
   menciónala en el system prompt del giro.
 - **Nuevo giro:** ver §7.

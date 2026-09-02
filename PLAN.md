@@ -580,34 +580,27 @@ middleware de `routes.ts:93` sin probar los 7 tests de Basic Auth después.
 
 ---
 
-## P. Comentarios → respuesta pública (nunca DM automático) ✅ (01-sep, v1.13.0 en origin/main)
+## P. Comentario sin automatización → respuesta pública (opcional) ⏳ (PLANEADO)
 
-> **Publicado:** commit `702212b` (v1.13.0) empujado a `origin/main` junto con §O.
-> Falta desplegar cada instalación real (`/actualizar-mi-bot` desde su carpeta):
->   - **cardealer_dani** (cuenta b579b154) — carpeta en la máquina del otro dueño.
->   - **Joel-nocode** (cuenta 29074eb8) — carpeta `OneDrive/Escritorio/Joel-nocode`
->     está en v1.11.0 y **no es repo git** → hay que `git init` + remote antes de
->     poder actualizar (bloqueante relacionado con J1).
+> **Corrección del operador (01-sep):** la primera versión de §P (v1.13.0) quitó
+> las opciones de DM del panel y forzó todo a respuesta pública. **Mal.** Revertido
+> en el commit siguiente. Lo que sí quiere el operador:
+>
+> - **Las automatizaciones NO cambian:** siguen pudiendo elegir *DM privado*,
+>   *respuesta pública*, *ambas* y *follow gate*. Todo eso ya funcionaba y se
+>   queda igual.
+> - **El bug real:** un comentario que **no coincide con ninguna automatización**
+>   no debería recibir DM. Debería, como mucho, recibir **una respuesta pública**
+>   genérica — y nada más.
+> - **Implementación pendiente:** un toggle de configuración del bot (checkbox +
+>   mensaje) "responder en público los comentarios que no matchean ninguna regla".
+>   Default **apagado** (= comportamiento actual: no hacer nada). Cuando está
+>   encendido, `autoDmOnComment` — en la rama `!matched` — publica el mensaje
+>   configurado (reusando dedup + anti-bucle + tope diario que ya existen).
+> - Ubicación por decidir: pestaña **Configuración** vs **Automatizaciones**.
 
-> **Pedido del operador:** el bot mandaba DM privado a quien comentaba una
-> keyword. Un DM no pedido molesta y las plataformas lo penalizan. Ahora un
-> comentario que matchea una keyword se responde **en público** (como
-> comentario); si la regla tiene un link, se suma al final del texto (los
-> comentarios no admiten botones). El enlace sigue siendo trackeado (`/r/:slug`).
-
-| Cambio | Archivo |
-|---|---|
-| Motor: `kind` por defecto `comment_reply` (era `comment_dm`); reglas legacy de env (`ZERNIO_AUTO_DM_*`) y JSON sin `kind` → `comment_reply`; el link se concatena al texto público. | `src/channels/zernio.ts` |
-| Panel: el selector ya no ofrece "→ DM privado" ni "→ DM + público" (siguen en el mapa solo para reglas viejas); default `comment_reply`; se quitaron los campos de follow gate y "respuesta pública fija"; textos y JS ajustados. | `src/admin/views/automatizaciones.ts`, `src/admin/routes.ts` (`parseRuleForm`) |
-| Plantillas de campaña: todas las de comentario pasan a `comment_reply`; se quitó la de follow gate. | `src/templates/campaigns.ts` |
-| **Data fix idempotente** al final de `schema.sql`: `UPDATE auto_rules SET kind='comment_reply', reply_to_comment=NULL, require_follow=0, … WHERE kind IN ('comment_dm','comment_dm_public')`. Se aplica en cada `pnpm db:apply:remote` (o sea: al correr `/actualizar-mi-bot`). | `src/db/schema.sql` |
-| Docs | `ARQUITECTURA.md`, `FLUJOS.md`, `USO.md`, `DESPLIEGUE.md`, `PRUEBA-LOCAL.md`, `skill/references/channel-setup-guides/zernio-webhook.md` |
-| Tests | `test/channels/zernio.test.ts` (bloque de comentarios reescrito a respuesta pública), `test/templates/campaigns.test.ts`. Suite completa: **649/649** verde. |
-
-**Nota:** el motor todavía sabe hacer DM para reglas con `kind` explícito
-`comment_dm`/`comment_dm_public` (red de seguridad para instalaciones que aún no
-corrieron el data fix). El follow gate depende del DM, así que queda inerte para
-reglas nuevas. Tras el `db:apply:remote` no queda ninguna regla de ese tipo.
+**Estado del código:** §P v1.13.0 revertido (motor, panel, plantillas, data fix y
+docs de Zernio vuelven a como estaban). §O (login) se queda.
 
 ---
 

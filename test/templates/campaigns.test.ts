@@ -11,8 +11,7 @@ describe("CAMPAIGN_TEMPLATES", () => {
       expect(t.desc.length).toBeGreaterThan(0);
       expect(t.defaults.keywords.length).toBeGreaterThan(0);
       expect(t.defaults.message.length).toBeGreaterThan(0);
-      // Los comentarios se responden en público: ninguna plantilla crea DM.
-      expect(["comment_reply", "dm_reply"]).toContain(t.defaults.kind);
+      expect(["comment_dm", "comment_reply", "dm_reply"]).toContain(t.defaults.kind);
     }
   });
 
@@ -21,11 +20,10 @@ describe("CAMPAIGN_TEMPLATES", () => {
     expect(getTemplate("no-existe")).toBeUndefined();
   });
 
-  it("las plantillas de comentario responden en público (nunca DM)", () => {
-    for (const t of CAMPAIGN_TEMPLATES) {
-      if (t.defaults.kind === "dm_reply") continue;
-      expect(t.defaults.kind).toBe("comment_reply");
-      expect(t.defaults.requireFollow).not.toBe(true);
-    }
+  it("la plantilla de follow gate trae requireFollow con mensajes", () => {
+    const tpl = getTemplate("oferta-follow-gate");
+    expect(tpl?.defaults.requireFollow).toBe(true);
+    expect(tpl?.defaults.followPromptMessage).toContain("{username}");
+    expect(tpl?.defaults.followButtonLabel).toBeTruthy();
   });
 });

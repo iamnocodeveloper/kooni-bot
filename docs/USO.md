@@ -92,9 +92,9 @@ El panel está en español, tema oscuro Kooni (tinta + teal). De izquierda a der
 ### Conexiones
 - Estado de cada canal: **verde** = conectado, **gris** = no configurado.
 - **Zernio** (si está configurado): multicanal unificado — un solo canal verde cubre
-  IG, Messenger, X, Telegram, WhatsApp, etc. El **comentario → respuesta pública
-  por keyword** se configura en **Automatizaciones** (o con `ZERNIO_AUTO_DM_KEYWORD`;
-  ver `docs/DESPLIEGUE.md`). El bot responde el comentario en público, nunca por DM.
+  IG, Messenger, X, Telegram, WhatsApp, etc. El **comentario → DM por keyword** se
+  configura en **Automatizaciones** (o con `ZERNIO_AUTO_DM_KEYWORD`; ver
+  `docs/DESPLIEGUE.md`).
 - Webhooks y secrets asociados (los secrets no se muestran, solo si existen).
 - Aquí se ve si falta un secret (ej. `TELEGRAM_BOT_TOKEN` sin setear).
 

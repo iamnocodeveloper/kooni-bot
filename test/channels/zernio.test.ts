@@ -76,8 +76,8 @@ describe("parseZernioEvents (message.received)", () => {
   });
 });
 
-describe("auto-respuesta pública por keyword en comentarios", () => {
-  it("responde EN PÚBLICO (nunca DM) con el mensaje + link cuando el comentario trae la keyword", async () => {
+describe("auto-DM por keyword en comentarios", () => {
+  it("manda DM privado (private-reply) con mensaje y botón cuando el comentario trae la keyword", async () => {
     const fetchMock = vi.fn(async (url: string) => {
       if (String(url).includes("/v1/accounts")) {
         return new Response(JSON.stringify({ accounts: [{ _id: "acct_1", platform: "instagram", username: "mi_negocio" }] }), { status: 200 });
@@ -89,20 +89,16 @@ describe("auto-respuesta pública por keyword en comentarios", () => {
     const out = await parseZernioEvents(commentPayload, envBase);
     // El comentario no entra al agente:
     expect(out).toHaveLength(0);
-    const calls = fetchMock.mock.calls as unknown as [string, RequestInit][];
-    // Nunca DM:
-    expect(calls.find((c) => String(c[0]).includes("/private-reply"))).toBeUndefined();
-    // Respuesta pública al comentario:
-    const pub = calls.find((c) => /\/v1\/inbox\/comments\/post_1$/.test(String(c[0])));
-    expect(pub).toBeTruthy();
-    expect(pub![1].method).toBe("POST");
-    expect((pub![1].headers as Record<string, string>).Authorization).toBe("Bearer zkey_test");
-    const body = JSON.parse(pub![1].body as string);
-    expect(body.commentId).toBe("cm_1");
-    expect(body.message).toContain("Aquí tienes el recurso 👇");
-    // El link va al final del texto (los comentarios no admiten botones):
-    expect(body.message).toContain("Abrir recurso: https://kooni.app/recurso");
-    expect(body.buttons).toBeUndefined();
+    // accounts (resolución) + private-reply:
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const [url, init] = fetchMock.mock.calls[1] as unknown as [string, RequestInit];
+    expect(url).toBe("https://zernio.com/api/v1/inbox/comments/post_1/cm_1/private-reply");
+    expect(init.method).toBe("POST");
+    expect((init.headers as Record<string, string>).Authorization).toBe("Bearer zkey_test");
+    const body = JSON.parse(init.body as string);
+    expect(body.accountId).toBe("acct_1");
+    expect(body.message).toBe("Aquí tienes el recurso 👇");
+    expect(body.buttons).toEqual([{ type: "url", title: "Abrir recurso", url: "https://kooni.app/recurso" }]);
   });
 
   it("NO manda DM si la keyword no aparece", async () => {
@@ -124,7 +120,7 @@ describe("auto-respuesta pública por keyword en comentarios", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("soporta VARIAS reglas con varios mensajes (ZERNIO_AUTO_DM_RULES) y elige la que matchea, en público", async () => {
+  it("soporta VARIAS reglas con varios mensajes (ZERNIO_AUTO_DM_RULES) y responde también en público", async () => {
     const fetchMock = vi.fn(async (url: string) => {
       if (String(url).includes("/v1/accounts")) {
         return new Response(JSON.stringify({ accounts: [{ _id: "acct_1", platform: "instagram", username: "mi_negocio" }] }), { status: 200 });
@@ -141,6 +137,7 @@ describe("auto-respuesta pública por keyword en comentarios", () => {
           message: "Te mando el catálogo 👇",
           buttonLabel: "Ver catálogo",
           buttonUrl: "https://kooni.app/catalogo",
+          replyToComment: "¡Gracias por preguntar! Te escribí por privado ✨",
         },
         { keywords: ["claude"], message: "Aquí tienes el recurso" },
       ]),
@@ -151,15 +148,16 @@ describe("auto-respuesta pública por keyword en comentarios", () => {
       envRules,
     );
     expect(out).toHaveLength(0);
-    const calls = fetchMock.mock.calls as unknown as [string, RequestInit][];
-    // Nunca DM:
-    expect(calls.find((c) => String(c[0]).includes("/private-reply"))).toBeUndefined();
-    // Respuesta pública con el mensaje de la regla que matcheó + el link:
-    const pub = calls.find((c) => /\/v1\/inbox\/comments\/post_1$/.test(String(c[0])));
-    expect(pub).toBeTruthy();
-    const pubBody = JSON.parse(pub![1].body as string);
-    expect(pubBody.message).toContain("Te mando el catálogo 👇");
-    expect(pubBody.message).toContain("Ver catálogo: https://kooni.app/catalogo");
+    // accounts + DM privado + respuesta pública:
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    const [dmUrl, dmInit] = fetchMock.mock.calls[1] as unknown as [string, RequestInit];
+    expect(dmUrl).toBe("https://zernio.com/api/v1/inbox/comments/post_1/cm_1/private-reply");
+    expect(JSON.parse(dmInit.body as string).message).toBe("Te mando el catálogo 👇");
+    expect(JSON.parse(dmInit.body as string).buttons).toEqual([{ type: "url", title: "Ver catálogo", url: "https://kooni.app/catalogo" }]);
+    const [pubUrl, pubInit] = fetchMock.mock.calls[2] as unknown as [string, RequestInit];
+    expect(pubUrl).toBe("https://zernio.com/api/v1/inbox/comments/post_1");
+    const pubBody = JSON.parse(pubInit.body as string);
+    expect(pubBody.message).toBe("¡Gracias por preguntar! Te escribí por privado ✨");
     expect(pubBody.commentId).toBe("cm_1");
   });
 
@@ -190,7 +188,7 @@ describe("auto-respuesta pública por keyword en comentarios", () => {
     expect(body.message).toBe("Catálogo de precios");
   });
 
-  it("responde en público al comentario aunque el id social del inbox difiera del webhook", async () => {
+  it("usa el account social del inbox (no el id del webhook) al enviar private-reply", async () => {
     const fetchMock = vi.fn(async (url: string) => {
       if (String(url).includes("/v1/accounts")) {
         return new Response(JSON.stringify({ accounts: [{ _id: "inbox_acct_99", platform: "instagram", username: "mi_negocio" }] }), { status: 200 });
@@ -200,11 +198,11 @@ describe("auto-respuesta pública por keyword en comentarios", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     await parseZernioEvents(commentPayload, envBase);
-    const calls = fetchMock.mock.calls as unknown as [string, RequestInit][];
-    expect(calls.find((c) => String(c[0]).includes("/private-reply"))).toBeUndefined();
-    const pub = calls.find((c) => /\/v1\/inbox\/comments\/post_1$/.test(String(c[0])));
-    expect(pub).toBeTruthy();
-    expect(JSON.parse(pub![1].body as string).commentId).toBe("cm_1");
+    const dm = fetchMock.mock.calls.find((c) => String((c as [string])[0]).includes("/private-reply"));
+    expect(dm).toBeTruthy();
+    const body = JSON.parse(((dm as unknown as [string, RequestInit])[1]).body as string);
+    // El webhook trae account.id=acct_1, pero el id social real es inbox_acct_99.
+    expect(body.accountId).toBe("inbox_acct_99");
   });
 
   it("NO responde 2 veces al mismo comentario si el webhook lo reenvía (dedup secuencial)", async () => {
@@ -229,7 +227,7 @@ describe("auto-respuesta pública por keyword en comentarios", () => {
       ...envBase,
       ZERNIO_AUTO_DM_KEYWORD: undefined,
       ZERNIO_AUTO_DM_RULES: JSON.stringify([
-        { keywords: ["precio"], message: "¡Gracias por preguntar! Aquí va la info 👇" },
+        { keywords: ["precio"], message: "Te escribí por privado 👇", replyToComment: "¡Gracias por tu comentario! Mira tu privado ✨" },
       ]),
       DB: makeDbStub({}),
     } as unknown as Env;
@@ -237,12 +235,12 @@ describe("auto-respuesta pública por keyword en comentarios", () => {
 
     await parseZernioEvents(payload, env);
     expect(pubPosts).toBe(1);
-    expect(dmPosts).toBe(0); // los comentarios se responden solo en público
+    expect(dmPosts).toBe(1);
 
     // Zernio reintenta el MISMO comentario → NO debe responder otra vez.
     await parseZernioEvents(payload, env);
     expect(pubPosts).toBe(1);
-    expect(dmPosts).toBe(0); // los comentarios se responden solo en público
+    expect(dmPosts).toBe(1);
   });
 
   it("NO responde 2 veces al mismo comentario aunque dos deliveries lleguen en paralelo (race)", async () => {
@@ -269,7 +267,7 @@ describe("auto-respuesta pública por keyword en comentarios", () => {
       ...envBase,
       ZERNIO_AUTO_DM_KEYWORD: undefined,
       ZERNIO_AUTO_DM_RULES: JSON.stringify([
-        { keywords: ["precio"], message: "¡Gracias por preguntar! Aquí va la info 👇" },
+        { keywords: ["precio"], message: "Te escribí por privado 👇", replyToComment: "¡Gracias por tu comentario! Mira tu privado ✨" },
       ]),
       DB: makeDbStub({}),
     } as unknown as Env;
@@ -278,7 +276,7 @@ describe("auto-respuesta pública por keyword en comentarios", () => {
     // El claim atómico garantiza que solo UNO de los dos envíe.
     await Promise.all([parseZernioEvents(payload, env), parseZernioEvents(payload, env)]);
     expect(pubPosts).toBe(1);
-    expect(dmPosts).toBe(0); // los comentarios se responden solo en público
+    expect(dmPosts).toBe(1);
   });
 
   it("NO responde a un comentario de NUESTRA propia cuenta (anti-bucle de auto-respuesta)", async () => {
@@ -362,7 +360,7 @@ describe("auto-respuesta pública por keyword en comentarios", () => {
       ...envBase,
       ZERNIO_AUTO_DM_KEYWORD: undefined,
       ZERNIO_AUTO_DM_RULES: JSON.stringify([
-        { keywords: ["precio"], message: "¡Gracias por preguntar! Aquí va la info 👇" },
+        { keywords: ["precio"], message: "Te escribí por privado 👇", replyToComment: "¡Gracias por tu comentario! Mira tu privado ✨" },
       ]),
       DB: makeDbStub({}),
     } as unknown as Env;
@@ -378,7 +376,7 @@ describe("auto-respuesta pública por keyword en comentarios", () => {
       env,
     );
     expect(pubPosts).toBe(1);
-    expect(dmPosts).toBe(0); // los comentarios se responden solo en público
+    expect(dmPosts).toBe(1);
 
     // Zernio reentrega el MISMO comentario con OTRO id → NO debe responder otra vez.
     await parseZernioEvents(
@@ -386,7 +384,7 @@ describe("auto-respuesta pública por keyword en comentarios", () => {
       env,
     );
     expect(pubPosts).toBe(1);
-    expect(dmPosts).toBe(0); // los comentarios se responden solo en público
+    expect(dmPosts).toBe(1);
   });
 
 });

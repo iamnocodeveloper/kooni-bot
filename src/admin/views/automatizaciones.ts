@@ -1,33 +1,28 @@
 // "Automatizaciones" tab — flujos keyword → respuesta (comentarios y DMs).
 // El dueño crea reglas SIN tocar código: cuando un comentario o DM matchea una
-// keyword, la regla gana y el mensaje no entra al agente. Viven en D1 (tabla
-// auto_rules).
-//
-// Los comentarios SIEMPRE se responden en PÚBLICO (como comentario), nunca por
-// DM automático. Los tipos viejos `comment_dm` / `comment_dm_public` ya no se
-// ofrecen: siguen existiendo para las reglas guardadas, pero el motor las trata
-// como respuesta pública (ver src/channels/zernio.ts).
+// keyword, la regla gana (DM automático, respuesta pública, o ambas) y el
+// mensaje no entra al agente. Viven en D1 (tabla auto_rules).
 import type { Env } from "../../env";
 import { layout } from "./layout";
 import { AutoRulesRepo, type AutoRule, type AutoRuleKind } from "../../db/autoRules";
 import { CAMPAIGN_TEMPLATES } from "../../templates/campaigns";
 
 const KIND_LABELS: Record<AutoRuleKind, { title: string; desc: string }> = {
+  comment_dm: {
+    title: "Comentario → DM privado",
+    desc: "Alguien comenta una keyword en tu post → le envías un DM privado (+ botón) y opcionalmente respondes su comentario en público.",
+  },
+  comment_dm_public: {
+    title: "Comentario → respuesta pública + DM",
+    desc: "Alguien comenta una keyword → respondes su comentario en público Y le envías un DM privado. Ideal para promocionar y captar a la vez.",
+  },
   comment_reply: {
     title: "Comentario → respuesta pública",
-    desc: "Alguien comenta una keyword → respondes su comentario en público (visible para todos). Si la regla tiene un link, se suma al texto.",
+    desc: "Alguien comenta una keyword → respondes su comentario en público (visible para todos). Sin DM privado.",
   },
   dm_reply: {
     title: "DM → respuesta automática",
     desc: "Alguien te escribe por privado una keyword → le respondes al momento, sin pasar por la IA.",
-  },
-  comment_dm: {
-    title: "Comentario → respuesta pública (antes: DM)",
-    desc: "Tipo antiguo. Ya no se envía DM automático a quien comenta: esta regla responde en público como las demás.",
-  },
-  comment_dm_public: {
-    title: "Comentario → respuesta pública (antes: DM + público)",
-    desc: "Tipo antiguo. El DM automático quedó desactivado; esta regla responde solo en público.",
   },
 };
 
@@ -48,7 +43,7 @@ const INPUT_STYLE =
   "background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:10px 12px;font-size:12.5px;outline:none;width:100%";
 
 function ruleCard(rule: AutoRule, clicks: number): string {
-  const kind = KIND_LABELS[rule.kind] ?? KIND_LABELS.comment_reply;
+  const kind = KIND_LABELS[rule.kind] ?? KIND_LABELS.comment_dm;
   const platform = PLATFORMS.find((p) => p.value === rule.platform)?.label ?? rule.platform;
   const keywords = rule.keywords.map(esc).join(", ");
   const chip = (label: string, accent: boolean): string =>
@@ -130,13 +125,7 @@ export async function renderAutomatizaciones(env: Env, saved?: boolean, error?: 
       ? `<div style="border:1px solid var(--bad);color:var(--bad);padding:10px 14px;font-size:12px;background:rgba(248,113,113,.06)">⚠ ${esc(error)}</div>`
       : "";
 
-  // Solo se ofrecen los tipos vigentes. Si se está editando una regla con un
-  // tipo antiguo (comment_dm*), se añade su opción para no romper el select.
-  const OFFERED_KINDS: AutoRuleKind[] = ["comment_reply", "dm_reply"];
-  const kindsToShow = editRule && !OFFERED_KINDS.includes(editRule.kind)
-    ? [...OFFERED_KINDS, editRule.kind]
-    : OFFERED_KINDS;
-  const kindOptions = kindsToShow
+  const kindOptions = (Object.keys(KIND_LABELS) as AutoRuleKind[])
     .map((k) => `<option value="${k}">${esc(KIND_LABELS[k].title)}</option>`)
     .join("");
   const platformOptions = PLATFORMS.map((p) => `<option value="${p.value}">${esc(p.label)}</option>`).join("");
@@ -179,9 +168,9 @@ export async function renderAutomatizaciones(env: Env, saved?: boolean, error?: 
             <input id="keywords" name="keywords" required value="${esc(editRule?.keywords.join(", ") ?? "")}" placeholder="precio, cuánto cuesta, cotización" style="${INPUT_STYLE}">
           </div>
           <div style="display:flex;flex-direction:column;gap:5px">
-            <label class="font-display font-semibold text-[12px] text-cream" for="message">Mensaje de la respuesta</label>
-            <textarea id="message" name="message" required rows="3" placeholder="¡Hola {username}! 👋 Gracias por tu interés. Aquí tienes el catálogo:" style="${INPUT_STYLE}">${esc(editRule?.message ?? "")}</textarea>
-            <span class="text-dim text-[10.5px]">Para comentarios se publica como respuesta pública (nunca DM). Puedes usar <span class="font-mono">{"{username}"}</span> para saludar al cliente por su nombre.</span>
+            <label class="font-display font-semibold text-[12px] text-cream" for="message">Mensaje del DM / respuesta</label>
+            <textarea id="message" name="message" required rows="3" placeholder="¡Hola {username}! 👋 Gracias por tu interés. Te mando el catálogo:" style="${INPUT_STYLE}">${esc(editRule?.message ?? "")}</textarea>
+            <span class="text-dim text-[10.5px]">Puedes usar <span class="font-mono">{"{username}"}</span> para saludar al cliente por su nombre.</span>
           </div>
           <div style="display:flex;align-items:center;gap:10px">
             <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);cursor:pointer">
@@ -189,17 +178,36 @@ export async function renderAutomatizaciones(env: Env, saved?: boolean, error?: 
               La keyword debe ser palabra completa (recomendado). Desmárcalo para matchear también dentro de otras palabras (ej. "link" matchea "linking").
             </label>
           </div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);cursor:pointer">
+              <input type="checkbox" name="require_follow" value="1" ${editRule?.requireFollow ? "checked" : ""} style="accent-color:var(--accent)">
+              Follow gate: exigir que el cliente siga la cuenta antes de entregar el link (hace crecer tu cuenta).
+            </label>
+          </div>
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px">
             <div style="display:flex;flex-direction:column;gap:5px">
-              <label class="font-display font-semibold text-[12px] text-cream" for="button_label">Texto antes del link (opcional)</label>
+              <label class="font-display font-semibold text-[12px] text-cream" for="follow_prompt_message">Mensaje para pedir el follow (opcional)</label>
+              <input id="follow_prompt_message" name="follow_prompt_message" value="${esc(editRule?.followPromptMessage ?? "")}" placeholder="Hola {username}! Sígueme y toca el botón para recibir el link 👇" style="${INPUT_STYLE}">
+            </div>
+            <div style="display:flex;flex-direction:column;gap:5px">
+              <label class="font-display font-semibold text-[12px] text-cream" for="follow_button_label">Texto del botón de confirmación (opcional)</label>
+              <input id="follow_button_label" name="follow_button_label" value="${esc(editRule?.followButtonLabel ?? "")}" placeholder="Ya te sigo" style="${INPUT_STYLE}">
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px">
+            <div style="display:flex;flex-direction:column;gap:5px">
+              <label class="font-display font-semibold text-[12px] text-cream" for="button_label">Texto del botón (opcional)</label>
               <input id="button_label" name="button_label" value="${esc(editRule?.buttonLabel ?? "")}" placeholder="Ver catálogo" style="${INPUT_STYLE}">
             </div>
             <div style="display:flex;flex-direction:column;gap:5px">
-              <label class="font-display font-semibold text-[12px] text-cream" for="button_url">Link (opcional)</label>
+              <label class="font-display font-semibold text-[12px] text-cream" for="button_url">Link del botón (opcional)</label>
               <input id="button_url" name="button_url" value="${esc(editRule?.buttonUrl ?? "")}" placeholder="https://tusitio.com/catalogo" style="${INPUT_STYLE}">
             </div>
           </div>
-          <span class="text-dim text-[10.5px]" style="margin-top:-6px">El link se agrega al final de la respuesta pública (los comentarios no admiten botones). Se sirve vía enlace trackeado para contar clics.</span>
+          <div style="display:flex;flex-direction:column;gap:5px">
+            <label class="font-display font-semibold text-[12px] text-cream" for="reply_to_comment">Respuesta pública fija (opcional)</label>
+            <input id="reply_to_comment" name="reply_to_comment" value="${esc(editRule?.replyToComment ?? "")}" placeholder="¡Gracias por preguntar! Te escribí por privado ✨" style="${INPUT_STYLE}">
+          </div>
           <div style="display:flex;flex-direction:column;gap:5px">
             <label class="font-display font-semibold text-[12px] text-cream" for="ai_reply_prompt">Respuesta pública con IA (opcional, reemplaza la fija)</label>
             <textarea id="ai_reply_prompt" name="ai_reply_prompt" rows="2" placeholder="Ej. Responde breve y cálido, en mi tono, agradeciendo el comentario e invitando a escribir por privado. Máximo 2 oraciones." style="${INPUT_STYLE}">${esc(editRule?.aiReplyPrompt ?? "")}</textarea>
@@ -240,28 +248,33 @@ export async function renderAutomatizaciones(env: Env, saved?: boolean, error?: 
     (function () {
       const TEMPLATES = ${JSON.stringify(CAMPAIGN_TEMPLATES)};
       const $ = (id) => document.getElementById(id);
-      const set = (id, v) => { const el = $(id); if (el) el.value = v; };
-      const check = (id, v) => { const el = $(id); if (el) el.checked = v; };
-      const normKind = (k) => (k === "comment_dm" || k === "comment_dm_public") ? "comment_reply" : (k || "comment_reply");
       function fill(t) {
         if (!t) { // vaciar
-          set("kind", "comment_reply");
-          set("platform", "all");
-          set("keywords", "");
-          set("message", "");
-          set("button_label", "");
-          set("button_url", "");
-          check("whole_word_match", true);
+          $("kind").value = "comment_dm";
+          $("platform").value = "all";
+          $("keywords").value = "";
+          $("message").value = "";
+          $("button_label").value = "";
+          $("button_url").value = "";
+          $("reply_to_comment").value = "";
+          $("whole_word_match").checked = true;
+          $("require_follow").checked = false;
+          $("follow_prompt_message").value = "";
+          $("follow_button_label").value = "";
           return;
         }
         const d = t.defaults || {};
-        set("kind", normKind(d.kind));
-        set("platform", d.platform || "all");
-        set("keywords", (d.keywords || []).join(", "));
-        set("message", d.message || "");
-        set("button_label", d.buttonLabel || "");
-        set("button_url", d.buttonUrl || "");
-        check("whole_word_match", d.wholeWordMatch !== false);
+        $("kind").value = d.kind || "comment_dm";
+        $("platform").value = d.platform || "all";
+        $("keywords").value = (d.keywords || []).join(", ");
+        $("message").value = d.message || "";
+        $("button_label").value = d.buttonLabel || "";
+        $("button_url").value = d.buttonUrl || "";
+        $("reply_to_comment").value = d.replyToComment || "";
+        $("whole_word_match").checked = d.wholeWordMatch !== false;
+        $("require_follow").checked = !!d.requireFollow;
+        $("follow_prompt_message").value = d.followPromptMessage || "";
+        $("follow_button_label").value = d.followButtonLabel || "";
         $("auto-form").scrollIntoView({ behavior: "smooth", block: "start" });
       }
       document.querySelectorAll(".tpl-btn").forEach((btn) => {

@@ -310,17 +310,15 @@ Webhook en Meta: `<WORKER_URL>/webhooks/whatsapp`
 ### Zernio — varias redes con una sola api key (IG, FB, X, TG, WhatsApp…)
 
 Con una cuenta de **zernio.com** conectas varias redes con OAuth de un clic y una
-sola key. Incluye **comentario → respuesta pública automática por keyword**
-(alguien comenta tu keyword en un post → el bot le responde el comentario en
-público; si configuraste un link, se agrega al final del texto). Nunca DM
-automático. Guía completa: `skill/references/channel-setup-guides/zernio-webhook.md`
+sola key. Incluye **comentario → DM automático por keyword** (alguien comenta tu
+keyword en un post → el bot le manda DM con mensaje + botón). Guía completa:
+`skill/references/channel-setup-guides/zernio-webhook.md`
 
 ```bash
 npx wrangler secret put ZERNIO_API_KEY
 npx wrangler secret put ZERNIO_WEBHOOK_SECRET
 # vars en wrangler.toml ([vars]):
 # ZERNIO_AUTO_DM_KEYWORD / ZERNIO_AUTO_DM_MESSAGE / ZERNIO_AUTO_DM_BUTTON_URL
-#   (el nombre dice "DM" por historia; hoy la respuesta va SIEMPRE en público)
 ```
 Webhook en Zernio: `<WORKER_URL>/webhooks/zernio` (eventos: message.received + comment.received)
 

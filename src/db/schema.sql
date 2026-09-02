@@ -214,10 +214,9 @@ CREATE INDEX IF NOT EXISTS idx_template_sends_time ON template_sends(sent_at);
 
 -- Flujos de automatización (Zernio y multicanal): reglas keyword → respuesta.
 -- Editables desde el panel /admin/flujos. Se aplican ANTES de la IA: si un
--- comentario o DM matchea una regla activa, la regla gana y el mensaje no entra
--- al agente. Los comentarios se responden SIEMPRE en público (nunca DM).
--- kind: comment_reply | dm_reply  (comment_dm / comment_dm_public: legacy, el
---       motor las trata como comment_reply — ver data fix al final del archivo)
+-- comentario o DM matchea una regla activa, la regla gana (respuesta automática
+-- con DM, respuesta pública, o ambas) y el mensaje no entra al agente.
+-- kind: comment_dm | comment_reply | dm_reply
 -- platform: all | instagram | facebook
 -- keywords: JSON array (case-insensitive)
 CREATE TABLE IF NOT EXISTS auto_rules (
@@ -378,19 +377,3 @@ CREATE TABLE IF NOT EXISTS contacts (
   UNIQUE (channel, channel_user_id)
 );
 CREATE INDEX IF NOT EXISTS idx_contacts_last ON contacts(last_interaction_at);
-
--- ─────────────────────────────────────────────────────────────────────────────
--- Data fixes idempotentes (corren en cada db:apply, sin efecto tras la 1a vez)
--- ─────────────────────────────────────────────────────────────────────────────
-
--- Los comentarios ya no se responden con DM automatico: solo en publico. Las
--- reglas viejas de tipo comment_dm / comment_dm_public pasan a comment_reply.
--- El texto publico sale de message. Se limpia reply_to_comment (solia ser el
--- "te escribi por privado", que ya no aplica) y el follow gate.
-UPDATE auto_rules
-   SET kind = 'comment_reply',
-       reply_to_comment = NULL,
-       require_follow = 0,
-       follow_prompt_message = NULL,
-       follow_button_label = NULL
- WHERE kind IN ('comment_dm', 'comment_dm_public');

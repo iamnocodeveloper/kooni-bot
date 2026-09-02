@@ -55,7 +55,7 @@ import { AutoRulesRepo, type AutoRuleKind } from "../db/autoRules";
 
 /** Parsea el form de una automatización (crear o editar) a un objeto de regla. */
 function parseRuleForm(form: FormData) {
-  const kind = String(form.get("kind") ?? "comment_reply") as AutoRuleKind;
+  const kind = String(form.get("kind") ?? "comment_dm") as AutoRuleKind;
   const platform = String(form.get("platform") ?? "all").trim() || "all";
   const keywords = String(form.get("keywords") ?? "")
     .split(",")

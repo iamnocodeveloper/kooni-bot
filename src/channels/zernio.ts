@@ -10,12 +10,10 @@
 //
 // Eventos que maneja este adapter:
 //   • message.received  → DM entrante de cualquier plataforma → al agente.
-//   • comment.received  → comentario en un post. Si matchea una keyword (regla
-//     del panel o ZERNIO_AUTO_DM_KEYWORD), se responde SIEMPRE en PÚBLICO
-//     (como comentario), nunca por DM automático — decisión del operador: un
-//     DM no pedido molesta y varias plataformas lo penalizan. El link del
-//     botón, si lo hay, se suma al texto de la respuesta. El comentario NO
-//     entra al agente.
+//   • comment.received  → comentario en un post. Si ZERNIO_AUTO_DM_KEYWORD
+//     aparece en el texto (case-insensitive), responde al autor con
+//     ZERNIO_AUTO_DM_MESSAGE + botón opcional (ZERNIO_AUTO_DM_BUTTON_URL/
+//     ZERNIO_AUTO_DM_BUTTON_LABEL). El comentario NO entra al agente.
 //   • reaction.received → ack, se ignora.
 //
 // Referencia del adapter oficial (Chat SDK): github.com/zernio-dev/chat-sdk-adapter
@@ -183,8 +181,7 @@ async function loadAutoDmRules(env: Env): Promise<AutoDmRule[]> {
         const kws = (r.keywords ?? []).map((k) => String(k).trim().toLowerCase()).filter(Boolean);
         const msg = (r.message ?? "").trim();
         if (kws.length > 0 && msg) {
-          // Sin `kind` explícito → respuesta pública (nunca DM automático).
-          rules.push({ keywords: kws, message: msg, kind: r.kind ?? "comment_reply", buttonLabel: r.buttonLabel, buttonUrl: r.buttonUrl, replyToComment: r.replyToComment, aiReplyPrompt: r.aiReplyPrompt, wholeWordMatch: r.wholeWordMatch, requireFollow: r.requireFollow, followPromptMessage: r.followPromptMessage, followButtonLabel: r.followButtonLabel });
+          rules.push({ keywords: kws, message: msg, buttonLabel: r.buttonLabel, buttonUrl: r.buttonUrl, replyToComment: r.replyToComment, aiReplyPrompt: r.aiReplyPrompt, wholeWordMatch: r.wholeWordMatch, requireFollow: r.requireFollow, followPromptMessage: r.followPromptMessage, followButtonLabel: r.followButtonLabel });
         }
       }
     }
@@ -198,8 +195,6 @@ async function loadAutoDmRules(env: Env): Promise<AutoDmRule[]> {
   if (legacyKw) {
     rules.push({
       keywords: [legacyKw],
-      // Respuesta pública al comentario (el link, si lo hay, se suma al texto).
-      kind: "comment_reply",
       message:
         env.ZERNIO_AUTO_DM_MESSAGE?.trim() ||
         "¡Hola! 👋 Gracias por tu interés. Aquí tienes la información que pediste:",
@@ -255,11 +250,7 @@ async function sendCommentActions(
   }
 
   const dmMessage = renderUsername(matched.message, commenterName);
-  // Por defecto un comentario se responde en PÚBLICO (como comentario), nunca
-  // por DM automático — decisión del operador. Solo las reglas que piden DM de
-  // forma explícita (`comment_dm` / `comment_dm_public`, que el panel ya no
-  // crea) mantienen esa pierna, para no romper instalaciones que la usen.
-  const kind = matched.kind ?? "comment_reply";
+  const kind = matched.kind ?? "comment_dm";
   const publicOnly = kind === "comment_reply";
   // Respuesta pública: para comment_reply el texto ES el campo message (público
   // sin DM); para comment_dm / comment_dm_public viene de replyToComment.
@@ -270,13 +261,6 @@ async function sendCommentActions(
     : matched.replyToComment?.trim()
       ? renderUsername(matched.replyToComment.trim(), commenterName)
       : undefined;
-  // La API de comentarios no acepta botones: si una regla de respuesta pública
-  // trae un link, lo sumamos al final del texto (buttonUrl ya viene reescrito a
-  // /r/:slug para contar clics, ver arriba).
-  if (publicOnly && publicReply && buttonUrl) {
-    const label = matched.buttonLabel?.trim();
-    publicReply += `\n\n${label ? `${label}: ` : ""}${buttonUrl}`;
-  }
   if (!publicReply && matched.aiReplyPrompt?.trim()) {
     try {
       const { generateAiPublicReply } = await import("../aiReply");

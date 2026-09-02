@@ -7,8 +7,7 @@
 >
 > **¿Cómo se compara con ManyChat?** ManyChat conecta IG/Messenger/WhatsApp con un
 > flow visual; Zernio conecta **más redes** con una api key y además permite
-> **automatizar comentarios → respuesta pública por keyword** (el bot responde el
-> comentario en público, nunca por DM automático).
+> **automatizar comentarios → DM privado** (nuestro adapter lo dispara por keyword).
 >
 > Este canal es **adicional**: no reemplaza los directos (Twilio/Meta/Telegram).
 
@@ -21,10 +20,10 @@
 | `ZERNIO_API_KEY` | ✅ | Tu api key de Zernio (Bearer para enviar mensajes) |
 | `ZERNIO_WEBHOOK_SECRET` | recomendado | Secreto con el que Zernio firma los webhooks (HMAC-SHA256); sin él, el webhook acepta todo |
 | `ZERNIO_API_BASE_URL` | opcional | Override de la API (default `https://zernio.com/api`) |
-| `ZERNIO_AUTO_DM_KEYWORD` | opcional | Palabra que dispara la **respuesta pública** al comentario (ej. `claude`, `info`, `precio`). El nombre dice "DM" por historia; hoy responde SIEMPRE en público. |
-| `ZERNIO_AUTO_DM_MESSAGE` | opcional | Texto de la respuesta pública |
-| `ZERNIO_AUTO_DM_BUTTON_LABEL` | opcional | Texto antes del link (default "Abrir") |
-| `ZERNIO_AUTO_DM_BUTTON_URL` | opcional | Link que se agrega al final de la respuesta (los comentarios no admiten botones) |
+| `ZERNIO_AUTO_DM_KEYWORD` | opcional | Palabra que dispara el **comentario → DM** (ej. `claude`, `info`, `precio`) |
+| `ZERNIO_AUTO_DM_MESSAGE` | opcional | Mensaje del DM automático |
+| `ZERNIO_AUTO_DM_BUTTON_LABEL` | opcional | Texto del botón (default "Abrir") |
+| `ZERNIO_AUTO_DM_BUTTON_URL` | opcional | Link del botón (tu recurso, tu link de venta…) |
 
 ---
 
@@ -44,10 +43,9 @@ npx wrangler secret put ZERNIO_WEBHOOK_SECRET
 
 (En local: agrégala a `.dev.vars`.)
 
-## Paso 3 — Configura la respuesta pública por keyword (comentario → comentario)
+## Paso 3 — Configura el auto-DM por keyword (comentario → DM)
 
-Lo más fácil es crearlo desde el panel → **Automatizaciones**. Por env, en
-`wrangler.toml` → `[vars]`:
+En `wrangler.toml` → `[vars]`.
 
 **Modo simple (una sola keyword):**
 
@@ -58,26 +56,24 @@ ZERNIO_AUTO_DM_BUTTON_LABEL = "Abrir recurso"
 ZERNIO_AUTO_DM_BUTTON_URL = "https://tusitio.com/recurso"
 ```
 
-**Modo avanzado (VARIAS keywords, cada una con su mensaje):**
+**Modo avanzado (VARIAS keywords, cada una con su mensaje + respuesta pública):**
 
 ```toml
-ZERNIO_AUTO_DM_RULES = '[{"keywords":["precio","cuánto cuesta"],"message":"Te mando el catálogo 👇","buttonLabel":"Ver catálogo","buttonUrl":"https://tusitio.com/catalogo"},{"keywords":["claude"],"message":"Aquí tienes el recurso"}]'
+ZERNIO_AUTO_DM_RULES = '[{"keywords":["precio","cuánto cuesta"],"message":"Te mando el catálogo 👇","buttonLabel":"Ver catálogo","buttonUrl":"https://tusitio.com/catalogo","replyToComment":"¡Gracias por preguntar! Te escribí por privado ✨"},{"keywords":["claude"],"message":"Aquí tienes el recurso"}]'
 ```
 
-Cuando el comentario trae alguna de las keywords, el bot **responde ese comentario
-en público** con el `message`. Si hay `buttonUrl`, se agrega al final del texto
-(los comentarios no admiten botones) vía un enlace trackeado que cuenta clics.
-**Nunca envía DM automático.** El comentario no entra al agente.
+Cada regla hace dos cosas cuando el comentario trae alguna de sus keywords:
+1. **DM privado** al autor (endpoint `private-reply`, IG/FB) con su `message` (+ botón opcional).
+2. **Respuesta pública** al comentario si la regla tiene `replyToComment` (opcional).
 
 > Si usas `ZERNIO_AUTO_DM_RULES`, el modo simple se ignora. Los eventos
 > necesarios en el webhook son `comment.received` (comentarios) y
-> `message.received` (los DMs que la persona escriba después, que sí entran al
-> agente).
+> `message.received` (los DMs que respondan después, que sí entran al agente).
 
-> **Ejemplo real:** alguien comenta *"precio"* en un post de Instagram → el bot
-> responde ese comentario en público con tu mensaje + el link del catálogo. Si
-> la persona luego te escribe por privado, ahí contesta la IA con tu base de
-> conocimiento.
+> **Ejemplo real (tu caso):** alguien comenta *"precio"* en un post de Instagram →
+> el bot responde en privado con tu catálogo + botón, Y responde en público
+> *"¡Gracias por preguntar! Te escribí por privado ✨"*. Los DMs posteriores
+> los contesta la IA con tu base de conocimiento.
 
 ## Paso 4 — Configura el webhook en Zernio
 
