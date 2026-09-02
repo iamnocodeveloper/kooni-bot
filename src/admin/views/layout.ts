@@ -416,7 +416,7 @@ export async function layout(opts: { title: string; activeTab: string; body: str
           <span style="width:8px;height:8px;border-radius:50%;background:var(--ok);animation:pulse 1.8s ease-in-out infinite,ring 2s infinite"></span>
           <span style="font-size:11px;font-weight:600;letter-spacing:.04em">BOT EN LÍNEA</span>
         </div>
-        <a href="/admin/logout" title="Cerrar sesión: limpia las credenciales guardadas del navegador" style="display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600;letter-spacing:.04em;color:var(--dim);border:1px solid var(--line);padding:7px 12px;text-decoration:none">Cerrar sesión</a>
+        <a href="/admin/logout" title="Cerrar sesión y volver a la pantalla de ingreso" style="display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600;letter-spacing:.04em;color:var(--dim);border:1px solid var(--line);padding:7px 12px;text-decoration:none">Cerrar sesión</a>
       </header>
       <main style="padding:22px 26px;min-width:0">${opts.body}</main>
     </div>

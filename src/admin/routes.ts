@@ -20,7 +20,7 @@ import { generateText } from "ai";
 import { createModel } from "../llm/provider";
 import { loadLlmOverrides } from "../settings-loader";
 import type { Env } from "../env";
-import { adminAuth, isAdminAuthenticated, verifyDashboardPassword, setSessionCookie, clearSessionCookie } from "./auth";
+import { adminAuth, hasValidSessionCookie, verifyDashboardPassword, setSessionCookie, clearSessionCookie } from "./auth";
 import { layout, renderUpgrade, loginPage } from "./views/layout";
 import { isProUnlocked } from "../config";
 import { renderOverview } from "./views/overview";
@@ -95,8 +95,9 @@ export const adminApp = new Hono<{ Bindings: Env }>();
 // sesión por cookie firmada. Basic Auth sigue funcionando en paralelo para
 // scripts y tests (no pasan por acá).
 adminApp.get("/login", (c) => {
-  // Si ya hay sesión (cookie viva o Basic Auth), no tiene sentido pedir login.
-  if (isAdminAuthenticated(c, c.env)) return c.redirect("/admin/overview", 302);
+  // Solo se salta la página si YA hay cookie de sesión válida. Una credencial
+  // Basic Auth vieja del navegador NO cuenta acá — si no, nunca vería el login.
+  if (hasValidSessionCookie(c, c.env)) return c.redirect("/admin/overview", 302);
   const error = c.req.query("error");
   return c.html(loginPage({ env: c.env, error: error || undefined }));
 });
@@ -114,9 +115,9 @@ adminApp.post("/login", async (c) => {
   return c.redirect("/admin/overview", 302);
 });
 
-// Cerrar sesión: limpia la cookie y manda al login. (Para una sesión de Basic
-// Auth no hay "logout" real — el navegador reenvía la credencial solo; el
-// humano usa la cookie.)
+// Cerrar sesión: borra la cookie y manda al login. El guard de páginas ignora
+// Basic Auth (solo cuenta la cookie), así que sin cookie el panel queda cerrado
+// aunque el navegador todavía tenga una credencial Basic vieja guardada.
 adminApp.get("/logout", (c) => {
   clearSessionCookie(c);
   return c.redirect("/admin/login", 302);

@@ -136,36 +136,40 @@ export function clearSessionCookie(c: Context): void {
   deleteCookie(c, SESSION_COOKIE, { path: "/" });
 }
 
-/**
- * ¿Esta request ya está autenticada? Sesión por cookie O Basic Auth — el
- * primero que valga gana. No mira `/admin/login` (esa ruta es pública).
- * Exportada para que `GET /admin/login` mande al panel si ya hay sesión.
- */
-export function isAdminAuthenticated(c: Context, env: Env): boolean {
-  const cookie = getCookie(c, SESSION_COOKIE);
-  if (verifySessionCookie(env, cookie)) return true;
-  return checkBasicCredentials(c.req.header("Authorization"), env);
+/** ¿Hay una cookie de sesión válida en esta request? (ignora Basic Auth). */
+export function hasValidSessionCookie(c: Context, env: Env): boolean {
+  return verifySessionCookie(env, getCookie(c, SESSION_COOKIE));
+}
+
+/** ¿Es una navegación de navegador (carga de página), no htmx/API/script? */
+function isBrowserNavigation(c: Context): boolean {
+  const accept = c.req.header("Accept") ?? "";
+  const isHtmx = c.req.header("HX-Request") === "true";
+  return !isHtmx && accept.includes("text/html");
 }
 
 /**
- * Hono middleware factory: exige sesión por cookie O Basic Auth en las rutas
- * admin. `/admin/login` (GET y POST) queda afuera — se registra antes en
- * `routes.ts` y ahí no se llama a este guard.
+ * Hono middleware factory. `/admin/login` y `/admin/logout` quedan afuera (se
+ * registran antes en `routes.ts`).
  *
- * Navegación real de navegador sin credenciales → redirige a `/admin/login`
- * (UX humana). Cualquier otra request (htmx, scripts, tests) sin credenciales
- * → 401 igual que siempre, para no romper nada que ya dependa de eso.
+ * - **Carga de página en el navegador** → SOLO cuenta la cookie de sesión. Así
+ *   una credencial Basic Auth vieja guardada en el navegador NO se salta la
+ *   página de login ni impide cerrar sesión. Sin cookie → 302 a `/admin/login`.
+ * - **Todo lo demás** (htmx, API, scripts, healthchecks, tests) → cookie **o**
+ *   Basic Auth, como siempre. Sin credenciales → 401.
  */
 export function adminAuth(env: Env): MiddlewareHandler {
   return async (c, next) => {
-    if (isAdminAuthenticated(c, env)) return next();
+    const cookieOk = hasValidSessionCookie(c, env);
 
-    const accept = c.req.header("Accept") ?? "";
-    const isHtmx = c.req.header("HX-Request") === "true";
-    if (!isHtmx && accept.includes("text/html")) {
+    if (isBrowserNavigation(c)) {
+      if (cookieOk) return next();
       return c.redirect("/admin/login", 302);
     }
 
+    if (cookieOk || checkBasicCredentials(c.req.header("Authorization"), env)) {
+      return next();
+    }
     return new Response("Unauthorized", {
       status: 401,
       headers: { "WWW-Authenticate": 'Basic realm="Kooni", charset="UTF-8"' },

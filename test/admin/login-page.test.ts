@@ -154,6 +154,35 @@ describe("adminApp — guard con sesión por cookie", () => {
     expect(res.status).toBe(401);
   });
 
+  it("navegación de navegador con Basic Auth vieja pero SIN cookie → 302 al login (la credencial Basic no cuenta para páginas)", async () => {
+    const basic = "Basic " + btoa(`admin:${PASSWORD}`);
+    const res = await adminApp.fetch(
+      req("/overview", { headers: { Accept: "text/html", Authorization: basic } }),
+      env,
+    );
+    expect(res.status).toBe(302);
+    expect(res.headers.get("Location")).toBe("/admin/login");
+  });
+
+  it("Basic Auth SÍ vale para peticiones no-navegación (scripts/tests) aunque no haya cookie", async () => {
+    const basic = "Basic " + btoa(`admin:${PASSWORD}`);
+    const res = await adminApp.fetch(
+      req("/projects", { headers: { Authorization: basic } }),
+      env,
+    );
+    expect(res.status).toBe(200);
+  });
+
+  it("GET /admin/login con Basic Auth vieja (sin cookie) muestra el login, no redirige", async () => {
+    const basic = "Basic " + btoa(`admin:${PASSWORD}`);
+    const res = await adminApp.fetch(
+      req("/login", { headers: { Accept: "text/html", Authorization: basic } }),
+      env,
+    );
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain('action="/admin/login"');
+  });
+
   it("POST /admin/login con contraseña mala → 302 de vuelta al login con ?error=", async () => {
     const res = await adminApp.fetch(
       req("/login", {

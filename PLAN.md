@@ -516,14 +516,19 @@ que tiene el sistema hoy, porque decide todas las demás.
 
 ## O. Pantalla de login del panel — de modal del navegador a página propia ✅ (O1-O4, O6-O8 hechos; O5 rate-limit pendiente)
 
-> **Estado (01-sep):** implementado y verificado. `GET/POST /admin/login` +
+> **Estado:** implementado y verificado. `GET/POST /admin/login` +
 > `GET /admin/logout` (rutas públicas, antes del guard), sesión por cookie
-> firmada con `DASHBOARD_PASSWORD` (sin tabla D1), `adminAuth` acepta cookie
-> **o** Basic Auth (navegador sin credenciales → 302 al login; htmx/scripts →
-> 401 como siempre). `loginPage()` reescrita a dos columnas (marca blanca vía
-> `resolveBrand` + versión). Tests: `test/admin/login-page.test.ts` (24 casos)
-> + los 3 de Basic Auth sin cambios. Docs: `USO.md`, `IDENTIDAD-KOONI.md`.
-> **Falta O5** (rate-limit del login por IP en D1 — cierra también S5).
+> firmada con `DASHBOARD_PASSWORD` (sin tabla D1). `loginPage()` reescrita a dos
+> columnas (marca blanca vía `resolveBrand` + versión).
+>
+> **v1.13.3 — fix del guard:** una **carga de página en el navegador** ahora
+> cuenta SOLO la cookie de sesión. Antes aceptaba también Basic Auth, así que un
+> navegador con la credencial Basic vieja guardada nunca veía la página de login
+> y "Cerrar sesión" no hacía nada (redirigía de vuelta al panel). Las peticiones
+> no-navegación (htmx, API, scripts, tests) siguen aceptando cookie **o** Basic.
+>
+> Tests: `test/admin/login-page.test.ts`. **Falta O5** (rate-limit del login por
+> IP en D1 — cierra también S5).
 
 > Pedido (01-sep): reemplazar el diálogo nativo de Basic Auth por una página de
 > login propia, dos columnas — izquierda: marca Kooni + subtítulo "agentes de
