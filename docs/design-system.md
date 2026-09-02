@@ -1,10 +1,18 @@
 # Kooni Admin — Design System
 
-Retro-terminal dark theme for the bot admin dashboard. This is the **contract**
-for every view under `src/admin/views/`. The shell (`layout.ts`) already loads
-the fonts, Tailwind config, tokens, lucide, htmx, the scanline overlay and all
-the component classes below. Views only render the **body** — write it to match
-this system.
+> ⚠️ **Rediseño 2026 (v1.17–v1.18):** este documento describe el sistema VIEJO
+> (teal/menta, solo oscuro, look terminal). La identidad actual es **morado/fucsia,
+> tema claro + oscuro, fuente Sora**. La fuente de verdad de la paleta y las
+> fuentes es `src/admin/views/layout.ts` (`GLOBAL_STYLE`) y `docs/IDENTIDAD-KOONI.md`.
+> Lo que sigue vigente de este doc: **los nombres de las clases de componentes**
+> (`.card`, `.chip`, `.bigbtn`, `.node`, filas, etc.) y la regla de que las vistas
+> usan tokens (`var(--x)`), nunca colores literales. Reescribir este doc entero
+> es tarea pendiente de la Fase 2 del rediseño.
+
+Contrato para cada vista bajo `src/admin/views/`. El shell (`layout.ts`) ya carga
+las fuentes, la config de Tailwind, los tokens, lucide y htmx, más las clases de
+componente de abajo. Las vistas solo renderizan el **body** — escríbelo para que
+encaje con este sistema.
 
 Stack reminder: no build step. Views are TS template strings → HTML, styled with
 **Tailwind CDN utilities** (mapped to the tokens below) and/or inline
