@@ -286,6 +286,36 @@ simple que el plan de `§ L`.
 commiteó ni quedó en código — va solo como `wrangler secret` en el worker de
 cardealer. Conviene que Joel la rote en el panel de Decodo por las dudas.
 
+## 2026-09-02 · v1.17.0 — Rediseño visual (§ T) — base
+
+Joel aprobó el rumbo: **identidad propia**, distinta de Forja, para los videos y
+el marketing. Dirección: **claro + oscuro con toggle**, acento **morado/fucsia**.
+
+**Base implementada** (`src/admin/views/layout.ts`):
+
+| Antes (Forja) | Ahora (Kooni) |
+|---|---|
+| Todo en JetBrains Mono | **Sora** (texto) + **IBM Plex Mono** (solo datos/código) |
+| Space Grotesk para títulos | Sora |
+| Teal/menta sobre tinta azulada | **Fucsia `#e05fd8` + violeta `#a679f6`** sobre tinta con matiz violeta |
+| Solo tema oscuro | **Claro + oscuro**, toggle en el header, `data-theme` en `<html>` + `localStorage`, respeta `prefers-color-scheme`, sin parpadeo (script en el `<head>`) |
+| Sombras duras `Npx Npx 0` (brutalismo) | Sombra suave `var(--shadow)`, bordes redondeados |
+| Overlay de scanlines | Retirado (clase inerte por compat) |
+
+- Los colores viven en CSS custom properties (`:root` oscuro + `:root[data-theme="light"]`);
+  Tailwind los mapea con `var()`. Las vistas que usan `var(--x)` cambian solas.
+- `#1a1206` (texto sobre botón teal) → `var(--on-accent)` en todas las vistas.
+- Marca blanca: `resolveBrand` ahora solo emite overrides de las vars `BRAND_*`
+  que el revendedor puso; sin ellas, identidad Kooni pura.
+
+**Verificación:** `pnpm test` 711/711. Tests en `test/admin/layout-scripts.test.ts`.
+
+**Pendiente (Fase 2 del rediseño):** pase fino por vista (algún inline style con
+color hardcodeado, contraste en tema claro en vistas densas —Estadísticas,
+Costos, canvas de Flujo—), y actualizar `docs/IDENTIDAD-KOONI.md` +
+`docs/design-system.md` con la paleta final. **Joel revisa la base primero** y
+dice si el rumbo va — la paleta son 6 líneas de tokens, fácil de ajustar.
+
 ---
 
 ## Estado al cierre — 2026-09-02
@@ -310,8 +340,9 @@ cardealer. Conviene que Joel la rote en el panel de Decodo por las dudas.
 | Filtros de conversaciones: canal, fecha, texto de mensajes | ✅ |
 | Responsive móvil: navegación en cajón, bandeja de una vista, tablas, modales, iOS | ✅ Fases 1-3 |
 | **Módulo "Sincronizar sitio web" (Decodo → KB)** | ✅ código · **activar en cardealer** (secret + `module_unlocks` + URLs) |
+| **Rediseño visual — base** (claro/oscuro, Sora, morado/fucsia) v1.17.0 | ✅ base · **Joel revisa el rumbo** · falta Fase 2 (pase por vista) |
 | Fix `/kb/reindex` (ignoraba los docs del panel) | ✅ |
-| `vitest maxWorkers: 2` (arregla el flakeo de la suite) | ✅ · 710/710 estable |
+| `vitest maxWorkers: 2` (arregla el flakeo de la suite) | ✅ · 711/711 estable |
 
 ### Config aplicada en las instalaciones
 
@@ -333,12 +364,14 @@ cardealer. Conviene que Joel la rote en el panel de Decodo por las dudas.
 3. Pedirle a Daniel las 5 preguntas que el bot debe poder contestar.
 4. Activar el push en cada celular (instalar PWA → 🔔 → permitir).
 5. Rotar la credencial de Decodo y el par VAPID (ambos se pegaron en el chat).
-6. Aprobar el rumbo del rediseño visual (`§ T` — claro/oscuro + morado/fucsia).
+6. **Revisar la base del rediseño (v1.17.0)** — actualizar una instalación, abrir
+   el panel, probar el toggle claro/oscuro, y decir si el rumbo (Sora +
+   morado/fucsia) va. La paleta se ajusta en 6 líneas.
 7. Dejar "Modelo" en **Automático** en el panel de Joel (el override haiku/sonnet
    no aplica con OpenAI).
 
 **Claude:**
-- Rediseño visual `§ T` (cuando Joel apruebe el rumbo).
+- Rediseño `§ T` **Fase 2** — pase fino por vista + `docs/IDENTIDAD-KOONI.md` (cuando Joel dé el OK al rumbo).
 - Sumar el Vigilante a los disparadores de push.
-- Campañas `§ R` — en pausa hasta Meta oficial / ManyChat.
+- Campañas `§ R` — **PAUSADO TOTALMENTE** (no se retoma salvo pedido explícito de Joel).
 - Web Sync Fase 2 (crawl / paginación) si el volumen lo pide — hoy: lista fija de URLs.

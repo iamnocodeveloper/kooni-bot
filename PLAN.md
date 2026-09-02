@@ -105,7 +105,7 @@ otra pública. La pública, en cambio, es segura de publicar — ese es el punto
 6. **UI del panel de licencias** — exponer campos `botSlug` / `instUid` (instalación) en el formulario de generación, y mostrar el `correo` en la tabla de clientes.
 7. **Modelo de revendedores (marca blanca + recurrencia)** — licencias por agencia/revendedor: el revendedor paga una cuota/mensualidad (recurrencia real) y a cambio instala bots con su marca (`BRAND_*` ya implementado), con límites y reporte de su cartera desde el panel de licencias (rol `revendedor` en `profiles`, comisión/cuota por instalación activa).
 8. **PWA del panel — Fases 1-3** (`§ Q`). Fase 0 ✅ v1.14.0 · **Fase 1 (avisos push con VAPID) ✅ v1.16.0** — botón campana en el header, se dispara con nuevo prospecto / ticket / handoff. Pendiente: Fase 2 = lectura offline (endpoints JSON + cache del SW), Fase 3 = bandeja móvil (ya casi cubierta por § S2).
-9. **Atribución y rendimiento de campañas** (`§ R`) — ⏸️ **en espera**. Se retoma cuando la instalación esté en **Meta oficial** o **ManyChat** (Zernio no entrega el `referral` del anuncio). Orden: panel solo-lectura de comentario→DM (Fase 1, ya sirve) → stamp de origen en la conversación (Fase 2) → `referral` de anuncios (Fase 3, Meta/ManyChat).
+9. **Atribución y rendimiento de campañas** (`§ R`) — ⏸️ **PAUSADO TOTALMENTE** (decisión de Joel, 2026-09-02). No se toca hasta que Joel lo reactive explícitamente. El plan queda escrito en `§ R` por si se retoma.
 10. **Panel — filtros de conversaciones, responsive y PWA install** (`§ S`). ✅ S1 (filtros canal/fecha/texto) v1.14.5 · S2 Fase 1 (shell+nav+bandeja) v1.14.3 · S2 Fase 2-3 (vistas, modales, iOS) v1.14.5. Queda: probar en dispositivos reales; formularios angostos → se cierran con § T.
 11. **Scraping web → KB** (`§ L`) — ✅ código v1.15.0, ambas instalaciones en v1.16.0. Falta en cardealer: verificar `module_unlocks += web_sync` (o que la licencia lo cubra) + cargar URLs en Extras + primera sync. `DECODO_AUTH` ya puesto.
 12. **Rediseño visual del panel** (`§ T`) — **APROBADO por Joel** (claro/oscuro + morado/fucsia). Bloque dedicado. Antes de codear: proponer 1 mockup de paleta + toggle para aprobar el rumbo.
@@ -762,16 +762,17 @@ servidor nuevo — todo vive en el Worker + D1.
 
 ---
 
-## R. Atribución y rendimiento de campañas — ⏸️ EN ESPERA (Meta / ManyChat)
+## R. Atribución y rendimiento de campañas — ⏸️ PAUSADO TOTALMENTE
 
 > **Pedido (prueba de Joel):** "revisa si Zernio puede reconocer si el mensaje
 > viene de una campaña para marcarlo, y tener datos de ventas / rendimiento de
 > mensajes de campañas en el dashboard."
 >
-> **Decisión (2026-09-01):** se posterga. La atribución real (de qué anuncio /
-> ref viene el mensaje) solo llega limpia por **Meta oficial** o **ManyChat** —
-> no por Zernio. Se retoma cuando la instalación esté en uno de esos dos canales.
-> Ver "Cuándo se retoma" abajo. Hasta entonces, no se construye nada.
+> **Decisión (2026-09-02):** **pausado del todo.** Joel lo confirmó dos veces.
+> No se construye nada, ni la parte que hoy sería posible con Zernio. El plan de
+> abajo queda **archivado** — se retoma SOLO si Joel lo pide explícitamente
+> (idealmente cuando una instalación esté en Meta oficial o ManyChat, que sí
+> entregan el `referral` del anuncio; Zernio no).
 
 ### Análisis — ¿qué señal de campaña tenemos por canal?
 
@@ -974,7 +975,24 @@ urge, no bloquea nada. Conviene hacerlo igual, por estas razones:
   botones brutalistas, sombras `Npx Npx 0`).
 - Un look propio hace el producto más vendible.
 
-### Plan de ejecución (bloque dedicado — APROBADO, siguiente)
+### Estado: BASE HECHA (v1.17.0), falta Fase 2
+
+**Fase 1 ✅ (v1.17.0)** — sistema de temas (claro + oscuro, toggle en el header,
+`data-theme` + `localStorage`, anti-FOUC), paleta morado/fucsia como CSS custom
+properties, fuentes **Sora + IBM Plex Mono**, sombras suaves, scanlines fuera,
+`#1a1206` → `var(--on-accent)`, `resolveBrand` solo emite lo que el revendedor
+setea. Todo en `src/admin/views/layout.ts`. 711/711.
+
+**Fase 2 (pendiente, tras el OK de Joel al rumbo):**
+- Pase por vista: buscar inline styles con color hardcodeado (no `var(--x)`).
+- Contraste en tema **claro** en las vistas densas: Estadísticas, Costos,
+  Insights, el canvas de Flujo (`agente/canvas`), badges de sentimiento.
+- Los `rgba(...)` hardcodeados en banners/badges (ej. `rgba(127,183,126,.1)`) →
+  tokens o `color-mix`.
+- `docs/IDENTIDAD-KOONI.md` + `docs/design-system.md` con la paleta final.
+- Landing (`web/`, `sitio-web/`) — alinear.
+
+### Plan de ejecución original (referencia)
 
 Es un pase por **todas** las vistas + el sistema de tokens — hacerlo a medias se
 ve peor que no hacerlo. Orden:
@@ -1017,4 +1035,4 @@ de "quedar a medias" si se apura.
 8. **Móvil + filtros** (`§ S`) — ✅ v1.14.3–v1.14.5.
 9. **Scraping web → KB** (`§ L`) — ✅ código v1.15.0; falta activar URLs en cardealer.
 10. **Rediseño visual** (`§ T`) — aprobado, siguiente bloque. Proponer paleta primero.
-11. **Campañas** (`§ R`) — ⏸️ en espera hasta Meta oficial / ManyChat.
+11. **Campañas** (`§ R`) — ⏸️ **PAUSADO TOTALMENTE** por Joel. Archivado; no se retoma salvo pedido explícito.

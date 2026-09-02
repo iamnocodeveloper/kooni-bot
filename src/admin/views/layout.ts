@@ -1,9 +1,9 @@
 // Dashboard shell: a fixed 248px sidebar (grouped navigation) + a live-status
-// topbar, wrapping each tab's server-rendered body. Retro-terminal dark theme
-// ("Kooni admin"): Space Grotesk + JetBrains Mono, brutalist buttons, scan
-// lines. Paleta de marca: tinta azulada + teal/menta (docs/IDENTIDAD-KOONI.md). Design tokens are exposed both as CSS custom properties (for inline
-// styles) and mapped to Tailwind color names (for utility classes) — see
-// docs/design-system.md, the contract every view follows.
+// topbar, wrapping each tab's server-rendered body. Identidad Kooni (rediseño
+// 2026): Sora + IBM Plex Mono, acento morado/fucsia, tema CLARO + OSCURO con
+// toggle (data-theme en <html> + localStorage). Los tokens de color viven en
+// CSS custom properties (GLOBAL_STYLE) y se mapean a nombres Tailwind.
+// docs/IDENTIDAD-KOONI.md es el contrato de marca.
 //
 // The layout() API is unchanged: views keep their own activeTab id; the group,
 // breadcrumb and page title are derived here.
@@ -76,37 +76,43 @@ const NAV: Section[] = [
   },
 ];
 
-// <head> assets: fonts, Tailwind CDN + token config, lucide, htmx.
+// <head> assets: anti-FOUC del tema, fuentes, Tailwind CDN + tokens, lucide, htmx.
+// Identidad Kooni (docs/IDENTIDAD-KOONI.md): morado/fucsia, claro + oscuro.
 const HEAD_ASSETS = `
+  <script>
+    // Fija el tema ANTES de pintar para no parpadear. localStorage → si no,
+    // prefers-color-scheme. El toggle del header lo cambia después.
+    (function(){
+      try {
+        var t = localStorage.getItem('kooni-theme');
+        if (!t) t = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', t);
+      } catch(e){ document.documentElement.setAttribute('data-theme','dark'); }
+    })();
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <script src="https://unpkg.com/htmx.org@2.0.4"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
+      darkMode: ["selector", '[data-theme="dark"]'],
       theme: {
         extend: {
           colors: {
-            bg: "#0d1218",
-            panel: "#141b24",
-            panel2: "#1a2330",
-            raise: "#223043",
-            line: "#2b3b4f",
-            linelit: "#3d546f",
-            accent: { DEFAULT: "#2dd4bf", soft: "rgba(45,212,191,.13)" },
-            accent2: "#6ee7b7",
-            cream: "#e7eef5",
-            muted: "#93a4b5",
-            dim: "#64748b",
-            ok: "#34d399",
-            info: "#60a5fa",
-            bad: "#f87171",
-            violet: "#a78bfa",
+            // Tailwind usa estos para clases utilitarias; los valores "vivos"
+            // (claro/oscuro) están en las CSS custom properties de GLOBAL_STYLE.
+            bg: "var(--bg)", panel: "var(--panel)", panel2: "var(--panel2)",
+            raise: "var(--raise)", line: "var(--line)", linelit: "var(--linelit)",
+            accent: { DEFAULT: "var(--accent)", soft: "var(--accent-soft)" },
+            accent2: "var(--accent-2)",
+            cream: "var(--cream)", muted: "var(--muted)", dim: "var(--dim)",
+            ok: "var(--ok)", info: "var(--info)", bad: "var(--bad)", violet: "var(--violet)",
           },
           fontFamily: {
-            display: ["'Space Grotesk'", "ui-sans-serif", "system-ui", "sans-serif"],
-            mono: ["'JetBrains Mono'", "ui-monospace", "monospace"],
+            display: ["'Sora'", "ui-sans-serif", "system-ui", "sans-serif"],
+            mono: ["'IBM Plex Mono'", "ui-monospace", "monospace"],
           },
         },
       },
@@ -120,21 +126,36 @@ const HEAD_ASSETS = `
 // overlay. All motion collapses under prefers-reduced-motion.
 const GLOBAL_STYLE = `
 <style>
-  :root{
-    --bg:#0d1218; --panel:#141b24; --panel2:#1a2330; --raise:#223043;
-    --line:#2b3b4f; --linelit:#3d546f;
-    --accent:#2dd4bf; --accent-2:#6ee7b7; --accent-soft:rgba(45,212,191,.13);
-    --cream:#e7eef5; --muted:#93a4b5; --dim:#64748b;
-    --ok:#34d399; --info:#60a5fa; --bad:#f87171; --violet:#a78bfa;
-    /* legacy aliases kept so mockup-derived snippets keep working */
-    --border:#2b3b4f; --border-lit:#3d546f; --green:#34d399; --blue:#60a5fa; --red:#f87171;
+  /* ── Tema oscuro (default) — identidad Kooni: tinta con matiz violeta + fucsia ── */
+  :root, :root[data-theme="dark"]{
+    --bg:#0f0e17; --panel:#181624; --panel2:#221d33; --raise:#2f2745;
+    --line:#332c48; --linelit:#463c63;
+    --accent:#e05fd8; --accent-2:#a679f6; --accent-soft:rgba(224,95,216,.14);
+    --on-accent:#170f1c;
+    --cream:#ece9f5; --muted:#a49bbd; --dim:#726a8c;
+    --ok:#34d399; --info:#6aa9fb; --bad:#fb7185; --violet:#a78bfa;
+    --shadow:0 8px 24px -8px rgba(0,0,0,.55);
+    --border:#332c48; --border-lit:#463c63; --green:#34d399; --blue:#6aa9fb; --red:#fb7185;
+  }
+  /* ── Tema claro ── */
+  :root[data-theme="light"]{
+    --bg:#faf7fe; --panel:#ffffff; --panel2:#f4eefc; --raise:#ece2fa;
+    --line:#e7ddf4; --linelit:#d3c4ec;
+    --accent:#c31fce; --accent-2:#8b3ff0; --accent-soft:rgba(195,31,206,.09);
+    --on-accent:#ffffff;
+    --cream:#211c33; --muted:#5c5473; --dim:#8b83a3;
+    --ok:#059669; --info:#2563eb; --bad:#e11d48; --violet:#7c3aed;
+    --shadow:0 10px 28px -12px rgba(80,40,120,.25);
+    --border:#e7ddf4; --border-lit:#d3c4ec; --green:#059669; --blue:#2563eb; --red:#e11d48;
   }
   *{box-sizing:border-box}
   html,body{margin:0;padding:0;background:var(--bg);color:var(--cream);
-    font-family:'JetBrains Mono',ui-monospace,monospace;-webkit-font-smoothing:antialiased}
+    font-family:'Sora',ui-sans-serif,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
   body{overflow-x:clip;max-width:100vw}
+  .font-mono, code, pre, kbd{font-family:'IBM Plex Mono',ui-monospace,monospace}
   a{color:var(--accent);text-decoration:none}
   a:hover{color:var(--accent-2)}
+  html{transition:background-color .2s ease}
   ::-webkit-scrollbar{width:10px;height:10px}
   ::-webkit-scrollbar-track{background:var(--bg)}
   ::-webkit-scrollbar-thumb{background:var(--linelit);border-radius:0}
@@ -153,22 +174,22 @@ const GLOBAL_STYLE = `
   @keyframes toastIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
   @keyframes toastOut{to{opacity:0;transform:translateY(8px);visibility:hidden}}
 
-  /* scanline overlay (applied to <body>) */
-  .scanlines::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:200;
-    background:repeating-linear-gradient(to bottom,rgba(0,0,0,0) 0,rgba(0,0,0,0) 2px,rgba(0,0,0,.12) 3px,rgba(0,0,0,0) 4px);
-    opacity:.5;mix-blend-mode:multiply}
+  /* (scanlines retirado en el rediseño — la clase queda inerte por compat) */
+  .scanlines::after{content:none}
 
   /* sidebar nav */
+  .navlink{border-radius:8px}
   .navlink:hover{background:var(--panel2);color:var(--cream)}
   .navlink:hover [data-lucide]{color:var(--accent)}
 
-  /* entrance + brutalist buttons */
+  /* entrada + botones (sombra suave, no brutalista) */
   .card{animation:rise .4s cubic-bezier(.16,1,.3,1) both}
-  .bigbtn{transition:transform .12s ease,box-shadow .12s ease}
-  .bigbtn:hover{transform:translate(-2px,-2px);box-shadow:6px 6px 0 var(--linelit)}
-  .bigbtn:active{transform:translate(0,0);box-shadow:2px 2px 0 var(--linelit)}
+  .bigbtn{transition:transform .12s ease,box-shadow .12s ease,filter .12s ease;border-radius:10px;box-shadow:var(--shadow)}
+  .bigbtn:hover{transform:translateY(-1px);filter:brightness(1.05);box-shadow:0 12px 26px -10px var(--accent-soft)}
+  .bigbtn:active{transform:translateY(0);filter:none}
+  .ghostbtn{border-radius:9px}
   .ghostbtn:hover{border-color:var(--accent);color:var(--cream);background:var(--accent-soft)}
-  .glow{text-shadow:0 0 22px var(--accent-soft),0 0 40px rgba(45,212,191,.1)}
+  .glow{text-shadow:0 0 24px var(--accent-soft)}
 
   /* list / table rows + interactive bits reused across views */
   .convrow:hover{background:var(--panel2)}
@@ -189,16 +210,16 @@ const GLOBAL_STYLE = `
 
   /* flow-canvas node (mockup ".node") + the existing views' ".node-card" */
   .node{transition:transform .14s ease,border-color .14s ease,box-shadow .14s ease;cursor:pointer}
-  .node:hover{transform:translateY(-2px);border-color:var(--accent);box-shadow:4px 4px 0 var(--linelit)}
+  .node:hover{transform:translateY(-2px);border-color:var(--accent);box-shadow:var(--shadow)}
   .node-card{transition:transform .15s ease,box-shadow .15s ease,border-color .15s ease}
-  .node-card:hover{transform:translateY(-2px);border-color:var(--accent);box-shadow:4px 4px 0 var(--linelit)}
+  .node-card:hover{transform:translateY(-2px);border-color:var(--accent);box-shadow:var(--shadow)}
 
   /* modal + toast (class names kept from prior layout for existing views) */
   .modal-backdrop{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;
     padding:1rem;background:rgba(4,8,12,.7);animation:fadeIn .15s ease-out}
-  .modal-card{background:var(--panel);border:1px solid var(--linelit);box-shadow:8px 8px 0 rgba(0,0,0,.4);
+  .modal-card{background:var(--panel);border:1px solid var(--linelit);border-radius:14px;box-shadow:0 24px 60px -12px rgba(0,0,0,.5);
     animation:popIn .18s cubic-bezier(.16,1,.3,1);transform-origin:center}
-  .toast{background:var(--panel);border:1px solid var(--linelit);color:var(--cream);box-shadow:4px 4px 0 var(--linelit);
+  .toast{background:var(--panel);border:1px solid var(--linelit);border-radius:10px;color:var(--cream);box-shadow:var(--shadow);
     animation:toastIn .25s cubic-bezier(.16,1,.3,1),toastOut .3s ease-in 2.4s forwards}
 
   /* app shell */
@@ -307,6 +328,25 @@ const GLOBAL_SCRIPT = `
     document.addEventListener("keydown", function(e){ if (e.key === "Escape") close(); });
   })();
 
+  // Toggle de tema claro/oscuro. El tema inicial ya lo fijó el script del <head>.
+  (function(){
+    var btn = document.getElementById("kooni-theme");
+    if (!btn) return;
+    function paint(){
+      var dark = document.documentElement.getAttribute("data-theme") !== "light";
+      var i = btn.querySelector("[data-lucide]");
+      if (i){ i.setAttribute("data-lucide", dark ? "moon-star" : "sun"); if (window.lucide) window.lucide.createIcons(); }
+      btn.title = dark ? "Cambiar a tema claro" : "Cambiar a tema oscuro";
+    }
+    paint();
+    btn.addEventListener("click", function(){
+      var next = document.documentElement.getAttribute("data-theme") === "light" ? "dark" : "light";
+      document.documentElement.setAttribute("data-theme", next);
+      try { localStorage.setItem("kooni-theme", next); } catch(e){}
+      paint();
+    });
+  })();
+
   // Acordeón del sidebar: secciones colapsables (Inbox).
   document.querySelectorAll("button[data-acc]").forEach(function(btn){
     btn.addEventListener("click", function(){
@@ -362,21 +402,29 @@ const K_MARK = `<svg width="18" height="18" viewBox="0 0 32 32" fill="none" aria
 // properties con override; nombre/logo van en la sidebar.
 interface Brand { name: string; logo: string; primary: string; primarySoft: string; accent2: string; bg: string; panel: string; }
 function resolveBrand(env?: Env): Brand {
+  // Sin BRAND_* → strings vacíos: el panel usa la identidad Kooni de GLOBAL_STYLE
+  // (morado/fucsia, claro + oscuro). Solo un revendedor con marca propia los llena.
   return {
     name: env?.BRAND_NAME || "Kooni",
     logo: env?.BRAND_LOGO_URL || "",
-    primary: env?.BRAND_PRIMARY || "#2dd4bf",
-    primarySoft: env?.BRAND_PRIMARY_SOFT || "rgba(45,212,191,.13)",
-    accent2: env?.BRAND_ACCENT2 || "#6ee7b7",
-    bg: env?.BRAND_BG || "#0d1218",
-    panel: env?.BRAND_PANEL || "#141b24",
+    primary: env?.BRAND_PRIMARY || "",
+    primarySoft: env?.BRAND_PRIMARY_SOFT || "",
+    accent2: env?.BRAND_ACCENT2 || "",
+    bg: env?.BRAND_BG || "",
+    panel: env?.BRAND_PANEL || "",
   };
 }
 function brandOverrides(b: Brand): string {
-  return `:root{--bg:${b.bg};--panel:${b.panel};--accent:${b.primary};--accent-2:${b.accent2};--accent-soft:${b.primarySoft}}`;
+  const v: string[] = [];
+  if (b.bg) v.push(`--bg:${b.bg}`);
+  if (b.panel) v.push(`--panel:${b.panel}`);
+  if (b.primary) v.push(`--accent:${b.primary}`);
+  if (b.accent2) v.push(`--accent-2:${b.accent2}`);
+  if (b.primarySoft) v.push(`--accent-soft:${b.primarySoft}`);
+  return v.length ? `:root,:root[data-theme]{${v.join(";")}}` : "";
 }
 
-function sidebar(activeTab: string, locked: (id: string) => boolean, niche: NichePack | null, tierLabel: string, brand: Brand = { name: "Kooni", logo: "", primary: "#2dd4bf", primarySoft: "rgba(45,212,191,.13)", accent2: "#6ee7b7", bg: "#0d1218", panel: "#141b24" }): string {
+function sidebar(activeTab: string, locked: (id: string) => boolean, niche: NichePack | null, tierLabel: string, brand: Brand = { name: "Kooni", logo: "", primary: "", primarySoft: "", accent2: "", bg: "", panel: "" }): string {
   const sections = NAV.map((sec) => {
     const hasActive = sec.items.some((i) => i.id === activeTab);
     const labelColor = hasActive ? "var(--accent)" : "var(--dim)";
@@ -407,11 +455,11 @@ function sidebar(activeTab: string, locked: (id: string) => boolean, niche: Nich
   return `<aside class="sb">
     <div class="sb-brand" style="padding:20px 18px 16px;border-bottom:1px solid var(--line)">
       <div style="display:flex;align-items:center;gap:10px">
-        <div style="width:34px;height:34px;flex:none;border:1.5px solid var(--accent);display:flex;align-items:center;justify-content:center;background:var(--accent-soft);box-shadow:3px 3px 0 var(--linelit)">
+        <div style="width:34px;height:34px;flex:none;border:1.5px solid var(--accent);display:flex;align-items:center;justify-content:center;background:var(--accent-soft);box-shadow:var(--shadow)">
           ${brand.logo ? `<img src="${brand.logo}" alt="" style="width:20px;height:20px;object-fit:contain">` : K_MARK}
         </div>
         <div style="line-height:1.05">
-          <div style="font-family:'Space Grotesk';font-weight:700;font-size:15px;letter-spacing:-.02em">${brand.name}</div>
+          <div style="font-family:'Sora';font-weight:700;font-size:15px;letter-spacing:-.02em">${brand.name}</div>
           <div style="font-size:9.5px;letter-spacing:.22em;color:var(--dim);text-transform:uppercase">Panel · ${tierLabel}</div>
         </div>
       </div>
@@ -462,17 +510,21 @@ export async function layout(opts: { title: string; activeTab: string; body: str
     ${sidebar(opts.activeTab, lockedSync, niche, tierLabel, resolveBrand(opts.env))}
     <div class="nav-backdrop" data-nav-close></div>
     <div style="display:flex;flex-direction:column;min-width:0">
-      <header style="position:sticky;top:0;z-index:30;background:rgba(13,18,24,.9);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);padding:14px 26px;display:flex;align-items:center;gap:14px">
+      <header style="position:sticky;top:0;z-index:30;background:var(--panel);border-bottom:1px solid var(--line);padding:14px 26px;display:flex;align-items:center;gap:14px">
         <button type="button" class="hburger" data-nav-open aria-label="Abrir menú">
           <i data-lucide="menu" width="20" height="20"></i>
         </button>
         <div style="min-width:0">
           <div class="crumb" style="font-size:10px;letter-spacing:.22em;color:var(--dim);text-transform:uppercase">${section.label} / ${item.label}</div>
-          <h1 style="font-family:'Space Grotesk';font-weight:700;font-size:22px;margin:2px 0 0;letter-spacing:-.02em">${item.label}</h1>
+          <h1 style="font-family:'Sora';font-weight:700;font-size:22px;margin:2px 0 0;letter-spacing:-.02em">${item.label}</h1>
         </div>
         <div id="proj-switcher" class="hide-mobile" style="margin-left:auto"></div>
+        <button type="button" id="kooni-theme" title="Cambiar tema claro/oscuro" aria-label="Cambiar tema"
+          style="flex:none;width:36px;height:36px;background:var(--panel2);border:1px solid var(--line);color:var(--muted);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;border-radius:8px">
+          <i data-lucide="moon-star" width="16" height="16"></i>
+        </button>
         <button type="button" id="kooni-push" hidden title="Avisos en este dispositivo"
-          style="flex:none;width:36px;height:36px;background:var(--panel2);border:1px solid var(--line);color:var(--muted);cursor:pointer;display:inline-flex;align-items:center;justify-content:center">
+          style="flex:none;width:36px;height:36px;background:var(--panel2);border:1px solid var(--line);color:var(--muted);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;border-radius:8px">
           <i data-lucide="bell" width="16" height="16"></i>
         </button>
         <div class="live-pill">
@@ -502,7 +554,7 @@ export async function layout(opts: { title: string; activeTab: string; body: str
     // El parser de HTML las decodifica antes de que corran el onchange y el CSS.
     el.innerHTML = '<select onchange="if(this.value.indexOf(&#39;http&#39;)===0)window.location=this.value" ' +
       'style="background:rgba(20,16,9,.9);color:var(--fg,#e8e0cf);border:1px solid var(--line);border-radius:8px;' +
-      'padding:6px 10px;font-family:&#39;JetBrains Mono&#39;,monospace;font-size:11px;letter-spacing:.04em;cursor:pointer" ' +
+      'padding:6px 10px;font-family:&#39;IBM Plex Mono&#39;,monospace;font-size:11px;letter-spacing:.04em;cursor:pointer" ' +
       'title="Cambiar de proyecto">' + opts + '</select>';
   }).catch(function(){});
   </script>
@@ -526,7 +578,7 @@ export async function renderUpgrade(env: Env, feature?: string): Promise<string>
     .map(
       ([icon, title, desc]) => `<div style="display:flex;gap:12px;padding:14px;border:1px solid var(--line);background:var(--panel)">
         <i data-lucide="${icon}" width="20" height="20" style="color:var(--accent);flex:none;margin-top:2px"></i>
-        <div><div style="font-family:'Space Grotesk';font-weight:600;font-size:14px;margin-bottom:3px">${title}</div>
+        <div><div style="font-family:'Sora';font-weight:600;font-size:14px;margin-bottom:3px">${title}</div>
         <div style="font-size:12.5px;color:var(--muted);line-height:1.5">${desc}</div></div>
       </div>`,
     )
@@ -534,11 +586,11 @@ export async function renderUpgrade(env: Env, feature?: string): Promise<string>
 
   const body = `
     <div class="card" style="max-width:720px">
-      <div style="border:1px solid var(--linelit);background:var(--panel);box-shadow:6px 6px 0 var(--linelit);padding:28px">
+      <div style="border:1px solid var(--linelit);background:var(--panel);box-shadow:var(--shadow);padding:28px">
         <div style="display:inline-flex;align-items:center;gap:8px;border:1px solid var(--accent);color:var(--accent2);font-size:10px;letter-spacing:.16em;padding:4px 10px;text-transform:uppercase">
           <i data-lucide="lock" width="13" height="13"></i> Función Pro
         </div>
-        <h2 style="font-family:'Space Grotesk';font-weight:700;font-size:24px;letter-spacing:-.02em;margin:14px 0 6px">
+        <h2 style="font-family:'Sora';font-weight:700;font-size:24px;letter-spacing:-.02em;margin:14px 0 6px">
           ${feature ? `“${feature}” es parte de Pro` : "Desbloquea el panel Pro"}
         </h2>
         <p style="font-size:13.5px;color:var(--muted);line-height:1.6;margin:0 0 20px;max-width:560px">
@@ -593,27 +645,27 @@ export function loginPage(opts: { error?: string; env?: Env } = {}): string {
     <div class="login-brand">
       <div style="position:relative;display:flex;flex-direction:column;gap:18px;max-width:380px">
         <div style="display:flex;align-items:center;gap:12px">
-          <div style="width:44px;height:44px;flex:none;border:1.5px solid var(--accent);display:flex;align-items:center;justify-content:center;background:var(--accent-soft);box-shadow:4px 4px 0 var(--linelit)">
+          <div style="width:44px;height:44px;flex:none;border:1.5px solid var(--accent);display:flex;align-items:center;justify-content:center;background:var(--accent-soft);box-shadow:var(--shadow)">
             ${brand.logo ? `<img src="${brand.logo}" alt="" style="width:26px;height:26px;object-fit:contain">` : K_MARK}
           </div>
-          <div style="font-family:'Space Grotesk';font-weight:700;font-size:24px;letter-spacing:-.02em">${brand.name}</div>
+          <div style="font-family:'Sora';font-weight:700;font-size:24px;letter-spacing:-.02em">${brand.name}</div>
         </div>
         <p style="font-size:14px;color:var(--muted);line-height:1.6;margin:0">
           Agentes de IA que atienden tu negocio 24/7 — WhatsApp, Instagram, Messenger y Telegram, desde tu propia infraestructura.
         </p>
         ${businessName ? `<div style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)">Panel de <span style="color:var(--accent-2)">${escLogin(businessName)}</span></div>` : ""}
-        <div style="font-size:10.5px;font-family:'JetBrains Mono';color:var(--dim);letter-spacing:.04em">v${escLogin(BOT_VERSION)}</div>
+        <div style="font-size:10.5px;font-family:'IBM Plex Mono';color:var(--dim);letter-spacing:.04em">v${escLogin(BOT_VERSION)}</div>
       </div>
     </div>
     <div class="login-form-side">
-      <form method="POST" action="/admin/login" style="background:var(--panel);border:1px solid var(--linelit);box-shadow:8px 8px 0 var(--linelit);padding:32px;max-width:360px;width:100%">
-        <h1 style="font-family:'Space Grotesk';font-weight:700;font-size:18px;margin:0 0 4px;letter-spacing:-.02em">Ingresar</h1>
+      <form method="POST" action="/admin/login" style="background:var(--panel);border:1px solid var(--linelit);box-shadow:var(--shadow);padding:32px;max-width:360px;width:100%">
+        <h1 style="font-family:'Sora';font-weight:700;font-size:18px;margin:0 0 4px;letter-spacing:-.02em">Ingresar</h1>
         <p style="font-size:12px;color:var(--dim);margin:0 0 18px">Usuario: <span style="color:var(--muted)">admin</span></p>
         ${opts.error ? `<p style="color:var(--bad);font-size:12px;margin:0 0 12px">${escLogin(opts.error)}</p>` : ""}
         <input name="password" type="password" required autofocus placeholder="Contraseña"
           style="width:100%;background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:10px 12px;font-size:13px;outline:none;margin-bottom:14px">
         <button class="bigbtn" type="submit"
-          style="width:100%;background:var(--accent);border:1px solid var(--accent);color:#1a1206;box-shadow:4px 4px 0 var(--linelit);padding:11px;font-family:'Space Grotesk';font-weight:700;font-size:13px;cursor:pointer">
+          style="width:100%;background:var(--accent);border:1px solid var(--accent);color:var(--on-accent);box-shadow:var(--shadow);padding:11px;font-family:'Sora';font-weight:700;font-size:13px;cursor:pointer">
           Entrar
         </button>
       </form>

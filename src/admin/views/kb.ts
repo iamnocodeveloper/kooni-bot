@@ -80,7 +80,7 @@ export async function renderKbList(
         <p class="text-muted text-[12.5px]" style="margin-top:2px">Lo que tu bot sabe del negocio. Cada documento se indexa al guardar y el bot lo usa de inmediato.</p>
       </div>
       <a href="/admin/kb/new" class="bigbtn font-display font-bold text-[12.5px] cursor-pointer"
-         style="margin-left:auto;background:var(--accent);border:1px solid var(--accent);color:#1a1206;box-shadow:3px 3px 0 var(--linelit);padding:9px 16px;display:flex;align-items:center;gap:8px;white-space:nowrap">
+         style="margin-left:auto;background:var(--accent);border:1px solid var(--accent);color:var(--on-accent);box-shadow:3px 3px 0 var(--linelit);padding:9px 16px;display:flex;align-items:center;gap:8px;white-space:nowrap">
         <i data-lucide="plus" width="14" height="14"></i> Nuevo documento
       </a>
     </div>
@@ -146,7 +146,7 @@ export function renderKbSearchResults(
       const c = r.score >= 0.7 ? "var(--ok)" : r.score >= 0.55 ? "var(--accent-2)" : "var(--dim)";
       return `<div style="border-top:1px solid var(--line);padding:9px 0">
         <div style="display:flex;gap:10px;align-items:baseline">
-          <span style="font-family:'JetBrains Mono';font-size:12px;font-weight:700;color:${c};flex:none">${r.score.toFixed(2)}</span>
+          <span style="font-family:'IBM Plex Mono';font-size:12px;font-weight:700;color:${c};flex:none">${r.score.toFixed(2)}</span>
           <span class="text-cream text-[12px] font-semibold">${esc(r.title || "(sin título)")}</span>
         </div>
         <div class="text-dim text-[11px]" style="margin-top:3px;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${esc(r.content.replace(/\s+/g, " ").slice(0, 180))}</div>
@@ -187,7 +187,7 @@ export async function renderKbEditor(doc: KbDoc | null, env: Env): Promise<strin
 
       <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px">
         <button type="submit" class="bigbtn font-display font-bold text-[12.5px] cursor-pointer"
-                style="background:var(--accent);border:1px solid var(--accent);color:#1a1206;box-shadow:4px 4px 0 var(--linelit);padding:11px 20px">Guardar e indexar</button>
+                style="background:var(--accent);border:1px solid var(--accent);color:var(--on-accent);box-shadow:4px 4px 0 var(--linelit);padding:11px 20px">Guardar e indexar</button>
         ${isNew ? "" : `
         <details style="margin-left:auto">
           <summary class="text-bad text-[12px]" style="cursor:pointer;list-style:none">Eliminar documento…</summary>

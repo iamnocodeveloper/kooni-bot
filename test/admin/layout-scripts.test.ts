@@ -54,4 +54,16 @@ describe("los scripts en línea del panel", () => {
     expect(html).toContain("data-nav-close");
     expect(html).toContain('classList.add("nav-open")');
   });
+
+  it("rediseño 2026: tema claro/oscuro, fuente Sora, paleta morado/fucsia, sin restos de Forja", () => {
+    expect(html).toContain("family=Sora");
+    expect(html).toContain('id="kooni-theme"');
+    expect(html).toContain("localStorage.getItem('kooni-theme')");
+    expect(html).toContain('data-theme="light"'); // el bloque de tema claro existe
+    expect(html).toContain("--accent:#e05fd8"); // fucsia (oscuro)
+    expect(html).not.toContain("Space Grotesk");
+    expect(html).not.toContain("#1a1206");
+    expect(html).not.toMatch(/font-family:"Sora"/); // comillas dobles rotas en un style=""
+    expect(html).not.toContain("{{");
+  });
 });
