@@ -21,6 +21,7 @@ import { createModel } from "../llm/provider";
 import { loadLlmOverrides } from "../settings-loader";
 import type { Env } from "../env";
 import { adminAuth, hasValidSessionCookie, verifyDashboardPassword, setSessionCookie, clearSessionCookie } from "./auth";
+import type { LoginAttemptsRepo } from "../db/loginAttempts";
 import { layout, renderUpgrade, loginPage } from "./views/layout";
 import { isProUnlocked } from "../config";
 import { renderOverview } from "./views/overview";
@@ -105,12 +106,41 @@ adminApp.get("/login", (c) => {
 adminApp.post("/login", async (c) => {
   const form = await c.req.formData().catch(() => null);
   const password = String(form?.get("password") ?? "");
+
+  // Rate-limit por IP (S5): tras varios fallos, se rechaza sin comprobar la
+  // contraseña. Fail-open: si D1 falla, se deja pasar.
+  const ip = c.req.header("CF-Connecting-IP") ?? c.req.header("X-Forwarded-For")?.split(",")[0]?.trim();
+  let attempts: LoginAttemptsRepo | null = null;
+  let ipHash = "";
+  if (ip) {
+    try {
+      const { LoginAttemptsRepo, hashIp } = await import("../db/loginAttempts");
+      attempts = new LoginAttemptsRepo(new Db(c.env.DB));
+      ipHash = hashIp(ip);
+      const gate = await attempts.check(ipHash);
+      if (!gate.allowed) {
+        const mins = Math.max(1, Math.ceil(gate.retryAfterSeconds / 60));
+        return c.redirect(
+          "/admin/login?error=" +
+            encodeURIComponent(`Demasiados intentos fallidos. Espera ${mins} minuto(s) y prueba de nuevo.`),
+          302,
+        );
+      }
+    } catch (e) {
+      console.warn("[login] rate-limit check falló — fail-open:", e);
+      attempts = null;
+    }
+  }
+
   if (!verifyDashboardPassword(c.env, password)) {
+    if (attempts) await attempts.recordFailure(ipHash).catch(() => {});
     return c.redirect(
       "/admin/login?error=" + encodeURIComponent("Contraseña incorrecta. Prueba de nuevo."),
       302,
     );
   }
+
+  if (attempts) await attempts.clear(ipHash).catch(() => {});
   setSessionCookie(c, c.env);
   return c.redirect("/admin/overview", 302);
 });

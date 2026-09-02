@@ -248,3 +248,99 @@ describe("adminApp — guard con sesión por cookie", () => {
     expect(res.headers.get("Set-Cookie") ?? "").toContain(`${SESSION_COOKIE}=`);
   });
 });
+
+// ── O5: rate-limit del login por IP (hallazgo S5) ───────────────────────────
+
+/** D1 en memoria mínimo para la tabla login_attempts. */
+function makeLoginDbEnv(): Env {
+  const rows: { ip_hash: string; window_start: number; count: number }[] = [];
+  const d1 = {
+    prepare(sql: string) {
+      let b: unknown[] = [];
+      const s: any = {
+        bind(...a: unknown[]) { b = a; return s; },
+        async first() {
+          if (/SELECT count FROM login_attempts/.test(sql)) {
+            const r = rows.find((x) => x.ip_hash === b[0] && x.window_start === b[1]);
+            return r ? { count: r.count } : null;
+          }
+          return null;
+        },
+        async run() {
+          if (/UPDATE login_attempts SET count = count \+ 1/.test(sql)) {
+            const r = rows.find((x) => x.ip_hash === b[0] && x.window_start === b[1]);
+            if (r) { r.count += 1; return { meta: { changes: 1 } }; }
+            return { meta: { changes: 0 } };
+          }
+          if (/INSERT INTO login_attempts/.test(sql)) {
+            const r = rows.find((x) => x.ip_hash === b[0] && x.window_start === b[1]);
+            if (r) r.count += 1; else rows.push({ ip_hash: b[0] as string, window_start: b[1] as number, count: 1 });
+            return { meta: { changes: 1 } };
+          }
+          if (/DELETE FROM login_attempts WHERE ip_hash = \?/.test(sql)) {
+            for (let i = rows.length - 1; i >= 0; i--) if (rows[i].ip_hash === b[0]) rows.splice(i, 1);
+            return { meta: { changes: 1 } };
+          }
+          return { meta: { changes: 0 } };
+        },
+      };
+      return s;
+    },
+  };
+  return { DASHBOARD_PASSWORD: PASSWORD, DB: d1 } as unknown as Env;
+}
+
+function loginPost(body: string, ip = "203.0.113.9", e?: Env) {
+  return adminApp.fetch(
+    req("/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded", "CF-Connecting-IP": ip },
+      body,
+    }),
+    e ?? makeLoginDbEnv(),
+  );
+}
+
+describe("rate-limit del login (O5 / S5)", () => {
+  it("bloquea tras 8 intentos fallidos desde la misma IP", async () => {
+    const e = makeLoginDbEnv();
+    for (let i = 0; i < 8; i++) {
+      const r = await loginPost("password=mala", "203.0.113.9", e);
+      expect(r.headers.get("Location")).toContain("Contra");
+    }
+    const blocked = await loginPost("password=mala", "203.0.113.9", e);
+    expect(blocked.status).toBe(302);
+    expect(decodeURIComponent(blocked.headers.get("Location") ?? "")).toContain("Demasiados intentos");
+  });
+
+  it("el bloqueo NO afecta a otra IP", async () => {
+    const e = makeLoginDbEnv();
+    for (let i = 0; i < 9; i++) await loginPost("password=mala", "203.0.113.9", e);
+    const other = await loginPost("password=mala", "198.51.100.5", e);
+    expect(decodeURIComponent(other.headers.get("Location") ?? "")).toContain("Contraseña incorrecta");
+  });
+
+  it("un login CORRECTO limpia el contador de esa IP", async () => {
+    const e = makeLoginDbEnv();
+    for (let i = 0; i < 7; i++) await loginPost("password=mala", "203.0.113.9", e);
+    const ok = await loginPost(`password=${PASSWORD}`, "203.0.113.9", e);
+    expect(ok.headers.get("Location")).toBe("/admin/overview");
+    // Tras el éxito, el contador quedó en cero → vuelve a poder fallar 8 veces.
+    for (let i = 0; i < 8; i++) {
+      const r = await loginPost("password=mala", "203.0.113.9", e);
+      expect(decodeURIComponent(r.headers.get("Location") ?? "")).toContain("Contraseña incorrecta");
+    }
+  });
+
+  it("sin CF-Connecting-IP (y sin DB) el login sigue funcionando — fail-open", async () => {
+    const res = await adminApp.fetch(
+      req("/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: `password=${PASSWORD}`,
+      }),
+      env,
+    );
+    expect(res.headers.get("Location")).toBe("/admin/overview");
+  });
+});

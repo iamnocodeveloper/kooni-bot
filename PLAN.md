@@ -113,7 +113,7 @@ otra pública. La pública, en cambio, es segura de publicar — ese es el punto
 | S2 | **`LICENSE_MASTER_KEY` embebida en el CLI público** (kooni-bot en npm). Quien tenga el paquete puede falsificar códigos KOONI-PRO. | 🔴 Crítico | ✅ **Corregido en el worker** (tarea #5 del roadmap, Ed25519 v2 — ver detalle ahí). ⏳ Falta: migrar `generar-licencia` (InsForge) a firmar con la privada y reemplazar `LICENSE_MASTER_KEY` por `LICENSE_PRIVATE_KEY` ahí; después, **rotar**: la vieja `LICENSE_MASTER_KEY` ya circulaba en el paquete npm y debe darse por comprometida (cualquier código v1 firmado con ella ya no es válido de todas formas, porque `verifyLicense` v2 los rechaza). |
 | S3 | **CORS `*`** en funciones con auth (auth-login, generar-licencia, listar-licencias, registrar-pago, crear-admin, estado-admin). | 🟡 Medio | ✅ Restringido a `https://f5gacw7g.insforge.site`. |
 | S4 | `registrar-instalacion` / `registrar-uso` públicos (spoofeables; el check-in envía email/PII). | 🟡 Medio | ✅ **Hecho (CLI 0.2.17 + funciones v2)**: token compartido `X-Kooni-Token` (secret `REGISTER_TOKEN`, fail-closed), rate-limit por IP (reusa `auth_attempts`), validación de formato (email/uid/worker_name) y **rechazo de uids no registrados** en `registrar-uso` + límite de payload. `updated_at` se refresca en el upsert. |
-| S5 | Sin rate-limit en `auth-login` (fuerza bruta sobre el admin). | 🟡 Medio | ⏳ Pendiente: limitar intentos por IP (intervalo corto). |
+| S5 | Sin rate-limit en `auth-login` (fuerza bruta sobre el admin). | 🟡 Medio | ✅ **Hecho (v1.13.4, O5):** `POST /admin/login` limita a 8 fallos por IP en ventanas de 15 min (tabla D1 `login_attempts`, ip_hash SHA-256, fail-open). El login del panel del bot. *(El `auth-login` de InsForge del panel de licencias es otra superficie — S4 ya le puso token + rate-limit por IP.)* |
 | S6 | SQL de activación de licencia en el CLI (escape manual de comillas). | 🟢 Bajo | ✅ Código KOONI-PRO solo contiene base64url+hex (sin comillas); aun así, migrar a valores parametrizados cuando el CLI lo soporte. |
 
 **Buenas prácticas ya verificadas:** compare de tokens en tiempo constante (`src/http-auth.ts`), `.gitignore` cubre `.dev.vars`/`.env`/`.wrangler`, API keys vía `wrangler secret put` por stdin (nunca en disco ni en logs), sin secrets en logs del bot, RLS en InsForge (solo admin lee clientes/licencias/pagos), fail-closed en `/api/*` con `CONTROL_PLANE_TOKEN`.
@@ -514,7 +514,7 @@ que tiene el sistema hoy, porque decide todas las demás.
 
 ---
 
-## O. Pantalla de login del panel — de modal del navegador a página propia ✅ (O1-O4, O6-O8 hechos; O5 rate-limit pendiente)
+## O. Pantalla de login del panel — de modal del navegador a página propia ✅ (COMPLETO, O1-O8)
 
 > **Estado:** implementado y verificado. `GET/POST /admin/login` +
 > `GET /admin/logout` (rutas públicas, antes del guard), sesión por cookie
@@ -527,8 +527,12 @@ que tiene el sistema hoy, porque decide todas las demás.
 > y "Cerrar sesión" no hacía nada (redirigía de vuelta al panel). Las peticiones
 > no-navegación (htmx, API, scripts, tests) siguen aceptando cookie **o** Basic.
 >
-> Tests: `test/admin/login-page.test.ts`. **Falta O5** (rate-limit del login por
-> IP en D1 — cierra también S5).
+> **v1.13.4 — O5:** rate-limit del login. `POST /admin/login` cuenta fallos por
+> IP (`login_attempts` en D1, ip_hash SHA-256, ventana 15 min, tope 8). Al pasar
+> el tope se rechaza sin comprobar la contraseña; un login correcto borra el
+> contador. Fail-open si D1 falla. Cierra **S5**.
+>
+> Tests: `test/admin/login-page.test.ts`, `test/db/loginAttempts.test.ts`.
 
 > Pedido (01-sep): reemplazar el diálogo nativo de Basic Auth por una página de
 > login propia, dos columnas — izquierda: marca Kooni + subtítulo "agentes de
@@ -565,7 +569,7 @@ Así la superficie de riesgo se limita a lo nuevo; nada que ya funciona se toca.
 | # | Tarea | Archivo(s) | Estado |
 |---|---|---|---|
 | O1–O4, O6–O8 | Implementados y verificados (`pnpm typecheck` limpio, 51/51 tests de auth/login/routes en verde). Cookie `kooni_admin_session` firmada HMAC-SHA256 con `DASHBOARD_PASSWORD`, 30 días. Logout limpia la cookie (`deleteCookie`) y redirige. `loginPage()` reescrita a dos columnas con `resolveBrand` + `BOT_VERSION`. Comentarios viejos de "Basic Auth / no /login" corregidos en `routes.ts` e `index.ts`. | — | ✅ |
-| O5 | **Rate-limit del login** — sigue pendiente (necesita migración D1 `login_attempts`). Cierra también S5. | `src/admin/auth.ts` + migración D1 | ⏳ |
+| O5 | **Rate-limit del login** — ✅ hecho (v1.13.4). Tabla D1 `login_attempts` (en `schema.sql`), `src/db/loginAttempts.ts`, gate en `POST /admin/login`. Cierra S5. | `src/db/loginAttempts.ts`, `src/db/schema.sql`, `src/admin/routes.ts` | ✅ |
 | O1 | **Endpoint de sesión**: `POST /admin/login` — valida el password contra `DASHBOARD_PASSWORD` (reusar `timingSafeEqual` de `auth.ts`) y, si es correcto, pone una cookie `HttpOnly; Secure; SameSite=Lax`. Valor de la cookie: HMAC/hash del password + expiración firmada (no un session store en D1) — así rotar `DASHBOARD_PASSWORD` invalida sesiones viejas solas. | `src/admin/auth.ts` (nueva función) | Sin tabla nueva en D1. |
 | O2 | **Middleware actualizado**: `adminAuth` acepta sesión por cookie **o** Basic Auth (ver arriba). Si ninguna vale: navegación de navegador (`Accept: text/html`) → `302` a `/admin/login`; petición de API/htmx → `401` (igual que hoy, para no romper los fetch internos del panel). | `src/admin/auth.ts`, `src/admin/routes.ts` | El gate en `routes.ts:93` cambia de "siempre Basic" a "cookie u Basic". |
 | O3 | **Página `GET /admin/login`** (pública, sin auth): dos columnas. Izquierda: `resolveBrand(env)` (para que blanco-marca herede su propio nombre/logo/color — nunca hardcodear "Kooni"), subtítulo "Agentes de IA" (o el tagline de marca), `BOT_VERSION` (`src/version.ts`, ya existe). Derecha: `<form method="POST" action="/admin/login">` con un solo campo password (usuario fijo "admin", igual que hoy) + botón `bigbtn`. Reusa `HEAD_ASSETS`/`GLOBAL_STYLE` de `layout.ts` tal cual — mismos tokens, misma tipografía, mismas animaciones. Responsive: en mobile colapsa a una columna (mismo patrón `@media (max-width:767px)` que ya usa el sidebar). | `src/admin/views/layout.ts` (reemplaza `loginPage()`) | Mostrar error si el password es incorrecto (mismo `?error=` que ya soporta la función vieja). |

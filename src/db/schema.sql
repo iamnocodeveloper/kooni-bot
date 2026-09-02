@@ -337,6 +337,17 @@ CREATE TABLE IF NOT EXISTS dm_rate_limits (
   PRIMARY KEY (account_id, window_start)
 );
 
+-- Rate-limit del login del panel (§O / hallazgo S5): intentos FALLIDOS de
+-- POST /admin/login por IP en ventanas de 15 min. Al pasar el tope se rechaza
+-- sin comprobar la contraseña. Un login correcto borra la fila de esa IP.
+-- ip_hash: SHA-256 de la IP (nunca se guarda la IP en claro).
+CREATE TABLE IF NOT EXISTS login_attempts (
+  ip_hash TEXT NOT NULL,
+  window_start INTEGER NOT NULL,
+  count INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (ip_hash, window_start)
+);
+
 -- Comentarios recibidos (igual que la pestaña "Comentarios" de Zernio).
 -- Se guarda CADA comment.received: texto, autor, post, y qué hizo la
 -- automatización (DM enviado, respuesta pública enviada).
