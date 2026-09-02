@@ -1,12 +1,14 @@
 import type { Env } from "../env";
 import type { NichePack } from "./types";
 import { generico } from "./generico";
+import { agenciaIa } from "./agencia-ia";
 
 export type { NichePack, NicheColumn } from "./types";
 
 // Registro de packs. Agregar un nicho = importar su archivo y sumarlo aquí.
 const PACKS: Record<string, NichePack> = {
   generico,
+  "agencia-ia": agenciaIa,
 };
 
 /** Resuelve el pack activo desde BOT_NICHE. Nicho ausente/desconocido → genérico. */

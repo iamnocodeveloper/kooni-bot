@@ -20,6 +20,15 @@ describe("getNiche", () => {
   it("normaliza mayúsculas/espacios al resolver el pack", () => {
     expect(getNiche(envWith("  GENERICO ")).id).toBe("generico");
   });
+
+  it("agencia-ia: resuelve el pack y trae playbook + etiquetas propias", () => {
+    const n = getNiche(envWith("agencia-ia"));
+    expect(n.id).toBe("agencia-ia");
+    expect(n.navLabel).toBe("Prospectos");
+    expect(n.playbook).toContain("playbook_de_venta");
+    expect(n.defaultTone).not.toBe("");
+    expect(n.columns.map((c) => c.key)).toEqual(["servicio", "plan", "canal"]);
+  });
 });
 
 describe("dashboard (nav genérico)", () => {
@@ -37,5 +46,13 @@ describe("cableado del playbook al prompt", () => {
     const env = envWith(undefined);
     const prompt = systemPromptFromEnv(env, ["searchKb"], "ctx", getNiche(env).playbook || undefined);
     expect(prompt).not.toContain("<diagnostic_playbooks>");
+  });
+
+  it("agencia-ia inyecta su playbook de venta en el prompt", () => {
+    const env = envWith("agencia-ia");
+    const prompt = systemPromptFromEnv(env, ["searchKb", "captureLead"], "ctx", getNiche(env).playbook || undefined);
+    expect(prompt).toContain("<playbook_de_venta>");
+    expect(prompt).toContain("captureLead");
+    expect(prompt).toContain("WhatsApp");
   });
 });
