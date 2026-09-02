@@ -78,6 +78,9 @@ KOONI_REGISTER_TOKEN = ""
 #                                 (sin esta var se usa la pública embebida por defecto en src/license.ts;
 #                                 la privada NUNCA va en el worker — vive solo en el panel de licencias)
 #   OWNER_TELEGRAM_CHAT_ID      — avisos de handoff al dueño
+#   DECODO_AUTH                 — módulo "Sincronizar sitio web" (una instalación):
+#                                 credencial de Decodo ("user:pass" o el base64).
+#                                 Sin esto + módulo web_sync, el bot no scrapea nada.
 
 [triggers]
 crons = ["0 3 * * *"]  # purga nocturna y trabajos diarios

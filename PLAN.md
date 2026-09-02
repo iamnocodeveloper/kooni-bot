@@ -107,7 +107,7 @@ otra pública. La pública, en cambio, es segura de publicar — ese es el punto
 8. **PWA del panel — Fases 1-3** (`§ Q`). Fase 0 (instalable + offline básico) ✅ en v1.14.0. Pendiente: **Fase 1 = avisos push con VAPID** (nuevo lead / ticket / alerta del Vigilante; la más valiosa), Fase 2 = lectura offline de datos (endpoints JSON + cache del SW), Fase 3 = bandeja móvil (inbox pensado para celular, reusa `POST /admin/conversations/:id/reply`).
 9. **Atribución y rendimiento de campañas** (`§ R`) — ⏸️ **en espera**. Se retoma cuando la instalación esté en **Meta oficial** o **ManyChat** (Zernio no entrega el `referral` del anuncio). Orden: panel solo-lectura de comentario→DM (Fase 1, ya sirve) → stamp de origen en la conversación (Fase 2) → `referral` de anuncios (Fase 3, Meta/ManyChat).
 10. **Panel — filtros de conversaciones, responsive y PWA install** (`§ S`). ✅ S1 (filtros canal/fecha/texto) v1.14.5 · S2 Fase 1 (shell+nav+bandeja) v1.14.3 · S2 Fase 2-3 (vistas, modales, iOS) v1.14.5. Queda: probar en dispositivos reales; formularios angostos → se cierran con § T.
-11. **Scraping web → KB** (`§ L`) — ⏳ a la espera de que el cliente (autos) entregue API de Decodo + URLs + preguntas + permiso. Aislado a esa instalación vía `module_unlocks` + secrets.
+11. **Scraping web → KB** (`§ L`) — ✅ código en v1.15.0. Falta activar en cardealer: actualizar a ≥v1.15.0, `secret put DECODO_AUTH`, `module_unlocks += web_sync`, cargar URLs en Extras.
 12. **Rediseño visual del panel** (`§ T`) — identidad Kooni propia, diferenciar de Forja. Bloque dedicado, no urgente. Legalmente MIT ya lo permite (no es obligatorio).
 
 ## Seguridad — auditoría 2026-08-31 (arreglos + pendientes)
@@ -326,7 +326,34 @@ paso posterior (`pair`) donde el usuario la pega explícitamente.
 
 ---
 
-## L. Scraping web con Decodo → KB del agente (PEDIDO DE UN CLIENTE ÚNICO) ⏳
+## L. Scraping web con Decodo → KB del agente — ✅ IMPLEMENTADO (v1.15.0), pendiente activar en cardealer
+
+> **Estado 2026-09-02:** el módulo está en el código (inerte en todas las
+> instalaciones). Falta: activarlo en `cardealer-daniel2` y cargar sus URLs.
+>
+> **Activar en cardealer (cuando esté actualizado a ≥ v1.15.0):**
+> 1. `cd C:\Users\joeld\cardealerdaniel`
+> 2. `npx wrangler secret put DECODO_AUTH` → pegar `U00004345000:PW_…` (user:pass de Decodo)
+> 3. En su D1: `module_unlocks` += `"web_sync"` (override del dueño) —
+>    `wrangler d1 execute <db> --remote --command "..."` o el admin de pagos.
+> 4. En su panel → Extras → "Sincronizar sitio web": encender + pegar las URLs
+>    (una por línea), p. ej.
+>    `https://www.greenwaykiawestpalmbeach.com/llm/inventory/?limit=100&type=used`
+>    y `...&type=new`.
+> 5. Panel → Conocimiento → "Sincronizar sitio ahora" para la primera carga
+>    (después corre solo cada noche en el tick de las 3am).
+>
+> **Cómo quedó** (más simple que el plan original): el endpoint `/llm/inventory/`
+> del sitio ya es texto pensado para IA, y Decodo con `markdown:true` lo
+> devuelve limpio → **no hace falta parsear HTML**. Cada URL → un documento
+> `web:<slug>` en `kb_docs`, visible y borrable desde `/admin/kb`. Hash para no
+> re-embeber sin cambios. Corre en el tick nocturno (`src/index.ts`). Archivos:
+> `src/integrations/decodo.ts`, `src/kb/webSync.ts`, `src/modules.ts` (módulo
+> `web_sync`), `src/features.ts` (card en Extras), `src/db/settings.ts`,
+> `src/env.ts` (`DECODO_AUTH`), ruta `POST /admin/kb/web-sync`. Tests:
+> `test/integrations/decodo.test.ts`, `test/kb/webSync.test.ts`.
+
+### Plan original (referencia — se siguió con simplificaciones) ⏳
 
 > Objetivo: el bot de **un** cliente responde con información sacada de un sitio
 > web, actualizada sola. **No es para todas las instalaciones** — el código viaja

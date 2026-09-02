@@ -139,6 +139,12 @@ export const PAID_MODULES: PaidModule[] = [
     descripcion: "El bot manda fotos, videos y audios de verdad desde tu biblioteca de recursos: productos, menú, antes/después, notas de voz tuyas — en el momento justo.",
     tipo: "membresia",
   },
+  {
+    id: "web_sync",
+    nombre: "Sincronizar sitio web",
+    descripcion: "El bot lee páginas de tu sitio (catálogo, inventario, precios) y responde con esa información, actualizada sola cada noche. Requiere una cuenta de scraping (Decodo).",
+    tipo: "membresia",
+  },
 ];
 
 /** Setting (D1) con el override del dueño de la plataforma: JSON array de ids. */

@@ -249,6 +249,7 @@ adminApp.get("/kb", async (c) =>
       saved: c.req.query("saved") === "1",
       deleted: c.req.query("deleted") === "1",
       reindexed: c.req.query("reindexed") ?? undefined,
+      websync: c.req.query("websync") ?? undefined,
     }),
   ),
 );
@@ -298,6 +299,16 @@ adminApp.post("/kb/:id/delete", async (c) => {
 adminApp.post("/kb/reindex", async (c) => {
   const r = await reindexAll(c.env);
   return c.redirect(`/admin/kb?reindexed=${r.indexed}`);
+});
+
+// Web Sync manual (módulo web_sync): scrapea ya las páginas configuradas.
+adminApp.post("/kb/web-sync", async (c) => {
+  const { runWebSync } = await import("../kb/webSync");
+  const r = await runWebSync(c.env);
+  const msg = r.skipped
+    ? `omitido: ${r.skipped}`
+    : `${r.updated} actualizadas · ${r.unchanged} sin cambios${r.errors.length ? ` · ${r.errors.length} con error` : ""}`;
+  return c.redirect(`/admin/kb?websync=${encodeURIComponent(msg)}`);
 });
 
 // --- Handoff: plantilla HSM del aviso al dueño ---------------------------------

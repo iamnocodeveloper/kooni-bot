@@ -33,9 +33,12 @@ function banner(tone: "ok" | "bad" | "neutral", text: string): string {
 
 export async function renderKbList(
   env: Env,
-  flash?: { saved?: boolean; deleted?: boolean; reindexed?: string },
+  flash?: { saved?: boolean; deleted?: boolean; reindexed?: string; websync?: string },
 ): Promise<string> {
   const docs = await new KbDocsRepo(new Db(env.DB)).list();
+
+  const { isModuleUnlocked } = await import("../../modules");
+  const webSyncOn = await isModuleUnlocked(env, "web_sync").catch(() => false);
 
   const bannerHtml = flash?.saved
     ? banner("ok", "✓ Guardado e indexado — el bot ya puede usarlo.")
@@ -43,7 +46,9 @@ export async function renderKbList(
       ? banner("neutral", "Documento eliminado (también del índice del bot).")
       : flash?.reindexed
         ? banner("ok", `✓ Reindexado: ${esc(flash.reindexed)} fragmentos actualizados.`)
-        : "";
+        : flash?.websync
+          ? banner("ok", `🌐 Sincronización del sitio: ${esc(flash.websync)}.`)
+          : "";
 
   const rows = docs.length
     ? docs
@@ -86,11 +91,22 @@ export async function renderKbList(
 
     <div style="display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-bottom:16px" class="text-dim text-[11.5px]">
       <span>Además, tu bot trae <b class="text-cream">${FIXTURE_CHUNKS.length}</b> fragmentos precargados del repo.</span>
-      <form method="POST" action="/admin/kb/reindex" style="margin-left:auto">
-        <button class="ghostbtn cursor-pointer" style="display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);color:var(--muted);padding:8px 14px;font-size:11.5px;transition:all .12s ease">
-          <i data-lucide="refresh-cw" width="13" height="13"></i> Reindexar todo
-        </button>
-      </form>
+      <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
+        ${
+          webSyncOn
+            ? `<form method="POST" action="/admin/kb/web-sync">
+                 <button class="ghostbtn cursor-pointer" title="Lee ahora las páginas configuradas en Extras → Sincronizar sitio web" style="display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);color:var(--muted);padding:8px 14px;font-size:11.5px;transition:all .12s ease">
+                   <i data-lucide="globe" width="13" height="13"></i> Sincronizar sitio ahora
+                 </button>
+               </form>`
+            : ""
+        }
+        <form method="POST" action="/admin/kb/reindex">
+          <button class="ghostbtn cursor-pointer" style="display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);color:var(--muted);padding:8px 14px;font-size:11.5px;transition:all .12s ease">
+            <i data-lucide="refresh-cw" width="13" height="13"></i> Reindexar todo
+          </button>
+        </form>
+      </div>
     </div>
 
     <div class="bg-panel border border-line" style="padding:16px">

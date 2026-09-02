@@ -74,6 +74,11 @@ export const SETTING_KEYS = {
   // con el texto de commentFallbackMessage. Default "" (apagado = no hace nada).
   commentFallbackEnabled: "comment_fallback_enabled", // "0" | "1"
   commentFallbackMessage: "comment_fallback_message", // texto de la respuesta pública
+  // Web Sync (módulo web_sync): páginas que se scrapean a la KB del bot.
+  webSyncEnabled: "feature_web_sync_enabled", // "0" | "1"
+  webSyncUrls: "web_sync_urls", // URLs (una por línea o coma)
+  webSyncState: "web_sync_state", // JSON { [url]: { hash, at, chars } } — anti re-embebido
+  webSyncLastRun: "web_sync_last_run", // epoch ms de la última corrida
 } as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[keyof typeof SETTING_KEYS];

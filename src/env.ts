@@ -125,6 +125,11 @@ export interface Env {
   CALCOM_EVENT_TYPES?: string;             // opcional: JSON {"corte":123,"barba":456} servicio→eventTypeId
   CALCOM_TIMEZONE?: string;                // zona horaria (default America/Mexico_City)
   GOOGLE_SERVICE_ACCOUNT_JSON?: string;  // base64-encoded JSON
+
+  // ── Web Sync (módulo web_sync — SOLO en la instalación que lo pidió) ──────
+  // Credencial de Decodo Scraper API: "user:pass" o el base64 ya hecho. Ausente
+  // = el módulo no scrapea nada (segundo candado, además de module_unlocks).
+  DECODO_AUTH?: string;                    // secret
   OWNER_EMAIL: string;  // for handoff notifications (email)
   OWNER_TELEGRAM_CHAT_ID?: string;  // for handoff notifications (default channel)
   OWNER_WA_NUMBER?: string;  // for Pro handoff WhatsApp DM (requires template)

@@ -27,6 +27,7 @@ export const FEATURE_KEYS = {
   resenas: "feature_resenas_enabled",
   cobros: "feature_cobros_enabled",
   galeria: "feature_galeria_enabled",
+  webSync: "feature_web_sync_enabled",
 } as const;
 
 export interface ExtraFeature {
@@ -208,6 +209,25 @@ export const EXTRA_FEATURES: ExtraFeature[] = [
       "El bot manda fotos, videos y audios de verdad desde tu biblioteca de recursos: productos, menú, antes/después, notas de voz tuyas — en el momento justo.",
     actuaEn: "bot",
     tipo: "membresia",
+  },
+  {
+    id: "web_sync",
+    module: "web_sync",
+    toggleKey: FEATURE_KEYS.webSync,
+    nombre: "Sincronizar sitio web",
+    emoji: "🌐",
+    descripcion:
+      "El bot lee páginas de tu sitio (catálogo, inventario, precios) y responde con esa info, actualizada sola cada noche. Cada página aparece como documento en Conocimiento.",
+    actuaEn: "bot+panel",
+    tipo: "membresia",
+    config: [
+      {
+        key: SETTING_KEYS.webSyncUrls,
+        label: "Páginas a sincronizar",
+        placeholder: "https://tusitio.com/inventario/?limit=100&type=used\nhttps://tusitio.com/inventario/?limit=100&type=new",
+        help: "Una URL por línea (máx 10). Se leen cada noche; si algo cambió, el bot lo aprende. Necesita el secret DECODO_AUTH en el worker.",
+      },
+    ],
   },
 ];
 

@@ -240,6 +240,34 @@ tope, decenas de Miniflare arrancaban en paralelo y el proxy tronaba con
 `TypeError: fetch failed` (rojos falsos distintos en cada corrida). Ahora
 **691/691 estable y más rápido** (145s vs 300s).
 
+## 2026-09-02 · v1.15.0 — Módulo "Sincronizar sitio web" (Decodo) para cardealer
+
+**Pedido:** el cliente cardealer-daniel2 ("Daniel autos") quiere que el bot
+conteste con el inventario de su sitio, actualizado solo.
+
+**Implementado** (inerte en todas las instalaciones — se enciende solo en la de
+Daniel con módulo + secret):
+
+| Archivo | Qué |
+|---|---|
+| `src/integrations/decodo.ts` | Cliente de Decodo Scraper API (`/v2/scrape`, `markdown:true`, `headless:html`). `DECODO_AUTH` acepta `user:pass` o el base64. Fail-soft. |
+| `src/kb/webSync.ts` | Orquesta: URLs de la config → scrape → hash → si cambió, `kb_doc` `web:<slug>` + `indexDoc`. Limpia docs de URLs que se quitaron. 2 candados: módulo `web_sync` + `DECODO_AUTH`, ambos fallan cerrados. |
+| `src/modules.ts` | Módulo `web_sync` en el catálogo. |
+| `src/features.ts` | Card "🌐 Sincronizar sitio web" en Extras, con campo para las URLs. |
+| `src/index.ts` | Corre en el tick nocturno (3am). |
+| `src/admin/routes.ts` + `views/kb.ts` | Botón "Sincronizar sitio ahora" en `/admin/kb` (visible solo si el módulo está desbloqueado). |
+
+**Clave:** el endpoint `/llm/inventory/` del sitio ya devuelve texto para IA;
+con Decodo `markdown:true` llega limpio → **cero parseo de HTML**. Mucho más
+simple que el plan de `§ L`.
+
+**Pendiente (Joel):** actualizar cardealer a v1.15.0, poner el secret
+`DECODO_AUTH`, activar el módulo en su D1 y cargar las URLs. Pasos en `PLAN.md § L`.
+
+**Nota de seguridad:** la credencial de Decodo la pegó Joel en el chat. NO se
+commiteó ni quedó en código — va solo como `wrangler secret` en el worker de
+cardealer. Conviene que Joel la rote en el panel de Decodo por las dudas.
+
 ### 2026-09-02 — Estado tras las pruebas de Joel
 
 - **Aprobado por Joel:** el bot ya responde con los precios reales de Kooni tras

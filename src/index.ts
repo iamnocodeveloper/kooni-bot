@@ -413,6 +413,16 @@ export default {
     } catch (e) {
       console.error("copiloto:", e);
     }
+    // Web Sync (módulo web_sync, una instalación): scrapea las páginas
+    // configuradas → KB. No-op si el módulo está bloqueado o falta DECODO_AUTH.
+    try {
+      const { runWebSync } = await import("./kb/webSync");
+      const r = await runWebSync(env);
+      if (!r.skipped) console.log(`[webSync] noche: ${r.updated} actualizadas, ${r.unchanged} sin cambios, ${r.errors.length} errores`);
+    } catch (e) {
+      console.error("webSync:", e);
+    }
+
     // Uso del sistema → panel de licencias del dueño (si USAGE_PUSH_URL está
     // definida): métricas agregadas + costos de IA. Fire-and-forget.
     const { pushUsage } = await import("./usage");
