@@ -108,7 +108,7 @@ otra pública. La pública, en cambio, es segura de publicar — ese es el punto
 9. **Atribución y rendimiento de campañas** (`§ R`) — ⏸️ **PAUSADO TOTALMENTE** (decisión de Joel, 2026-09-02). No se toca hasta que Joel lo reactive explícitamente. El plan queda escrito en `§ R` por si se retoma.
 10. **Panel — filtros de conversaciones, responsive y PWA install** (`§ S`). ✅ S1 (filtros canal/fecha/texto) v1.14.5 · S2 Fase 1 (shell+nav+bandeja) v1.14.3 · S2 Fase 2-3 (vistas, modales, iOS) v1.14.5. Queda: probar en dispositivos reales; formularios angostos → se cierran con § T.
 11. **Scraping web → KB** (`§ L`) — ✅ código v1.15.0, ambas instalaciones en v1.16.0. Falta en cardealer: verificar `module_unlocks += web_sync` (o que la licencia lo cubra) + cargar URLs en Extras + primera sync. `DECODO_AUTH` ya puesto.
-12. **Rediseño visual del panel** (`§ T`) — **APROBADO por Joel** (claro/oscuro + morado/fucsia). Bloque dedicado. Antes de codear: proponer 1 mockup de paleta + toggle para aprobar el rumbo.
+12. **Rediseño visual del panel** (`§ T`) — **BASE ✅ v1.17.0** (Sora + IBM Plex Mono, morado/fucsia, tema claro+oscuro con toggle, sombras suaves). Preview enviada a Joel. Falta Fase 2: pase fino por vista (contraste tema claro en Estadísticas/Costos/canvas de Flujo) + `docs/IDENTIDAD-KOONI.md`.
 
 ## Seguridad — auditoría 2026-08-31 (arreglos + pendientes)
 
