@@ -751,18 +751,43 @@ async function recordZernioComment(body: ZernioWebhookBody, env: Env): Promise<v
   }
 }
 
+/**
+ * "Regla" sintética para los comentarios que NO matchean ninguna automatización.
+ * Si el dueño activó `commentFallbackEnabled`, respondemos EN PÚBLICO (kind
+ * comment_reply → nunca DM) con `commentFallbackMessage`. Default: apagado
+ * (devuelve undefined y el comentario se ignora, como siempre).
+ */
+async function buildCommentFallbackRule(env: Env): Promise<AutoDmRule | undefined> {
+  try {
+    const { Db } = await import("../db/client");
+    const { SettingsRepo, SETTING_KEYS } = await import("../db/settings");
+    const repo = new SettingsRepo(new Db(env.DB));
+    if ((await repo.get(SETTING_KEYS.commentFallbackEnabled)) !== "1") return undefined;
+    const message = (await repo.get(SETTING_KEYS.commentFallbackMessage))?.trim();
+    if (!message) return undefined;
+    return { keywords: [], message, kind: "comment_reply" };
+  } catch (e) {
+    console.warn("[zernio] no se pudo leer el fallback de comentarios:", e);
+    return undefined;
+  }
+}
+
 async function autoDmOnComment(body: ZernioWebhookBody, env: Env): Promise<void> {
   const comment = body.comment;
   const account = body.account;
   if (!comment || !account?.platform) return;
   const rules = await loadAutoDmRules(env);
-  if (rules.length === 0) return;
 
   const text = comment.text ?? "";
-  const matched = rules.find((r) =>
+  let matched = rules.find((r) =>
     matchKeywords(text, r.keywords, r.wholeWordMatch !== false).matched,
   );
-  if (!matched) return;
+  if (!matched) {
+    // Ninguna automatización matcheó → si el dueño lo activó, respuesta pública
+    // genérica (nunca DM). Si no, se ignora el comentario (comportamiento base).
+    matched = await buildCommentFallbackRule(env);
+    if (!matched) return;
+  }
 
   // El account del webhook de comentarios NO es el id social del inbox: lo
   // resolvemos desde GET /v1/accounts solo cuando ya vamos a enviar

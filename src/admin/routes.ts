@@ -747,6 +747,16 @@ adminApp.get("/comentarios", async (c) => c.html(await renderComentarios(c.env))
 // Contactos: todos los que interactúan (separados de Leads).
 adminApp.get("/contactos", async (c) => c.html(await renderContactos(c.env)));
 
+// Fallback: respuesta pública a comentarios que no matchean ninguna regla.
+// (checkbox + mensaje, arriba de la lista de automatizaciones)
+adminApp.post("/automatizaciones/fallback", async (c) => {
+  const form = await c.req.formData();
+  const repo = new SettingsRepo(new Db(c.env.DB));
+  await repo.set(SETTING_KEYS.commentFallbackEnabled, form.get("enabled") === "1" ? "1" : "0");
+  await repo.set(SETTING_KEYS.commentFallbackMessage, String(form.get("message") ?? "").trim());
+  return c.redirect("/admin/automatizaciones?saved=1");
+});
+
 adminApp.post("/automatizaciones/save", async (c) => {
   try {
     const form = await c.req.formData();

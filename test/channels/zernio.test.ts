@@ -389,6 +389,87 @@ describe("auto-DM por keyword en comentarios", () => {
 
 });
 
+describe("comentarios sin automatización (fallback público)", () => {
+  const noKwEnv = { ...envBase, ZERNIO_AUTO_DM_KEYWORD: undefined } as unknown as Env;
+  const payload = {
+    event: "comment.received",
+    comment: { id: "cm_fb1", postId: "post_1", platformPostId: "pp_1", text: "qué lindo producto", author: { id: "usr_fb", username: "ana" } },
+    account: { id: "acct_1", accountId: "acct_1", platform: "instagram", username: "mi_negocio" },
+  };
+
+  const postedAComment = (fm: ReturnType<typeof vi.fn>) =>
+    (fm.mock.calls as unknown as [string, RequestInit][]).some(
+      (c) => /\/v1\/inbox\/comments\//.test(String(c[0])),
+    );
+
+  it("APAGADO (default): un comentario sin regla NO recibe respuesta", async () => {
+    const fetchMock = vi.fn(async () => new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const env = { ...noKwEnv, DB: makeDbStub({}) } as unknown as Env;
+    const out = await parseZernioEvents(payload, env);
+    expect(out).toHaveLength(0);
+    expect(postedAComment(fetchMock)).toBe(false);
+  });
+
+  it("ENCENDIDO: responde EN PÚBLICO (nunca DM) con el mensaje configurado", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (String(url).includes("/v1/accounts")) {
+        return new Response(JSON.stringify({ accounts: [{ _id: "acct_1", platform: "instagram", username: "mi_negocio" }] }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ success: true }), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const env = {
+      ...noKwEnv,
+      DB: makeDbStub({}, {
+        comment_fallback_enabled: "1",
+        comment_fallback_message: "¡Gracias por tu comentario! 🙌",
+      }),
+    } as unknown as Env;
+
+    const out = await parseZernioEvents(payload, env);
+    expect(out).toHaveLength(0);
+    const calls = fetchMock.mock.calls as unknown as [string, RequestInit][];
+    // Nunca DM:
+    expect(calls.find((c) => String(c[0]).includes("/private-reply"))).toBeUndefined();
+    // Respuesta pública con el texto configurado:
+    const pub = calls.find((c) => /\/v1\/inbox\/comments\/post_1$/.test(String(c[0])));
+    expect(pub).toBeTruthy();
+    const body = JSON.parse(pub![1].body as string);
+    expect(body.message).toBe("¡Gracias por tu comentario! 🙌");
+    expect(body.commentId).toBe("cm_fb1");
+  });
+
+  it("ENCENDIDO pero sin mensaje: no responde", async () => {
+    const fetchMock = vi.fn(async () => new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const env = { ...noKwEnv, DB: makeDbStub({}, { comment_fallback_enabled: "1", comment_fallback_message: "  " }) } as unknown as Env;
+    await parseZernioEvents(payload, env);
+    expect(postedAComment(fetchMock)).toBe(false);
+  });
+
+  it("una regla con keyword sigue ganando sobre el fallback", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (String(url).includes("/v1/accounts")) {
+        return new Response(JSON.stringify({ accounts: [{ _id: "acct_1", platform: "instagram", username: "mi_negocio" }] }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ success: true }), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const env = {
+      ...envBase,
+      DB: makeDbStub({}, { comment_fallback_enabled: "1", comment_fallback_message: "genérico" }),
+    } as unknown as Env;
+    // "claude" está en ZERNIO_AUTO_DM_KEYWORD (envBase) → gana la regla, DM.
+    const out = await parseZernioEvents({ ...payload, comment: { ...payload.comment, text: "claude ayúdame" } }, env);
+    expect(out).toHaveLength(0);
+    const calls = fetchMock.mock.calls as unknown as [string, RequestInit][];
+    const dm = calls.find((c) => String(c[0]).includes("/private-reply"));
+    expect(dm).toBeTruthy();
+    expect(JSON.parse(dm![1].body as string).message).toBe("Aquí tienes el recurso 👇");
+  });
+});
+
 describe("zernioAdapter.sendReply", () => {
   it("envía los chunks a la conversación correcta", async () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({ success: true, data: {} }), { status: 200 }));
@@ -417,7 +498,7 @@ describe("zernioAdapter.sendReply", () => {
 });
 
 // Stub mínimo de Db en memoria para AutoRulesRepo + DmLogsRepo.
-function makeDbStub(rule: any) {
+function makeDbStub(rule: any, settings: Record<string, string> = {}) {
   const processed: any[] = [];
     const logs: any[] = [];
     const rates: any[] = [];
@@ -512,6 +593,10 @@ function makeDbStub(rule: any) {
         }
         if (/SELECT \* FROM auto_rules WHERE id = \?/.test(sql)) {
           return rule as T;
+        }
+        if (/SELECT value FROM settings WHERE key = \?/.test(sql)) {
+          const v = settings[String(params[0])];
+          return (v === undefined ? null : { value: v }) as T;
         }
         return null;
       },

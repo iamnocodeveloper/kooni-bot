@@ -580,27 +580,30 @@ middleware de `routes.ts:93` sin probar los 7 tests de Basic Auth después.
 
 ---
 
-## P. Comentario sin automatización → respuesta pública (opcional) ⏳ (PLANEADO)
+## P. Comentario sin automatización → respuesta pública (opcional) ✅ (v1.13.2)
 
-> **Corrección del operador (01-sep):** la primera versión de §P (v1.13.0) quitó
-> las opciones de DM del panel y forzó todo a respuesta pública. **Mal.** Revertido
-> en el commit siguiente. Lo que sí quiere el operador:
+> **Historia:** la v1.13.0 forzó TODOS los comentarios a respuesta pública y quitó
+> las opciones de DM del panel. Mal — revertido en v1.13.1. Esta es la versión
+> correcta:
 >
-> - **Las automatizaciones NO cambian:** siguen pudiendo elegir *DM privado*,
->   *respuesta pública*, *ambas* y *follow gate*. Todo eso ya funcionaba y se
->   queda igual.
-> - **El bug real:** un comentario que **no coincide con ninguna automatización**
->   no debería recibir DM. Debería, como mucho, recibir **una respuesta pública**
->   genérica — y nada más.
-> - **Implementación pendiente:** un toggle de configuración del bot (checkbox +
->   mensaje) "responder en público los comentarios que no matchean ninguna regla".
->   Default **apagado** (= comportamiento actual: no hacer nada). Cuando está
->   encendido, `autoDmOnComment` — en la rama `!matched` — publica el mensaje
->   configurado (reusando dedup + anti-bucle + tope diario que ya existen).
-> - Ubicación por decidir: pestaña **Configuración** vs **Automatizaciones**.
+> - **Las automatizaciones NO cambian.** Siguen eligiendo por regla: *DM privado*,
+>   *respuesta pública*, *ambas* y *follow gate*. Todo intacto.
+> - **Lo nuevo — un toggle** en el panel → **Automatizaciones** (arriba de la
+>   lista): checkbox "Responder en público los comentarios sin automatización" +
+>   un mensaje. Default **apagado**.
+>   - Encendido: un comentario de primer nivel que no matchea ninguna regla
+>     recibe ese texto **como respuesta pública** (`kind` sintético
+>     `comment_reply` → nunca DM). Reusa el dedup por huella, el anti-bucle
+>     (cuenta propia / `isReply`) y el tope diario `MAX_PUBLIC_REPLIES_PER_DAY`.
+>   - Apagado: el comentario se ignora, igual que siempre.
 
-**Estado del código:** §P v1.13.0 revertido (motor, panel, plantillas, data fix y
-docs de Zernio vuelven a como estaban). §O (login) se queda.
+| Cambio | Archivo |
+|---|---|
+| Settings nuevas: `comment_fallback_enabled` / `comment_fallback_message` | `src/db/settings.ts` |
+| `buildCommentFallbackRule()` + rama `!matched` en `autoDmOnComment` | `src/channels/zernio.ts` |
+| Card checkbox+mensaje arriba de la lista de reglas | `src/admin/views/automatizaciones.ts` |
+| `POST /admin/automatizaciones/fallback` | `src/admin/routes.ts` |
+| Tests: `test/channels/zernio.test.ts` (bloque "comentarios sin automatización") | — |
 
 ---
 

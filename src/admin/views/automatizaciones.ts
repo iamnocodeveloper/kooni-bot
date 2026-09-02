@@ -115,6 +115,31 @@ export async function renderAutomatizaciones(env: Env, saved?: boolean, error?: 
     // sin logs aún
   }
 
+  // Fallback: respuesta pública a comentarios que NO matchean ninguna regla.
+  let fbEnabled = false;
+  let fbMessage = "";
+  try {
+    const { SettingsRepo, SETTING_KEYS } = await import("../../db/settings");
+    const s = new SettingsRepo(new Db(env.DB));
+    fbEnabled = (await s.get(SETTING_KEYS.commentFallbackEnabled)) === "1";
+    fbMessage = (await s.get(SETTING_KEYS.commentFallbackMessage)) ?? "";
+  } catch {
+    // sin settings: fallback apagado
+  }
+
+  const fallbackCard = `
+    <form method="POST" action="/admin/automatizaciones/fallback" class="bg-panel border" style="padding:16px 18px;display:flex;flex-direction:column;gap:10px">
+      <label style="display:flex;align-items:flex-start;gap:10px;font-size:12.5px;color:var(--cream);cursor:pointer">
+        <input type="checkbox" name="enabled" value="1" ${fbEnabled ? "checked" : ""} style="accent-color:var(--accent);margin-top:2px">
+        <span>
+          <span class="font-display font-semibold">Responder en público los comentarios sin automatización</span>
+          <span style="display:block;color:var(--dim);font-size:11px;margin-top:2px">Un comentario de primer nivel que no matchea ninguna regla de arriba recibe esta respuesta pública. <b>Nunca DM.</b> Con tope de seguridad por día. Apágalo y esos comentarios se ignoran (comportamiento normal).</span>
+        </span>
+      </label>
+      <textarea name="message" rows="2" placeholder="¡Gracias por tu comentario! 🙌 Te leemos." style="${INPUT_STYLE}">${esc(fbMessage)}</textarea>
+      <div><button type="submit" style="background:var(--accent);color:#06251f;font-weight:700;border:none;padding:8px 16px;font-size:12px;cursor:pointer">Guardar</button></div>
+    </form>`;
+
   const cards = rules.length
     ? rules.map((r) => ruleCard(r, clicksByRule[r.id] ?? 0)).join("")
     : `<div class="bg-panel border" style="padding:24px;text-align:center;color:var(--dim);font-size:12.5px">Aún no hay automatizaciones. Crea la primera con el formulario de abajo.</div>`;
@@ -137,6 +162,7 @@ export async function renderAutomatizaciones(env: Env, saved?: boolean, error?: 
         <p class="text-muted text-[12.5px]">Reglas keyword → respuesta para comentarios y DMs. Cuando una regla matchea, gana ella (la IA no interviene). Se aplican en Instagram, Facebook y más vía Zernio.</p>
       </div>
       ${banner}
+      ${fallbackCard}
       <div style="display:flex;flex-direction:column;gap:12px">${cards}</div>
       <div class="bg-panel border" style="padding:18px 20px;display:flex;flex-direction:column;gap:14px">
         <h3 class="font-display font-semibold text-[13.5px] text-cream">${editRule ? `✏️ Editar automatización` : "Nueva automatización"}</h3>

@@ -205,10 +205,16 @@ El mensaje lo redacta el modelo rápido con la voz del bot.
 - Segmentos listos: interesados que escribieron "QUIERO" sin clicar, etiquetas de
   interés/objeción (`conv_labels`), keywords (`keyword_hits`).
 
-### 5.3 Comentario → DM automático (Zernio)
-`ZERNIO_AUTO_DM_KEYWORD` + mensaje + botón: alguien comenta tu keyword en un post
-(IG, TikTok…) → DM privado inmediato con tu recurso. Los DMs posteriores los
-contesta la IA. (Ver `skill/references/channel-setup-guides/zernio-webhook.md`.)
+### 5.3 Comentario → automatización (Zernio)
+Reglas en el panel → **Automatizaciones** (o `ZERNIO_AUTO_DM_KEYWORD`): alguien
+comenta tu keyword en un post (IG, TikTok…) → según el tipo de regla, DM privado,
+respuesta pública, ambas, o follow gate. Los DMs posteriores los contesta la IA.
+
+**Comentarios sin regla:** por defecto se ignoran. En Automatizaciones hay un
+toggle "Responder en público los comentarios sin automatización" + mensaje: al
+encenderlo, un comentario de primer nivel que no matchea ninguna regla recibe ese
+texto **como respuesta pública** (nunca DM), con tope diario de seguridad.
+(Ver `skill/references/channel-setup-guides/zernio-webhook.md`.)
 
 ### 5.4 Flywheel — el bot mejora solo (`src/flywheel/`)
 El Analista detecta preguntas que la KB no respondió (`missed_kb`) y **propone**

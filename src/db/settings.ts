@@ -69,6 +69,11 @@ export const SETTING_KEYS = {
   // Config de funciones de Extras (enlaces que el bot inyecta al prompt).
   reviewLink: "review_link", // link de reseñas de Google (Pide reseñas)
   paymentLink: "payment_link", // link de pago seguro (Cobros por WhatsApp)
+  // Comentarios SIN automatización: si está en "1", el bot responde EN PÚBLICO
+  // (nunca DM) los comentarios de primer nivel que no matchean ninguna regla,
+  // con el texto de commentFallbackMessage. Default "" (apagado = no hace nada).
+  commentFallbackEnabled: "comment_fallback_enabled", // "0" | "1"
+  commentFallbackMessage: "comment_fallback_message", // texto de la respuesta pública
 } as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[keyof typeof SETTING_KEYS];
