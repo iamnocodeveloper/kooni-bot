@@ -240,10 +240,18 @@ tope, decenas de Miniflare arrancaban en paralelo y el proxy tronaba con
 `TypeError: fetch failed` (rojos falsos distintos en cada corrida). Ahora
 **691/691 estable y más rápido** (145s vs 300s).
 
-### Pendiente para Joel (en el panel)
+### 2026-09-02 — Estado tras las pruebas de Joel
 
-- El bot corre con `model_override = "haiku"` (modelo barato). Si el playbook de
-  calificación se siente flojo, subir a `auto` o `sonnet` en Configuración → Modelo.
-- Si quiere que el bot mencione el servicio de chatbots de forma más proactiva,
-  agregar una línea en Configuración → Información del negocio (su lista de
-  servicios hoy dice "automatizaciones (procesos, bots, integraciones)").
+- **Aprobado por Joel:** el bot ya responde con los precios reales de Kooni tras
+  el fix del `custom_instructions`. Cierra la Mejora 6.
+- **Modelo:** Joel cambió a **gpt-4o-mini** desde el panel (OpenAI). Aplica al
+  instante (setting D1). Con proveedor OpenAI el override `haiku`/`sonnet` se
+  ignora — conviene dejar "Modelo" en **Automático** para no confundir.
+- **Deploy de v1.14.4 / v1.14.5 a joel-nocode:** NO entró desde esta máquina
+  (la red corta las descargas grandes; ~13 intentos). Joel lo corre él mismo
+  con `npx kooni-bot update --yes` en su carpeta. El worker sigue en v1.14.3
+  (móvil ya live); falta la caja "Probar búsqueda" y los filtros nuevos.
+- **cardealer-daniel2 ("Daniel autos"):** está en **v1.12.0** (5 minors atrás).
+  Es el **cliente del scraping de autos** (`§ L`). Actualizar con cuidado:
+  worker en `cardealerdani.workers.dev` (posible otra cuenta de Cloudflare) —
+  confirmar `wrangler whoami` antes. Hacer joel-nocode primero.

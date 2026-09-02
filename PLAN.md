@@ -332,17 +332,22 @@ paso posterior (`pair`) donde el usuario la pega explícitamente.
 > web, actualizada sola. **No es para todas las instalaciones** — el código viaja
 > en el template (inerte) pero solo se enciende en esa instalación.
 >
-> **Caso concreto (2026-09-02):** un cliente vende autos; quiere que el bot
-> conteste con la info de fichas/precios de un sitio. El plan de abajo sirve tal
-> cual. **Bloqueado a la espera de que el cliente entregue:** (a) API key / user
-> de Decodo, (b) la lista EXACTA de URLs, (c) 5 preguntas concretas que el bot
+> **Caso concreto (2026-09-02):** el cliente es **cardealer-daniel2 ("Daniel
+> autos")** — `kooni-bot-cardealer-daniel2-948b8b`, carpeta
+> `C:\Users\joeld\cardealerdaniel`. Vende autos; quiere que el bot conteste con
+> la info de fichas/precios de un sitio. El plan de abajo sirve tal cual.
+> **Bloqueado a la espera de que Daniel entregue:** (a) API key / user de
+> Decodo, (b) la lista EXACTA de URLs, (c) 5 preguntas concretas que el bot
 > debe poder contestar con eso, (d) confirmación de permiso para scrapear ese
-> sitio. Con (b) ≤ 3 URLs y (c) claras, quizá no haga falta scraping: cargar 2-3
-> docs a mano en `/admin/kb` es gratis y ya funciona. Decidir con esos datos.
+> sitio. Con (b) ≤ 3 URLs y (c) claras, quizá no haga falta scraping: cargar
+> 2-3 docs a mano en `/admin/kb` es gratis y ya funciona. Decidir con esos datos.
+>
+> **Antes de nada:** actualizar esa instalación (está en v1.12.0) con
+> `npx kooni-bot update` — ver el aviso de cuenta de Cloudflare en la bitácora.
 >
 > Cuando esté listo: implementar Fases 1-4, activar `module_unlocks` +
-> `DECODO_*` SOLO en el worker del cliente, y correr `kooni-bot update` en su
-> carpeta para traer el código nuevo.
+> `DECODO_*` SOLO en el worker de Daniel, y correr `kooni-bot update` de nuevo
+> para traer el código del módulo.
 
 ### Idea clave: no hay que tocar al agente
 
