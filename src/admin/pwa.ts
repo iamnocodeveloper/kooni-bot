@@ -23,11 +23,14 @@ interface PwaBrand {
 }
 
 function brand(env: Env): PwaBrand {
+  // Identidad Kooni 2026: fucsia/violeta sobre tinta con matiz violeta
+  // (mismos valores del tema oscuro en layout.ts). El manifest y el theme-color
+  // no cambian con el toggle claro/oscuro — se quedan en el oscuro.
   return {
     name: env.BRAND_NAME || "Kooni",
-    themeColor: env.BRAND_BG || "#0d1218",
-    accent: env.BRAND_PRIMARY || "#2dd4bf",
-    accent2: env.BRAND_ACCENT2 || "#6ee7b7",
+    themeColor: env.BRAND_BG || "#0f0e17",
+    accent: env.BRAND_PRIMARY || "#e05fd8",
+    accent2: env.BRAND_ACCENT2 || "#a679f6",
   };
 }
 
@@ -114,7 +117,7 @@ self.addEventListener('fetch', (e) => {
         if (home) return home;
         return new Response(
           '<meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">' +
-          '<body style="font-family:system-ui;background:#0d1218;color:#e7edf3;padding:40px;text-align:center">' +
+          '<body style="font-family:system-ui;background:#0f0e17;color:#ece9f5;padding:40px;text-align:center">' +
           '<h1 style="font-size:18px">Sin conexión</h1>' +
           '<p style="opacity:.7;font-size:14px">Abre el panel de nuevo cuando tengas señal.</p></body>',
           { headers: { 'Content-Type': 'text/html; charset=utf-8' }, status: 503 },
