@@ -349,9 +349,17 @@ adminApp.post("/push/test", async (c) => {
 adminApp.post("/kb/web-sync", async (c) => {
   const { runWebSync } = await import("../kb/webSync");
   const r = await runWebSync(c.env);
-  const msg = r.skipped
-    ? `omitido: ${r.skipped}`
-    : `${r.updated} actualizadas · ${r.unchanged} sin cambios${r.errors.length ? ` · ${r.errors.length} con error` : ""}`;
+  let msg: string;
+  if (r.skipped) {
+    msg = `omitido: ${r.skipped}`;
+  } else {
+    msg = `${r.updated} actualizadas · ${r.unchanged} sin cambios`;
+    if (r.errors.length) {
+      // Mostrar el primer error concreto (no solo el conteo).
+      const e = r.errors[0];
+      msg += ` · error en ${new URL(e.url).pathname}${new URL(e.url).search}: ${e.error.slice(0, 160)}`;
+    }
+  }
   return c.redirect(`/admin/kb?websync=${encodeURIComponent(msg)}`);
 });
 

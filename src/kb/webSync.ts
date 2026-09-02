@@ -41,23 +41,28 @@ export function parseWebSyncUrls(raw: string | undefined | null): string[] {
     .slice(0, MAX_URLS);
 }
 
-/** id de doc estable y legible por URL: `web:<host>-<path>-<query>`. */
+/**
+ * id de doc estable por URL. CORTO a propósito: `indexDoc` genera vectores
+ * `dash:<id>#<n>` y Vectorize rechaza ids > 64 bytes. Prefijo legible (≤ 30) +
+ * hash de la URL completa para unicidad. Ej. `web:greenwaykiawestpalmbeach-1a2b3c`.
+ */
 export function webDocId(url: string): string {
+  let label = "pagina";
+  let canon = url;
   try {
     const u = new URL(url);
-    const q = [...u.searchParams.entries()]
-      .sort()
-      .map(([k, v]) => `${k}-${v}`)
-      .join("-");
-    const base = `${u.hostname}${u.pathname}${q ? "-" + q : ""}`
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "")
-      .slice(0, 90);
-    return `web:${base || "pagina"}`;
+    // Canonicalizar para que el orden de los query params no cambie el id.
+    const q = [...u.searchParams.entries()].sort();
+    canon = `${u.hostname}${u.pathname}?${new URLSearchParams(q).toString()}`;
+    label =
+      (u.hostname.replace(/^www\./, "").split(".")[0] || "sitio")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .slice(0, 30) || "sitio";
   } catch {
-    return `web:${quickHash(url)}`;
+    /* url inválida — solo el hash de la cadena cruda */
   }
+  return `web:${label}-${quickHash(canon)}`;
 }
 
 export interface WebSyncSummary {

@@ -11,10 +11,19 @@ describe("parseWebSyncUrls / webDocId", () => {
     const urls = parseWebSyncUrls("https://a.com/1\nhttps://b.com/2, no-url ,https://c.com/3");
     expect(urls).toEqual(["https://a.com/1", "https://b.com/2", "https://c.com/3"]);
   });
-  it("webDocId es estable y namespaceado", () => {
+  it("webDocId es estable, corto y namespaceado", () => {
     const id = webDocId("https://x.com/llm/inventory/?type=used&limit=100");
     expect(id.startsWith("web:")).toBe(true);
     expect(webDocId("https://x.com/llm/inventory/?limit=100&type=used")).toBe(id); // orden de query no importa
+  });
+
+  it("webDocId nunca genera vectores > 64 bytes (Vectorize los rechaza)", () => {
+    const largo =
+      "https://www.greenwaykiawestpalmbeach.com/llm/inventory/?limit=100&type=used&bodytype=Cars&page=2&sort=price";
+    const id = webDocId(largo);
+    // indexDoc genera `dash:<id>#<n>` con n hasta 24 → el peor caso:
+    const peor = `dash:${id}#24`;
+    expect(Buffer.byteLength(peor, "utf8")).toBeLessThanOrEqual(64);
   });
 });
 
