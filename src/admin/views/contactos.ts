@@ -43,8 +43,8 @@ export async function renderContactos(env: Env): Promise<string> {
         <h2 class="font-display font-semibold text-[15px] text-cream">Contactos</h2>
         <p class="text-muted text-[12.5px]">Todos los que interactuaron con tu bot (${total} en total) — DMs o comentarios. Es la lista cruda de interacción; los <b>Leads</b> son los que además mostraron interés y el bot capturó su intención.</p>
       </div>
-      <div class="bg-panel border" style="padding:18px 20px;overflow-x:auto">
-        <table style="width:100%;border-collapse:collapse;font-size:12.5px">
+      <div class="bg-panel border xscroll" style="padding:18px 20px">
+        <table style="width:100%;min-width:560px;border-collapse:collapse;font-size:12.5px">
           <tr>
             <th style="text-align:left;padding:8px 10px;color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--line)">Nombre</th>
             <th style="text-align:left;padding:8px 10px;color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--line)">Canal</th>

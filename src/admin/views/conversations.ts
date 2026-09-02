@@ -112,14 +112,32 @@ interface InboxParams {
   search?: string;
   filter?: string;
   selectedId?: string;
+  /** Filtro por canal (telegram | zernio | whatsapp | …). Vacío = todos. */
+  channel?: string;
+  /** Filtro por antigüedad del último mensaje: 1 | 7 | 30 días. 0/undefined = sin tope. */
+  days?: number;
 }
 
-/** Preserve the current filter/search when building inbox URLs. */
+/** Lee los parámetros de la bandeja de una request (?q ?f ?c ?ch ?d). */
+export function inboxParamsFrom(q: (k: string) => string | undefined): InboxParams {
+  const d = Number.parseInt(q("d") ?? "", 10);
+  return {
+    search: q("q") || undefined,
+    filter: q("f") || undefined,
+    selectedId: q("c") || undefined,
+    channel: q("ch") || undefined,
+    days: [1, 7, 30].includes(d) ? d : undefined,
+  };
+}
+
+/** Preserve the current filters/search when building inbox URLs. */
 function inboxUrl(p: InboxParams, convId?: string): string {
   const qs = new URLSearchParams();
   if (convId) qs.set("c", convId);
   if (p.filter) qs.set("f", p.filter);
   if (p.search) qs.set("q", p.search);
+  if (p.channel) qs.set("ch", p.channel);
+  if (p.days) qs.set("d", String(p.days));
   const s = qs.toString();
   return `/admin/conversations${s ? `?${s}` : ""}`;
 }
@@ -133,8 +151,19 @@ export async function renderInboxList(env: Env, p: InboxParams): Promise<string>
   const conds: string[] = [];
   const params: (string | number)[] = [];
   if (p.search) {
-    conds.push("(c.display_name LIKE ? OR c.channel_user_id LIKE ?)");
-    params.push(`%${p.search}%`, `%${p.search}%`);
+    // Nombre, id del canal, o el texto de cualquier mensaje del hilo.
+    conds.push(
+      "(c.display_name LIKE ? OR c.channel_user_id LIKE ? OR EXISTS (SELECT 1 FROM messages m WHERE m.conversation_id = c.id AND m.content LIKE ?))",
+    );
+    params.push(`%${p.search}%`, `%${p.search}%`, `%${p.search}%`);
+  }
+  if (p.channel) {
+    conds.push("c.channel = ?");
+    params.push(p.channel);
+  }
+  if (p.days) {
+    conds.push("c.last_message_at >= ?");
+    params.push(now - p.days * 86_400_000);
   }
   if (p.filter === "leads") {
     conds.push("EXISTS (SELECT 1 FROM leads l WHERE l.conversation_id = c.id)");
@@ -381,7 +410,7 @@ export async function renderThreadLive(env: Env, convId: string): Promise<string
 function renderComposer(convId: string): string {
   const id = encodeURIComponent(convId);
   return `
-  <div style="border-top:1px solid var(--line);background:var(--panel);padding:12px;display:flex;flex-direction:column;gap:8px">
+  <div class="composer" style="border-top:1px solid var(--line);background:var(--panel);padding:12px;padding-bottom:max(12px,env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:8px">
     <div id="suggestion-box"></div>
     <form hx-post="/admin/conversations/${id}/reply" hx-target="#send-status" hx-swap="innerHTML"
           hx-on::after-request="if(event.detail.xhr.getResponseHeader('X-Sent')==='1')this.reset()"
@@ -443,14 +472,26 @@ export async function renderInbox(env: Env, p: InboxParams): Promise<string> {
     `<a href="${href}" class="chip" style="font-size:11px;letter-spacing:.05em;padding:5px 12px;white-space:nowrap;border:1px solid ${color};${
       active ? `background:${color};color:#1a1206;font-weight:700` : `color:${color}`
     }">${label}</a>`;
+  // Los pills conservan canal + fecha + búsqueda; solo cambian el filtro rápido.
+  const pillUrl = (f?: string) => inboxUrl({ ...p, filter: f }, p.selectedId);
+  const dayUrl = (d?: number) => inboxUrl({ ...p, days: d }, p.selectedId);
+
+  // Canales presentes (para el selector). DISTINCT sobre lo que hay.
+  const chanRows = await db.all<{ channel: string }>(
+    "SELECT DISTINCT channel FROM conversations WHERE channel IS NOT NULL AND channel != '' ORDER BY channel",
+  );
+  const dayChip = (label: string, d?: number) =>
+    filterPill(dayUrl(d), label, (p.days ?? 0) === (d ?? 0), "var(--linelit)");
 
   const list = await renderInboxList(env, p);
 
-  const listPollUrl = `/admin/conversations/list-fragment?${new URLSearchParams({
-    ...(p.filter ? { f: p.filter } : {}),
-    ...(p.search ? { q: p.search } : {}),
-    ...(p.selectedId ? { c: p.selectedId } : {}),
-  }).toString()}`;
+  const pollParams = new URLSearchParams();
+  if (p.filter) pollParams.set("f", p.filter);
+  if (p.search) pollParams.set("q", p.search);
+  if (p.selectedId) pollParams.set("c", p.selectedId);
+  if (p.channel) pollParams.set("ch", p.channel);
+  if (p.days) pollParams.set("d", String(p.days));
+  const listPollUrl = `/admin/conversations/list-fragment?${pollParams.toString()}`;
 
   let rightPane: string;
   if (p.selectedId) {
@@ -471,20 +512,45 @@ export async function renderInbox(env: Env, p: InboxParams): Promise<string> {
 
   const body = `
    <div class="inbox" data-view="${p.selectedId ? "thread" : "list"}">
-    <div class="inbox-filters flex flex-wrap items-center gap-2" style="margin-bottom:14px">
-      ${filterPill(inboxUrl({ selectedId: p.selectedId }), `Todas · ${totalConvs}`, !p.filter, "var(--accent)")}
-      ${filterPill(inboxUrl({ filter: "leads", selectedId: p.selectedId }), `💰 Leads · ${totalLeads}`, p.filter === "leads", "var(--accent)")}
-      ${filterPill(inboxUrl({ filter: "atencion", selectedId: p.selectedId }), `🔔 Atención · ${needAttention}`, p.filter === "atencion", "var(--bad)")}
-      ${filterPill(inboxUrl({ filter: "molestos", selectedId: p.selectedId }), `😠 Molestos · ${nMolestos}`, p.filter === "molestos", "var(--bad)")}
-      ${filterPill(inboxUrl({ filter: "contentos", selectedId: p.selectedId }), `🙂 Contentos · ${nContentos}`, p.filter === "contentos", "var(--ok)")}
-      <form method="GET" action="/admin/conversations" class="ml-auto" style="display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);padding:7px 12px;min-width:220px">
+    <div class="inbox-filters flex flex-wrap items-center gap-2" style="margin-bottom:10px">
+      ${filterPill(pillUrl(), `Todas · ${totalConvs}`, !p.filter, "var(--accent)")}
+      ${filterPill(pillUrl("leads"), `💰 Leads · ${totalLeads}`, p.filter === "leads", "var(--accent)")}
+      ${filterPill(pillUrl("atencion"), `🔔 Atención · ${needAttention}`, p.filter === "atencion", "var(--bad)")}
+      ${filterPill(pillUrl("molestos"), `😠 Molestos · ${nMolestos}`, p.filter === "molestos", "var(--bad)")}
+      ${filterPill(pillUrl("contentos"), `🙂 Contentos · ${nContentos}`, p.filter === "contentos", "var(--ok)")}
+      <form method="GET" action="/admin/conversations" class="ml-auto" style="display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);padding:7px 12px;min-width:200px">
         <i data-lucide="search" width="14" height="14" style="color:var(--dim)"></i>
         ${p.filter ? `<input type="hidden" name="f" value="${escapeHtml(p.filter)}">` : ""}
         ${p.selectedId ? `<input type="hidden" name="c" value="${escapeHtml(p.selectedId)}">` : ""}
-        <input name="q" value="${escapeHtml(p.search ?? "")}" placeholder="Buscar cliente…"
+        ${p.channel ? `<input type="hidden" name="ch" value="${escapeHtml(p.channel)}">` : ""}
+        ${p.days ? `<input type="hidden" name="d" value="${p.days}">` : ""}
+        <input name="q" value="${escapeHtml(p.search ?? "")}" placeholder="Buscar nombre o texto…"
                style="flex:1;background:transparent;border:none;color:var(--cream);font-size:12px;outline:none">
       </form>
     </div>
+    ${
+      chanRows.length > 1
+        ? `<div class="inbox-filters flex flex-wrap items-center gap-2" style="margin-bottom:14px">
+      <select onchange="if(this.value)window.location=this.value" style="background:var(--panel);border:1px solid var(--line);color:var(--cream);font-size:11.5px;padding:6px 10px;outline:none">
+        <option value="${escapeHtml(inboxUrl({ ...p, channel: undefined }, p.selectedId))}" ${p.channel ? "" : "selected"}>Todos los canales</option>
+        ${chanRows
+          .map(
+            (r) =>
+              `<option value="${escapeHtml(inboxUrl({ ...p, channel: r.channel }, p.selectedId))}" ${p.channel === r.channel ? "selected" : ""}>${escapeHtml(channelLabel(r.channel))}</option>`,
+          )
+          .join("")}
+      </select>
+      ${dayChip("Cualquier fecha")}
+      ${dayChip("24 h", 1)}
+      ${dayChip("7 días", 7)}
+      ${dayChip("30 días", 30)}
+      ${p.channel || p.days || p.search ? `<a href="${inboxUrl({ selectedId: p.selectedId })}" class="chip" style="font-size:11px;padding:5px 10px;color:var(--dim);border:1px solid var(--line)">✕ limpiar</a>` : ""}
+    </div>`
+        : `<div class="inbox-filters flex flex-wrap items-center gap-2" style="margin-bottom:14px">
+      ${dayChip("Cualquier fecha")}${dayChip("24 h", 1)}${dayChip("7 días", 7)}${dayChip("30 días", 30)}
+      ${p.days || p.search ? `<a href="${inboxUrl({ selectedId: p.selectedId })}" class="chip" style="font-size:11px;padding:5px 10px;color:var(--dim);border:1px solid var(--line)">✕ limpiar</a>` : ""}
+    </div>`
+    }
 
     <div class="inbox-grid grid grid-cols-1 md:grid-cols-[320px_1fr] overflow-hidden" style="border:1px solid var(--line);background:var(--panel);height:calc(100vh - 200px);min-height:480px">
       <div class="inbox-list border-r border-line flex flex-col" style="min-height:0">

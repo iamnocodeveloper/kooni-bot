@@ -106,7 +106,7 @@ otra pública. La pública, en cambio, es segura de publicar — ese es el punto
 7. **Modelo de revendedores (marca blanca + recurrencia)** — licencias por agencia/revendedor: el revendedor paga una cuota/mensualidad (recurrencia real) y a cambio instala bots con su marca (`BRAND_*` ya implementado), con límites y reporte de su cartera desde el panel de licencias (rol `revendedor` en `profiles`, comisión/cuota por instalación activa).
 8. **PWA del panel — Fases 1-3** (`§ Q`). Fase 0 (instalable + offline básico) ✅ en v1.14.0. Pendiente: **Fase 1 = avisos push con VAPID** (nuevo lead / ticket / alerta del Vigilante; la más valiosa), Fase 2 = lectura offline de datos (endpoints JSON + cache del SW), Fase 3 = bandeja móvil (inbox pensado para celular, reusa `POST /admin/conversations/:id/reply`).
 9. **Atribución y rendimiento de campañas** (`§ R`) — ⏸️ **en espera**. Se retoma cuando la instalación esté en **Meta oficial** o **ManyChat** (Zernio no entrega el `referral` del anuncio). Orden: panel solo-lectura de comentario→DM (Fase 1, ya sirve) → stamp de origen en la conversación (Fase 2) → `referral` de anuncios (Fase 3, Meta/ManyChat).
-10. **Panel — filtros de conversaciones, responsive y PWA install** (`§ S`). S2 Fase 1 (shell + nav + bandeja móvil) ✅ v1.14.3. Pendiente: S1 (filtros canal/fecha), S2 Fase 2 (pase por vista) y Fase 3 (detalles iOS/perf).
+10. **Panel — filtros de conversaciones, responsive y PWA install** (`§ S`). ✅ S1 (filtros canal/fecha/texto) v1.14.5 · S2 Fase 1 (shell+nav+bandeja) v1.14.3 · S2 Fase 2-3 (vistas, modales, iOS) v1.14.5. Queda: probar en dispositivos reales; formularios angostos → se cierran con § T.
 11. **Scraping web → KB** (`§ L`) — ⏳ a la espera de que el cliente (autos) entregue API de Decodo + URLs + preguntas + permiso. Aislado a esa instalación vía `module_unlocks` + secrets.
 12. **Rediseño visual del panel** (`§ T`) — identidad Kooni propia, diferenciar de Forja. Bloque dedicado, no urgente. Legalmente MIT ya lo permite (no es obligatorio).
 
@@ -818,26 +818,19 @@ Cuando la instalación esté en Meta oficial o ManyChat:
 > nombre, fechas), mejorar la vista responsiva / menús en móvil, y "en móvil no
 > se ve la PWA para instalar".
 
-### S1 — Filtros de la bandeja de conversaciones
+### S1 — Filtros de la bandeja de conversaciones ✅ (v1.14.5)
 
-Hoy (`src/admin/views/conversations.ts`, `renderInboxList`) hay:
-- búsqueda por `display_name` / `channel_user_id` (LIKE)
-- filtros: `leads`, `atencion`, `molestos`, `contentos`
-
-Falta:
-1. **Filtro por canal** — chips/select con los canales presentes (telegram,
-   zernio, whatsapp, instagram, messenger…). `WHERE c.channel = ?`. Poblar el
-   selector con `SELECT DISTINCT channel FROM conversations`.
-2. **Filtro por fecha** — rango sobre `c.last_message_at` (o `started_at`):
-   presets "hoy / 7 días / 30 días" + rango custom. Query param `d=7d` / `desde`+`hasta`.
-3. **Búsqueda más visible** — el campo ya existe; subirlo en la UI y que también
-   matchee el texto de los mensajes (opcional: `EXISTS (SELECT 1 FROM messages…)`).
-4. Persistir todos los filtros en la URL (ya se hace con `f` y `q` — sumar
-   `ch` y `d`) para que el refresco HTMX y los enlaces los conserven.
-
-Archivos: `conversations.ts` (`InboxParams`, `buildWhere`, barra de filtros),
-`routes.ts` (`/conversations` y `/conversations/list-fragment` leen los nuevos
-query params). Tests: `test/admin/inbox.test.ts`.
+**Hecho** (`conversations.ts`, `routes.ts`):
+- **Filtro por canal** — `<select>` con los canales presentes (`SELECT DISTINCT
+  channel`), navega al cambiar. `?ch=<canal>`.
+- **Filtro por fecha** — chips "Cualquier fecha / 24 h / 7 días / 30 días" sobre
+  `c.last_message_at`. `?d=1|7|30`.
+- **Búsqueda ampliada** — ahora matchea nombre, id del canal **y el texto de
+  cualquier mensaje** del hilo.
+- Todos los filtros se combinan y persisten en la URL (`f`, `q`, `ch`, `d`) — el
+  refresco HTMX y los pills los conservan. Chip "✕ limpiar" cuando hay filtros.
+- Helper `inboxParamsFrom()` para leer los params en las dos rutas.
+- Tests en `test/admin/inbox.test.ts`.
 
 ### S2 — Responsive / menús en móvil — plan por fases
 
@@ -852,25 +845,33 @@ Breakpoint del panel: `max-width:767px` (el login usa 900; se deja como está).
 | **Bandeja = una vista a la vez** en móvil: la lista, o el hilo con barra "← Conversaciones". `.inbox[data-view]` + CSS. Filtros en fila con scroll horizontal; se ocultan al abrir un hilo. Altura `100dvh`. | `conversations.ts`, `layout.ts` |
 | Inputs a 16px en móvil (evita el zoom de iOS al enfocar). Tap targets de nav ≥ 44px. `main` con menos padding. `body{overflow-x:clip}`. Utilidad `.xscroll`. | `layout.ts` |
 
-**Fase 2 — Pase por vista (pendiente)**
+**Fase 2 — Pase por vista ✅ en su mayoría (v1.14.5)**
 
-- **Prospectos / Contactos / Tickets**: las tablas anchas → envolver en `.xscroll`
-  o, mejor, tarjetas apiladas en móvil (`< 640px`).
-- **Costos / Estadísticas / Insights**: las gráficas y grids de KPIs → 1 columna
-  en móvil; revisar que las barras SVG no desborden.
-- **Configuración / KB editor / Automatizaciones**: formularios anchos → ancho
-  completo, `max-width` solo en desktop; el editor de KB con `textarea` alto.
-- **Resumen (overview)**: los cuadros de KPI → grid `repeat(auto-fit,minmax(150px,1fr))`.
-- **Modales** (`.modal-card`): en móvil casi pantalla completa, con scroll interno.
-- **Composer del hilo** (`renderComposer`): sticky abajo, que el teclado no lo tape
-  (`env(safe-area-inset-bottom)` + `position:sticky`).
+Al revisar, casi todas las vistas ya traían un pase Tailwind (`grid-cols-1
+md:grid-cols-…`) — Resumen, Estadísticas, Costos e Insights ya colapsan a 1
+columna en móvil. Lo que faltaba:
 
-**Fase 3 — Detalles**
+- **Leads**: ya tenía `overflow-x:auto` + `min-width` en el grid interno. OK.
+- **Contactos**: la `<table width:100%>` se comprimía en vez de scrollear → se
+  le puso `min-width:560px` + `.xscroll`. ✅
+- **Cualquier `<table>` suelta en `main`**: regla global en móvil
+  `display:block;overflow-x:auto`. ✅
+- **Modales** (`.modal-card`): en móvil van casi a pantalla completa, pegados
+  abajo, con scroll interno (`max-height:92dvh`). ✅
+- **Composer del hilo**: `padding-bottom:max(12px,env(safe-area-inset-bottom))`
+  para el home indicator de iOS; ya queda pegado abajo por el flex del pane. ✅
 
-- `<meta name="viewport">` con `viewport-fit=cover` para las safe-areas de iOS.
-- Quitar el overlay `.scanlines` en móvil (coste de pintado) o bajarlo a `opacity:.2`.
-- `100dvh` vs `100vh` — auditar dónde queda contenido bajo la barra del navegador.
-- Probar en iOS Safari y Android Chrome reales (no solo el emulador).
+Pendiente menor: Configuración / KB editor / Automatizaciones — formularios que
+en pantallas medianas quedan angostos (no rotos). Se resuelve en el rediseño § T.
+
+**Fase 3 — Detalles ✅ (v1.14.5)**
+
+- `<meta name="viewport" … viewport-fit=cover>` en el panel y el login. ✅
+- `.scanlines::after` baja a `opacity:.18` en móvil (coste de pintado). ✅
+- La bandeja usa `100dvh` (no `100vh`) para no quedar bajo la barra del navegador. ✅
+- **Pendiente para ti (Joel):** probar en un iPhone (Safari) y un Android
+  (Chrome) reales — el emulador no reproduce del todo el teclado ni las
+  safe-areas.
 
 ### S3 — PWA: botón de instalar visible ✅ (v1.14.1)
 

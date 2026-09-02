@@ -205,6 +205,55 @@ describe("inbox — pause / resume", () => {
   });
 });
 
+describe("inbox — filtros de canal, fecha y búsqueda (§ S1)", () => {
+  it("filtra por canal (?ch)", async () => {
+    const tg = await convs.getOrCreate("telegram", "s1a", "DesdeTelegram");
+    await msgs.append(tg.id, "user", "hola");
+    const wa = await convs.getOrCreate("whatsapp", "s1b", "DesdeWhatsApp");
+    await msgs.append(wa.id, "user", "hola");
+
+    const res = await adminApp.request("/conversations?ch=telegram", { headers: AUTH }, env);
+    const html = await res.text();
+    expect(html).toContain("DesdeTelegram");
+    expect(html).not.toContain("DesdeWhatsApp");
+  });
+
+  it("filtra por fecha del último mensaje (?d=7)", async () => {
+    const viejo = await convs.getOrCreate("telegram", "s1old", "Viejo");
+    await msgs.append(viejo.id, "user", "hola");
+    // Empujar el último mensaje 20 días atrás.
+    await db.run("UPDATE conversations SET last_message_at = ? WHERE id = ?", [
+      Date.now() - 20 * 86_400_000,
+      viejo.id,
+    ]);
+    const nuevo = await convs.getOrCreate("telegram", "s1new", "Nuevo");
+    await msgs.append(nuevo.id, "user", "hola");
+
+    const res = await adminApp.request("/conversations?d=7", { headers: AUTH }, env);
+    const html = await res.text();
+    expect(html).toContain("Nuevo");
+    expect(html).not.toContain(">Viejo<");
+  });
+
+  it("la búsqueda matchea el texto de los mensajes, no solo el nombre", async () => {
+    const conv = await convs.getOrCreate("telegram", "s1txt", "Anónimo");
+    await msgs.append(conv.id, "user", "necesito una cotización para un Toyota Corolla");
+
+    const res = await adminApp.request("/conversations?q=corolla", { headers: AUTH }, env);
+    expect(await res.text()).toContain("Anónimo");
+  });
+
+  it("el filtro rápido conserva el canal en el enlace", async () => {
+    const conv = await convs.getOrCreate("zernio", "s1keep", "X");
+    await msgs.append(conv.id, "user", "hola");
+    const res = await adminApp.request("/conversations?ch=zernio", { headers: AUTH }, env);
+    const html = await res.text();
+    // Los pills de filtro (Leads, Atención…) deben llevar ch=zernio.
+    expect(html).toContain("ch=zernio");
+    expect(html).toMatch(/f=leads[^"]*ch=zernio|ch=zernio[^"]*f=leads/);
+  });
+});
+
 describe("inbox — filtros por sentimiento del Analista", () => {
   it("filtra molestos y contentos según conversation_insights", async () => {
     const { InsightsRepo } = await import("../../src/db/insights");

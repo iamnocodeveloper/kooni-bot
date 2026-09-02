@@ -220,6 +220,26 @@ encuentra el bot antes de que un cliente escriba.
 - Tareas que faltan para el móvil: ver `PLAN.md § S2` Fase 2 (pase por vista) y
   Fase 3 (detalles iOS/perf). No bloquean nada.
 
+### Mejora 7 — v1.14.5 — Filtros de conversaciones + responsive Fase 2-3
+
+**Filtros (`§ S1`)** — `src/admin/views/conversations.ts`, `routes.ts`:
+- Filtro por **canal** (`<select>` con los canales presentes) y por **fecha**
+  (chips 24h / 7d / 30d).
+- La **búsqueda** ahora matchea también el texto de los mensajes, no solo el nombre.
+- Se combinan y persisten en la URL (`f`, `q`, `ch`, `d`); chip "✕ limpiar".
+
+**Responsive Fase 2-3 (`§ S2`)** — `layout.ts`, `contactos.ts`, `conversations.ts`:
+- Contactos: tabla con `min-width` + scroll (antes se comprimía).
+- Regla global: cualquier `<table>` que no quepa en móvil → scroll horizontal.
+- Modales casi a pantalla completa en móvil (pegados abajo, scroll interno).
+- Composer del hilo respeta la safe-area de iOS.
+- `viewport-fit=cover`, scanlines a `opacity:.18` en móvil, bandeja en `100dvh`.
+
+**De paso — flakiness de la suite:** `maxWorkers: 2` en `vitest.config.ts`. Sin
+tope, decenas de Miniflare arrancaban en paralelo y el proxy tronaba con
+`TypeError: fetch failed` (rojos falsos distintos en cada corrida). Ahora
+**691/691 estable y más rápido** (145s vs 300s).
+
 ### Pendiente para Joel (en el panel)
 
 - El bot corre con `model_override = "haiku"` (modelo barato). Si el playbook de

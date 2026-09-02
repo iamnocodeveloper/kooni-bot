@@ -63,9 +63,9 @@ describe("KB tab", () => {
 
   it("probar búsqueda: corre la consulta y muestra score + veredicto", async () => {
     // queryKb embebe un STRING (no array) — el mock por defecto asume array.
-    env.AI.run = vi.fn(async () => ({ data: [[0.1, 0.2, 0.3]] }));
+    (env.AI as any).run = vi.fn(async () => ({ data: [[0.1, 0.2, 0.3]] }));
     // KB devuelve un match fuerte y uno débil.
-    env.KB.query = vi.fn(async () => ({
+    (env.KB as any).query = vi.fn(async () => ({
       matches: [
         { id: "a", score: 0.82, metadata: { title: "Planes", content: "Gratis $0, Pro $12" } },
         { id: "b", score: 0.4, metadata: { title: "Otra cosa", content: "bla" } },
@@ -80,7 +80,7 @@ describe("KB tab", () => {
   });
 
   it("probar búsqueda: query corta no consulta nada", async () => {
-    const spy = (env.AI.run = vi.fn());
+    const spy = ((env.AI as any).run = vi.fn());
     const res = await adminApp.request("/kb/search?q=a", { headers: AUTH }, env);
     expect(res.status).toBe(200);
     expect(spy).not.toHaveBeenCalled();

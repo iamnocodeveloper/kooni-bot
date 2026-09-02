@@ -32,6 +32,7 @@ import {
   renderInboxList,
   renderThreadLive,
   renderSuggestionBox,
+  inboxParamsFrom,
 } from "./views/conversations";
 import { pickAdapter } from "../replies/sender";
 import { channelLabel } from "../channels/labels";
@@ -369,25 +370,13 @@ adminApp.post("/mejoras/lessons/remove", async (c) => {
 
 // Inbox (F1): two-pane view. ?c=<id> selects the thread; ?f/?q filter the list.
 adminApp.get("/conversations", async (c) =>
-  c.html(
-    await renderInbox(c.env, {
-      search: c.req.query("q"),
-      filter: c.req.query("f"),
-      selectedId: c.req.query("c"),
-    }),
-  ),
+  c.html(await renderInbox(c.env, inboxParamsFrom((k) => c.req.query(k)))),
 );
 
 // HTMX fragments (polled): left list every 10s, thread every 5s. Registered
 // before /conversations/:id so the static segments win the match.
 adminApp.get("/conversations/list-fragment", async (c) =>
-  c.html(
-    await renderInboxList(c.env, {
-      search: c.req.query("q"),
-      filter: c.req.query("f"),
-      selectedId: c.req.query("c"),
-    }),
-  ),
+  c.html(await renderInboxList(c.env, inboxParamsFrom((k) => c.req.query(k)))),
 );
 
 adminApp.get("/conversations/thread/:id", async (c) =>

@@ -35,6 +35,12 @@ export default defineConfig({
     exclude: [...configDefaults.exclude, "**/._*"],
     pool: "forks",
     poolOptions: { forks: { singleFork: true } },
+    // Vitest 4 ya no respeta `poolOptions.forks.singleFork`. Sin un tope de
+    // workers, decenas de archivos arrancan su Miniflare a la vez y el puente
+    // proxy de miniflare truena con `TypeError: fetch failed` (sin sockets) —
+    // rojos falsos que cambian en cada corrida. 2 workers = estable y rápido.
+    maxWorkers: 2,
+    minWorkers: 1,
     // Most tests spin up a real Miniflare (workerd process + full D1 schema)
     // in beforeEach; under machine load that alone can blow the 5s default.
     // These are integration tests — give them real headroom.

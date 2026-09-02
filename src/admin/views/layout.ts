@@ -231,6 +231,13 @@ const GLOBAL_STYLE = `
     header .live-pill{margin-left:auto;padding:8px}
     .live-pill span:last-child{display:none}
     .hide-mobile{display:none !important}
+    /* Modales casi a pantalla completa, con scroll propio. */
+    .modal-backdrop{padding:0 !important;align-items:flex-end !important}
+    .modal-card{width:100% !important;max-width:100% !important;max-height:92dvh;overflow-y:auto;box-shadow:none !important}
+    /* El overlay de scanlines cuesta pintado en móvil — bajarlo. */
+    .scanlines::after{opacity:.18}
+    /* Cualquier <table> suelta que no quepa: scroll en vez de romper el layout. */
+    main table{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%}
   }
   @media (prefers-reduced-motion:reduce){ .sb{transition:none} }
 
@@ -443,7 +450,7 @@ export async function layout(opts: { title: string; activeTab: string; body: str
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>${opts.title}</title>
   ${HEAD_ASSETS}
   ${GLOBAL_STYLE}
@@ -559,7 +566,7 @@ export function loginPage(opts: { error?: string; env?: Env } = {}): string {
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Ingresar · ${brand.name}</title>
   ${HEAD_ASSETS}
   ${GLOBAL_STYLE}
