@@ -120,6 +120,28 @@ instalación esté en **Meta oficial** o **ManyChat**, que sí mandan
 Plan completo y disparador en `PLAN.md § R`; entrada en el roadmap
 (`Siguientes mejoras`, ítem 9).
 
+### Mejora 4 (bug) — v1.14.1 — El reindex por HTTP ignoraba los documentos del panel
+
+**Qué se observó:** al mover los 4 KB de Kooni de `member/kb/` (repo) a la tabla
+`kb_docs` (editables desde `/admin/kb`), el reindex vía `POST /kb/reindex`
+devolvió `indexed: 0`. Causa: ese endpoint llamaba `reindexKb(env)` —solo los
+fragmentos de `kb-fixtures.json`—, no `reindexAll` (repo + `kb_docs`). Efecto
+colateral: después de cada `kooni-bot update`, los documentos que el dueño
+escribió en el panel quedaban sin re-embeber.
+
+**Qué se cambió:** `src/index.ts` — `POST /kb/reindex` ahora llama `reindexAll`.
+Test nuevo en `test/index.test.ts` (token válido → embebe también `kb_docs`).
+
+### Dónde se ven y editan los KB del negocio
+
+- **`/admin` → Conocimiento (`/admin/kb`)** — los documentos que el dueño
+  escribe y edita. Viven en D1 (`kb_docs`), se reindexan al guardar, sobreviven
+  los updates. **Aquí quedaron los 4 de Kooni** (qué es, planes y precios,
+  canales y costos, FAQ) tras migrarlos de `member/kb/`.
+- `member/kb/*.md` (archivos del repo) — fragmentos precargados; en el panel solo
+  se ven como el contador "N fragmentos precargados del repo", no editables ahí.
+  La instalación de Joel ya no usa esta vía (carpeta vacía).
+
 ### Pendiente para Joel (en el panel)
 
 - El bot corre con `model_override = "haiku"` (modelo barato). Si el playbook de

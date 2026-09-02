@@ -65,5 +65,30 @@ describe("Worker entry", () => {
       expect(warn).not.toHaveBeenCalled();
       warn.mockRestore();
     });
+
+    it("con token válido reindexa repo + documentos del panel (reindexAll)", async () => {
+      // Un doc en kb_docs → reindexAll lo debe embeber (antes se ignoraba).
+      const rows = [{ id: "d1", title: "Precios", content: "Corte $150", updated_at: 1 }];
+      const db = {
+        prepare: () => ({
+          bind: () => ({ first: async () => null, all: async () => ({ results: rows }), run: async () => ({}) }),
+          all: async () => ({ results: rows }),
+        }),
+      };
+      const upsert = vi.fn(async () => ({}));
+      const res = await pedir({ "X-Reindex-Token": "el-bueno" }, {
+        ...env,
+        KB_REINDEX_TOKEN: "el-bueno",
+        DB: db,
+        KB: { upsert, deleteByIds: vi.fn(async () => ({})) },
+        AI: { run: vi.fn(async (_m: string, i: { text: string[] }) => ({ data: i.text.map(() => [0.1, 0.2, 0.3]) })) },
+      });
+
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { ok: boolean; indexed: number };
+      expect(body.ok).toBe(true);
+      expect(body.indexed).toBeGreaterThan(0);
+      expect(upsert).toHaveBeenCalled();
+    });
   });
 });

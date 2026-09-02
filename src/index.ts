@@ -11,7 +11,7 @@ import { resolveZernioCredentials } from "./channels/zernioCredentials";
 import { adminApp } from "./admin/routes";
 import { purgeOldMessages } from "./crons/purgeOldMessages";
 import { DAILY_CRON, isNightlyTick } from "./crons/schedule";
-import { reindexKb } from "./kb/reindex";
+import { reindexAll } from "./kb/docs";
 import { analyzeConversations } from "./insights/analyzer";
 import { Db } from "./db/client";
 import { SettingsRepo, SETTING_KEYS } from "./db/settings";
@@ -321,7 +321,11 @@ app.post("/kb/reindex", async (c) => {
   if (!tokensMatch(provided, expected)) {
     return c.json({ ok: false, error: "unauthorized" }, 401);
   }
-  const r = await reindexKb(c.env);
+  // reindexAll = fragmentos del repo (kb-fixtures.json) + TODOS los documentos
+  // que el dueño escribió en /admin/kb (tabla kb_docs). Antes solo reindexaba
+  // los del repo, así que tras `kooni-bot update` los docs del panel quedaban
+  // sin re-embeber.
+  const r = await reindexAll(c.env);
   return c.json({ ok: true, indexed: r.indexed }, 200);
 });
 
