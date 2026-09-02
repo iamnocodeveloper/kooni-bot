@@ -109,6 +109,7 @@ otra pública. La pública, en cambio, es segura de publicar — ese es el punto
 10. **Panel — filtros de conversaciones, responsive y PWA install** (`§ S`). ✅ S1 (filtros canal/fecha/texto) v1.14.5 · S2 Fase 1 (shell+nav+bandeja) v1.14.3 · S2 Fase 2-3 (vistas, modales, iOS) v1.14.5. Queda: probar en dispositivos reales; formularios angostos → se cierran con § T.
 11. **Scraping web → KB** (`§ L`) — ✅ código v1.15.0, ambas instalaciones en v1.16.0. Falta en cardealer: verificar `module_unlocks += web_sync` (o que la licencia lo cubra) + cargar URLs en Extras + primera sync. `DECODO_AUTH` ya puesto.
 12. **Rediseño visual del panel** (`§ T`) — ✅ **HECHO y desplegado** (v1.17.0–v1.18.2). Sora + IBM Plex Mono, morado/fucsia, tema claro+oscuro con toggle, sombras suaves, 12 vistas + SVG + PWA (ícono, theme-color, botón instalar) en tokens. Ambas instalaciones en v1.18.2, visto por Joel. **Queda solo:** `web/*.html` (landing, sigue teal — pase aparte) y reescribir `docs/design-system.md`.
+13. **Chat del CRM — links y multimedia** (`§ V`) — que los links de los mensajes sean clicables/descargables y que las imágenes/videos/audios se previsualicen en el hilo (`/admin/conversations`). Hoy todo se renderiza como texto plano escapado. Pedido de Joel (2026-09-02).
 
 ## Seguridad — auditoría 2026-08-31 (arreglos + pendientes)
 
@@ -1034,6 +1035,60 @@ ve peor que no hacerlo. Orden:
 Antes de codear todo: proponer 1 mockup de la paleta + toggle en el Resumen
 para que Joel apruebe el rumbo. Esfuerzo: 1-2 días. Riesgo: bajo (visual), alto
 de "quedar a medias" si se apura.
+
+---
+
+## V. Chat del CRM — links clicables + previsualización de multimedia
+
+> **Pedido (Joel, 2026-09-02):** en el hilo de `/admin/conversations`, que los
+> links de los mensajes sean **clicables / descargables**, y que si el mensaje
+> trae **imagen, video o audio** se **previsualice** en la burbuja.
+
+### Estado actual
+
+`renderThreadLive` (`src/admin/views/conversations.ts`) renderiza el contenido
+de cada mensaje como `escapeHtml(m.content)` dentro de `white-space:pre-wrap` —
+**texto plano**. Nada de links ni media.
+
+Lo que hay de media hoy:
+- **Imágenes entrantes** → el agente mete un marcador `[IMAGE_URL: <url enmascarada>]`
+  en el texto del mensaje (solo en el camino multimodal Pro + "Oído y vista"). El
+  token de Telegram se enmascara antes de guardar (`src/telegramFiles.ts`), así que
+  la URL cruda no sirve para `<img>`.
+- **Audio entrante** → se transcribe a texto; el audio original no se guarda.
+- **WhatsApp Cloud** ya tiene un proxy firmado del media (`/webhooks/whatsapp/media/:id`).
+
+### Fase 1 — Links (fácil, sin esquema)
+
+En `renderThreadLive`, después de escapar, una pasada de "linkify": envolver
+`https?://\S+` en `<a href target="_blank" rel="noopener noreferrer">`. Para
+"descargable": si la URL termina en una extensión de archivo conocida
+(`.pdf .jpg .png .mp4 .mp3 .csv .xlsx …`), agregar `download`. Tests: que un link
+en el contenido salga como `<a>` y que el texto normal no se rompa.
+
+### Fase 2 — Previsualización de media (esquema + ingest + proxy)
+
+1. **Persistir el media al entrar.** Tabla `message_media (id, message_id,
+   kind [image|video|audio|file], mime, url_proxy, created_at)` o
+   `messages.metadata` JSON. Se llena en `agent.ingest` cuando el payload trae
+   `imageUrl` / `audioUrl` (todos los canales, no solo el multimodal Pro).
+2. **Proxy firmado por canal.** Generalizar el patrón de WhatsApp
+   (`/webhooks/whatsapp/media/:id`) a Telegram / Zernio / Meta: una ruta
+   `/admin/media/:id` (con auth de panel) que resuelve la URL real (des-enmascara
+   el token de Telegram sólo acá) y hace stream del archivo. Nunca exponer el
+   token ni la URL cruda al HTML.
+3. **Render en la burbuja.** En `renderThreadLive`, si el mensaje tiene media:
+   `<img loading="lazy">` / `<video controls preload="metadata">` /
+   `<audio controls>` con `src` = el proxy. Miniatura con `max-height` y click →
+   abrir grande (reusar `#modal-root`).
+4. **Audio entrante:** guardar el audio además de transcribirlo, para poder
+   escucharlo en el panel (hoy solo queda el texto).
+5. **Salientes con media:** cuando el dueño responde con imagen/audio desde el
+   panel (si se agrega esa opción) o el bot manda un recurso de la Galería —
+   registrar y mostrar igual.
+
+Esfuerzo: Fase 1 ~1h · Fase 2 ~1 día (el proxy por canal es lo que lleva tiempo).
+Riesgo: bajo en Fase 1; medio en Fase 2 (tocar `ingest` + un proxy nuevo).
 
 ---
 
