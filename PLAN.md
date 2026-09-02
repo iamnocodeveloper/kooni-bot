@@ -616,6 +616,73 @@ middleware de `routes.ts:93` sin probar los 7 tests de Basic Auth después.
 
 ---
 
+## Q. PWA del panel — instalable + avisos push
+
+> **Meta:** que el dueño tenga el panel como app en el celular (ícono en pantalla
+> de inicio, pantalla completa) y reciba **avisos push** cuando pasa algo
+> (prospecto nuevo, ticket, alerta del Vigilante). Nada de config avanzada:
+> datos, conversaciones, avisos.
+
+### Fase 0 — Instalable ✅ (hecho)
+
+| Cambio | Archivo |
+|---|---|
+| `manifest.webmanifest` + `sw.js` + `icon.svg` (network-first, respaldo offline) | `src/admin/pwa.ts` |
+| Rutas públicas `/admin/manifest.webmanifest` · `/admin/sw.js` · `/admin/icon.svg` (antes del guard) | `src/admin/routes.ts` |
+| `<link rel=manifest>` + theme-color + apple-touch-icon + registro del SW en el `<head>` (panel y login) | `src/admin/views/layout.ts` |
+| Tests | `test/admin/pwa.test.ts` |
+
+El service worker ya trae los handlers `push` y `notificationclick` — la Fase 1
+solo agrega el emisor y la tabla de suscripciones.
+
+### Fase 1 — Notificaciones push (Web Push + VAPID)
+
+Cloudflare Workers puede mandar Web Push sin infra extra: se firma un JWT VAPID
+(ES256 con WebCrypto) y se hace `fetch` al endpoint del navegador.
+
+1. **Claves VAPID** (una vez): generar par P-256. Pública → var `VAPID_PUBLIC_KEY`.
+   Privada → `wrangler secret put VAPID_PRIVATE_KEY`. `VAPID_SUBJECT` = `mailto:` del dueño.
+2. **Tabla D1** `push_subscriptions` (endpoint TEXT PK, p256dh, auth, created_at) en `src/db/schema.sql`
+   + `PushSubscriptionsRepo` en `src/db/pushSubs.ts`.
+3. **`src/push.ts`**: `vapidJwt(env, audience)` + `sendPush(env, sub, payload)`.
+   Empezar **sin payload cifrado** (RFC 8291 es complejo): push vacío → el SW
+   muestra un aviso genérico y al tocarlo abre `/admin/overview`. Si luego se
+   quiere texto en el aviso, ahí se agrega la cifra `aes128gcm`.
+4. **Endpoints** en `adminApp` (con auth): `POST /admin/push/subscribe`,
+   `POST /admin/push/unsubscribe`, y `GET /admin/push/key` (devuelve la pública).
+5. **UI**: botón "Activar avisos en este dispositivo" en Configuración (o en el
+   Resumen). Llama `Notification.requestPermission()` + `pushManager.subscribe()`
+   con la clave pública, y postea la suscripción.
+6. **Disparadores** (reusar los puntos que hoy avisan por Telegram):
+   - `notifyOwner()` en `src/tools/handoffHuman.ts` → push además del Telegram/WA/email.
+   - Vigilante (`src/vigilante.ts`) → push cuando detecta cliente molesto / venta en riesgo.
+   - Lead nuevo: en `captureLead.execute` o en el cron de resumen.
+   - Limpiar suscripciones muertas cuando el push devuelve 404/410.
+
+⚠️ **iOS:** el push solo llega si la PWA está **instalada** en pantalla de inicio
+(iOS 16.4+). Android y escritorio funcionan sin instalar.
+
+### Fase 2 — Lectura offline de datos
+
+Hoy las vistas devuelven HTML; para offline hacen falta endpoints JSON ligeros:
+`GET /admin/api/overview` · `/api/conversations?limit=30` · `/api/leads` · `/api/tickets`.
+El SW cachea la última respuesta de cada uno (stale-while-revalidate) → abrir la
+app sin señal muestra los últimos datos.
+
+### Fase 3 — Bandeja móvil
+
+Vista "Inbox" pensada para celular (lista de chats → hilo → responder). Reusa
+`POST /admin/conversations/:id/reply` que ya existe. Junto con la corrección de
+los mensajes de la app nativa (§ commit "registrar respuestas del negocio"),
+queda una bandeja unificada real en el bolsillo.
+
+### Recomendación
+
+Fase 0 (hecha) + Fase 1 dan el 80% del valor. Fases 2-3 después. Nada necesita
+servidor nuevo — todo vive en el Worker + D1.
+
+---
+
 ## Orden recomendado de ejecución
 
 1. **Fase 1-2 OpenReply** — matcher avanzado + `{username}` + links trackeados (mayor valor). | ✅ HECHO (v d59c390c)

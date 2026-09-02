@@ -40,6 +40,7 @@ import { renderInsights } from "./views/insights";
 import { analyzeConversations } from "../insights/analyzer";
 import { renderAgentePage, renderAgenteCanvas, renderNodeModal, toggleTool, toastOob } from "./views/agente";
 import { renderKbList, renderKbEditor } from "./views/kb";
+import { manifest as pwaManifest, serviceWorker as pwaServiceWorker, iconSvg as pwaIconSvg } from "./pwa";
 import { KbDocsRepo, indexDoc, removeDocVectors, reindexAll, MAX_DOC_CHARS } from "../kb/docs";
 import { renderMejoras } from "./views/mejoras";
 import { runFlywheel, getLessons, saveLessons } from "../flywheel/detect";
@@ -152,6 +153,35 @@ adminApp.get("/logout", (c) => {
   clearSessionCookie(c);
   return c.redirect("/admin/login", 302);
 });
+
+// ── PWA (Fase 0) — públicas a propósito: el navegador pide el manifest y el
+// service worker sin cookie. No exponen datos; el start_url del manifest sí
+// pasa por el guard normal.
+adminApp.get("/manifest.webmanifest", (c) =>
+  new Response(pwaManifest(c.env), {
+    headers: {
+      "Content-Type": "application/manifest+json; charset=utf-8",
+      "Cache-Control": "public, max-age=3600",
+    },
+  }),
+);
+adminApp.get("/sw.js", (c) =>
+  new Response(pwaServiceWorker(), {
+    headers: {
+      "Content-Type": "text/javascript; charset=utf-8",
+      "Service-Worker-Allowed": "/admin/",
+      "Cache-Control": "no-cache",
+    },
+  }),
+);
+adminApp.get("/icon.svg", (c) =>
+  new Response(pwaIconSvg(c.env), {
+    headers: {
+      "Content-Type": "image/svg+xml; charset=utf-8",
+      "Cache-Control": "public, max-age=86400",
+    },
+  }),
+);
 
 // Guard every admin route with cookie session OR Basic Auth. The middleware factory needs the
 // request-scoped Env to read DASHBOARD_PASSWORD, so build it per request here.

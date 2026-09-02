@@ -12,6 +12,7 @@ import type { Env } from "../../env";
 import { BOT_VERSION } from "../../version";
 import { isProUnlocked, PRO_ONLY_TABS, isTabAllowed } from "../../config";
 import { getNiche } from "../../niches";
+import { pwaHeadTags } from "../pwa";
 import type { NichePack } from "../../niches";
 
 const UPGRADE_URL = "/admin/upgrade";
@@ -401,6 +402,7 @@ export async function layout(opts: { title: string; activeTab: string; body: str
   ${HEAD_ASSETS}
   ${GLOBAL_STYLE}
   ${opts.env ? `<style>${brandOverrides(resolveBrand(opts.env))}</style>` : ""}
+  ${opts.env ? pwaHeadTags(opts.env) : ""}
 </head>
 <body class="scanlines">
   <div class="shell">
@@ -512,6 +514,7 @@ export function loginPage(opts: { error?: string; env?: Env } = {}): string {
   ${HEAD_ASSETS}
   ${GLOBAL_STYLE}
   <style>${brandOverrides(brand)}</style>
+  ${opts.env ? pwaHeadTags(opts.env) : ""}
   <style>
     .login-shell{min-height:100vh;display:grid;grid-template-columns:1fr 1fr}
     .login-brand{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;justify-content:center;padding:48px;position:relative;overflow:hidden}
