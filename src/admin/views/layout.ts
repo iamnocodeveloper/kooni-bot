@@ -53,6 +53,7 @@ const NAV: Section[] = [
     label: "Mi Agente",
     items: [
       { id: "agente", label: "Flujo", href: "/admin/agente", icon: "workflow" },
+      { id: "probar", label: "Probar el bot", href: "/admin/probar", icon: "flask-conical" },
       { id: "automatizaciones", label: "Automatizaciones", href: "/admin/automatizaciones", icon: "zap" },
       { id: "kb", label: "Conocimiento", href: "/admin/kb", icon: "book-open" },
       { id: "mejoras", label: "Mejoras", href: "/admin/mejoras", icon: "sparkles" },

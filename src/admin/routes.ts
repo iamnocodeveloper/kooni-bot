@@ -479,6 +479,29 @@ adminApp.post("/insights/analyze", async (c) => {
 // polled by HTMX every 15s (live activity pulse); node panels load on click.
 adminApp.get("/agente", async (c) => c.html(await renderAgentePage(c.env)));
 
+// Probar el bot — chat de prueba (no persiste, no manda por canal).
+adminApp.get("/probar", async (c) => {
+  const { renderProbar } = await import("./views/probar");
+  return c.html(await renderProbar(c.env));
+});
+adminApp.post("/probar/send", async (c) => {
+  const body = (await c.req.json().catch(() => null)) as
+    | { text?: string; history?: { role: "user" | "assistant"; content: string }[] }
+    | null;
+  const text = (body?.text ?? "").trim();
+  if (!text) return c.json({ error: "escribe un mensaje" }, 400);
+  const history = Array.isArray(body?.history)
+    ? body!.history.filter((m) => (m.role === "user" || m.role === "assistant") && typeof m.content === "string")
+    : [];
+  try {
+    const { runTestTurn } = await import("./playground");
+    const r = await runTestTurn(c.env, history, text);
+    return c.json(r);
+  } catch (e) {
+    return c.json({ error: e instanceof Error ? e.message : String(e) }, 500);
+  }
+});
+
 adminApp.get("/agente/canvas", async (c) => c.html(await renderAgenteCanvas(c.env)));
 
 adminApp.get("/agente/node/:id", async (c) =>

@@ -17,11 +17,36 @@ import { scrapeUrl, decodoConfigured } from "../integrations/decodo";
 // encuentra solo vía searchKb — no hay plumbing nuevo en el agente.
 
 const MAX_URLS = 10;
+/** Si una página pasa MAX_DOC_CHARS, se parte en hasta N docs `web:<slug>`, `-2`, `-3`… */
+const MAX_PARTS = 8;
+
+/** Parte el texto en trozos de <= max chars, cortando en salto de línea. */
+export function splitParts(text: string, max: number, maxParts: number): string[] {
+  const t = text.trim();
+  if (t.length <= max) return [t];
+  const parts: string[] = [];
+  let rest = t;
+  while (rest.length > max && parts.length < maxParts - 1) {
+    let cut = rest.lastIndexOf("\n", max);
+    if (cut < max * 0.5) cut = max; // sin salto útil → corte duro
+    parts.push(rest.slice(0, cut).trim());
+    rest = rest.slice(cut).trim();
+  }
+  if (rest) parts.push(rest.slice(0, max).trim());
+  return parts;
+}
+
+/** id del doc de la parte n (n=1 usa el id base, para compat). */
+function partId(baseId: string, n: number): string {
+  return n === 1 ? baseId : `${baseId}-${n}`;
+}
 
 interface UrlState {
   hash: string;
   at: number;
   chars: number;
+  /** Cuántos docs `web:<slug>[-n]` genera esta URL (1 si cabe en un doc). */
+  parts?: number;
 }
 
 /**
@@ -135,23 +160,38 @@ export async function runWebSync(env: Env): Promise<WebSyncSummary> {
       continue;
     }
     summary.scraped++;
-    const content = trimBoilerplate(r.content).slice(0, MAX_DOC_CHARS);
-    const hash = quickHash(content);
-    const id = webDocId(url);
+    const full = trimBoilerplate(r.content);
+    const parts = splitParts(full, MAX_DOC_CHARS, MAX_PARTS);
+    const hash = quickHash(full);
+    const baseId = webDocId(url);
+    const prevParts = state[url]?.parts ?? 1;
 
-    if (state[url]?.hash === hash) {
+    if (state[url]?.hash === hash && prevParts === parts.length) {
       summary.unchanged++;
       continue;
     }
 
-    const title = `Inventario web — ${new URL(url).pathname}${new URL(url).search}`;
+    const base = `${new URL(url).pathname}${new URL(url).search}`;
     try {
-      await kb.upsert({ id, title, content });
-      const doc = await kb.getById(id);
-      if (doc) await indexDoc(env, doc);
-      state[url] = { hash, at: Date.now(), chars: content.length };
+      for (let i = 0; i < parts.length; i++) {
+        const id = partId(baseId, i + 1);
+        const title =
+          parts.length > 1
+            ? `Inventario web — ${base} (parte ${i + 1}/${parts.length})`
+            : `Inventario web — ${base}`;
+        await kb.upsert({ id, title, content: parts[i] });
+        const doc = await kb.getById(id);
+        if (doc) await indexDoc(env, doc);
+      }
+      // Si antes había más partes, borrar las sobrantes.
+      for (let i = parts.length + 1; i <= prevParts; i++) {
+        const id = partId(baseId, i);
+        await removeDocVectors(env, id).catch(() => {});
+        await kb.delete(id).catch(() => {});
+      }
+      state[url] = { hash, at: Date.now(), chars: full.length, parts: parts.length };
       summary.updated++;
-      console.log(`[webSync] ${url} → ${id} (${content.length} chars) reindexado`);
+      console.log(`[webSync] ${url} → ${parts.length} doc(s), ${full.length} chars`);
     } catch (e) {
       const msg = String((e as Error)?.message ?? e);
       console.error(`[webSync] ${url}: fallo al guardar/indexar: ${msg}`);
@@ -159,14 +199,18 @@ export async function runWebSync(env: Env): Promise<WebSyncSummary> {
     }
   }
 
-  // Limpiar docs de URLs que ya no están en la config.
+  // Limpiar docs de URLs que ya no están en la config (todas sus partes).
   for (const oldUrl of Object.keys(state)) {
     if (!urls.includes(oldUrl)) {
-      const id = webDocId(oldUrl);
-      await removeDocVectors(env, id).catch(() => {});
-      await kb.delete(id).catch(() => {});
+      const baseId = webDocId(oldUrl);
+      const n = state[oldUrl]?.parts ?? 1;
+      for (let i = 1; i <= n; i++) {
+        const id = partId(baseId, i);
+        await removeDocVectors(env, id).catch(() => {});
+        await kb.delete(id).catch(() => {});
+      }
       delete state[oldUrl];
-      console.log(`[webSync] ${oldUrl} salió de la config → doc ${id} eliminado`);
+      console.log(`[webSync] ${oldUrl} salió de la config → ${n} doc(s) eliminados`);
     }
   }
 

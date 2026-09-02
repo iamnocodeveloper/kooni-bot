@@ -3,7 +3,7 @@ import { createTestMiniflare } from "../helpers/miniflareSetup";
 import { Db } from "../../src/db/client";
 import { SettingsRepo, SETTING_KEYS } from "../../src/db/settings";
 import { KbDocsRepo } from "../../src/kb/docs";
-import { parseWebSyncUrls, webDocId, runWebSync, trimBoilerplate } from "../../src/kb/webSync";
+import { parseWebSyncUrls, webDocId, runWebSync, trimBoilerplate, splitParts } from "../../src/kb/webSync";
 import type { Env } from "../../src/env";
 
 describe("parseWebSyncUrls / webDocId", () => {
@@ -34,6 +34,16 @@ describe("parseWebSyncUrls / webDocId", () => {
   it("trimBoilerplate no rompe texto sin marcadores", () => {
     const plain = "Este es un texto corto sin precios ni menús.";
     expect(trimBoilerplate(plain)).toBe(plain);
+  });
+
+  it("splitParts: un texto corto → 1 parte; uno largo → varias en salto de línea", () => {
+    expect(splitParts("hola\nmundo", 100, 8)).toEqual(["hola\nmundo"]);
+    const lines = Array.from({ length: 50 }, (_, i) => `linea ${i} con algo de texto`).join("\n");
+    const parts = splitParts(lines, 200, 8);
+    expect(parts.length).toBeGreaterThan(1);
+    expect(parts.length).toBeLessThanOrEqual(8);
+    parts.forEach((p) => expect(p.length).toBeLessThanOrEqual(200));
+    expect(parts.join("\n")).toContain("linea 49");
   });
 
   it("webDocId nunca genera vectores > 64 bytes (Vectorize los rechaza)", () => {
