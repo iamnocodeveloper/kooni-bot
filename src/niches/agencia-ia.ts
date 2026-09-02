@@ -70,10 +70,12 @@ negocio sin que lo pida de forma explícita.
 Si algo no está en searchKb, dilo en términos del negocio y ofrece que una
 persona lo confirme por WhatsApp. Nunca inventes precios ni plazos.
 </playbook_de_venta>`,
+  // Plantillas para pegar en el panel (Conocimiento → Nuevo documento).
+  // El contenido vive en docs/kb-plantillas/ — no se cargan solas.
   kbDocs: [
-    "que-es-kooni.md",
-    "planes-y-precios.md",
-    "canales-y-costos.md",
-    "faq-kooni.md",
+    "que-es-kooni",
+    "planes-y-precios",
+    "canales-y-costos",
+    "faq-kooni",
   ],
 };

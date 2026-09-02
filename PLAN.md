@@ -106,6 +106,7 @@ otra pública. La pública, en cambio, es segura de publicar — ese es el punto
 7. **Modelo de revendedores (marca blanca + recurrencia)** — licencias por agencia/revendedor: el revendedor paga una cuota/mensualidad (recurrencia real) y a cambio instala bots con su marca (`BRAND_*` ya implementado), con límites y reporte de su cartera desde el panel de licencias (rol `revendedor` en `profiles`, comisión/cuota por instalación activa).
 8. **PWA del panel — Fases 1-3** (`§ Q`). Fase 0 (instalable + offline básico) ✅ en v1.14.0. Pendiente: **Fase 1 = avisos push con VAPID** (nuevo lead / ticket / alerta del Vigilante; la más valiosa), Fase 2 = lectura offline de datos (endpoints JSON + cache del SW), Fase 3 = bandeja móvil (inbox pensado para celular, reusa `POST /admin/conversations/:id/reply`).
 9. **Atribución y rendimiento de campañas** (`§ R`) — ⏸️ **en espera**. Se retoma cuando la instalación esté en **Meta oficial** o **ManyChat** (Zernio no entrega el `referral` del anuncio). Orden: panel solo-lectura de comentario→DM (Fase 1, ya sirve) → stamp de origen en la conversación (Fase 2) → `referral` de anuncios (Fase 3, Meta/ManyChat).
+10. **Panel — filtros de conversaciones, responsive y PWA install** (`§ S`).
 
 ## Seguridad — auditoría 2026-08-31 (arreglos + pendientes)
 
@@ -794,6 +795,58 @@ Cuando la instalación esté en Meta oficial o ManyChat:
   comentario→DM) → Fase 3 (`referral` de anuncios).
 - **No hacer ahora** con Zernio: sin `referral` el dato queda a medias y no
   justifica el trabajo.
+
+---
+
+## S. Panel — filtros de conversaciones, responsive y PWA install
+
+> **Pedido (prueba de Joel, 2026-09-01):** más filtros en Conversaciones (canal,
+> nombre, fechas), mejorar la vista responsiva / menús en móvil, y "en móvil no
+> se ve la PWA para instalar".
+
+### S1 — Filtros de la bandeja de conversaciones
+
+Hoy (`src/admin/views/conversations.ts`, `renderInboxList`) hay:
+- búsqueda por `display_name` / `channel_user_id` (LIKE)
+- filtros: `leads`, `atencion`, `molestos`, `contentos`
+
+Falta:
+1. **Filtro por canal** — chips/select con los canales presentes (telegram,
+   zernio, whatsapp, instagram, messenger…). `WHERE c.channel = ?`. Poblar el
+   selector con `SELECT DISTINCT channel FROM conversations`.
+2. **Filtro por fecha** — rango sobre `c.last_message_at` (o `started_at`):
+   presets "hoy / 7 días / 30 días" + rango custom. Query param `d=7d` / `desde`+`hasta`.
+3. **Búsqueda más visible** — el campo ya existe; subirlo en la UI y que también
+   matchee el texto de los mensajes (opcional: `EXISTS (SELECT 1 FROM messages…)`).
+4. Persistir todos los filtros en la URL (ya se hace con `f` y `q` — sumar
+   `ch` y `d`) para que el refresco HTMX y los enlaces los conserven.
+
+Archivos: `conversations.ts` (`InboxParams`, `buildWhere`, barra de filtros),
+`routes.ts` (`/conversations` y `/conversations/list-fragment` leen los nuevos
+query params). Tests: `test/admin/inbox.test.ts`.
+
+### S2 — Responsive / menús en móvil
+
+- El shell tiene sidebar fija de 248px (`layout.ts`). En móvil debe colapsar a
+  un menú hamburguesa (drawer). Revisar el breakpoint que ya usa el login
+  (`max-width:900px`).
+- Bandeja de conversaciones: en móvil, lista y hilo compiten por el ancho —
+  pasar a una vista de una columna (lista → toca → hilo, con "volver").
+- Tablas anchas (Prospectos, Costos, Estadísticas) → scroll horizontal contenido
+  o tarjetas apiladas en móvil.
+- Header sticky: revisar que los botones (proyecto, cerrar sesión) no se
+  amontonen en pantallas chicas.
+
+### S3 — PWA: botón de instalar visible ✅ (v1.14.1)
+
+**Hecho:** `pwaHeadTags` inyecta un botón flotante "📲 Instalar app":
+- Android/desktop Chrome: captura `beforeinstallprompt` y llama `prompt()`.
+- iOS Safari (nunca dispara el evento): muestra la instrucción manual
+  (Compartir → Añadir a pantalla de inicio).
+- Se oculta si ya está instalada (`display-mode: standalone`) o tras `appinstalled`.
+
+Pendiente opcional: mover el botón a un lugar fijo del panel (Resumen /
+Configuración) en vez del flotante, si molesta.
 
 ---
 

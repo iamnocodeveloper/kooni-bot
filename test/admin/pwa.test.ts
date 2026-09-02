@@ -47,6 +47,14 @@ describe("pwa module", () => {
     expect(h).toContain("theme-color");
     expect(h).toContain("navigator.serviceWorker.register('/admin/sw.js'");
   });
+
+  it("head tags: botón de instalar (beforeinstallprompt + fallback iOS)", () => {
+    const h = pwaHeadTags(env);
+    expect(h).toContain("beforeinstallprompt");
+    expect(h).toContain("kooni-install");
+    expect(h).toContain("display-mode: standalone");
+    expect(h).toContain("Añadir a pantalla de inicio");
+  });
 });
 
 describe("pwa routes (públicas, sin auth)", () => {

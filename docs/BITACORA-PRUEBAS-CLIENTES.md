@@ -74,10 +74,17 @@ Si no llegan, verificar con `wrangler tail` que aparezca `[recordOwnerEcho]`.
 | `src/admin/routes.ts` | Rutas públicas `/admin/manifest.webmanifest` · `/admin/sw.js` · `/admin/icon.svg` (antes del guard: el navegador las pide sin cookie; no exponen datos). |
 | `src/admin/views/layout.ts` | `<head>` del panel y del login: link al manifest, theme-color, apple-touch-icon, registro del SW. |
 
-**Verificación:** `pnpm test` 682/682. Tests en `test/admin/pwa.test.ts`.
+**Verificación:** `pnpm test`. Tests en `test/admin/pwa.test.ts`.
 
-**Pendiente (documentado en `PLAN.md` § Q):** Fase 1 = avisos push con VAPID
-(la más valiosa), Fase 2 = lectura offline de datos, Fase 3 = bandeja móvil.
+**v1.14.1 — botón "Instalar app":** Joel reportó que "en móvil no se ve la PWA
+para instalar". Android Chrome esconde la opción en el menú ⋮ e iOS Safari no
+tiene prompt. Se agregó un botón flotante "📲 Instalar app" en `pwaHeadTags`:
+Android/desktop usa `beforeinstallprompt`; iOS muestra la instrucción manual;
+se oculta si ya está instalada.
+
+**Pendiente (documentado en `PLAN.md` § Q y § S):** Fase 1 = avisos push con
+VAPID (la más valiosa), Fase 2 = lectura offline, Fase 3 = bandeja móvil;
+§ S = filtros de conversaciones (canal/fecha) + responsive.
 
 ### Ajuste tras revisar la instalación real
 

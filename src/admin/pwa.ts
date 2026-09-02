@@ -177,5 +177,56 @@ export function pwaHeadTags(env: Env): string {
         });
       });
     }
+
+    // Botón "Instalar app". Android/desktop Chrome disparan beforeinstallprompt;
+    // iOS Safari nunca lo hace → se muestra la instrucción manual. Se oculta si
+    // ya está instalada (display-mode: standalone).
+    (function () {
+      var standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+      if (standalone) return;
+      var deferred = null;
+      var THEME = ${JSON.stringify(b.themeColor)}, ACCENT = ${JSON.stringify(b.accent)};
+
+      function btn() {
+        var el = document.getElementById('kooni-install');
+        if (el) return el;
+        el = document.createElement('button');
+        el.id = 'kooni-install';
+        el.type = 'button';
+        el.textContent = '📲 Instalar app';
+        el.setAttribute('style',
+          'position:fixed;right:14px;bottom:14px;z-index:9999;padding:10px 14px;' +
+          'font:600 13px system-ui;border:1px solid ' + ACCENT + ';border-radius:10px;' +
+          'background:' + THEME + ';color:' + ACCENT + ';cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.35)');
+        el.addEventListener('click', onClick);
+        document.body.appendChild(el);
+        return el;
+      }
+      function hide() { var el = document.getElementById('kooni-install'); if (el) el.remove(); }
+
+      function onClick() {
+        if (deferred) {
+          deferred.prompt();
+          deferred.userChoice.finally(function () { deferred = null; hide(); });
+          return;
+        }
+        var isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+        alert(isIOS
+          ? 'Para instalar: toca el botón Compartir y elige "Añadir a pantalla de inicio".'
+          : 'Abre el menú del navegador (⋮) y elige "Instalar aplicación" / "Agregar a pantalla de inicio".');
+      }
+
+      window.addEventListener('beforeinstallprompt', function (e) {
+        e.preventDefault();
+        deferred = e;
+        btn();
+      });
+      window.addEventListener('appinstalled', hide);
+
+      // iOS Safari: sin evento, mostramos el botón igual (la instrucción manual).
+      if (/iphone|ipad|ipod/i.test(navigator.userAgent) && !standalone) {
+        window.addEventListener('load', btn);
+      }
+    })();
   </script>`;
 }
