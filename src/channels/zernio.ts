@@ -1143,10 +1143,32 @@ export async function parseZernioEvents(body: unknown, env: Env): Promise<Incomi
     const m = b.message;
     const conv = b.conversation;
     const account = b.account;
-    if (!m || m.direction !== "incoming") return [];
+    if (!m) return [];
     const convId = conv?.id;
     const accountId = account?.accountId;
     if (!convId || !accountId) return [];
+
+    // Mensaje SALIENTE: el negocio respondió al cliente desde la app nativa
+    // (Instagram/Messenger/WhatsApp) u otra herramienta — o es el eco de lo que
+    // el propio bot envió (se de-duplica en recordOwnerEcho). Se registra en el
+    // hilo como `owner` y pausa el bot; NO entra al agente.
+    if (m.direction === "outgoing") {
+      if (!m.text) return [];
+      console.log("[zernio] msg saliente (owner echo):", JSON.stringify({ platform: account.platform }));
+      return [
+        {
+          channel: "zernio" as ChannelId,
+          channelUserId: `${accountId}:${convId}`,
+          displayName: conv?.participantName,
+          text: m.text,
+          ownerEcho: true,
+          isOwnerMessage: false,
+          receivedAt: Date.now(),
+          rawPayload: b,
+        },
+      ];
+    }
+    if (m.direction !== "incoming") return [];
 
     // Flujo automático de DM (reglas dm_reply del panel): si una keyword
     // matchea, respondemos ya y el mensaje NO entra al agente.

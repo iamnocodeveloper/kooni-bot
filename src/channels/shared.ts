@@ -8,6 +8,13 @@ export interface IncomingMessage {
   audioUrl?: string;
   imageUrl?: string;
   isOwnerMessage?: boolean;
+  /**
+   * El negocio respondió al cliente DESDE FUERA del panel (app nativa de
+   * Instagram/Messenger/WhatsApp, u otra herramienta). No es un mensaje para
+   * que el bot conteste: se registra en el hilo como `owner` y pausa el bot
+   * (takeover). El webhook lo enruta con `recordOwnerEcho`, no con `ingest`.
+   */
+  ownerEcho?: boolean;
   receivedAt: number;
   rawPayload: unknown;
   /** Para responder en el hilo del mensaje entrante (Telegram grupos). */

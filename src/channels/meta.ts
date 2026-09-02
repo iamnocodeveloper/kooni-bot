@@ -33,8 +33,9 @@ interface MetaWebhookBody {
 
 /**
  * Convierte un webhook de Meta en 0..N mensajes entrantes. Un solo POST puede
- * traer varias entradas y varios eventos; también trae echoes (mensajes que la
- * propia página envió) y recibos de entrega/lectura, que se ignoran.
+ * traer varias entradas y varios eventos. Los recibos de entrega/lectura se
+ * ignoran; los echoes (mensajes que la propia página envió, p. ej. desde la app
+ * nativa) salen marcados con `ownerEcho: true` para registrarse en el hilo.
  */
 export function parseMetaEvents(body: MetaWebhookBody): IncomingMessage[] {
   const channel: ChannelId = body.object === "instagram" ? "instagram" : "messenger";
@@ -50,8 +51,27 @@ export function parseMetaEvents(body: MetaWebhookBody): IncomingMessage[] {
         echo: m?.is_echo,
         kind: m?.text ? "text" : m?.attachments?.[0]?.type ?? "other",
       }));
-      if (!m || m.is_echo) continue; // ignora echoes
+      if (!m) continue;
       if (m.quick_reply) continue; // tap de botón (quick reply), no es texto para el LLM
+
+      // Echo: el negocio respondió al cliente desde la app nativa (o el bot vía
+      // API — eso se de-duplica río abajo). El destinatario del echo es el
+      // cliente (recipient), no la Página (sender). Se registra como `owner`.
+      if (m.is_echo) {
+        const customer = ev.recipient?.id;
+        if (!customer || !m.text) continue; // solo texto; sin recipiente no hay hilo
+        out.push({
+          channel,
+          channelUserId: String(customer),
+          text: m.text,
+          ownerEcho: true,
+          isOwnerMessage: false,
+          receivedAt: Date.now(),
+          rawPayload: ev,
+        });
+        continue;
+      }
+
       const sender = ev.sender?.id;
       if (!sender) continue;
       const audio = m.attachments?.find((a) => a.type === "audio");

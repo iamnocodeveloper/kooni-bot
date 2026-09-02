@@ -334,6 +334,54 @@ describe("SupportAgent.alarm — multimodal last message (Task 6.3)", () => {
   });
 });
 
+describe("SupportAgent.recordOwnerEcho — respuesta del negocio desde la app nativa", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    stubSettings();
+  });
+  afterEach(() => vi.restoreAllMocks());
+
+  function stubRepos(recent: any[] = []) {
+    vi.spyOn(ConversationsRepo.prototype, "getOrCreate").mockResolvedValue({ id: "conv-1" } as any);
+    vi.spyOn(MessagesRepo.prototype, "lastN").mockResolvedValue(recent as any);
+    const append = vi.spyOn(MessagesRepo.prototype, "append").mockResolvedValue("m1" as any);
+    vi.spyOn(ConversationsRepo.prototype, "touchLastMessage").mockResolvedValue(undefined as any);
+    const setPaused = vi.spyOn(ConversationsRepo.prototype, "setPausedUntil").mockResolvedValue(undefined as any);
+    return { append, setPaused };
+  }
+
+  it("registra el mensaje como owner y pausa el bot ~1h", async () => {
+    const { agent } = makeAgent();
+    const { append, setPaused } = stubRepos();
+
+    const before = Date.now();
+    await agent.recordOwnerEcho({ channel: "zernio", channelUserId: "acct:conv", text: "te confirmo por aquí" });
+
+    expect(append).toHaveBeenCalledWith("conv-1", "owner", "te confirmo por aquí");
+    const until = setPaused.mock.calls[0][1] as number;
+    expect(until - before).toBeGreaterThan(59 * 60 * 1000);
+  });
+
+  it("de-duplica el eco de una respuesta que el propio bot/panel acaba de mandar", async () => {
+    const { agent } = makeAgent();
+    const { append, setPaused } = stubRepos([
+      { role: "assistant", content: "te confirmo por aquí", created_at: Date.now() - 5_000 },
+    ]);
+
+    await agent.recordOwnerEcho({ channel: "zernio", channelUserId: "acct:conv", text: "te confirmo por aquí" });
+
+    expect(append).not.toHaveBeenCalled();
+    expect(setPaused).not.toHaveBeenCalled();
+  });
+
+  it("ignora un eco vacío", async () => {
+    const { agent } = makeAgent();
+    const { append } = stubRepos();
+    await agent.recordOwnerEcho({ channel: "zernio", channelUserId: "acct:conv", text: "   " });
+    expect(append).not.toHaveBeenCalled();
+  });
+});
+
 describe("SupportAgent.ingest — bot_paused (settings)", () => {
   let originalFetch: typeof globalThis.fetch;
 

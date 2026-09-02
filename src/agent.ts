@@ -42,6 +42,8 @@ export interface AgentIncomingPayload {
   audioUrl?: string;
   imageUrl?: string;
   isOwnerMessage?: boolean;
+  /** El negocio respondió desde la app nativa — registrar + pausar, no contestar. */
+  ownerEcho?: boolean;
   /** Para responder en el hilo (Telegram grupos). */
   replyToMessageId?: number;
 }
@@ -263,6 +265,49 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
     }
     this.setState({ ...this.state, lastAlarmAt: alarmAt });
 
+    return { acknowledged: true };
+  }
+
+  /**
+   * El negocio respondió al cliente DESDE FUERA del panel (app nativa de
+   * Instagram/Messenger/WhatsApp, u otra herramienta). Lo registramos en el
+   * hilo como `owner` para que el CRM muestre la conversación completa, y
+   * pausamos el bot 1h (mismo takeover que responder desde el panel).
+   *
+   * De-duplicación: el bot y el panel también producen "echo" — si un mensaje
+   * idéntico (assistant/owner) se guardó hace < 3 min, este echo es esa misma
+   * respuesta que vuelve por el webhook y se ignora.
+   */
+  async recordOwnerEcho(payload: AgentIncomingPayload): Promise<{ acknowledged: true }> {
+    const text = (payload.text ?? "").trim();
+    if (!text) return { acknowledged: true };
+
+    const db = new Db(this.env.DB);
+    const convs = new ConversationsRepo(db);
+    const conv = await convs.getOrCreate(
+      payload.channel,
+      payload.channelUserId,
+      payload.displayName,
+    );
+    const msgs = new MessagesRepo(db);
+
+    const recent = await msgs.lastN(conv.id, 10);
+    const cutoff = Date.now() - 3 * 60 * 1000;
+    const isDup = recent.some(
+      (m) =>
+        (m.role === "assistant" || m.role === "owner") &&
+        m.content.trim() === text &&
+        (m.created_at ?? 0) >= cutoff,
+    );
+    if (isDup) {
+      console.log(`[recordOwnerEcho] duplicado ignorado (conv ${conv.id})`);
+      return { acknowledged: true };
+    }
+
+    await msgs.append(conv.id, "owner", text);
+    await convs.touchLastMessage(conv.id);
+    await convs.setPausedUntil(conv.id, Date.now() + 60 * 60 * 1000);
+    console.log(`[recordOwnerEcho] respuesta manual registrada + bot en pausa 1h (conv ${conv.id})`);
     return { acknowledged: true };
   }
 

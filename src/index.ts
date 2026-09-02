@@ -107,7 +107,12 @@ app.post("/webhooks/zernio", async (c) => {
     for (const msg of msgs) {
       if (!msg.text && !msg.audioUrl && !msg.imageUrl) continue;
       const doId = c.env.AGENT.idFromName(`${msg.channel}:${msg.channelUserId}`);
-      await c.env.AGENT.get(doId).ingest(msg).catch((e) => console.error("zernio ingest:", e));
+      const stub = c.env.AGENT.get(doId);
+      if (msg.ownerEcho) {
+        await stub.recordOwnerEcho(msg).catch((e) => console.error("zernio ownerEcho:", e));
+      } else {
+        await stub.ingest(msg).catch((e) => console.error("zernio ingest:", e));
+      }
     }
     return c.text("ok", 200);
   } catch (e: any) {
@@ -201,7 +206,12 @@ app.post("/webhooks/meta", async (c) => {
     // colisiones de rate limit en ráfagas de historias).
     if (msg.channel === "instagram" && c.env.IG_DM_SOURCE === "manychat") continue;
     const doId = c.env.AGENT.idFromName(`${msg.channel}:${msg.channelUserId}`);
-    await c.env.AGENT.get(doId).ingest(msg);
+    const stub = c.env.AGENT.get(doId);
+    if (msg.ownerEcho) {
+      await stub.recordOwnerEcho(msg).catch((e) => console.error("meta ownerEcho:", e));
+    } else {
+      await stub.ingest(msg);
+    }
   }
   return c.text("EVENT_RECEIVED", 200);
 });

@@ -67,12 +67,29 @@ describe("parseZernioEvents (message.received)", () => {
     expect(msg.text).toBe("hola, quiero información");
   });
 
-  it("ignora mensajes salientes (echo)", async () => {
-    const out = await parseZernioEvents(
-      { ...dmPayload, message: { ...dmPayload.message, direction: "outgoing" } },
+  it("marca los mensajes salientes como ownerEcho (respuesta del negocio desde la app nativa)", async () => {
+    const [msg] = await parseZernioEvents(
+      { ...dmPayload, message: { ...dmPayload.message, direction: "outgoing", text: "te confirmo por aquí" } },
       envBase,
     );
-    expect(out).toHaveLength(0);
+    expect(msg.ownerEcho).toBe(true);
+    expect(msg.channelUserId).toBe("acct_1:conv_1");
+    expect(msg.text).toBe("te confirmo por aquí");
+  });
+
+  it("descarta salientes sin texto y direcciones desconocidas", async () => {
+    expect(
+      await parseZernioEvents(
+        { ...dmPayload, message: { ...dmPayload.message, direction: "outgoing", text: null } },
+        envBase,
+      ),
+    ).toHaveLength(0);
+    expect(
+      await parseZernioEvents(
+        { ...dmPayload, message: { ...dmPayload.message, direction: "system" } },
+        envBase,
+      ),
+    ).toHaveLength(0);
   });
 });
 
