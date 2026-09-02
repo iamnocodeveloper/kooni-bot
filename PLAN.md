@@ -683,6 +683,91 @@ servidor nuevo — todo vive en el Worker + D1.
 
 ---
 
+## R. Atribución y rendimiento de campañas
+
+> **Pedido (prueba de Joel):** "revisa si Zernio puede reconocer si el mensaje
+> viene de una campaña para marcarlo, y tener datos de ventas / rendimiento de
+> mensajes de campañas en el dashboard."
+
+### Análisis — ¿qué señal de campaña tenemos?
+
+**Zernio NO expone atribución directa.** El payload que modela `src/channels/zernio.ts`
+(`ZernioMessage`, `ZernioConversation`) no trae `referral` / `ref` / `utm` /
+`ads_context`. Meta sí tiene un objeto `referral` (source `ADS` / `SHORTLINK`,
+`ref` de links `ig.me?ref=` y `m.me?ref=`), pero **por la vía de Zernio no llega**
+— habría que confirmarlo con soporte de Zernio y, si lo mandan, sumar el campo al
+parser. Por ahora: **no asumir que existe.**
+
+**Lo que SÍ es una señal de campaña, y ya se registra a medias:**
+
+| Señal | Tabla existente | Qué falta |
+|---|---|---|
+| Comentario con keyword en un post promocionado → el bot manda DM | `comments` (`rule_id`, `dm_sent`, `public_reply_sent`), `processed_comments`, `dm_logs` (`rule_id`, `status`) | Nada; ya se guarda por regla. |
+| Clic en el link del DM automático | `auto_rule_clicks` (por `slug`) + `auto_rule_links` (`slug` → `rule_id`) | Nada; ya se cuenta por regla. |
+| El DM derivó en conversación / lead / venta | — | **El eslabón que falta.** No hay stamp de "esta conversación nació de la regla X". |
+
+`keyword_hits` (schema) está declarada pero **nunca se escribe** — es un stub;
+no sirve de puente hoy.
+
+### Plan — 2 fases
+
+**Fase 1 — Panel "Rendimiento de campañas" (solo lectura, sin tocar webhooks ni esquema).**
+
+Agrega una vista que agrega lo que YA se guarda, por regla activa de
+`auto_rules` (cada regla = una campaña de comentario→DM):
+
+- comentarios que matchearon  = `COUNT(comments WHERE rule_id = ?)`
+- DMs enviados                 = `COUNT(dm_logs WHERE rule_id = ? AND kind IN ('dm_reply','comment_dm') AND status='sent')`
+- respuestas públicas          = `COUNT(comments WHERE rule_id = ? AND public_reply_sent = 1)`
+- clics en el link             = `COUNT(auto_rule_clicks JOIN auto_rule_links USING(slug) WHERE rule_id = ?)`
+- tasa de clic                 = clics / DMs enviados
+
+Tareas:
+1. `src/db/campaignStats.ts` — un repo con esas 4-5 consultas agregadas por `rule_id` y por rango de fechas.
+2. `src/admin/views/campanas.ts` o vista nueva `rendimiento.ts` — tabla: regla · keywords · comentarios · DMs · clics · % clic. Link a la pestaña Automatizaciones.
+3. Entrada en el nav (dentro de "Automatizaciones" o "Estadísticas" — Pro-gate como el resto de métricas).
+4. Tests: `test/db/campaignStats.test.ts` con D1 stub.
+
+Riesgo: bajo. Sin migración, sin cambios en el flujo de mensajes.
+
+**Fase 2 — Atribución hasta la venta (stamp de origen en la conversación).**
+
+Cuando una conversación nace de un DM automático de comentario, marcarla con su
+origen y propagarlo al lead.
+
+Tareas:
+1. **Esquema:** reusar `conversations.metadata` (JSON, ya existe) — no hace falta
+   columna nueva. Guardar `{ source: "comment_dm", ruleId, postId, keyword, at }`.
+2. **Puente comentario → conversación.** El DM se manda con
+   `private-reply` (`sendCommentActions`), pero la conversación se crea recién
+   cuando la persona responde. Opciones:
+   - (a) Si la respuesta de `private-reply` de Zernio trae `conversationId`,
+     stampear ahí mismo. **Verificar el contrato primero.**
+   - (b) Tabla chica `pending_attribution (account_id, commenter_id, rule_id,
+     post_id, keyword, created_at)` con TTL ~7 días. Al entrar el primer
+     `message.received` de ese usuario, si hay pending → stampear la
+     conversación y borrar el pending. Reusa el patrón de `follow_gate_pending`.
+3. **Propagar al lead:** en `captureLead.execute`, leer `conversations.metadata.source`
+   y copiarlo a `lead.metadata.source` / `lead.metadata.campaignRuleId`.
+4. **Dashboard:** extender el panel de la Fase 1 con el embudo completo:
+   comentarios → DMs → respondieron → leads → vendidos ($), por regla.
+5. **Conversaciones:** chip "Campaña: <keyword>" en el hilo (como el chip de canal).
+6. Tests: puente de atribución, propagación al lead, agregados del embudo.
+
+Riesgo: medio (toca `zernio.ts` y `captureLead`). Hacer después de la Fase 1 y
+de que la Fase 1 muestre que el volumen de comentario→DM justifica el trabajo.
+
+### Indicaciones para esta etapa
+
+1. Confirmar con Zernio si su webhook puede incluir `referral`/`ref` de anuncios.
+   Si sí → tarea extra: sumar el campo al parser y usarlo como origen directo.
+2. Implementar **Fase 1 completa** (panel solo-lectura). Es la que da el dato de
+   "rendimiento de mensajes de campaña" sin riesgo.
+3. Medir 1-2 semanas con datos reales de la campaña de Joel.
+4. Si el volumen lo amerita, implementar **Fase 2** (atribución hasta venta).
+
+---
+
 ## Orden recomendado de ejecución
 
 1. **Fase 1-2 OpenReply** — matcher avanzado + `{username}` + links trackeados (mayor valor). | ✅ HECHO (v d59c390c)
