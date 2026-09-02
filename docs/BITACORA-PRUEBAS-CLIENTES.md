@@ -110,6 +110,16 @@ lista de servicios). Los KB de Kooni le dan al bot el detalle de planes/precios.
   venía funcionando así.
 - **CLI/npm:** sin cambios en `cli-kooni/` esta sesión → no hubo publicación en npm.
 
+### Decisión — atribución de campañas: en espera
+
+Se pidió medir el rendimiento de los mensajes de campaña. **Zernio no entrega el
+`referral` del anuncio** en su webhook, así que la atribución real (de qué
+anuncio viene cada DM) queda a medias. Decisión: **postergar** hasta que la
+instalación esté en **Meta oficial** o **ManyChat**, que sí mandan
+`messaging.referral` (`source: ADS`, `ads_context_data`, `m.me?ref=` / `ig.me?ref=`).
+Plan completo y disparador en `PLAN.md § R`; entrada en el roadmap
+(`Siguientes mejoras`, ítem 9).
+
 ### Pendiente para Joel (en el panel)
 
 - El bot corre con `model_override = "haiku"` (modelo barato). Si el playbook de

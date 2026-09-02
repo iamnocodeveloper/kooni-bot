@@ -104,6 +104,8 @@ otra pública. La pública, en cambio, es segura de publicar — ese es el punto
 5. **Validación asimétrica de licencias (Ed25519)** — ✅ **HECHO en el worker (2026-09-01, sin desplegar)**: `src/license.ts` genera/verifica códigos `KOONI-PRO-V2-<payload>.<sig>` con Ed25519 (`node:crypto`, sync, compatible con Workers). El worker solo lleva la clave PÚBLICA (embebida en el código, con override opcional vía `env.LICENSE_PUBLIC_KEY`); la PRIVADA nunca toca el repo. `scripts/gen-license.ts` (gitignored, uso interno) ya firma en v2. El formato v1 (HMAC/`LICENSE_MASTER_KEY`) queda desactivado — `verifyLicense` rechaza cualquier código que no empiece con `KOONI-PRO-V2-`. **Pendiente para cerrar del todo:** (a) actualizar la edge function `generar-licencia` en InsForge para firmar con Ed25519 (privada como secret `LICENSE_PRIVATE_KEY`) — vive fuera de este repo, no se pudo tocar desde aquí; (b) generar y pegar un código v2 en el panel de **cada bot ya desplegado** (ver aviso operativo abajo); (c) correr `pnpm test && pnpm typecheck` y desplegar.
 6. **UI del panel de licencias** — exponer campos `botSlug` / `instUid` (instalación) en el formulario de generación, y mostrar el `correo` en la tabla de clientes.
 7. **Modelo de revendedores (marca blanca + recurrencia)** — licencias por agencia/revendedor: el revendedor paga una cuota/mensualidad (recurrencia real) y a cambio instala bots con su marca (`BRAND_*` ya implementado), con límites y reporte de su cartera desde el panel de licencias (rol `revendedor` en `profiles`, comisión/cuota por instalación activa).
+8. **PWA del panel — Fases 1-3** (`§ Q`). Fase 0 (instalable + offline básico) ✅ en v1.14.0. Pendiente: **Fase 1 = avisos push con VAPID** (nuevo lead / ticket / alerta del Vigilante; la más valiosa), Fase 2 = lectura offline de datos (endpoints JSON + cache del SW), Fase 3 = bandeja móvil (inbox pensado para celular, reusa `POST /admin/conversations/:id/reply`).
+9. **Atribución y rendimiento de campañas** (`§ R`) — ⏸️ **en espera**. Se retoma cuando la instalación esté en **Meta oficial** o **ManyChat** (Zernio no entrega el `referral` del anuncio). Orden: panel solo-lectura de comentario→DM (Fase 1, ya sirve) → stamp de origen en la conversación (Fase 2) → `referral` de anuncios (Fase 3, Meta/ManyChat).
 
 ## Seguridad — auditoría 2026-08-31 (arreglos + pendientes)
 
@@ -683,20 +685,36 @@ servidor nuevo — todo vive en el Worker + D1.
 
 ---
 
-## R. Atribución y rendimiento de campañas
+## R. Atribución y rendimiento de campañas — ⏸️ EN ESPERA (Meta / ManyChat)
 
 > **Pedido (prueba de Joel):** "revisa si Zernio puede reconocer si el mensaje
 > viene de una campaña para marcarlo, y tener datos de ventas / rendimiento de
 > mensajes de campañas en el dashboard."
+>
+> **Decisión (2026-09-01):** se posterga. La atribución real (de qué anuncio /
+> ref viene el mensaje) solo llega limpia por **Meta oficial** o **ManyChat** —
+> no por Zernio. Se retoma cuando la instalación esté en uno de esos dos canales.
+> Ver "Cuándo se retoma" abajo. Hasta entonces, no se construye nada.
 
-### Análisis — ¿qué señal de campaña tenemos?
+### Análisis — ¿qué señal de campaña tenemos por canal?
 
-**Zernio NO expone atribución directa.** El payload que modela `src/channels/zernio.ts`
-(`ZernioMessage`, `ZernioConversation`) no trae `referral` / `ref` / `utm` /
-`ads_context`. Meta sí tiene un objeto `referral` (source `ADS` / `SHORTLINK`,
-`ref` de links `ig.me?ref=` y `m.me?ref=`), pero **por la vía de Zernio no llega**
-— habría que confirmarlo con soporte de Zernio y, si lo mandan, sumar el campo al
-parser. Por ahora: **no asumir que existe.**
+| Canal | Trae origen del anuncio / ref | Cómo |
+|---|---|---|
+| **Zernio** (hoy) | ❌ No | `ZernioMessage` / `ZernioConversation` no traen `referral` / `ref` / `utm` / `ads_context`. Habría que pedírselo a soporte de Zernio. |
+| **Meta oficial** (Messenger + IG DM) | ✅ Sí | Evento `messaging.referral` y `postback.referral`: `{ ref, source: "ADS"\|"SHORTLINK"\|"CUSTOMER_CHAT_PLUGIN"…, ads_context_data: { ad_title, post_id, photo_url } }`. Links `m.me/<pág>?ref=<campaña>` y `ig.me/m/<user>?ref=<campaña>`. Anuncios click-to-Messenger/IG lo mandan solos. |
+| **ManyChat** | 🟡 Parcial | El flujo de ManyChat puede pasar la atribución del anuncio como custom field / `last_input_text` si se configura; menos directo que Meta nativo pero suficiente. |
+
+**Lo que SÍ es señal de campaña hoy y ya se registra a medias** (sirve para
+cualquier canal, no depende de `referral`):
+
+| Señal | Tabla existente | Qué falta |
+|---|---|---|
+| Comentario con keyword en un post promocionado → el bot manda DM | `comments` (`rule_id`, `dm_sent`, `public_reply_sent`), `processed_comments`, `dm_logs` (`rule_id`, `status`) | Nada; ya se guarda por regla. |
+| Clic en el link del DM automático | `auto_rule_clicks` (por `slug`) + `auto_rule_links` (`slug` → `rule_id`) | Nada; ya se cuenta por regla. |
+| El DM derivó en conversación / lead / venta | — | **El eslabón que falta.** No hay stamp de "esta conversación nació de la regla X". |
+
+`keyword_hits` (schema) está declarada pero **nunca se escribe** — es un stub;
+no sirve de puente hoy.
 
 **Lo que SÍ es una señal de campaña, y ya se registra a medias:**
 
@@ -754,17 +772,28 @@ Tareas:
 5. **Conversaciones:** chip "Campaña: <keyword>" en el hilo (como el chip de canal).
 6. Tests: puente de atribución, propagación al lead, agregados del embudo.
 
-Riesgo: medio (toca `zernio.ts` y `captureLead`). Hacer después de la Fase 1 y
-de que la Fase 1 muestre que el volumen de comentario→DM justifica el trabajo.
+Riesgo: medio (toca el parser del canal y `captureLead`).
 
-### Indicaciones para esta etapa
+**Fase 3 — Origen del anuncio (`referral`), solo con Meta/ManyChat.**
 
-1. Confirmar con Zernio si su webhook puede incluir `referral`/`ref` de anuncios.
-   Si sí → tarea extra: sumar el campo al parser y usarlo como origen directo.
-2. Implementar **Fase 1 completa** (panel solo-lectura). Es la que da el dato de
-   "rendimiento de mensajes de campaña" sin riesgo.
-3. Medir 1-2 semanas con datos reales de la campaña de Joel.
-4. Si el volumen lo amerita, implementar **Fase 2** (atribución hasta venta).
+Cuando la instalación esté en Meta oficial o ManyChat:
+1. Parsear `messaging.referral` / `postback.referral` en `src/channels/meta.ts`
+   (y el equivalente en `manychat.ts`) → `{ ref, source, adTitle, postId }`.
+2. Al crear la conversación, stampear `conversations.metadata.ad = { ref, source, … }`.
+3. Convención de `ref`: el dueño pone `?ref=<slug-campaña>` en el link del anuncio;
+   el panel agrupa por ese slug.
+4. Dashboard: cruzar anuncio (`ref`) → conversaciones → leads → ventas.
+
+### Cuándo se retoma
+
+- **Disparador:** la instalación (de Joel u otra) migra a **Meta oficial** o
+  **ManyChat** como canal de IG/Messenger.
+- **Antes de codear:** confirmar que ese canal entrega `referral` en el webhook
+  (Meta sí; ManyChat depende de cómo esté armado el flujo).
+- **Orden:** Fase 1 (panel solo-lectura, sirve ya con Zernio) → Fase 2 (stamp
+  comentario→DM) → Fase 3 (`referral` de anuncios).
+- **No hacer ahora** con Zernio: sin `referral` el dato queda a medias y no
+  justifica el trabajo.
 
 ---
 
@@ -776,3 +805,5 @@ de que la Fase 1 muestre que el volumen de comentario→DM justifica el trabajo.
 4. **F2** — prueba del handoff con el dueño.
 5. **Fases 3-7 OpenReply** — follow gate, dedup, rate limit, logs, plantillas. | 🎉 PLAN COMPLETO (v86b83401): follow gate ✅ + dedup ✅ + rate limit ✅ + logs ✅ + plantillas ✅
 6. **E7** — generar la landing con los prompts de `sitio-web/`.
+7. **PWA Fase 1** (`§ Q`, roadmap 8) — avisos push con VAPID. Fase 0 ✅ en v1.14.0.
+8. **Campañas** (`§ R`, roadmap 9) — ⏸️ en espera hasta Meta oficial / ManyChat.
