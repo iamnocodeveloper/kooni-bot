@@ -95,9 +95,7 @@ Archivos: `assets/kooni-logo.svg` (64px) y `assets/kooni-favicon.svg` (32px).
   abren en dos direcciones) en fucsia.
 - **Punto:** un nodo violeta `#a679f6` en la esquina superior derecha — "el bot
   encendido / en línea".
-
-> Los SVG en `assets/` todavía tienen los colores teal viejos — actualizar en la
-> Fase 2 del rediseño.
+- Los SVG (`assets/` y `web/assets/`) ya están recoloreados a fucsia/violeta (v1.18).
 - **Uso en dashboard:** dentro del cuadro de marca (34px) del sidebar y en la
   página de login de dos columnas (`loginPage()` en `layout.ts`), se renderiza
   el glifo K con el punto. En marca blanca lo reemplaza el logo del revendedor
