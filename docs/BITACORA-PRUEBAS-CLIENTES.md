@@ -258,7 +258,39 @@ las dos instalaciones. Joel puede rotarlas cuando quiera (regenera y re-pone).
 
 Tests: `test/push.test.ts` (verifica la firma ES256), `test/admin/pwa.test.ts`. 710/710.
 
-## 2026-09-02 · v1.18.3–v1.18.5 — Web Sync ACTIVO en cardealer (Daniel autos)
+## 2026-09-02 · v1.19.0 — "Probar el bot" + web_sync en varios docs + bot de Daniel
+
+### "Probar el bot" (playground) — pedido de Joel
+
+Ventana de prueba en `/admin/probar` (nav → Mi Agente). El dueño escribe como
+cliente y ve la respuesta **real** del bot (mismo prompt, modelo, KB), sin
+persistir nada ni mandar por canal. Solo tools de lectura (`searchKb`,
+`catalogQuery`); las de acción no van y un `<modo_prueba>` le dice al bot que
+diga "lo que haría". `src/admin/playground.ts` + `views/probar.ts` + rutas +
+nav. Tests: `test/admin/probar.test.ts`. Detalle en `PLAN.md § W`.
+
+### web_sync — inventario completo (100 autos, no 71)
+
+`splitParts()`: si una página pasa `MAX_DOC_CHARS`, se parte en hasta 8 docs
+(`web:<slug>`, `-2`, `-3`…). Borra las partes sobrantes si el contenido encoge.
+
+### Bot de Daniel autos — orientación de ventas
+
+Joel pidió que el bot ayude a la persona a encontrar el auto: preguntar
+nuevo/usado, modelo/tipo, rango de precio (mín/máx); si dan un VIN, buscarlo y
+decir si está; y orientar todo a entender qué auto quiere. Aplicado en el D1 de
+cardealer (aplica al instante):
+- `custom_instructions` — el playbook de ventas de autos (una pregunta a la vez,
+  proponer 1-3 opciones del inventario con enlace, VIN lookup, capturar el
+  prospecto al mostrar interés, nunca inventar autos/precios).
+- KB doc `inventario-como-funciona` — cómo el bot atiende y qué puede responder.
+- El inventario real (VIN/precio/millaje/link) ya está en la KB vía web_sync.
+
+**Pendiente (Joel):** entrar a `/admin/probar` de cardealer y probar preguntas
+("¿tienen un Sorento usado?", "autos usados hasta 15 mil", un VIN). Ajustar el
+`custom_instructions` desde Configuración → reglas del negocio si algo no cuadra.
+
+
 
 Joel pasó los datos: sitio `greenwaykiawestpalmbeach.com`, endpoint
 `/llm/inventory/`. Configurado y verificado end-to-end.

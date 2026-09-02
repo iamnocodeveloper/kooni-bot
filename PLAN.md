@@ -110,6 +110,7 @@ otra pública. La pública, en cambio, es segura de publicar — ese es el punto
 11. **Scraping web → KB** (`§ L`) — ✅ **ACTIVO en cardealer** (v1.18.5). 71 autos del inventario de Daniel en la KB, se refresca cada noche. Fase 2 (los 100 autos, hoy caben 71) solo si Daniel lo pide.
 12. **Rediseño visual del panel** (`§ T`) — ✅ **HECHO y desplegado** (v1.17.0–v1.18.2). Sora + IBM Plex Mono, morado/fucsia, tema claro+oscuro con toggle, sombras suaves, 12 vistas + SVG + PWA (ícono, theme-color, botón instalar) en tokens. Ambas instalaciones en v1.18.2, visto por Joel. **Queda solo:** `web/*.html` (landing, sigue teal — pase aparte) y reescribir `docs/design-system.md`.
 13. **Chat del CRM — links y multimedia** (`§ V`) — que los links de los mensajes sean clicables/descargables y que las imágenes/videos/audios se previsualicen en el hilo (`/admin/conversations`). Hoy todo se renderiza como texto plano escapado. Pedido de Joel (2026-09-02).
+14. **"Probar el bot" (playground)** (`§ W`) — ✅ **HECHO** v1.19.0. Chat de prueba en `/admin/probar`: el dueño escribe como cliente, ve la respuesta real (prompt+modelo+KB), sin persistir ni mandar por canal. Solo tools de lectura.
 
 ## Seguridad — auditoría 2026-08-31 (arreglos + pendientes)
 
@@ -1098,6 +1099,30 @@ en el contenido salga como `<a>` y que el texto normal no se rompa.
 
 Esfuerzo: Fase 1 ~1h · Fase 2 ~1 día (el proxy por canal es lo que lleva tiempo).
 Riesgo: bajo en Fase 1; medio en Fase 2 (tocar `ingest` + un proxy nuevo).
+
+---
+
+## W. "Probar el bot" — playground en el panel — ✅ HECHO (v1.19.0)
+
+> **Pedido (Joel, 2026-09-02):** "una ventana de pruebas, donde luego de
+> configurar el bot y sus datos, el usuario pueda probar el bot como si fuera un
+> usuario, preguntarle y ver cómo responde para poder ajustar algo."
+
+**Cómo quedó:**
+- **`/admin/probar`** (nav → Mi Agente → "Probar el bot") — un chat. El dueño
+  escribe como cliente y ve la respuesta **real** del bot: mismo system prompt
+  (`resolveAgentConfig`), mismo modelo, misma KB. Muestra qué tools usó y el modelo.
+- **Sin efectos:** no guarda conversación ni mensajes, no manda por ningún canal.
+  Solo se le pasan las tools de **lectura** (`searchKb`, `catalogQuery`,
+  `reportQuery`); las de acción (`captureLead`, `handoffHuman`, `scheduleAppointment`…)
+  NO están, y un bloque `<modo_prueba>` en el prompt le dice al bot que responda
+  "lo que haría" en vez de ejecutar. Así no se llenan leads/tickets de mentira.
+- Archivos: `src/admin/playground.ts` (`runTestTurn`), `src/admin/views/probar.ts`,
+  rutas `GET /admin/probar` + `POST /admin/probar/send`, nav en `layout.ts`.
+  Tests: `test/admin/probar.test.ts`.
+
+**Posibles mejoras (no pedidas):** botón "usar este chat como base de una lección"
+(alimentar el flywheel), o permitir elegir el modelo para comparar respuestas.
 
 ---
 
