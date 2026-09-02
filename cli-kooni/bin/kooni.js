@@ -907,8 +907,9 @@ async function onboarding(rl, answers, defaultDir) {
   }
 
   // Licencia Pro: si el usuario dice que es Pro, pide el código y lo valida
-  // localmente (HMAC con la master key). Si es válido se guarda tras el deploy
-  // (settings pro_license → límites quitados). Si es inválido, se avisa y sigue gratis.
+  // localmente (Ed25519 con la clave PÚBLICA embebida — solo verifica, no firma).
+  // Si es válido se guarda tras el deploy (settings pro_license → límites
+  // quitados). Si es inválido, se avisa y sigue gratis.
   const wantsPro = interactive()
     ? await confirm(rl, m("¿Tu bot será Pro (tienes una licencia)?", "Will your bot be Pro (do you have a license)?"))
     : !!(flags.license || answers.licenseCode);
