@@ -84,16 +84,61 @@ export async function renderKbList(
       ${rows}
     </div>
 
-    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:12px" class="text-dim text-[11.5px]">
+    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-bottom:16px" class="text-dim text-[11.5px]">
       <span>Además, tu bot trae <b class="text-cream">${FIXTURE_CHUNKS.length}</b> fragmentos precargados del repo.</span>
       <form method="POST" action="/admin/kb/reindex" style="margin-left:auto">
         <button class="ghostbtn cursor-pointer" style="display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);color:var(--muted);padding:8px 14px;font-size:11.5px;transition:all .12s ease">
           <i data-lucide="refresh-cw" width="13" height="13"></i> Reindexar todo
         </button>
       </form>
+    </div>
+
+    <div class="bg-panel border border-line" style="padding:16px">
+      <h3 class="font-display font-semibold text-[13px] text-cream">🔎 Probar búsqueda</h3>
+      <p class="text-dim text-[11.5px]" style="margin:2px 0 10px">Escribe una pregunta como la haría un cliente. Verás lo mismo que ve el bot (top 5 + score). Si el mejor score es menor a 0.70, el bot lo toma como "sin match" y no lo usa.</p>
+      <input type="search" name="q" placeholder="Ej. ¿cuánto cuesta un chatbot?"
+             hx-get="/admin/kb/search" hx-trigger="keyup changed delay:400ms, search"
+             hx-target="#kb-search-out" hx-swap="innerHTML"
+             style="width:100%;background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:10px 12px;font-size:12.5px;outline:none">
+      <div id="kb-search-out" style="margin-top:12px"></div>
     </div>`;
 
   return layout({ title: "Conocimiento", activeTab: "kb", body, env });
+}
+
+/** Fragmento HTMX: resultados de "probar búsqueda" en /admin/kb. */
+export function renderKbSearchResults(
+  query: string,
+  res: import("../../kb/query").KbQueryResult | null,
+): string {
+  if (!query || query.length < 2) return "";
+  if (!res || "error" in res) {
+    return `<div class="text-dim text-[11.5px]">No se pudo consultar ahora mismo. Reintenta en un momento.</div>`;
+  }
+  if (res.results.length === 0) {
+    return `<div style="border:1px solid var(--line);background:var(--panel2);padding:10px 12px;font-size:12px;color:var(--muted)">
+      Sin resultados. El bot no tiene nada sobre esto — agrega un documento arriba.
+    </div>`;
+  }
+  const top = res.results[0]?.score ?? 0;
+  const verdict =
+    top >= 0.7
+      ? `<span style="color:var(--ok)">✓ El bot usaría esto (mejor score ${top.toFixed(2)}).</span>`
+      : `<span style="color:var(--bad)">⚠ Mejor score ${top.toFixed(2)} &lt; 0.70 — el bot lo tomaría como "sin información". Ajusta el documento (usa las mismas palabras que el cliente) o baja el umbral.</span>`;
+  const rows = res.results
+    .map((r) => {
+      const c = r.score >= 0.7 ? "var(--ok)" : r.score >= 0.55 ? "var(--accent-2)" : "var(--dim)";
+      return `<div style="border-top:1px solid var(--line);padding:9px 0">
+        <div style="display:flex;gap:10px;align-items:baseline">
+          <span style="font-family:'JetBrains Mono';font-size:12px;font-weight:700;color:${c};flex:none">${r.score.toFixed(2)}</span>
+          <span class="text-cream text-[12px] font-semibold">${esc(r.title || "(sin título)")}</span>
+        </div>
+        <div class="text-dim text-[11px]" style="margin-top:3px;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${esc(r.content.replace(/\s+/g, " ").slice(0, 180))}</div>
+      </div>`;
+    })
+    .join("");
+  return `<div style="font-size:11.5px;margin-bottom:6px">${verdict}</div>
+    <div style="border:1px solid var(--line);background:var(--bg);padding:2px 12px 8px">${rows}</div>`;
 }
 
 export async function renderKbEditor(doc: KbDoc | null, env: Env): Promise<string> {

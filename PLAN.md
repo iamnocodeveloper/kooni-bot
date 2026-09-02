@@ -107,6 +107,8 @@ otra pública. La pública, en cambio, es segura de publicar — ese es el punto
 8. **PWA del panel — Fases 1-3** (`§ Q`). Fase 0 (instalable + offline básico) ✅ en v1.14.0. Pendiente: **Fase 1 = avisos push con VAPID** (nuevo lead / ticket / alerta del Vigilante; la más valiosa), Fase 2 = lectura offline de datos (endpoints JSON + cache del SW), Fase 3 = bandeja móvil (inbox pensado para celular, reusa `POST /admin/conversations/:id/reply`).
 9. **Atribución y rendimiento de campañas** (`§ R`) — ⏸️ **en espera**. Se retoma cuando la instalación esté en **Meta oficial** o **ManyChat** (Zernio no entrega el `referral` del anuncio). Orden: panel solo-lectura de comentario→DM (Fase 1, ya sirve) → stamp de origen en la conversación (Fase 2) → `referral` de anuncios (Fase 3, Meta/ManyChat).
 10. **Panel — filtros de conversaciones, responsive y PWA install** (`§ S`). S2 Fase 1 (shell + nav + bandeja móvil) ✅ v1.14.3. Pendiente: S1 (filtros canal/fecha), S2 Fase 2 (pase por vista) y Fase 3 (detalles iOS/perf).
+11. **Scraping web → KB** (`§ L`) — ⏳ a la espera de que el cliente (autos) entregue API de Decodo + URLs + preguntas + permiso. Aislado a esa instalación vía `module_unlocks` + secrets.
+12. **Rediseño visual del panel** (`§ T`) — identidad Kooni propia, diferenciar de Forja. Bloque dedicado, no urgente. Legalmente MIT ya lo permite (no es obligatorio).
 
 ## Seguridad — auditoría 2026-08-31 (arreglos + pendientes)
 
@@ -329,6 +331,18 @@ paso posterior (`pair`) donde el usuario la pega explícitamente.
 > Objetivo: el bot de **un** cliente responde con información sacada de un sitio
 > web, actualizada sola. **No es para todas las instalaciones** — el código viaja
 > en el template (inerte) pero solo se enciende en esa instalación.
+>
+> **Caso concreto (2026-09-02):** un cliente vende autos; quiere que el bot
+> conteste con la info de fichas/precios de un sitio. El plan de abajo sirve tal
+> cual. **Bloqueado a la espera de que el cliente entregue:** (a) API key / user
+> de Decodo, (b) la lista EXACTA de URLs, (c) 5 preguntas concretas que el bot
+> debe poder contestar con eso, (d) confirmación de permiso para scrapear ese
+> sitio. Con (b) ≤ 3 URLs y (c) claras, quizá no haga falta scraping: cargar 2-3
+> docs a mano en `/admin/kb` es gratis y ya funciona. Decidir con esos datos.
+>
+> Cuando esté listo: implementar Fases 1-4, activar `module_unlocks` +
+> `DECODO_*` SOLO en el worker del cliente, y correr `kooni-bot update` en su
+> carpeta para traer el código nuevo.
 
 ### Idea clave: no hay que tocar al agente
 
@@ -868,6 +882,56 @@ Breakpoint del panel: `max-width:767px` (el login usa 900; se deja como está).
 
 Pendiente opcional: mover el botón a un lugar fijo del panel (Resumen /
 Configuración) en vez del flotante, si molesta.
+
+---
+
+## T. Rediseño visual del panel — identidad propia (diferenciar de Forja)
+
+> **Pedido (2026-09-02):** que el sistema NO se vea igual a Forja, "para evitar
+> cualquier inconveniente".
+
+### Lo legal primero (para no rediseñar por miedo)
+
+`LICENSE` = **MIT**, © Horizontes IA (autor de Forja). MIT permite **usar,
+modificar, redistribuir y vender** — la única condición es **conservar el aviso
+de copyright** (ya está en `LICENSE` y `README.md § Licencia`). No hay
+obligación legal de cambiar el diseño ni el nombre. Kooni ya cumple.
+
+**Conclusión:** el rediseño es una decisión de **marca**, no de licencia. No
+urge, no bloquea nada. Conviene hacerlo igual, por estas razones:
+
+- Que un cliente no diga "esto es idéntico a [otro producto]".
+- Kooni ya tiene identidad propia definida (`docs/IDENTIDAD-KOONI.md`:
+  teal/menta sobre tinta, la K de nodo, voz español LATAM) — el panel todavía
+  arrastra el look "retro-terminal" de Forja (scanlines, JetBrains Mono en todo,
+  botones brutalistas, sombras `Npx Npx 0`).
+- Un look propio hace el producto más vendible.
+
+### Recomendación: dejarlo así POR AHORA, hacerlo en un bloque dedicado
+
+No mezclarlo con los arreglos de móvil (§ S) ni con features. Es un pase por
+**todas** las vistas y el sistema de tokens — hacerlo a medias se ve peor que no
+hacerlo. Cuando se agarre:
+
+1. **Sistema de diseño** (`layout.ts` `GLOBAL_STYLE`): definir la paleta y la
+   tipografía de `IDENTIDAD-KOONI.md` como tokens. Cambiar el par de fuentes
+   (Space Grotesk + JetBrains Mono → algo propio; mantener una mono solo para
+   datos/código). Quitar o suavizar el overlay `.scanlines`. Repensar los
+   botones brutalistas (sombra dura → algo más limpio) — es la firma visual más
+   reconocible de Forja.
+2. **Marca en el shell**: logo (la K de nodo ya existe como `K_MARK`), colores
+   del sidebar, el "BOT EN LÍNEA".
+3. **Componentes**: `.card`, `.chip`, `.node`, filas de tablas, modales, toasts
+   — todos usan las clases del mockup de Forja. Reestilizar sobre los mismos
+   nombres de clase (no renombrar → menos diff).
+4. **Marca blanca**: ya hay `BRAND_*` (`resolveBrand`). Asegurar que el
+   rediseño respete esos overrides para revendedores.
+5. **Sitio web / landing** (`web/`, `sitio-web/`): alinear con el panel nuevo.
+6. **`docs/IDENTIDAD-KOONI.md`**: actualizar con las decisiones finales; es el
+   contrato que siguen las vistas.
+
+Esfuerzo: 1-2 días enfocados. Sin cambios de comportamiento, solo CSS + assets.
+Riesgo: bajo (visual), pero alto de "quedar a medias" si se hace apurado.
 
 ---
 

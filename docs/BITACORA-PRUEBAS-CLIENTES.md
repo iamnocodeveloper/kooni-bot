@@ -178,6 +178,48 @@ paralelo—; los archivos afectados pasan al correrse aislados y
 `test/admin/` pasa 146/146). Tests nuevos en `test/admin/layout-scripts.test.ts`
 (cajón de nav) y `test/admin/pwa.test.ts`.
 
+### Mejora 6 — v1.14.4 — El bot decía "no tengo esa información" pese a tener los KB de Kooni
+
+**Qué se observó (Joel):** cargados los 4 documentos de Kooni y con la búsqueda
+vectorial OK (`vectorCount: 8`, dim 1024), el bot igual respondía *"no tengo esa
+información"* al preguntarle por Kooni o sus precios.
+
+**Causa — no era la KB, era el prompt.** El `business_context` de Joel es muy
+estricto: sección 2 *"Servicios que ofreces (solo estos, no inventes otros)"*
+(y Kooni no estaba en la lista) + sección 3 *"NUNCA inventar precios que no
+estén en esta lista"*. Ante esas reglas absolutas, el modelo (además en `haiku`)
+NO usa lo que devuelve `searchKb` para un tema "fuera de la lista" — lo trata
+como inventar. El `business_context` gana sobre la KB.
+
+**Arreglo (instalación de Joel):** se llenó `custom_instructions` (panel →
+Configuración → reglas del negocio; setting D1, se aplica sin redeploy):
+declara que **también ofrecemos montar chatbots (Kooni)**, que los datos de
+Kooni de la base de conocimiento **son oficiales** (no inventados), y que el
+montaje se cotiza con Joel. El resto del prompt sigue igual (no cierra ventas).
+
+**Herramienta nueva (todas las instalaciones): "Probar búsqueda" en `/admin/kb`.**
+Corre la MISMA consulta que la tool `searchKb` del bot y muestra el top-5 con
+score + un veredicto ("el bot usaría esto" si el mejor score ≥ 0.70, o el aviso
+de que lo tomaría como "sin información"). Así el dueño ve exactamente qué
+encuentra el bot antes de que un cliente escriba.
+
+| Cambio | Archivo |
+|---|---|
+| `queryKb()` compartido (una sola implementación para la tool y el panel) | `src/kb/query.ts` |
+| `searchKb` tool usa `queryKb` | `src/tools/searchKb.ts` |
+| Ruta `GET /admin/kb/search` + fragmento de resultados | `src/admin/routes.ts`, `src/admin/views/kb.ts` |
+| Caja "Probar búsqueda" en la pestaña Conocimiento | `src/admin/views/kb.ts` |
+| Tests | `test/admin/kb-routes.test.ts` |
+
+### Despliegue del cambio de móvil (v1.14.3)
+
+- La red de la máquina estuvo intermitente (`fetch failed` en `wrangler deploy`,
+  `git` a GitHub con "connection reset"). El deploy entró al **7º reintento** de
+  un bucle. **Instalación de Joel en v1.14.3** (Version ID `149fdcdd`), el cajón
+  de navegación y la bandeja móvil verificados en vivo en `/admin/login`.
+- Tareas que faltan para el móvil: ver `PLAN.md § S2` Fase 2 (pase por vista) y
+  Fase 3 (detalles iOS/perf). No bloquean nada.
+
 ### Pendiente para Joel (en el panel)
 
 - El bot corre con `model_override = "haiku"` (modelo barato). Si el playbook de

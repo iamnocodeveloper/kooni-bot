@@ -1,6 +1,6 @@
 {
   "name": "kooni",
-  "version": "1.14.3",
+  "version": "1.14.4",
   "private": true,
   "description": "Kooni — asistente de IA multicanal (WhatsApp, Instagram, Messenger, Telegram) self-hosted en tu Cloudflare.",
   "type": "module",

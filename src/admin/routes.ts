@@ -252,6 +252,16 @@ adminApp.get("/kb", async (c) =>
   ),
 );
 
+// Probar búsqueda: corre la MISMA consulta que la tool searchKb del bot y
+// muestra el top-5 con score. Sirve para ver qué encuentra (o no) el bot.
+adminApp.get("/kb/search", async (c) => {
+  const q = (c.req.query("q") ?? "").trim();
+  const { renderKbSearchResults } = await import("./views/kb");
+  if (q.length < 2) return c.html(renderKbSearchResults(q, null));
+  const { queryKb } = await import("../kb/query");
+  return c.html(renderKbSearchResults(q, await queryKb(c.env, q)));
+});
+
 adminApp.get("/kb/new", async (c) => c.html(await renderKbEditor(null, c.env)));
 
 adminApp.get("/kb/:id/edit", async (c) => {

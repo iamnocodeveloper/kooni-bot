@@ -61,6 +61,31 @@ describe("KB tab", () => {
     expect(html).toContain("Nuevo documento");
   });
 
+  it("probar búsqueda: corre la consulta y muestra score + veredicto", async () => {
+    // queryKb embebe un STRING (no array) — el mock por defecto asume array.
+    env.AI.run = vi.fn(async () => ({ data: [[0.1, 0.2, 0.3]] }));
+    // KB devuelve un match fuerte y uno débil.
+    env.KB.query = vi.fn(async () => ({
+      matches: [
+        { id: "a", score: 0.82, metadata: { title: "Planes", content: "Gratis $0, Pro $12" } },
+        { id: "b", score: 0.4, metadata: { title: "Otra cosa", content: "bla" } },
+      ],
+    }));
+    const res = await adminApp.request("/kb/search?q=cuanto%20cuesta", { headers: AUTH }, env);
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain("0.82");
+    expect(html).toContain("Planes");
+    expect(html).toContain("El bot usaría esto");
+  });
+
+  it("probar búsqueda: query corta no consulta nada", async () => {
+    const spy = (env.AI.run = vi.fn());
+    const res = await adminApp.request("/kb/search?q=a", { headers: AUTH }, env);
+    expect(res.status).toBe(200);
+    expect(spy).not.toHaveBeenCalled();
+  });
+
   it("save persists the doc AND indexes it into Vectorize", async () => {
     const res = await adminApp.request(
       "/kb/save",
