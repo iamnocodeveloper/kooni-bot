@@ -329,6 +329,18 @@ app.post("/kb/reindex", async (c) => {
   return c.json({ ok: true, indexed: r.indexed }, 200);
 });
 
+// Trigger manual del Web Sync (mismo token que /kb/reindex): scrapea ya las
+// páginas configuradas → KB, sin esperar el tick nocturno ni entrar al panel.
+app.post("/kb/web-sync", async (c) => {
+  const expected = c.env.KB_REINDEX_TOKEN ?? "";
+  if (!expected || !tokensMatch(c.req.header("X-Reindex-Token") ?? "", expected)) {
+    return c.json({ ok: false, error: "unauthorized" }, 401);
+  }
+  const { runWebSync } = await import("./kb/webSync");
+  const r = await runWebSync(c.env);
+  return c.json({ ok: true, ...r }, 200);
+});
+
 app.notFound((c) => c.text("not found", 404));
 
 // La raíz del worker redirige al panel: en cualquier dispositivo, entrar a la
