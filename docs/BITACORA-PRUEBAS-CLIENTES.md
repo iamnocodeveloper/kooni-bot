@@ -258,6 +258,48 @@ las dos instalaciones. Joel puede rotarlas cuando quiera (regenera y re-pone).
 
 Tests: `test/push.test.ts` (verifica la firma ES256), `test/admin/pwa.test.ts`. 710/710.
 
+## 2026-09-02 · v1.18.3–v1.18.5 — Web Sync ACTIVO en cardealer (Daniel autos)
+
+Joel pasó los datos: sitio `greenwaykiawestpalmbeach.com`, endpoint
+`/llm/inventory/`. Configurado y verificado end-to-end.
+
+**Lo que Joel había puesto:** `?limit=100&type=used`. **Empíricamente los query
+params rompen el endpoint** — con params devuelve la home genérica (0 autos, y
+tarda 22–37 s). **El `/llm/inventory/` pelado** trae los 100 autos (new + used)
+con precio/VIN/millaje/link, en ~7 s. Se configuró la URL pelada.
+
+**Bugs encontrados al activar:**
+- **v1.18.3 — `webDocId` demasiado largo.** Generaba ids tipo
+  `web:www-greenwaykiawestpalmbeach-com-llm-inventory-limit-100-type-used` →
+  `indexDoc` hace vectores `dash:<id>#<n>` → **Vectorize rechaza ids > 64 bytes**
+  → cada URL daba *"1 con error"* (lo que vio Joel). Ahora: prefijo legible corto
+  + hash de la URL canónica. Test verifica `dash:<id>#24` ≤ 64.
+- **v1.18.4 — `POST /kb/web-sync` con `X-Reindex-Token`.** Trigger manual sin
+  necesitar la contraseña del panel (mismo patrón que `/kb/reindex`). Sirvió
+  para verificar; útil también para el flujo post-`kooni-bot update` a futuro.
+- **v1.18.5 — `trimBoilerplate()`.** Las páginas `/llm/inventory/` traen ~55% de
+  nav + footer + cookie banner → el doc (tope 24k chars) se llenaba de chrome.
+  Recorta hasta el primer precio/VIN y desde el footer típico → **de ~35 a 71
+  autos** en el mismo tope.
+- El banner de "Sincronización del sitio" ahora muestra el **primer error
+  concreto**, no solo el conteo.
+
+**Config aplicada en el D1 de cardealer:**
+- `web_sync_urls` = `https://www.greenwaykiawestpalmbeach.com/llm/inventory/`
+- `feature_web_sync_enabled` = `1` · `module_unlocks` = `["web_sync"]`
+- Secret **`KB_REINDEX_TOKEN` reseteado** a un valor fresco (el `.dev.vars` local
+  no coincidía con el remoto). Guardado en `/tmp/cd_kbtoken.txt` de la sesión —
+  Joel no lo necesita salvo que tuviera un script viejo usando el anterior.
+- `DECODO_AUTH` ya estaba.
+
+**Estado:** `{ok:true, scraped:1, updated:1, errors:[]}`. `kb_docs` tiene
+"Inventario web — /llm/inventory/" con 71 VINs. Refresco nocturno automático.
+
+**Pendiente (Joel):** pedirle a Daniel las 5 preguntas concretas que el bot debe
+poder contestar, y probar el bot preguntándole por un auto.
+
+**Pendiente / Fase 2 (Claude):** los 100 autos (hoy 71) → partir en 2 docs.
+
 ## 2026-09-02 · v1.15.0 — Módulo "Sincronizar sitio web" (Decodo) para cardealer
 
 **Pedido:** el cliente cardealer-daniel2 ("Daniel autos") quiere que el bot

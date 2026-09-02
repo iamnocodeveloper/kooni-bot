@@ -107,7 +107,7 @@ otra pública. La pública, en cambio, es segura de publicar — ese es el punto
 8. **PWA del panel — Fases 1-3** (`§ Q`). Fase 0 ✅ v1.14.0 · **Fase 1 (avisos push con VAPID) ✅ v1.16.0** — botón campana en el header, se dispara con nuevo prospecto / ticket / handoff. Pendiente: Fase 2 = lectura offline (endpoints JSON + cache del SW), Fase 3 = bandeja móvil (ya casi cubierta por § S2).
 9. **Atribución y rendimiento de campañas** (`§ R`) — ⏸️ **PAUSADO TOTALMENTE** (decisión de Joel, 2026-09-02). No se toca hasta que Joel lo reactive explícitamente. El plan queda escrito en `§ R` por si se retoma.
 10. **Panel — filtros de conversaciones, responsive y PWA install** (`§ S`). ✅ S1 (filtros canal/fecha/texto) v1.14.5 · S2 Fase 1 (shell+nav+bandeja) v1.14.3 · S2 Fase 2-3 (vistas, modales, iOS) v1.14.5. Queda: probar en dispositivos reales; formularios angostos → se cierran con § T.
-11. **Scraping web → KB** (`§ L`) — ✅ código v1.15.0, ambas instalaciones en v1.16.0. Falta en cardealer: verificar `module_unlocks += web_sync` (o que la licencia lo cubra) + cargar URLs en Extras + primera sync. `DECODO_AUTH` ya puesto.
+11. **Scraping web → KB** (`§ L`) — ✅ **ACTIVO en cardealer** (v1.18.5). 71 autos del inventario de Daniel en la KB, se refresca cada noche. Fase 2 (los 100 autos, hoy caben 71) solo si Daniel lo pide.
 12. **Rediseño visual del panel** (`§ T`) — ✅ **HECHO y desplegado** (v1.17.0–v1.18.2). Sora + IBM Plex Mono, morado/fucsia, tema claro+oscuro con toggle, sombras suaves, 12 vistas + SVG + PWA (ícono, theme-color, botón instalar) en tokens. Ambas instalaciones en v1.18.2, visto por Joel. **Queda solo:** `web/*.html` (landing, sigue teal — pase aparte) y reescribir `docs/design-system.md`.
 13. **Chat del CRM — links y multimedia** (`§ V`) — que los links de los mensajes sean clicables/descargables y que las imágenes/videos/audios se previsualicen en el hilo (`/admin/conversations`). Hoy todo se renderiza como texto plano escapado. Pedido de Joel (2026-09-02).
 
@@ -327,31 +327,40 @@ paso posterior (`pair`) donde el usuario la pega explícitamente.
 
 ---
 
-## L. Scraping web con Decodo → KB del agente — ✅ IMPLEMENTADO (v1.15.0), pendiente activar en cardealer
+## L. Scraping web con Decodo → KB del agente — ✅ IMPLEMENTADO Y ACTIVO EN CARDEALER (v1.15.0–v1.18.5)
 
-> **Estado 2026-09-02:** el módulo está en el código (inerte en todas las
-> instalaciones). Falta: activarlo en `cardealer-daniel2` y cargar sus URLs.
+> **Estado 2026-09-02:** funcionando en `cardealer-daniel2` ("Daniel autos").
+> `POST /kb/web-sync` → `{ok, scraped:1, updated:1, errors:[]}`. `kb_docs` tiene
+> "Inventario web — /llm/inventory/" con **71 vehículos** (VIN, precio, millaje,
+> link a la ficha). Se re-sincroniza solo en el tick nocturno.
 >
-> **Activar en cardealer (cuando esté actualizado a ≥ v1.15.0):**
-> 1. `cd C:\Users\joeld\cardealerdaniel`
-> 2. `npx wrangler secret put DECODO_AUTH` → pegar `U00004345000:PW_…` (user:pass de Decodo)
-> 3. En su D1: `module_unlocks` += `"web_sync"` (override del dueño) —
->    `wrangler d1 execute <db> --remote --command "..."` o el admin de pagos.
-> 4. En su panel → Extras → "Sincronizar sitio web": encender + pegar las URLs
->    (una por línea), p. ej.
->    `https://www.greenwaykiawestpalmbeach.com/llm/inventory/?limit=100&type=used`
->    y `...&type=new`.
-> 5. Panel → Conocimiento → "Sincronizar sitio ahora" para la primera carga
->    (después corre solo cada noche en el tick de las 3am).
+> **Config aplicada (D1 de cardealer):**
+> - `web_sync_urls` = `https://www.greenwaykiawestpalmbeach.com/llm/inventory/`
+>   (**sin query params** — con `?type=used` o `?limit=100` el sitio devuelve la
+>   home genérica; el endpoint pelado ya trae los 100 autos, new + used).
+> - `feature_web_sync_enabled` = `1`, `module_unlocks` = `["web_sync"]`.
+> - Secrets en el worker: `DECODO_AUTH`, `KB_REINDEX_TOKEN` (fresco — ver bitácora).
+> - **Editable:** panel → Extras → "Sincronizar sitio web".
 >
-> **Cómo quedó** (más simple que el plan original): el endpoint `/llm/inventory/`
-> del sitio ya es texto pensado para IA, y Decodo con `markdown:true` lo
-> devuelve limpio → **no hace falta parsear HTML**. Cada URL → un documento
-> `web:<slug>` en `kb_docs`, visible y borrable desde `/admin/kb`. Hash para no
-> re-embeber sin cambios. Corre en el tick nocturno (`src/index.ts`). Archivos:
-> `src/integrations/decodo.ts`, `src/kb/webSync.ts`, `src/modules.ts` (módulo
-> `web_sync`), `src/features.ts` (card en Extras), `src/db/settings.ts`,
-> `src/env.ts` (`DECODO_AUTH`), ruta `POST /admin/kb/web-sync`. Tests:
+> **Bugs encontrados y arreglados en la activación:**
+> - **v1.18.3:** `webDocId` generaba ids larguísimos → `dash:<id>#<n>` > 64 bytes
+>   → Vectorize los rechazaba → cada URL daba "1 con error". Ahora: prefijo corto
+>   + hash. Test que verifica el tope de 64 bytes.
+> - **v1.18.4:** `POST /kb/web-sync` con `X-Reindex-Token` (trigger sin panel).
+> - **v1.18.5:** `trimBoilerplate()` — recorta nav/footer/cookies del markdown
+>   (era ~55% del doc) → de ~35 a **71 autos** en el mismo tope de 24k chars.
+> - El banner del panel ahora muestra el primer error concreto, no solo el conteo.
+>
+> **Pendiente / Fase 2:** el inventario completo son 100 autos; caben 71 en un
+> doc (tope `MAX_DOC_CHARS`). Para todos → partir en 2 docs `web:<slug>#a/#b` o
+> subir el tope. Solo si Daniel lo pide.
+>
+> **Cómo quedó:** el endpoint `/llm/inventory/` ya es texto para IA; Decodo con
+> `markdown:true` lo devuelve limpio → sin parsear HTML. Cada URL → doc
+> `web:<slug>` en `kb_docs`, visible/borrable desde `/admin/kb`. Hash anti
+> re-embebido. Tick nocturno (`src/index.ts`). Archivos: `src/integrations/decodo.ts`,
+> `src/kb/webSync.ts`, `src/modules.ts`, `src/features.ts`, `src/db/settings.ts`,
+> `src/env.ts`, rutas `POST /admin/kb/web-sync` y `POST /kb/web-sync`. Tests:
 > `test/integrations/decodo.test.ts`, `test/kb/webSync.test.ts`.
 
 ### Plan original (referencia — se siguió con simplificaciones) ⏳
