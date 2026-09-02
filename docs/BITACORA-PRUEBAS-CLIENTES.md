@@ -310,11 +310,23 @@ el marketing. Dirección: **claro + oscuro con toggle**, acento **morado/fucsia*
 
 **Verificación:** `pnpm test` 711/711. Tests en `test/admin/layout-scripts.test.ts`.
 
-**Pendiente (Fase 2 del rediseño):** pase fino por vista (algún inline style con
-color hardcodeado, contraste en tema claro en vistas densas —Estadísticas,
-Costos, canvas de Flujo—), y actualizar `docs/IDENTIDAD-KOONI.md` +
-`docs/design-system.md` con la paleta final. **Joel revisa la base primero** y
-dice si el rumbo va — la paleta son 6 líneas de tokens, fácil de ajustar.
+### v1.18.0 — Rediseño Fase 2 (pase por vista)
+
+Joel dio OK para seguir. Migración de colores hardcodeados a tokens en las 12
+vistas del panel:
+- `rgba(127,183,126,.X)` (verde OK de Forja) → `var(--ok-soft)` / `var(--ok)`.
+- `var(--danger,#e0654d)` (rojo con fallback stale) → `var(--bad)` / `var(--bad-soft)`.
+- `var(--warn,#e9ad4f)` / `#d9a441` (ámbar de Forja) → nuevos tokens `--warn` / `--warn-soft`.
+- `rgba(245,166,35,.X)` (ámbar accent-2 de Forja) → `--warn-soft` / `--warn`.
+- `#06251f` (texto sobre botón teal) → `var(--on-accent)`.
+- `stats.ts`: `ACCENT = "#f07a3f"` → `"var(--accent)"`; heatmap con `color-mix`.
+- `docs/IDENTIDAD-KOONI.md`: paleta (oscuro + claro), tipografía, logo actualizados.
+
+Nuevos tokens en ambos temas: `--warn`, `--warn-soft`, `--ok-soft`, `--bad-soft`,
+`--danger` (alias de `--bad`). `pnpm test` 711/711.
+
+**Pendiente:** los SVG de `assets/kooni-*.svg` siguen en teal (actualizar cuando
+haya un momento); `docs/design-system.md` (referencia interna, baja prioridad).
 
 ---
 

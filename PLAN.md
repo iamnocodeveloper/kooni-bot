@@ -108,7 +108,7 @@ otra pública. La pública, en cambio, es segura de publicar — ese es el punto
 9. **Atribución y rendimiento de campañas** (`§ R`) — ⏸️ **PAUSADO TOTALMENTE** (decisión de Joel, 2026-09-02). No se toca hasta que Joel lo reactive explícitamente. El plan queda escrito en `§ R` por si se retoma.
 10. **Panel — filtros de conversaciones, responsive y PWA install** (`§ S`). ✅ S1 (filtros canal/fecha/texto) v1.14.5 · S2 Fase 1 (shell+nav+bandeja) v1.14.3 · S2 Fase 2-3 (vistas, modales, iOS) v1.14.5. Queda: probar en dispositivos reales; formularios angostos → se cierran con § T.
 11. **Scraping web → KB** (`§ L`) — ✅ código v1.15.0, ambas instalaciones en v1.16.0. Falta en cardealer: verificar `module_unlocks += web_sync` (o que la licencia lo cubra) + cargar URLs en Extras + primera sync. `DECODO_AUTH` ya puesto.
-12. **Rediseño visual del panel** (`§ T`) — **BASE ✅ v1.17.0** (Sora + IBM Plex Mono, morado/fucsia, tema claro+oscuro con toggle, sombras suaves). Preview enviada a Joel. Falta Fase 2: pase fino por vista (contraste tema claro en Estadísticas/Costos/canvas de Flujo) + `docs/IDENTIDAD-KOONI.md`.
+12. **Rediseño visual del panel** (`§ T`) — **BASE ✅ v1.17.0 + Fase 2 ✅ v1.18.0** (Sora + IBM Plex Mono, morado/fucsia, tema claro+oscuro, sombras suaves, colores hardcodeados de las 12 vistas → tokens, `docs/IDENTIDAD-KOONI.md`). Queda: SVG de `assets/` (aún teal), `docs/design-system.md`.
 
 ## Seguridad — auditoría 2026-08-31 (arreglos + pendientes)
 
@@ -983,7 +983,13 @@ properties, fuentes **Sora + IBM Plex Mono**, sombras suaves, scanlines fuera,
 `#1a1206` → `var(--on-accent)`, `resolveBrand` solo emite lo que el revendedor
 setea. Todo en `src/admin/views/layout.ts`. 711/711.
 
-**Fase 2 (pendiente, tras el OK de Joel al rumbo):**
+**Fase 2 ✅ (v1.18.0)** — colores hardcodeados de las 12 vistas del panel
+migrados a tokens (`--ok-soft`, `--warn`, `--warn-soft`, `--bad-soft`, `--danger`
+nuevos); `stats.ts` heatmap con `color-mix`; `docs/IDENTIDAD-KOONI.md` con la
+paleta clara+oscura, tipografía y logo. Queda: los SVG de `assets/kooni-*.svg`
+(aún en teal) y `docs/design-system.md`.
+
+**Fase 2 — plan original (referencia):**
 - Pase por vista: buscar inline styles con color hardcodeado (no `var(--x)`).
 - Contraste en tema **claro** en las vistas densas: Estadísticas, Costos,
   Insights, el canvas de Flujo (`agente/canvas`), badges de sentimiento.

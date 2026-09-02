@@ -133,9 +133,9 @@ function renderLlmSection(settings: Record<string, string>, llmTest?: string): s
 
   let testBanner = "";
   if (llmTest?.startsWith("ok:")) {
-    testBanner = `<div style="border:1px solid var(--ok);background:rgba(127,183,126,.1);color:var(--ok);padding:9px 12px;font-size:12px;font-weight:600">✓ Conexión exitosa — respondió ${esc(llmTest.slice(3))}</div>`;
+    testBanner = `<div style="border:1px solid var(--ok);background:var(--ok-soft);color:var(--ok);padding:9px 12px;font-size:12px;font-weight:600">✓ Conexión exitosa — respondió ${esc(llmTest.slice(3))}</div>`;
   } else if (llmTest?.startsWith("err:")) {
-    testBanner = `<div style="border:1px solid var(--danger,#e0654d);background:rgba(224,101,77,.1);color:var(--danger,#e0654d);padding:9px 12px;font-size:12px;font-weight:600">✕ Falló la prueba: ${esc(llmTest.slice(4, 200))}</div>`;
+    testBanner = `<div style="border:1px solid var(--bad);background:var(--bad-soft);color:var(--bad);padding:9px 12px;font-size:12px;font-weight:600">✕ Falló la prueba: ${esc(llmTest.slice(4, 200))}</div>`;
   }
 
   return `
@@ -199,7 +199,7 @@ export async function renderConfig(
   const hasPromptOverride = (settings[SETTING_KEYS.systemPromptOverride] ?? "").trim() !== "";
 
   const savedBanner = saved
-    ? `<div style="border:1px solid var(--ok);background:rgba(127,183,126,.1);color:var(--ok);padding:10px 14px;font-size:12.5px;font-weight:600">Guardado ✓</div>`
+    ? `<div style="border:1px solid var(--ok);background:var(--ok-soft);color:var(--ok);padding:10px 14px;font-size:12.5px;font-weight:600">Guardado ✓</div>`
     : "";
 
   const body = `

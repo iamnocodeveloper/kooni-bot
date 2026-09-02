@@ -387,7 +387,7 @@ export async function renderThreadLive(env: Env, convId: string): Promise<string
         ? `Tú · ${time}`
         : [m.model_used ? modelShort(m.model_used) : null, cost || null, time].filter(Boolean).join(" · ");
       const bubbleBg = isOwner
-        ? "background:rgba(245,166,35,.1);border:1px solid rgba(245,166,35,.4)"
+        ? "background:var(--warn-soft);border:1px solid var(--warn)"
         : "background:var(--accent-soft);border:1px solid var(--linelit)";
       return `
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;max-width:78%;margin-left:auto">
@@ -433,7 +433,7 @@ function renderComposer(convId: string): string {
 /** Fragment returned by /suggest — suggestion + a "use it" button that fills the textarea. */
 export function renderSuggestionBox(text: string): string {
   return `
-  <div style="border:1px solid var(--accent-2);background:rgba(245,166,35,.08);padding:10px 12px;font-size:12.5px;display:flex;align-items:flex-start;gap:10px">
+  <div style="border:1px solid var(--accent-2);background:var(--warn-soft);padding:10px 12px;font-size:12.5px;display:flex;align-items:flex-start;gap:10px">
     <div style="flex:1">
       <div style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent-2);margin-bottom:3px">✦ Sugerencia del co-pilot</div>
       <div class="sugg-text" style="white-space:pre-wrap;color:var(--cream)">${escapeHtml(text)}</div>

@@ -92,9 +92,9 @@ export async function renderMejoras(
   const copilot = autonomyRaw === "copilot";
 
   const banner = flash?.found !== undefined
-    ? `<div style="border:1px solid var(--ok);background:rgba(127,183,126,.1);color:var(--ok);padding:10px 14px;font-size:12.5px;margin-bottom:16px">Búsqueda completada: ${esc(flash.found)} ${flash.found === "1" ? "mejora nueva propuesta" : "mejoras nuevas propuestas"}.</div>`
+    ? `<div style="border:1px solid var(--ok);background:var(--ok-soft);color:var(--ok);padding:10px 14px;font-size:12.5px;margin-bottom:16px">Búsqueda completada: ${esc(flash.found)} ${flash.found === "1" ? "mejora nueva propuesta" : "mejoras nuevas propuestas"}.</div>`
     : flash?.applied
-      ? `<div style="border:1px solid var(--ok);background:rgba(127,183,126,.1);color:var(--ok);padding:10px 14px;font-size:12.5px;margin-bottom:16px">✓ Mejora aplicada — activa desde el siguiente mensaje.</div>`
+      ? `<div style="border:1px solid var(--ok);background:var(--ok-soft);color:var(--ok);padding:10px 14px;font-size:12.5px;margin-bottom:16px">✓ Mejora aplicada — activa desde el siguiente mensaje.</div>`
       : flash?.dismissed
         ? `<div style="border:1px solid var(--line);background:var(--panel2);color:var(--muted);padding:10px 14px;font-size:12.5px;margin-bottom:16px">Descartada. No se volverá a proponer.</div>`
         : "";

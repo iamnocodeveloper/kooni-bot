@@ -56,7 +56,7 @@ function ruleCard(rule: AutoRule, clicks: number): string {
   ].join("");
 
   return `
-    <div class="bg-panel border" style="padding:16px 18px;display:flex;flex-direction:column;gap:9px;${rule.isActive ? "border-color:rgba(127,183,126,.4)" : "border-color:var(--line);opacity:.75"}">
+    <div class="bg-panel border" style="padding:16px 18px;display:flex;flex-direction:column;gap:9px;${rule.isActive ? "border-color:var(--ok)" : "border-color:var(--line);opacity:.75"}">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
           ${chip(kind.title, true)}
@@ -137,7 +137,7 @@ export async function renderAutomatizaciones(env: Env, saved?: boolean, error?: 
         </span>
       </label>
       <textarea name="message" rows="2" placeholder="¡Gracias por tu comentario! 🙌 Te leemos." style="${INPUT_STYLE}">${esc(fbMessage)}</textarea>
-      <div><button type="submit" style="background:var(--accent);color:#06251f;font-weight:700;border:none;padding:8px 16px;font-size:12px;cursor:pointer">Guardar</button></div>
+      <div><button type="submit" style="background:var(--accent);color:var(--on-accent);font-weight:700;border:none;padding:8px 16px;font-size:12px;cursor:pointer">Guardar</button></div>
     </form>`;
 
   const cards = rules.length
@@ -240,7 +240,7 @@ export async function renderAutomatizaciones(env: Env, saved?: boolean, error?: 
             <span class="text-dim text-[10.5px]">La IA genera la respuesta pública usando la llave/configuración del bot, en tu tono. Si falla, usa la respuesta fija de arriba (si la hay).</span>
           </div>
           <div style="display:flex;align-items:center;gap:10px">
-            <button type="submit" style="background:var(--accent);color:#06251f;font-weight:700;border:none;padding:10px 18px;font-size:12.5px;cursor:pointer">${editRule ? "💾 Guardar cambios" : "+ Crear automatización"}</button>
+            <button type="submit" style="background:var(--accent);color:var(--on-accent);font-weight:700;border:none;padding:10px 18px;font-size:12.5px;cursor:pointer">${editRule ? "💾 Guardar cambios" : "+ Crear automatización"}</button>
             ${editRule ? `<a href="/admin/automatizaciones" class="text-[11px]" style="border:1px solid var(--line);color:var(--dim);padding:10px 18px;text-decoration:none">Cancelar</a>` : `<span class="text-dim text-[11px]">La regla queda activa de inmediato.</span>`}
           </div>
         </form>
@@ -254,7 +254,7 @@ export async function renderAutomatizaciones(env: Env, saved?: boolean, error?: 
           : `<div style="display:flex;flex-direction:column;gap:6px">${recentLogs
               .map((l) => {
                 const color =
-                  l.status === "sent" ? "var(--ok)" : l.status === "skipped" ? "var(--warn,#e9ad4f)" : "var(--bad)";
+                  l.status === "sent" ? "var(--ok)" : l.status === "skipped" ? "var(--warn)" : "var(--bad)";
                 const when = new Date(l.createdAt).toLocaleString("es", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
                 const kindLabel = l.kind === "comment_dm" ? "comentario→DM" : l.kind === "comment_reply" ? "comentario→público" : l.kind === "comment_dm_public" ? "comentario→DM+público" : "DM→respuesta";
                 return `<div style="display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);background:var(--panel2);padding:8px 10px">

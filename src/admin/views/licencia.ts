@@ -22,9 +22,9 @@ export async function renderLicencia(env: Env, msg?: string, isError?: boolean):
     : "";
 
   const statusCard = isPro
-    ? `<div class="bg-panel border" style="padding:18px 20px;border-color:rgba(127,183,126,.45);display:flex;flex-direction:column;gap:8px">
+    ? `<div class="bg-panel border" style="padding:18px 20px;border-color:var(--ok);display:flex;flex-direction:column;gap:8px">
          <div style="display:flex;align-items:center;gap:9px">
-           <span style="font-size:10px;letter-spacing:.14em;color:var(--ok);border:1px solid var(--ok);background:rgba(127,183,126,.08);padding:3px 10px;font-weight:700">● PRO ACTIVO</span>
+           <span style="font-size:10px;letter-spacing:.14em;color:var(--ok);border:1px solid var(--ok);background:var(--ok-soft);padding:3px 10px;font-weight:700">● PRO ACTIVO</span>
            ${payload ? `<span class="text-dim text-[11px] font-mono">${esc(payload.kind)}${payload.expiry ? " · expira " + new Date(payload.expiry).toLocaleDateString("es") : ""}</span>` : `<span class="text-dim text-[11px]">(tier por configuración)</span>`}
          </div>
          <p class="text-muted text-[12px]" style="margin:0">Sin límites: contactos, mensajes, canales, automatizaciones, links trackeados y más.</p>
@@ -53,7 +53,7 @@ export async function renderLicencia(env: Env, msg?: string, isError?: boolean):
   const mods = await unlockedModules(env);
   const moduleRows = PAID_MODULES.map((m) => {
     const on = mods.has(m.id);
-    return `<div style="display:flex;align-items:flex-start;gap:12px;border:1px solid ${on ? "rgba(127,183,126,.4)" : "var(--line)"};background:var(--panel2);padding:11px 12px">
+    return `<div style="display:flex;align-items:flex-start;gap:12px;border:1px solid ${on ? "var(--ok)" : "var(--line)"};background:var(--panel2);padding:11px 12px">
       <span style="font-size:14px;flex:none;margin-top:1px">${on ? "🔓" : "🔒"}</span>
       <div style="min-width:0;flex:1">
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
@@ -89,7 +89,7 @@ export async function renderLicencia(env: Env, msg?: string, isError?: boolean):
         <form method="POST" action="/admin/licencia" style="display:flex;flex-direction:column;gap:10px">
           <input type="text" name="code" placeholder="KOONI-PRO-..." style="background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:10px 12px;font-size:12.5px;outline:none;width:100%">
           <div style="display:flex;gap:8px">
-            <button type="submit" style="background:var(--accent);color:#06251f;font-weight:700;border:none;padding:10px 18px;font-size:12.5px;cursor:pointer">${isPro ? "Reemplazar código" : "Activar Pro"}</button>
+            <button type="submit" style="background:var(--accent);color:var(--on-accent);font-weight:700;border:none;padding:10px 18px;font-size:12.5px;cursor:pointer">${isPro ? "Reemplazar código" : "Activar Pro"}</button>
             ${isPro ? `<button type="submit" name="clear" value="1" style="background:none;border:1px solid var(--bad);color:var(--bad);padding:10px 18px;font-size:12.5px;cursor:pointer">Quitar licencia</button>` : ""}
           </div>
         </form>

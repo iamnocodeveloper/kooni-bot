@@ -33,32 +33,42 @@
 
 ## 2. Paleta de color
 
-Estética **retro-terminal sobre tinta azulada**, con acento teal/menta. Oscura,
-limpia y legible. Los tokens son los que usa el dashboard (ver `docs/design-system.md`).
+> **Rediseño 2026 (v1.17.0):** acento **morado/fucsia** sobre tinta con matiz
+> violeta, con **tema claro y oscuro** (toggle en el header, `data-theme` en
+> `<html>` + `localStorage`). Antes: teal/menta, solo oscuro, look "terminal".
+> La fuente de verdad son los tokens CSS de `src/admin/views/layout.ts`.
 
-| Token | Hex | Uso |
-|---|---|---|
-| `bg` | `#0d1218` | Fondo general |
-| `panel` | `#141b24` | Tarjetas / sidebar |
-| `panel2` | `#1a2330` | Hover / filas |
-| `raise` | `#223043` | Elementos elevados |
-| `line` | `#2b3b4f` | Bordes |
-| `linelit` | `#3d546f` | Bordes iluminados / sombras |
-| `accent` | `#2dd4bf` | **Color de marca — teal** (acciones, links, activo) |
-| `accent2` | `#6ee7b7` | Secundario — menta (tags, highlights) |
-| `cream` | `#e7eef5` | Texto principal |
-| `muted` | `#93a4b5` | Texto secundario |
-| `dim` | `#64748b` | Texto terciario / deshabilitado |
-| `ok` | `#34d399` | Éxito / en línea |
-| `info` | `#60a5fa` | Información |
-| `bad` | `#f87171` | Errores / alertas |
-| `violet` | `#a78bfa` | Resaltados secundarios |
+**Neutrales:** no un gris plano — leve sesgo violeta hacia el acento.
+
+| Token | Oscuro | Claro | Uso |
+|---|---|---|---|
+| `bg` | `#0f0e17` | `#faf7fe` | Fondo general |
+| `panel` | `#181624` | `#ffffff` | Tarjetas / sidebar / header |
+| `panel2` | `#221d33` | `#f4eefc` | Hover / filas |
+| `raise` | `#2f2745` | `#ece2fa` | Elementos elevados |
+| `line` | `#332c48` | `#e7ddf4` | Bordes |
+| `linelit` | `#463c63` | `#d3c4ec` | Bordes iluminados |
+| `accent` | `#e05fd8` | `#c31fce` | **Marca — fucsia** (acciones, links, activo) |
+| `accent-2` | `#a679f6` | `#8b3ff0` | Secundario — violeta |
+| `accent-soft` | `rgba(224,95,216,.14)` | `rgba(195,31,206,.09)` | Fondo tenue del acento |
+| `on-accent` | `#170f1c` | `#ffffff` | Texto sobre el acento |
+| `cream` | `#ece9f5` | `#211c33` | Texto principal |
+| `muted` | `#a49bbd` | `#5c5473` | Texto secundario |
+| `dim` | `#726a8c` | `#8b83a3` | Texto terciario |
+| `ok` / `ok-soft` | `#34d399` | `#059669` | Éxito / en línea |
+| `warn` / `warn-soft` | `#f0b34a` | `#b45309` | Advertencia |
+| `bad` / `bad-soft` | `#fb7185` | `#e11d48` | Errores |
+| `info` | `#6aa9fb` | `#2563eb` | Información |
+| `shadow` | sombra suave | sombra suave violeta | Elevación (no `Npx Npx 0`) |
 
 **Reglas:**
-- El teal `#2dd4bf` es el color de marca: úsalo para acciones principales y
-  estados activos. Nunca como color de texto largo.
-- Fondo siempre oscuro (`bg`). Contraste mínimo 4.5:1 en texto.
-- Sobre acento teal, el texto va en tinta oscura (`#06251f` aprox.).
+- El fucsia es el color de marca: acciones principales y estados activos. Nunca
+  como color de texto largo.
+- Contraste mínimo 4.5:1 en texto, en **ambos** temas.
+- Sobre el acento, el texto va en `on-accent` (tinta en oscuro, blanco en claro).
+- `ok` / `warn` / `bad` son estados semánticos — no son "el acento".
+- Marca blanca: `BRAND_*` (`wrangler.toml`) sobreescribe `accent` / `bg` /
+  `panel`; sin ellas, identidad Kooni.
 
 ---
 
@@ -66,12 +76,13 @@ limpia y legible. Los tokens son los que usa el dashboard (ver `docs/design-syst
 
 | Rol | Familia | Fallback |
 |---|---|---|
-| Display / títulos | **Space Grotesk** (Google Fonts) | `ui-sans-serif, system-ui, sans-serif` |
-| Mono / datos / código | **JetBrains Mono** (Google Fonts) | `ui-monospace, monospace` |
+| Display / títulos / texto | **Sora** (Google Fonts, 400–800) | `ui-sans-serif, system-ui, sans-serif` |
+| Mono / datos / código / etiquetas | **IBM Plex Mono** (Google Fonts, 400–600) | `ui-monospace, monospace` |
 
-- Títulos en Space Grotesk 700, con `letter-spacing: -0.02em`.
-- Datos, tablas y etiquetas en JetBrains Mono.
-- Ambas se cargan por Google Fonts (gratis, sin registro).
+- Títulos en Sora 700/800, con `letter-spacing: -0.02em` a `-0.03em`.
+- **El cuerpo también es Sora** — antes todo era monoespaciado (el look "terminal"
+  de Forja). La mono queda solo para números, tablas, etiquetas y código.
+- Ambas por Google Fonts (gratis, sin registro).
 
 ---
 
@@ -79,11 +90,14 @@ limpia y legible. Los tokens son los que usa el dashboard (ver `docs/design-syst
 
 Archivos: `assets/kooni-logo.svg` (64px) y `assets/kooni-favicon.svg` (32px).
 
-- **Forma:** cuadrado redondeado de tinta `#0d1218` con borde teal `#2dd4bf`.
+- **Forma:** cuadrado redondeado de tinta `#0f0e17` con borde fucsia `#e05fd8`.
 - **Glifo:** la letra **K** formada por un nodo de conversación (trazos que se
-  abren en dos direcciones) en teal.
-- **Punto:** un nodo menta `#6ee7b7` en la esquina superior derecha — "el bot
+  abren en dos direcciones) en fucsia.
+- **Punto:** un nodo violeta `#a679f6` en la esquina superior derecha — "el bot
   encendido / en línea".
+
+> Los SVG en `assets/` todavía tienen los colores teal viejos — actualizar en la
+> Fase 2 del rediseño.
 - **Uso en dashboard:** dentro del cuadro de marca (34px) del sidebar y en la
   página de login de dos columnas (`loginPage()` en `layout.ts`), se renderiza
   el glifo K con el punto. En marca blanca lo reemplaza el logo del revendedor

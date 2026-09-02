@@ -17,16 +17,16 @@ export async function renderExtras(env: Env, saved = false, report?: string): Pr
   const state = await extrasState(env, settings);
 
   const savedBanner = saved
-    ? `<div style="border:1px solid var(--ok);background:rgba(127,183,126,.1);color:var(--ok);padding:10px 14px;font-size:12.5px;font-weight:600">Guardado ✓</div>`
+    ? `<div style="border:1px solid var(--ok);background:var(--ok-soft);color:var(--ok);padding:10px 14px;font-size:12.5px;font-weight:600">Guardado ✓</div>`
     : "";
 
   let reportBanner = "";
   if (report?.startsWith("ok:")) {
     const ch = report.slice(3).split("+").join(" + ");
-    reportBanner = `<div style="border:1px solid var(--ok);background:rgba(127,183,126,.1);color:var(--ok);padding:9px 12px;font-size:12px;font-weight:600">✓ Reporte enviado por: ${esc(ch)}</div>`;
+    reportBanner = `<div style="border:1px solid var(--ok);background:var(--ok-soft);color:var(--ok);padding:9px 12px;font-size:12px;font-weight:600">✓ Reporte enviado por: ${esc(ch)}</div>`;
   } else if (report?.startsWith("err:")) {
     const msg = report.slice(4).slice(0, 180);
-    reportBanner = `<div style="border:1px solid var(--danger,#e0654d);background:rgba(224,101,77,.1);color:var(--danger,#e0654d);padding:9px 12px;font-size:12px;font-weight:600">✕ ${esc(msg)}</div>`;
+    reportBanner = `<div style="border:1px solid var(--bad);background:var(--bad-soft);color:var(--bad);padding:9px 12px;font-size:12px;font-weight:600">✕ ${esc(msg)}</div>`;
   }
 
   const actuaBadge = (a: string) => {

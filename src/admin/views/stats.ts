@@ -9,7 +9,7 @@ import { costOfUsage, type ModelId } from "../../pricing";
 import { channelLabel } from "../../channels/labels";
 import { layout } from "./layout";
 
-const ACCENT = "#f07a3f";
+const ACCENT = "var(--accent)";
 
 function esc(s: string): string {
   return s.replace(
@@ -57,8 +57,8 @@ function heatmap(cells: Map<string, number>): string {
   const rows = DOW.map((name, dow) => {
     const tds = Array.from({ length: 24 }, (_, hour) => {
       const n = cells.get(`${dow}:${hour}`) ?? 0;
-      const alpha = n === 0 ? 0 : 0.12 + 0.8 * (n / max);
-      const bg = n === 0 ? "var(--panel2)" : `rgba(240,122,63,${alpha.toFixed(2)})`;
+      const pct = n === 0 ? 0 : Math.round((0.12 + 0.8 * (n / max)) * 100);
+      const bg = n === 0 ? "var(--panel2)" : `color-mix(in srgb, var(--accent) ${pct}%, var(--panel2))`;
       return `<td class="p-0"><div style="width:13px;height:13px;background:${bg}" title="${name} ${hour}:00 — ${n} ${n === 1 ? "mensaje" : "mensajes"}"></div></td>`;
     }).join("");
     return `<tr><td class="pr-2 text-[9px] text-dim font-mono text-right">${name}</td>${tds}</tr>`;

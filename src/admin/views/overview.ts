@@ -273,11 +273,11 @@ export async function renderOverview(env: Env): Promise<string> {
       const chips = active
         .map((r) => {
           const pct = r.limit ? Math.min(100, Math.round((r.used / r.limit) * 100)) : 0;
-          const color = pct >= 80 ? "var(--bad)" : pct >= 50 ? "var(--warn,#e9ad4f)" : "var(--ok)";
+          const color = pct >= 80 ? "var(--bad)" : pct >= 50 ? "var(--warn)" : "var(--ok)";
           return `<span class="font-mono" style="font-size:10.5px;border:1px solid ${color};color:${color};padding:2px 8px">${r.label} ${r.used}/${r.limit}</span>`;
         })
         .join(" ");
-      limitsBanner = `<div class="bg-panel border border-line p-4 flex items-center justify-between gap-3 flex-wrap" style="border-color:rgba(233,173,79,.4)">
+      limitsBanner = `<div class="bg-panel border border-line p-4 flex items-center justify-between gap-3 flex-wrap" style="border-color:var(--warn)">
         <div style="display:flex;flex-direction:column;gap:4px">
           <span class="font-display font-semibold text-[12.5px] text-cream">Plan gratis — límites de uso</span>
           <div style="display:flex;gap:6px;flex-wrap:wrap">${chips}</div>

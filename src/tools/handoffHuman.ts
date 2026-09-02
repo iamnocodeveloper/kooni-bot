@@ -105,10 +105,11 @@ export async function notifyOwner(env: Env, notice: HandoffNotice): Promise<void
   // puede ser el único canal de aviso configurado.
   try {
     const { notifyOwnerPush } = await import("../push");
+    const esVigilante = notice.reason === "vigilante";
     await notifyOwnerPush(env, {
-      title: `🚨 Ticket: ${notice.reason}`,
+      title: esVigilante ? "👁️ Vigilante" : `🚨 Ticket: ${notice.reason}`,
       body: notice.summary.slice(0, 140),
-      url: "/admin/tickets",
+      url: esVigilante ? "/admin/conversations" : "/admin/tickets",
     });
   } catch (e) {
     console.warn("[notifyOwner] push falló:", e);
