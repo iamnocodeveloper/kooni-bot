@@ -24,6 +24,33 @@ interface UrlState {
   chars: number;
 }
 
+/**
+ * Recorta el "chrome" del markdown scrapeado (nav, menús, footer, cookie
+ * banners) para que el documento de KB sea contenido útil, no boilerplate.
+ * El caso típico (páginas /llm/inventory/ de concesionarios): el primer ~40%
+ * es el menú de navegación y el último ~15% es footer + aviso de cookies.
+ * Heurística conservadora: si encuentra dónde empieza el contenido real
+ * (primer precio, VIN, o listado), corta lo de antes; y corta desde el
+ * footer típico. Si no encuentra marcadores, devuelve el texto tal cual.
+ */
+export function trimBoilerplate(raw: string): string {
+  let s = raw.trim();
+
+  // Inicio del contenido real: primer "$1,234" / "VIN:" / "### " tras 500 chars.
+  const startRe = /(\$\s?\d[\d,]{3,}|VIN:\s*[A-HJ-NPR-Z0-9]{6,}|^#{2,4}\s+\S)/m;
+  const m = startRe.exec(s.slice(400));
+  if (m && m.index > 200) s = s.slice(400 + m.index);
+
+  // Footer típico: "## Contact Us" / "## Get Directions" / "## Hours" / cookie.
+  const endRe = /\n#{1,3}\s+(Contact Us|Get Directions|Hours|Our Location|Dealer Info|Connect With Us)\b/i;
+  const e = endRe.exec(s);
+  if (e && e.index > s.length * 0.4) s = s.slice(0, e.index);
+  const cookie = s.search(/Your Privacy & Cookies|We respect consumer privacy|Powered by \*\*\[ComplyAuto/i);
+  if (cookie > s.length * 0.4) s = s.slice(0, cookie);
+
+  return s.trim();
+}
+
 /** Hash rápido (djb2) del texto — para saltar re-embebidos sin cambios. */
 function quickHash(s: string): string {
   let h = 5381;
@@ -108,7 +135,7 @@ export async function runWebSync(env: Env): Promise<WebSyncSummary> {
       continue;
     }
     summary.scraped++;
-    const content = r.content.trim().slice(0, MAX_DOC_CHARS);
+    const content = trimBoilerplate(r.content).slice(0, MAX_DOC_CHARS);
     const hash = quickHash(content);
     const id = webDocId(url);
 

@@ -3,7 +3,7 @@ import { createTestMiniflare } from "../helpers/miniflareSetup";
 import { Db } from "../../src/db/client";
 import { SettingsRepo, SETTING_KEYS } from "../../src/db/settings";
 import { KbDocsRepo } from "../../src/kb/docs";
-import { parseWebSyncUrls, webDocId, runWebSync } from "../../src/kb/webSync";
+import { parseWebSyncUrls, webDocId, runWebSync, trimBoilerplate } from "../../src/kb/webSync";
 import type { Env } from "../../src/env";
 
 describe("parseWebSyncUrls / webDocId", () => {
@@ -15,6 +15,25 @@ describe("parseWebSyncUrls / webDocId", () => {
     const id = webDocId("https://x.com/llm/inventory/?type=used&limit=100");
     expect(id.startsWith("web:")).toBe(true);
     expect(webDocId("https://x.com/llm/inventory/?limit=100&type=used")).toBe(id); // orden de query no importa
+  });
+
+  it("trimBoilerplate recorta nav y footer, deja el inventario", () => {
+    const raw =
+      "- [Home](/)\n- [New](/new)\n- [Used](/used)\n".repeat(30) +
+      "### 2022 Kia Sorento\nUsed 34,000 miles $27,900\nVIN: KNDPU3DG4V7430723\n".repeat(40) +
+      "\n## Contact Us\n561-555-1234\n" +
+      "Your Privacy & Cookies — bla bla\n".repeat(10);
+    const out = trimBoilerplate(raw);
+    expect(out).toContain("Kia Sorento");
+    expect(out).toContain("VIN: KNDPU3DG4V7430723");
+    expect(out).not.toContain("[Home](/)");
+    expect(out).not.toContain("Contact Us");
+    expect(out.length).toBeLessThan(raw.length);
+  });
+
+  it("trimBoilerplate no rompe texto sin marcadores", () => {
+    const plain = "Este es un texto corto sin precios ni menús.";
+    expect(trimBoilerplate(plain)).toBe(plain);
   });
 
   it("webDocId nunca genera vectores > 64 bytes (Vectorize los rechaza)", () => {
