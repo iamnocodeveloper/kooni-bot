@@ -389,6 +389,32 @@ CREATE TABLE IF NOT EXISTS contacts (
 );
 CREATE INDEX IF NOT EXISTS idx_contacts_last ON contacts(last_interaction_at);
 
+-- Registro de auditoria del panel (§ U): una fila por ACCION de un operador del
+-- panel /admin (no las escrituras del bot). Solo se lee desde /admin/auditoria;
+-- ninguna ruta del panel la modifica. La UNICA baja es la purga nocturna por
+-- retencion (audit_retention_days, default 180). Los valores de claves sensibles
+-- (tokens, API keys, licencia) se guardan REDACTADOS, nunca en claro.
+-- action: settings.update | kb.doc.save | kb.doc.delete | rule.create | login.ok | ...
+-- result: ok | denied | error
+CREATE TABLE IF NOT EXISTS audit_log (
+  id TEXT PRIMARY KEY,
+  at INTEGER NOT NULL,
+  actor_name TEXT,
+  actor_ip_hash TEXT,
+  actor_ua TEXT,
+  action TEXT NOT NULL,
+  target TEXT,
+  target_label TEXT,
+  before_val TEXT,
+  after_val TEXT,
+  method TEXT,
+  path TEXT,
+  result TEXT NOT NULL DEFAULT 'ok',
+  meta TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_audit_at ON audit_log(at);
+CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_log(action, at);
+
 -- PWA: suscripciones push de los dispositivos del dueno (panel instalado como
 -- app). endpoint es unico por navegador y dispositivo. p256dh y auth son las
 -- claves del cliente en base64url que devuelve pushManager.subscribe

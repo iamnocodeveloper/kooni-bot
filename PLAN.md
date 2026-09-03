@@ -206,7 +206,7 @@ giro (playbook + columnas + KB alcanzan).
 16. **Análisis ZernFlow — flujo visual tipo ManyChat** (`sitio-web/14-analisis-zernflow.md`) — ⏳ **EN ESPERA de feedback de las 2 instalaciones (beta).** Decisión 2026-09-02: NO construir el editor visual ahora (proyecto de semanas, choca con el principio "sin builders visuales" de `FLUJOS.md`, ningún cliente lo pidió). Se retoma con demanda real (2+ clientes lo piden / beta cerrada / cliente que paga ManyChat no migra sin editor). El doc trae además un Sprint 1 de tareas rápidas (T1 `src/triggers.ts`, T2/T3 playground: probar automatizaciones + ver tool calls, T4 vista de árbol read-only de `auto_rules`) — bajo riesgo, no toca `agent.ts` — y como Sprint 2 post-beta las **secuencias/drip** (la función que de verdad mueve la aguja vs ManyChat, antes que el lienzo).
 17. **Gestión de licencias de pago — mejor forma para Kooni** (`§ F`) — Modelo elegido: **híbrido** (Ed25519 offline como fuente de verdad + capa online opcional para revocar/renovar, que se mantiene MIT — no se gatea la descarga). ✅ **HECHO y en `main` en v1.20.0** (`a189124`, 2026-09-03 — ver § CIERRE DE ETAPA): periodo de **gracia de 7 días** para códigos `monthly` vencidos (`LICENSE_GRACE_MS`), `inspectLicense()` como estado único, tarjeta de estado real en `/admin/licencia` (de por vida / vence en N días / gracia / vencida) y aviso en el Resumen. Inerte para lifetime. ⏳ **ROADMAP (construir con cliente de suscripción real, detalle completo en `§ F`):** (a) endpoint `estado-licencia` en InsForge — `active` / `active + código rotado` (auto-renovación, cliente no hace nada) / `revoked`; (b) `src/license-check.ts` + cron nocturno (fail-open; cache de revoke en `isProLicense`); (c) procesador de cobro recurrente (Stripe / Lemon Squeezy / Mercado Pago) — decisión de negocio; (d) aviso automático de vencimiento (email/push); (e) botón "renovar" en el panel de licencias; (f) login del CLI estilo Forja SOLO si los revendedores lo piden.
 18. **Canal MercadoLibre** (`§ B5`) — ✅ **HECHO en `main` en v1.21.0** (`0a193c4`, 2026-09-03). Preguntas de publicaciones + mensajería post-venta; app OAuth propia del vendedor, todo en D1 `settings`, tarjeta en `/admin/conexiones`. Falta prueba end-to-end en vivo.
-19. **Registro de auditoría del panel** (`§ U`) — ⏳ **PLAN escrito (2026-09-03).** Ventana `/admin/auditoria` de **solo lectura**: quién entró, hora, qué acción, qué modificó, **antes → después**. Captura instrumentando `SettingsRepo.set` (cubre ~90 % de las mutaciones) + `audit()` en ~12 rutas + login/logout; actor por hash de IP + user-agent y (recomendado) nombre de operador guardado en la cookie firmada. Secretos **redactados** antes de guardar. Nueva tabla `audit_log`, purga nocturna (retención 180 d). Fases U1–U5 en `§ U`. Pendiente: decisión de tier (Free vs Pro para la vista) y si se quiere identidad Nivel B/C.
+19. **Registro de auditoría del panel** (`§ U`) — 🚧 **U1 HECHO (2026-09-03), pendiente commit+release.** Ventana `/admin/auditoria` de **solo lectura**: quién entró, hora, qué acción, qué modificó, **antes → después**. Decisiones de Joel: **Nivel A** (huella IP + navegador, sin tocar el login) · **vista solo Pro**, captura siempre. U1: tabla `audit_log`, `AuditRepo`, `src/audit/context.ts` (`AsyncLocalStorage` + redacción de secretos), middleware de actor, `SettingsRepo.set` instrumentado (antes→después), captura de login/logout, purga nocturna (180 d). Falta: **U2** ventana `/admin/auditoria` (Pro), **U3** `recordAudit()` en las ~12 rutas fuera de Settings. Detalle y fases en `§ U`.
 
 ## Seguridad — auditoría 2026-08-31 (arreglos + pendientes)
 
@@ -1229,16 +1229,17 @@ firmada con HMAC(`DASHBOARD_PASSWORD`) — **sin tabla, sin identidad**. Las tab
 `admin_emails` / `magic_links` existen en `src/db/` pero **no están cableadas** al
 login.
 
-Para "auditar usuarios" hace falta identidad. Tres niveles, por fases:
+Para "auditar usuarios" hace falta identidad. Tres niveles posibles:
 
 | Nivel | Qué da | Costo |
 |---|---|---|
-| **A — huella** (MVP) | actor = `admin` + hash de IP + user-agent. Distingue "sesión desde IP X", no personas en la misma red. | 0 (la IP ya se lee en el login) |
-| **B — nombre de operador** (recomendado) | Campo opcional **"tu nombre"** en la pantalla de login → se guarda **dentro de la cookie firmada** (ya va HMAC, no se puede falsear). Cada fila de auditoría lleva ese nombre. Sin auth nueva, sin tabla. | ~2 h |
-| **C — multiusuario real** | Activar `admin_emails` + `magic_links`: cada persona entra con su email + magic link → identidad real y revocable por persona. | ~1–2 días |
+| **A — huella** | actor = `admin` + hash de IP + user-agent. Distingue "sesión desde IP X", no personas en la misma red. | 0 (la IP ya se lee en el login) |
+| **B — nombre de operador** | Campo opcional **"tu nombre"** en el login → cookie firmada. | ~2 h |
+| **C — multiusuario real** | `admin_emails` + `magic_links`: cada persona entra con su email + magic link. | ~1–2 días |
 
-**Recomendación:** entregar **A + B juntos** (el registro sirve desde el día 1 y
-el nombre lo hace útil). **C** queda como mejora Pro/enterprise.
+**Decisión Joel (2026-09-03): Nivel A** (huella IP + navegador). Sin tocar el
+login. El campo `actor_name` queda en el esquema con valor `"admin"` por ahora,
+listo para subir a Nivel B/C después sin migración.
 
 ### Esquema (`src/db/schema.sql`)
 
@@ -1340,20 +1341,20 @@ proceso que da de baja filas.
 
 ### Tier
 
-La **captura** corre siempre (barata, y quieres el historial aunque sea Free).
-La **ventana**: recomendación **Free** también (trazabilidad y seguridad no van
-tras un muro; encaja con "uso interno"). Alternativa: gate Pro de la vista —
-decidir con Joel.
+**Decisión Joel (2026-09-03):** la **captura** corre siempre (Free y Pro — quieres
+el historial igual). La **ventana `/admin/auditoria` es solo Pro**: sin licencia
+Pro activa, el ítem de nav aparece con candado (`renderUpgrade`), igual que otras
+funciones Pro. El `export.csv` también queda tras Pro.
 
 ### Fases
 
-| Fase | Entrega | Esfuerzo |
-|---|---|---|
-| **U1** | Esquema + `AuditRepo` + `audit()` helper + instrumentar `SettingsRepo.set` + captura login/logout + redacción de secretos. Sin UI (verificable por SQL). | ~4 h |
-| **U2** | Nivel B: campo "tu nombre" en el login → cookie firmada → `actor_name`. | ~2 h |
-| **U3** | Ventana `/admin/auditoria` (tabla + filtros + paginación keyset) + nav + export CSV. | ~4 h |
-| **U4** | `audit()` en las ~12 rutas fuera de Settings + purga nocturna + `audit_retention_days`. | ~3 h |
-| **U5** (opcional) | Nivel C: multiusuario con `admin_emails` + `magic_links`. | ~1–2 días |
+| Fase | Entrega | Esfuerzo | Estado |
+|---|---|---|---|
+| **U1** | Esquema `audit_log` + `AuditRepo` (`src/db/auditLog.ts`) + `src/audit/context.ts` (`AsyncLocalStorage` + `recordAudit()` + `redactValue()` + `AUDIT_SENSITIVE_KEYS`) + middleware de actor en `/admin` (envuelve POST/PUT/PATCH/DELETE) + instrumentar `SettingsRepo.set` (antes→después, salta si no cambió o si no hay operador) + `SETTING_LABELS` + captura `login.ok`/`login.fail`/`login.blocked`/`logout` + purga nocturna (`audit_retention_days`, default 180). Tests: `test/db/auditLog.test.ts`, `test/audit/context.test.ts`. Sin UI. | ~4 h | ✅ **HECHO (2026-09-03)** — pendiente commit+release |
+| **U2** | Ventana `/admin/auditoria` **(Pro)**: tabla + filtros (fecha/acción/actor/texto) + paginación keyset + nav con candado + `export.csv`. (Ruta ya en `PRO_GATE`.) | ~4 h | ⏳ |
+| **U3** | `recordAudit()` en las ~12 rutas fuera de Settings (KB doc save/delete, `auto_rules` CRUD/toggle, estado de lead, resolver ticket, pausar/reanudar/responder conversación, `mejoras` aplicar/descartar, quitar lección, push) + campo `audit_retention_days` en /admin/config. | ~3 h | ⏳ |
+| **U4** (opcional) | Nivel B: campo "tu nombre" en el login → cookie firmada → `actor_name`. | ~2 h | ⏳ |
+| **U5** (opcional) | Nivel C: multiusuario con `admin_emails` + `magic_links`. | ~1–2 días | ⏳ |
 
 Tests: `test/db/auditLog.test.ts` (repo + redacción), `test/admin/auditoria.test.ts`
 (la vista no expone secretos, no hay rutas de escritura, filtros), + asserts en

@@ -458,6 +458,15 @@ export default {
 
     // Daily cron (wrangler.toml: "0 3 * * *") — purge messages older than 90 days.
     await purgeOldMessages(env);
+    // Registro de auditoría del panel (§ U): purga por retención (default 180 días).
+    try {
+      const { AuditRepo } = await import("./db/auditLog");
+      const days = Number(await new SettingsRepo(new Db(env.DB)).get("audit_retention_days")) || 180;
+      const removed = await new AuditRepo(new Db(env.DB)).purgeOld(Date.now() - days * 86_400_000);
+      if (removed) console.log(`[cron] audit_log: ${removed} filas viejas purgadas (> ${days}d)`);
+    } catch (e) {
+      console.warn("audit_log purge:", e);
+    }
     // Corrida nocturna del Analista de insights (F2). No debe tumbar la purga.
     await analyzeConversations(env, { limit: 50 }).catch((e) => console.error("insights:", e));
     // Reporte nocturno (Kooni+): resumen del día al dueño (Telegram/email),

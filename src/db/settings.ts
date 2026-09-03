@@ -1,4 +1,5 @@
 import { Db } from "./client";
+import { currentActor, recordAudit, redactValue } from "../audit/context";
 
 // Canonical setting keys. Every value is stored as TEXT; the loader parses.
 // Empty/absent => default (see settings-loader.ts).
@@ -99,6 +100,83 @@ export const SETTING_KEYS = {
 
 export type SettingKey = (typeof SETTING_KEYS)[keyof typeof SETTING_KEYS];
 
+/**
+ * Etiqueta legible por clave de `settings` — para el registro de auditoría
+ * (§ U). Las claves sin entrada aquí se muestran con su nombre técnico.
+ */
+export const SETTING_LABELS: Record<string, string> = {
+  [SETTING_KEYS.systemPromptOverride]: "Prompt del sistema (reemplazo total)",
+  [SETTING_KEYS.customInstructions]: "Instrucciones extra del dueño",
+  [SETTING_KEYS.businessContext]: "Contexto del negocio",
+  [SETTING_KEYS.botName]: "Nombre del bot",
+  [SETTING_KEYS.tone]: "Tono del bot",
+  [SETTING_KEYS.kbMinScore]: "Umbral de score de la KB",
+  [SETTING_KEYS.bufferSeconds]: "Segundos de buffer",
+  [SETTING_KEYS.maxChunks]: "Máximo de mensajes por respuesta",
+  [SETTING_KEYS.interChunkDelayMs]: "Pausa entre mensajes (ms)",
+  [SETTING_KEYS.escalationKeywords]: "Palabras de escalamiento",
+  [SETTING_KEYS.modelOverride]: "Modelo de IA (override)",
+  [SETTING_KEYS.botPaused]: "Bot en pausa (global)",
+  [SETTING_KEYS.pausedChannels]: "Canales pausados",
+  [SETTING_KEYS.disabledTools]: "Herramientas desactivadas",
+  [SETTING_KEYS.temperature]: "Temperatura del modelo",
+  [SETTING_KEYS.monthlyBudget]: "Presupuesto mensual de IA (USD)",
+  [SETTING_KEYS.learnedLessons]: "Lecciones aprendidas",
+  [SETTING_KEYS.twilioHandoffContentSid]: "Plantilla HSM de handoff (Twilio)",
+  [SETTING_KEYS.autonomyLevel]: "Nivel de autonomía (flywheel)",
+  [SETTING_KEYS.llmProvider]: "Proveedor de IA",
+  [SETTING_KEYS.llmApiKey]: "API key del proveedor de IA",
+  [SETTING_KEYS.llmModel]: "Modelo de IA",
+  [SETTING_KEYS.llmApiBaseUrl]: "URL base del proveedor de IA",
+  [SETTING_KEYS.proLicense]: "Código de licencia Pro",
+  [SETTING_KEYS.menuButtons]: "Botones del menú",
+  [SETTING_KEYS.resourceLibrary]: "Biblioteca de recursos",
+  [SETTING_KEYS.allowMultimedia]: "Permitir multimedia en respuestas",
+  [SETTING_KEYS.zernioApiKey]: "API key de Zernio",
+  [SETTING_KEYS.zernioWebhookSecret]: "Webhook secret de Zernio",
+  [SETTING_KEYS.telegramBotToken]: "Token del bot de Telegram",
+  [SETTING_KEYS.ownerTelegramChatId]: "Chat id del dueño (Telegram)",
+  [SETTING_KEYS.mlClientId]: "App ID de MercadoLibre",
+  [SETTING_KEYS.mlClientSecret]: "Secret Key de MercadoLibre",
+  [SETTING_KEYS.mlSite]: "País de MercadoLibre",
+  [SETTING_KEYS.mlAccessToken]: "Token de acceso de MercadoLibre",
+  [SETTING_KEYS.mlRefreshToken]: "Refresh token de MercadoLibre",
+  [SETTING_KEYS.mlUserId]: "Vendedor de MercadoLibre",
+  [SETTING_KEYS.mlNickname]: "Nombre del vendedor (MercadoLibre)",
+  [SETTING_KEYS.nightlyReportEnabled]: "Reporte nocturno activado",
+  [SETTING_KEYS.nightlyReportChannel]: "Canal del reporte nocturno",
+  [SETTING_KEYS.moduleUnlocks]: "Módulos de pago desbloqueados",
+  [SETTING_KEYS.agentPersona]: "Persona del bot",
+  [SETTING_KEYS.reviewLink]: "Link de reseñas",
+  [SETTING_KEYS.paymentLink]: "Link de pago",
+  [SETTING_KEYS.commentFallbackEnabled]: "Respuesta pública a comentarios sin regla",
+  [SETTING_KEYS.commentFallbackMessage]: "Texto de la respuesta pública a comentarios",
+  [SETTING_KEYS.webSyncEnabled]: "Web Sync activado",
+  [SETTING_KEYS.webSyncUrls]: "URLs de Web Sync",
+};
+
+/** Toggles del menú Extras (Kooni+) — etiquetas para el registro de auditoría. */
+for (const [k, label] of [
+  [SETTING_KEYS.featureBlindaje, "Extra: Blindaje"],
+  [SETTING_KEYS.featureVigilante, "Extra: Vigilante"],
+  [SETTING_KEYS.featureHandoff, "Extra: Handoff"],
+  [SETTING_KEYS.featureCazador, "Extra: Cazador de ventas"],
+  [SETTING_KEYS.featureOidoVista, "Extra: Oído y vista"],
+  [SETTING_KEYS.featureVozMarca, "Extra: Voz de marca"],
+  [SETTING_KEYS.featureMultiidioma, "Extra: Multiidioma"],
+  [SETTING_KEYS.featureEncuestas, "Extra: Encuestas"],
+  [SETTING_KEYS.featureReenganche, "Extra: Reenganche"],
+  [SETTING_KEYS.featureResenas, "Extra: Pide reseñas"],
+  [SETTING_KEYS.featureCobros, "Extra: Cobros"],
+  [SETTING_KEYS.featureGaleria, "Extra: Galería"],
+] as const) {
+  SETTING_LABELS[k] = label;
+}
+
+export function settingLabel(key: string): string {
+  return SETTING_LABELS[key] ?? key;
+}
+
 interface SettingRow {
   key: string;
   value: string;
@@ -116,12 +194,28 @@ export class SettingsRepo {
   }
 
   async set(key: string, value: string): Promise<void> {
+    // Registro de auditoría (§ U): si hay un operador del panel en contexto,
+    // capturamos el valor anterior para el "antes → después". Fuera del panel
+    // (bot / cron) no hay actor y esto no cuesta nada.
+    const actor = currentActor();
+    const before = actor ? await this.get(key) : null;
+
     await this.db.run(
       `INSERT INTO settings (key, value, updated_at)
        VALUES (?, ?, ?)
        ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
       [key, value, Date.now()],
     );
+
+    if (actor && before !== value) {
+      await recordAudit(this.db, {
+        action: "settings.update",
+        target: key,
+        targetLabel: settingLabel(key),
+        beforeVal: redactValue(key, before),
+        afterVal: redactValue(key, value),
+      });
+    }
   }
 
   async all(): Promise<Record<string, string>> {

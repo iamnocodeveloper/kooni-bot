@@ -22,6 +22,9 @@ import { loadLlmOverrides } from "../settings-loader";
 import type { Env } from "../env";
 import { adminAuth, hasValidSessionCookie, verifyDashboardPassword, setSessionCookie, clearSessionCookie } from "./auth";
 import type { LoginAttemptsRepo } from "../db/loginAttempts";
+import { AuditRepo } from "../db/auditLog";
+import { runWithActor } from "../audit/context";
+import { hashIp } from "../db/loginAttempts";
 import { layout, renderUpgrade, loginPage } from "./views/layout";
 import { isProUnlocked } from "../config";
 import { renderOverview } from "./views/overview";
@@ -91,6 +94,39 @@ import { renderBusinessContext } from "../businessContext";
 
 export const adminApp = new Hono<{ Bindings: Env }>();
 
+/**
+ * Registro de auditoría (§ U) para eventos de login/logout — se llama a mano
+ * porque estas rutas van ANTES del guard y del middleware de actor. Best-effort:
+ * nunca bloquea ni rompe el login.
+ */
+async function auditAuthEvent(
+  c: { req: { header: (k: string) => string | undefined; method: string; path: string }; env: Env },
+  action: "login.ok" | "login.fail" | "login.blocked" | "logout",
+  result: "ok" | "denied",
+  ipHash?: string,
+): Promise<void> {
+  try {
+    let hash = ipHash;
+    if (!hash) {
+      const ip =
+        c.req.header("CF-Connecting-IP") ??
+        c.req.header("X-Forwarded-For")?.split(",")[0]?.trim();
+      if (ip) hash = hashIp(ip);
+    }
+    await new AuditRepo(new Db(c.env.DB)).log({
+      action,
+      result,
+      actorName: action === "login.ok" ? "admin" : undefined,
+      actorIpHash: hash,
+      actorUa: (c.req.header("User-Agent") ?? "").slice(0, 180),
+      method: c.req.method,
+      path: c.req.path,
+    });
+  } catch (e) {
+    console.warn("[audit] evento de auth:", e);
+  }
+}
+
 // --- Login del panel (rutas PÚBLICAS — van antes del guard de abajo) ---------
 // El humano entra por aquí: `GET /admin/login` pinta la página propia (dos
 // columnas: marca + formulario, ver `loginPage` en views/layout.ts) y
@@ -122,6 +158,7 @@ adminApp.post("/login", async (c) => {
       const gate = await attempts.check(ipHash);
       if (!gate.allowed) {
         const mins = Math.max(1, Math.ceil(gate.retryAfterSeconds / 60));
+        await auditAuthEvent(c, "login.blocked", "denied", ipHash);
         return c.redirect(
           "/admin/login?error=" +
             encodeURIComponent(`Demasiados intentos fallidos. Espera ${mins} minuto(s) y prueba de nuevo.`),
@@ -136,6 +173,7 @@ adminApp.post("/login", async (c) => {
 
   if (!verifyDashboardPassword(c.env, password)) {
     if (attempts) await attempts.recordFailure(ipHash).catch(() => {});
+    await auditAuthEvent(c, "login.fail", "denied", ipHash || undefined);
     return c.redirect(
       "/admin/login?error=" + encodeURIComponent("Contraseña incorrecta. Prueba de nuevo."),
       302,
@@ -144,14 +182,16 @@ adminApp.post("/login", async (c) => {
 
   if (attempts) await attempts.clear(ipHash).catch(() => {});
   setSessionCookie(c, c.env);
+  await auditAuthEvent(c, "login.ok", "ok", ipHash || undefined);
   return c.redirect("/admin/overview", 302);
 });
 
 // Cerrar sesión: borra la cookie y manda al login. El guard de páginas ignora
 // Basic Auth (solo cuenta la cookie), así que sin cookie el panel queda cerrado
 // aunque el navegador todavía tenga una credencial Basic vieja guardada.
-adminApp.get("/logout", (c) => {
+adminApp.get("/logout", async (c) => {
   clearSessionCookie(c);
+  await auditAuthEvent(c, "logout", "ok");
   return c.redirect("/admin/login", 302);
 });
 
@@ -194,6 +234,35 @@ adminApp.use("*", (c, next) => {
   return adminAuth(c.env)(c, next);
 });
 
+// Contexto de auditoría (§ U): envolvemos cada request MUTANTE del panel para
+// que toda escritura en D1 hecha dentro de ella quede ligada al operador
+// (huella: hash de IP + navegador). Fuera de aquí (bot, crons) no hay actor y
+// nada se audita. Se registra DESPUÉS del guard: solo acciones autenticadas.
+adminApp.use("*", async (c, next) => {
+  const m = c.req.method;
+  if (m !== "POST" && m !== "PUT" && m !== "PATCH" && m !== "DELETE") return next();
+  const ipRaw =
+    c.req.header("CF-Connecting-IP") ??
+    c.req.header("X-Forwarded-For")?.split(",")[0]?.trim() ??
+    "";
+  let ipHash: string | undefined;
+  try {
+    if (ipRaw) ipHash = hashIp(ipRaw);
+  } catch {
+    /* sin hash de IP — se registra igual sin él */
+  }
+  return runWithActor(
+    {
+      name: "admin",
+      ipHash,
+      ua: (c.req.header("User-Agent") ?? "").slice(0, 180),
+      method: m,
+      path: c.req.path,
+    },
+    () => next(),
+  );
+});
+
 // Gate de tier: el panel free ve el nav Pro bloqueado; si aun así navega a una
 // ruta Pro (URL directa, bookmark, click al item bloqueado), servimos la página
 // de upgrade en vez de la vista real. Los datos Pro nunca se exponen en free.
@@ -203,6 +272,7 @@ const PRO_GATE: Array<[string, string]> = [
   ["/admin/costs", "Costos"],
   ["/admin/mejoras", "Mejoras"],
   ["/admin/campanas", "Campañas"],
+  ["/admin/auditoria", "Auditoría"],
 ];
 adminApp.use("*", async (c, next) => {
   if (await isProUnlocked(c.env)) return next();
