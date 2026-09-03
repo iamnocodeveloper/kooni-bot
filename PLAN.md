@@ -205,6 +205,8 @@ giro (playbook + columnas + KB alcanzan).
 15. **🐛 Umbral de score de la KB demasiado alto (0.70)** — ✅ **HECHO (2026-09-02), pendiente commit+release.** Diagnóstico: en cardealer el bot decía "no tengo esa información" aunque la KB tiene los 71 autos indexados. Causa raíz **confirmada** consultando el Vectorize remoto de cardealer (`wrangler vectorize query`): 31 vectores sanos, contenido limpio, la búsqueda SÍ funciona — pero `@cf/baai/bge-m3` sobre contenido denso de inventario (VINs, URLs, precios) da top-score **0.60–0.63** aunque el match sea correcto (peor con consulta ES contra fichas EN). El umbral de 0.70 hacía que el modelo descartara resultados buenos. **Fix aplicado:** (a) nuevo `KB_MIN_SCORE_DEFAULT = 0.45` + `resolveKbMinScore(env)` en `src/kb/query.ts` (lee `settings.kb_min_score`, override del dueño, clamp 0–1); (b) `src/tools/searchKb.ts` filtra los hits `< min` antes de devolvérselos al modelo y su descripción ya no lleva número fijo ("si viene vacío, escala; si trae fragmentos, son confiables"); (c) `src/admin/views/kb.ts` — veredicto y colores usan el umbral real + **campo nuevo en /admin/kb para ajustarlo** (`POST /admin/kb/min-score`); (d) nueva key `kbMinScore` en `settings.ts`. Tests: +3 en `test/tools/searchKb.test.ts`, +2 en `test/admin/kb-routes.test.ts`. Afecta a TODAS las instalaciones (sobre todo web_sync). **Cardealer: DESPLEGADO a mano** (2026-09-02, version `e9f0fdb6`) — verificado contra el Vectorize real: consultas ES de inventario dan score 0.50–0.57 (> 0.45, antes descartadas por el 0.70). ✅ **Commiteado y en `main` en v1.20.0** (`a189124`, 2026-09-03) — ver § CIERRE DE ETAPA v1.20.0.
 16. **Análisis ZernFlow — flujo visual tipo ManyChat** (`sitio-web/14-analisis-zernflow.md`) — ⏳ **EN ESPERA de feedback de las 2 instalaciones (beta).** Decisión 2026-09-02: NO construir el editor visual ahora (proyecto de semanas, choca con el principio "sin builders visuales" de `FLUJOS.md`, ningún cliente lo pidió). Se retoma con demanda real (2+ clientes lo piden / beta cerrada / cliente que paga ManyChat no migra sin editor). El doc trae además un Sprint 1 de tareas rápidas (T1 `src/triggers.ts`, T2/T3 playground: probar automatizaciones + ver tool calls, T4 vista de árbol read-only de `auto_rules`) — bajo riesgo, no toca `agent.ts` — y como Sprint 2 post-beta las **secuencias/drip** (la función que de verdad mueve la aguja vs ManyChat, antes que el lienzo).
 17. **Gestión de licencias de pago — mejor forma para Kooni** (`§ F`) — Modelo elegido: **híbrido** (Ed25519 offline como fuente de verdad + capa online opcional para revocar/renovar, que se mantiene MIT — no se gatea la descarga). ✅ **HECHO y en `main` en v1.20.0** (`a189124`, 2026-09-03 — ver § CIERRE DE ETAPA): periodo de **gracia de 7 días** para códigos `monthly` vencidos (`LICENSE_GRACE_MS`), `inspectLicense()` como estado único, tarjeta de estado real en `/admin/licencia` (de por vida / vence en N días / gracia / vencida) y aviso en el Resumen. Inerte para lifetime. ⏳ **ROADMAP (construir con cliente de suscripción real, detalle completo en `§ F`):** (a) endpoint `estado-licencia` en InsForge — `active` / `active + código rotado` (auto-renovación, cliente no hace nada) / `revoked`; (b) `src/license-check.ts` + cron nocturno (fail-open; cache de revoke en `isProLicense`); (c) procesador de cobro recurrente (Stripe / Lemon Squeezy / Mercado Pago) — decisión de negocio; (d) aviso automático de vencimiento (email/push); (e) botón "renovar" en el panel de licencias; (f) login del CLI estilo Forja SOLO si los revendedores lo piden.
+18. **Canal MercadoLibre** (`§ B5`) — ✅ **HECHO en `main` en v1.21.0** (`0a193c4`, 2026-09-03). Preguntas de publicaciones + mensajería post-venta; app OAuth propia del vendedor, todo en D1 `settings`, tarjeta en `/admin/conexiones`. Falta prueba end-to-end en vivo.
+19. **Registro de auditoría del panel** (`§ U`) — ⏳ **PLAN escrito (2026-09-03).** Ventana `/admin/auditoria` de **solo lectura**: quién entró, hora, qué acción, qué modificó, **antes → después**. Captura instrumentando `SettingsRepo.set` (cubre ~90 % de las mutaciones) + `audit()` en ~12 rutas + login/logout; actor por hash de IP + user-agent y (recomendado) nombre de operador guardado en la cookie firmada. Secretos **redactados** antes de guardar. Nueva tabla `audit_log`, purga nocturna (retención 180 d). Fases U1–U5 en `§ U`. Pendiente: decisión de tier (Free vs Pro para la vista) y si se quiere identidad Nivel B/C.
 
 ## Seguridad — auditoría 2026-08-31 (arreglos + pendientes)
 
@@ -1209,6 +1211,156 @@ ve peor que no hacerlo. Orden:
 Antes de codear todo: proponer 1 mockup de la paleta + toggle en el Resumen
 para que Joel apruebe el rumbo. Esfuerzo: 1-2 días. Riesgo: bajo (visual), alto
 de "quedar a medias" si se apura.
+
+---
+
+## U. Registro de auditoría del panel (audit log) — PLAN ⏳
+
+> **Pedido (Joel, 2026-09-03):** "una ventana para ver los logs del sistema:
+> quién entró, a qué hora, qué hizo, qué modificó, dato anterior vs dato actual
+> — todo para auditar usuarios. No se puede modificar, solo ver el registro
+> detallado por cada acción."
+
+### El problema del "quién"
+
+Hoy el panel tiene **un solo usuario**: usuario fijo `admin` + contraseña
+compartida `DASHBOARD_PASSWORD` (`src/admin/auth.ts`). La sesión es una cookie
+firmada con HMAC(`DASHBOARD_PASSWORD`) — **sin tabla, sin identidad**. Las tablas
+`admin_emails` / `magic_links` existen en `src/db/` pero **no están cableadas** al
+login.
+
+Para "auditar usuarios" hace falta identidad. Tres niveles, por fases:
+
+| Nivel | Qué da | Costo |
+|---|---|---|
+| **A — huella** (MVP) | actor = `admin` + hash de IP + user-agent. Distingue "sesión desde IP X", no personas en la misma red. | 0 (la IP ya se lee en el login) |
+| **B — nombre de operador** (recomendado) | Campo opcional **"tu nombre"** en la pantalla de login → se guarda **dentro de la cookie firmada** (ya va HMAC, no se puede falsear). Cada fila de auditoría lleva ese nombre. Sin auth nueva, sin tabla. | ~2 h |
+| **C — multiusuario real** | Activar `admin_emails` + `magic_links`: cada persona entra con su email + magic link → identidad real y revocable por persona. | ~1–2 días |
+
+**Recomendación:** entregar **A + B juntos** (el registro sirve desde el día 1 y
+el nombre lo hace útil). **C** queda como mejora Pro/enterprise.
+
+### Esquema (`src/db/schema.sql`)
+
+```sql
+-- Registro de auditoría del panel: una fila por ACCIÓN de un operador del panel
+-- (no las escrituras del bot). Solo se lee desde /admin/auditoria; nada en el
+-- panel la modifica. La ÚNICA baja es la purga nocturna por retención.
+CREATE TABLE IF NOT EXISTS audit_log (
+  id TEXT PRIMARY KEY,
+  at INTEGER NOT NULL,               -- epoch ms
+  actor_name TEXT,                   -- nombre del operador (cookie) o NULL
+  actor_ip_hash TEXT,                -- SHA-256 de la IP (NUNCA en claro)
+  actor_ua TEXT,                     -- user-agent, recortado
+  action TEXT NOT NULL,              -- "settings.update" | "kb.doc.delete" | "login.ok" | ...
+  target TEXT,                       -- clave/id afectado ("tone", "kb:abc", "rule:xyz")
+  target_label TEXT,                 -- etiqueta humana ("Tono del bot")
+  before_val TEXT,                   -- valor anterior (texto/JSON, truncado, secretos redactados)
+  after_val TEXT,                    -- valor nuevo (idem)
+  method TEXT,                       -- POST | DELETE
+  path TEXT,                         -- /admin/config
+  result TEXT NOT NULL DEFAULT 'ok', -- ok | denied | error
+  meta TEXT                          -- JSON extra opcional
+);
+CREATE INDEX IF NOT EXISTS idx_audit_at ON audit_log(at);
+CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_log(action, at);
+```
+
+`CREATE TABLE IF NOT EXISTS` → se aplica sola en cada `kooni-bot update`
+(`schema.sql --remote`); no rompe instalaciones viejas.
+
+### Captura — dónde se engancha
+
+El ~90 % de las mutaciones del panel pasan por **`SettingsRepo.set(key, value)`**
+(config, tono, buffer, modelo, KB min-score, presupuesto, autonomía, licencia,
+canales Zernio/Telegram/MercadoLibre, toggles de Extras, persona, BYO-LLM,
+fallback de comentarios, reporte nocturno…). Instrumentando **ese único método**
+se cubre casi todo con `before`/`after` gratis:
+
+1. **`SettingsRepo.set`**: antes del upsert, `SELECT` del valor actual → tras
+   guardar, emitir `{ action:"settings.update", target:key,
+   target_label:LABELS[key], before, after }`. Si `before === after`, no registra.
+2. **Contexto del actor** — `AsyncLocalStorage` (hay `nodejs_compat`): un
+   middleware de `/admin` que envuelve solo los métodos mutantes
+   (`POST`/`PUT`/`DELETE`) con
+   `auditCtx.run({ name, ipHash, ua, method, path }, next)`. `SettingsRepo.set` y
+   el helper `audit()` leen `auditCtx.getStore()`. Cero threading por las ~35
+   rutas. *(Fallback si ALS no vuela en Workers: pasar un `ActorContext` explícito
+   al construir los repos.)*
+3. **Mutaciones que NO pasan por Settings** — una línea `await audit(c, {...})` en
+   cada handler (~12 sitios): KB doc `save`/`delete`, `auto_rules`
+   crear/editar/toggle/borrar, estado de lead, resolver ticket,
+   pausar/reanudar/responder conversación, `mejoras` aplicar/descartar, quitar
+   lección, suscripción push.
+4. **Login/logout** — `login.ok`, `login.fail`, `logout` (esto es el "quién
+   entró": hora + IP + nombre). Complementa `login_attempts` (que ya cuenta
+   fallos por IP para el rate-limit) con la línea legible.
+
+Toda escritura de auditoría es **best-effort**: `try/catch`, nunca bloquea la
+acción real; `c.executionCtx.waitUntil()` donde se pueda.
+
+### Redacción de secretos (CRÍTICO)
+
+El registro se ve en el panel → **nunca** guarda el valor de un secreto.
+`before_val`/`after_val` de claves sensibles (`llm_api_key`, `zernio_api_key`,
+`zernio_webhook_secret`, `telegram_bot_token`, `owner_telegram_chat_id`,
+`ml_client_secret`, `ml_access_token`, `ml_refresh_token`, `pro_license`) se
+guardan como `"[secreto establecido]"` / `"[secreto cambiado · …AB12]"` /
+`"[secreto borrado]"`. Set `AUDIT_SENSITIVE_KEYS` junto a `SETTING_KEYS`, y un
+test dedicado de que ningún secreto llega a la tabla.
+
+### La ventana (solo lectura)
+
+- Nuevo ítem de nav en **Análisis**:
+  `{ id:"auditoria", label:"Auditoría", href:"/admin/auditoria", icon:"history" }`.
+- **`GET /admin/auditoria`** — tabla, más reciente arriba:
+  **Cuándo · Quién · Acción · Qué cambió · Antes → Después · Resultado**.
+  Hora en la zona del dueño. "Quién" = nombre + IP corta (`…a1b2`) + navegador
+  resumido. "Antes → Después" en dos columnas con el cambio resaltado (diff
+  línea a línea para JSON).
+- **Filtros:** rango de fechas, acción, actor, texto. Paginación **keyset por
+  `at`** (no OFFSET).
+- **Cero rutas de escritura en esta vista.** No hay endpoint para borrar ni
+  editar una fila — es intencional y es lo que pidió Joel.
+- **`GET /admin/auditoria/export.csv`** — para auditoría externa.
+
+### Retención y tamaño
+
+Filas diminutas. Purga en el **cron nocturno** que ya existe (vecino de
+`purgeOldMessages`): borra `audit_log` con `at <` N días.
+`audit_retention_days` en `settings`, default **180**. Esa purga es el único
+proceso que da de baja filas.
+
+### Qué NO se audita
+
+- Los **GET** (lecturas), salvo login — registrar cada visita es ruido; se puede
+  añadir después como opción.
+- Las escrituras del **bot** (conversaciones, mensajes, leads de tools) — eso es
+  el producto funcionando, no una acción de operador.
+
+### Tier
+
+La **captura** corre siempre (barata, y quieres el historial aunque sea Free).
+La **ventana**: recomendación **Free** también (trazabilidad y seguridad no van
+tras un muro; encaja con "uso interno"). Alternativa: gate Pro de la vista —
+decidir con Joel.
+
+### Fases
+
+| Fase | Entrega | Esfuerzo |
+|---|---|---|
+| **U1** | Esquema + `AuditRepo` + `audit()` helper + instrumentar `SettingsRepo.set` + captura login/logout + redacción de secretos. Sin UI (verificable por SQL). | ~4 h |
+| **U2** | Nivel B: campo "tu nombre" en el login → cookie firmada → `actor_name`. | ~2 h |
+| **U3** | Ventana `/admin/auditoria` (tabla + filtros + paginación keyset) + nav + export CSV. | ~4 h |
+| **U4** | `audit()` en las ~12 rutas fuera de Settings + purga nocturna + `audit_retention_days`. | ~3 h |
+| **U5** (opcional) | Nivel C: multiusuario con `admin_emails` + `magic_links`. | ~1–2 días |
+
+Tests: `test/db/auditLog.test.ts` (repo + redacción), `test/admin/auditoria.test.ts`
+(la vista no expone secretos, no hay rutas de escritura, filtros), + asserts en
+`test/db/settings.test.ts` de que `set` registra el diff.
+
+Riesgo: **bajo-medio**. Lo delicado: `AsyncLocalStorage` en Workers (si falla →
+threading explícito) y no filtrar secretos (allow-list de redacción + test).
 
 ---
 
