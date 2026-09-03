@@ -5,10 +5,14 @@
 
 ---
 
-## 🏁 CIERRE DE ETAPA — BETA
+## 🏁 CIERRE DE ETAPA — BETA (histórico)
 
-> **Estado:** bot de Joel en producción (`kooni-bot-joel-nocode-ec53aa.joeldavidar.workers.dev`),
-> template `v1.0.9` · CLI `0.2.14`. El dueño entra en **pruebas + lanzamiento beta**.
+> ⬇️ Este bloque es el cierre de la etapa BETA (`v1.0.9`). El estado **actual** vive
+> en **§ CIERRE DE ETAPA — v1.20.0** (más abajo, 2026-09-03).
+>
+> **Estado (cuando se escribió):** bot de Joel en producción
+> (`kooni-bot-joel-nocode-ec53aa.joeldavidar.workers.dev`), template `v1.0.9` · CLI
+> `0.2.14`. El dueño entra en **pruebas + lanzamiento beta**.
 
 ### Entregado y verificado en esta etapa
 
@@ -87,54 +91,39 @@ otra pública. La pública, en cambio, es segura de publicar — ese es el punto
 | # | Tarea | Estado |
 |---|---|---|
 | I8 | Publicar CLI en npm (`kooni-bot@0.2.17`). | ⏳ **HECHO**: 0.2.16 y 0.2.17 publicados (npm latest = 0.2.17). |
-| J1 | **Joel-nocode** — fixes del panel (logout, raíz→/admin, realm) sin desplegar. **DESBLOQUEADO** (2026-09-02): una sesión con wrangler logueado a la cuenta `29074eb8` sí puede. Pasos en → **§ "Working tree sin commitear"**. | ⏳ Listo para hacer (~5 min) |
+| J1 | **Joel-nocode** — fixes del panel (logout, raíz→/admin, realm) sin desplegar. Pasos en → **§ CIERRE DE ETAPA v1.20.0**. Su carpeta no está en esta máquina; se despliega con `kooni-bot update` cuando se tenga. | ⏳ Pendiente (carpeta ausente) |
 | F2 | Re-probar handoff en vivo. | ⏳ En pruebas (necesita a Joel). |
 
-## 🔜 Working tree sin commitear — para retomar (2026-09-02)
+## 🏁 CIERRE DE ETAPA — v1.20.0 (2026-09-03)
 
-> Todo lo de abajo está **en el working tree de `forja`, probado, SIN commitear**.
-> `pnpm test` → **728/728 verde** · `pnpm typecheck` → verde (corridos de verdad).
-> Decisión de Joel: **dejar en roadmap y seguir luego** — nada urgente, la beta sigue
-> con las 2 instalaciones dando feedback.
+> **Estado:** `origin/main` en **`a189124` (v1.20.0)**. `pnpm test` → **741/741** ·
+> `pnpm typecheck` → verde (corridos de verdad). Working tree limpio.
 
-### Archivos tocados (una sola tanda, 2 features independientes)
+### Qué entró en v1.20.0 (3 commits)
 
-| Archivo | Feature |
+| Commit | Contenido |
 |---|---|
-| `src/kb/query.ts`, `src/tools/searchKb.ts`, `src/db/settings.ts`, `src/admin/views/kb.ts`, `src/admin/routes.ts` | **W1 — Umbral KB** (ver #15) |
-| `src/license.ts`, `src/admin/views/licencia.ts`, `src/admin/views/overview.ts` | **W2 — Gracia de licencia** (ver #17 y § F) |
-| `test/tools/searchKb.test.ts`, `test/admin/kb-routes.test.ts`, `test/license.test.ts`, `test/modules.test.ts` | tests de W1 + W2 |
-| `PLAN.md` | esta bitácora |
-| `sitio-web/14-analisis-zernflow.md` (gitignored) | análisis ZernFlow + decisión (ver #16) |
+| `5a5c856` | **feat(niches):** 4 giros — `restaurante` (pack de referencia), `inmobiliaria`, `clinica` (regla dura: no diagnostica), `barberia`. Cada uno = 1 archivo en `src/niches/`. `test/niches.test.ts` reescrito a tabla `GIROS` (`it.each`). +6 plantillas de KB. `docs/ARQUITECTURA.md §7` reescrita a la API real de `NichePack`. |
+| `cfe5133` | **chore:** rebrand `"Forja+"` → `"Kooni+"` en 23 comentarios/títulos de test. Nada visible al usuario. Se conservan LICENSE (© Horizontes IA) y notas de atribución MIT. |
+| `a189124` | **v1.20.0:** W1 (umbral KB configurable, `KB_MIN_SCORE_DEFAULT=0.45` + `settings.kb_min_score` + campo en `/admin/kb`) + W2 (gracia de licencia 7 días para códigos `monthly`, `inspectLicense()`) + bump `package.json`. |
 
-### W1 — Umbral KB (#15): estado
+### Despliegue por instalación
 
-- **Código:** hecho. **Cardealer:** DESPLEGADO y verificado (version `e9f0fdb6`, 2026-09-02) —
-  se copiaron los 5 archivos a `C:\Users\joeld\cardealerdaniel\src\` y `wrangler deploy`.
-- **Falta:** commit a `main` + bump de versión + `kooni-bot update` en **joel-nocode**.
+| Instalación | Cuenta CF | Estado v1.20.0 |
+|---|---|---|
+| **cardealer** (`kooni-bot-cardealer-daniel2-948b8b`) | `b579b154` | ⏳ **Pendiente** — `npx kooni-bot update` en `C:\Users\joeld\cardealerdaniel` (auto: pnpm install + d1 exec remoto + kb:reindex + `pnpm run deploy`). Cambio funcional real = nulo (sin `BOT_NICHE`; W1 ya estaba a mano desde 2026-09-02 version `e9f0fdb6`; W2 inerte con licencia lifetime). Solo alinea `src/` + marker de versión. |
+| **joel-nocode** (`kooni-bot-joel-nocode-ec53aa`) | `29074eb8` | ⏳ **Pendiente** — su carpeta **no está en esta máquina**. Cuando exista: `cd <carpeta>` → `CLOUDFLARE_ACCOUNT_ID=29074eb8abdce39d39d4fc4553ee13b2 npx kooni-bot update`. Trae W1 + J1 (fixes del panel que ya están en su `src/`) + giros. |
 
-### W2 — Gracia de licencia (#17): estado
+### J1 — fixes del panel de joel-nocode (logout, raíz→/admin, realm)
 
-- **Código:** hecho. **Inerte** para códigos lifetime (las 2 instalaciones actuales) → no
-  cambia nada hasta que exista un código `monthly`.
-- **Falta:** commit a `main` (+ bump). No requiere redeploy urgente (inerte).
+- Ya están en el `src/` de la carpeta joel-nocode (no en esta máquina). Se despliegan
+  con el `kooni-bot update` de la fila de arriba.
 
-### J1 — fixes del panel de joel-nocode (logout, raíz→/admin, realm): DESBLOQUEADO
+### ⚠️ Hallazgo suelto (2026-09-03)
 
-- Antes bloqueado por no tener la cuenta CF `29074eb8` (joeldavidar). **En una sesión con
-  Remote Control / wrangler logueado a esa cuenta ya se puede** (esta sesión del 2026-09-02
-  vio ambas cuentas en `wrangler whoami`). Los fixes YA están en `src/` de joel-nocode.
-- **Hacer:** `cd <carpeta joel-nocode>` → `CLOUDFLARE_ACCOUNT_ID=29074eb8abdce39d39d4fc4553ee13b2 npx wrangler deploy`.
-  Si además se corre `kooni-bot update` antes, trae W1 de paso.
-
-### Orden sugerido para cerrar (próxima sesión, ~15 min)
-
-1. `forja`: `pnpm test && pnpm typecheck` (confirmar 728 verde) → commit W1 + W2 juntos →
-   bump de versión (¿v1.20.0?) → push a `main`.
-2. `kooni-bot update` en **joel-nocode** + `wrangler deploy` (cuenta `29074eb8`) → trae W1 + J1.
-3. `kooni-bot update` en **cardealer** para alinearlo con `main` (W1 ya está desplegado a mano,
-   pero conviene que su `src/` coincida con el template; ojo cuenta CF `b579b154`).
-4. Verificar `/health` 200 en ambas + probar KB en el playground de cardealer.
+- `C:\Users\joeld\starter\wrangler.toml` tiene una **API key de OpenAI (`sk-proj-…`)
+  pegada como literal en `BOT_NAME`**. Es local (no está en el repo), pero conviene
+  **rotarla** en platform.openai.com y limpiar ese `wrangler.toml`.
 
 ---
 
@@ -211,9 +200,9 @@ giro (playbook + columnas + KB alcanzan).
 12. **Rediseño visual del panel** (`§ T`) — ✅ **HECHO y desplegado** (v1.17.0–v1.18.2). Sora + IBM Plex Mono, morado/fucsia, tema claro+oscuro con toggle, sombras suaves, 12 vistas + SVG + PWA (ícono, theme-color, botón instalar) en tokens. Ambas instalaciones en v1.18.2, visto por Joel. **Queda solo:** `web/*.html` (landing, sigue teal — pase aparte) y reescribir `docs/design-system.md`.
 13. **Chat del CRM — links y multimedia** (`§ V`) — que los links de los mensajes sean clicables/descargables y que las imágenes/videos/audios se previsualicen en el hilo (`/admin/conversations`). Hoy todo se renderiza como texto plano escapado. Pedido de Joel (2026-09-02).
 14. **"Probar el bot" (playground)** (`§ W`) — ✅ **HECHO** v1.19.0. Chat de prueba en `/admin/probar`: el dueño escribe como cliente, ve la respuesta real (prompt+modelo+KB), sin persistir ni mandar por canal. Solo tools de lectura.
-15. **🐛 Umbral de score de la KB demasiado alto (0.70)** — ✅ **HECHO (2026-09-02), pendiente commit+release.** Diagnóstico: en cardealer el bot decía "no tengo esa información" aunque la KB tiene los 71 autos indexados. Causa raíz **confirmada** consultando el Vectorize remoto de cardealer (`wrangler vectorize query`): 31 vectores sanos, contenido limpio, la búsqueda SÍ funciona — pero `@cf/baai/bge-m3` sobre contenido denso de inventario (VINs, URLs, precios) da top-score **0.60–0.63** aunque el match sea correcto (peor con consulta ES contra fichas EN). El umbral de 0.70 hacía que el modelo descartara resultados buenos. **Fix aplicado:** (a) nuevo `KB_MIN_SCORE_DEFAULT = 0.45` + `resolveKbMinScore(env)` en `src/kb/query.ts` (lee `settings.kb_min_score`, override del dueño, clamp 0–1); (b) `src/tools/searchKb.ts` filtra los hits `< min` antes de devolvérselos al modelo y su descripción ya no lleva número fijo ("si viene vacío, escala; si trae fragmentos, son confiables"); (c) `src/admin/views/kb.ts` — veredicto y colores usan el umbral real + **campo nuevo en /admin/kb para ajustarlo** (`POST /admin/kb/min-score`); (d) nueva key `kbMinScore` en `settings.ts`. Tests: +3 en `test/tools/searchKb.test.ts`, +2 en `test/admin/kb-routes.test.ts`. **`pnpm test` → 722/722 verde · `pnpm typecheck` verde** (corridos de verdad, 2026-09-02). Afecta a TODAS las instalaciones (sobre todo web_sync). **Cardealer: DESPLEGADO** (2026-09-02, version `e9f0fdb6`) — copiados los 5 archivos a `C:\Users\joeld\cardealerdaniel\src\` + `wrangler deploy`; verificado contra el Vectorize real: consultas ES de inventario dan score 0.50–0.57 (> 0.45, antes descartadas por el 0.70). **Falta:** commit a `main` de forja + bump de versión + `kooni-bot update` en joel-nocode.
+15. **🐛 Umbral de score de la KB demasiado alto (0.70)** — ✅ **HECHO (2026-09-02), pendiente commit+release.** Diagnóstico: en cardealer el bot decía "no tengo esa información" aunque la KB tiene los 71 autos indexados. Causa raíz **confirmada** consultando el Vectorize remoto de cardealer (`wrangler vectorize query`): 31 vectores sanos, contenido limpio, la búsqueda SÍ funciona — pero `@cf/baai/bge-m3` sobre contenido denso de inventario (VINs, URLs, precios) da top-score **0.60–0.63** aunque el match sea correcto (peor con consulta ES contra fichas EN). El umbral de 0.70 hacía que el modelo descartara resultados buenos. **Fix aplicado:** (a) nuevo `KB_MIN_SCORE_DEFAULT = 0.45` + `resolveKbMinScore(env)` en `src/kb/query.ts` (lee `settings.kb_min_score`, override del dueño, clamp 0–1); (b) `src/tools/searchKb.ts` filtra los hits `< min` antes de devolvérselos al modelo y su descripción ya no lleva número fijo ("si viene vacío, escala; si trae fragmentos, son confiables"); (c) `src/admin/views/kb.ts` — veredicto y colores usan el umbral real + **campo nuevo en /admin/kb para ajustarlo** (`POST /admin/kb/min-score`); (d) nueva key `kbMinScore` en `settings.ts`. Tests: +3 en `test/tools/searchKb.test.ts`, +2 en `test/admin/kb-routes.test.ts`. Afecta a TODAS las instalaciones (sobre todo web_sync). **Cardealer: DESPLEGADO a mano** (2026-09-02, version `e9f0fdb6`) — verificado contra el Vectorize real: consultas ES de inventario dan score 0.50–0.57 (> 0.45, antes descartadas por el 0.70). ✅ **Commiteado y en `main` en v1.20.0** (`a189124`, 2026-09-03) — ver § CIERRE DE ETAPA v1.20.0.
 16. **Análisis ZernFlow — flujo visual tipo ManyChat** (`sitio-web/14-analisis-zernflow.md`) — ⏳ **EN ESPERA de feedback de las 2 instalaciones (beta).** Decisión 2026-09-02: NO construir el editor visual ahora (proyecto de semanas, choca con el principio "sin builders visuales" de `FLUJOS.md`, ningún cliente lo pidió). Se retoma con demanda real (2+ clientes lo piden / beta cerrada / cliente que paga ManyChat no migra sin editor). El doc trae además un Sprint 1 de tareas rápidas (T1 `src/triggers.ts`, T2/T3 playground: probar automatizaciones + ver tool calls, T4 vista de árbol read-only de `auto_rules`) — bajo riesgo, no toca `agent.ts` — y como Sprint 2 post-beta las **secuencias/drip** (la función que de verdad mueve la aguja vs ManyChat, antes que el lienzo).
-17. **Gestión de licencias de pago — mejor forma para Kooni** (`§ F`) — Modelo elegido: **híbrido** (Ed25519 offline como fuente de verdad + capa online opcional para revocar/renovar, que se mantiene MIT — no se gatea la descarga). ✅ **HECHO (2026-09-02), sin commitear** (ver "Working tree sin commitear" arriba): periodo de **gracia de 7 días** para códigos `monthly` vencidos (`LICENSE_GRACE_MS`), `inspectLicense()` como estado único, tarjeta de estado real en `/admin/licencia` (de por vida / vence en N días / gracia / vencida) y aviso en el Resumen. Inerte para lifetime. +5 tests, 728/728 verde. ⏳ **ROADMAP (construir con cliente de suscripción real, detalle completo en `§ F`):** (a) endpoint `estado-licencia` en InsForge — `active` / `active + código rotado` (auto-renovación, cliente no hace nada) / `revoked`; (b) `src/license-check.ts` + cron nocturno (fail-open; cache de revoke en `isProLicense`); (c) procesador de cobro recurrente (Stripe / Lemon Squeezy / Mercado Pago) — decisión de negocio; (d) aviso automático de vencimiento (email/push); (e) botón "renovar" en el panel de licencias; (f) login del CLI estilo Forja SOLO si los revendedores lo piden.
+17. **Gestión de licencias de pago — mejor forma para Kooni** (`§ F`) — Modelo elegido: **híbrido** (Ed25519 offline como fuente de verdad + capa online opcional para revocar/renovar, que se mantiene MIT — no se gatea la descarga). ✅ **HECHO y en `main` en v1.20.0** (`a189124`, 2026-09-03 — ver § CIERRE DE ETAPA): periodo de **gracia de 7 días** para códigos `monthly` vencidos (`LICENSE_GRACE_MS`), `inspectLicense()` como estado único, tarjeta de estado real en `/admin/licencia` (de por vida / vence en N días / gracia / vencida) y aviso en el Resumen. Inerte para lifetime. ⏳ **ROADMAP (construir con cliente de suscripción real, detalle completo en `§ F`):** (a) endpoint `estado-licencia` en InsForge — `active` / `active + código rotado` (auto-renovación, cliente no hace nada) / `revoked`; (b) `src/license-check.ts` + cron nocturno (fail-open; cache de revoke en `isProLicense`); (c) procesador de cobro recurrente (Stripe / Lemon Squeezy / Mercado Pago) — decisión de negocio; (d) aviso automático de vencimiento (email/push); (e) botón "renovar" en el panel de licencias; (f) login del CLI estilo Forja SOLO si los revendedores lo piden.
 
 ## Seguridad — auditoría 2026-08-31 (arreglos + pendientes)
 
