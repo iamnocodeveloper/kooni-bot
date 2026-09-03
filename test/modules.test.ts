@@ -91,10 +91,16 @@ describe("unlockedModules", () => {
     expect(mods.has("metricas")).toBe(false);
   });
 
-  it("licencia vencida → no desbloquea", async () => {
-    const code = generateLicenseV2(PRIV, { kind: "monthly", expiry: Date.now() - 1000, modules: ["analista"] });
+  it("licencia vencida (pasada la gracia) → no desbloquea", async () => {
+    const code = generateLicenseV2(PRIV, { kind: "monthly", expiry: Date.now() - 10 * 86_400_000, modules: ["analista"] });
     const mods = await unlockedModules(env({ pro_license: code }));
     expect(mods.size).toBe(0);
+  });
+
+  it("licencia recién vencida sigue desbloqueando durante la gracia", async () => {
+    const code = generateLicenseV2(PRIV, { kind: "monthly", expiry: Date.now() - 2 * 86_400_000, modules: ["analista"] });
+    const mods = await unlockedModules(env({ pro_license: code }));
+    expect(mods.has("analista")).toBe(true);
   });
 
   it("ignora ids desconocidos en el override y en la licencia", async () => {

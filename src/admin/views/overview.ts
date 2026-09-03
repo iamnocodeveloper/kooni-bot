@@ -289,8 +289,33 @@ export async function renderOverview(env: Env): Promise<string> {
     console.warn("[overview] banner de límites falló:", e);
   }
 
+  // Aviso de licencia por vencer / en gracia (solo si hay un código mensual).
+  let licenseBanner = "";
+  try {
+    const { SettingsRepo, SETTING_KEYS } = await import("../../db/settings");
+    const { inspectLicense } = await import("../../license");
+    const code = await new SettingsRepo(new Db(env.DB)).get(SETTING_KEYS.proLicense);
+    if (code) {
+      const ins = inspectLicense(code, env);
+      const soon = ins.state === "active" && ins.daysLeft !== null && ins.daysLeft <= 7;
+      if (ins.state === "grace" || soon) {
+        const grace = ins.state === "grace";
+        licenseBanner = `<div class="bg-panel border p-4 flex items-center justify-between gap-3 flex-wrap" style="border-color:var(--bad)">
+          <div style="display:flex;flex-direction:column;gap:3px">
+            <span class="font-display font-semibold text-[12.5px]" style="color:var(--bad)">${grace ? "Licencia vencida — periodo de gracia" : `Tu licencia Pro vence en ${ins.daysLeft} ${ins.daysLeft === 1 ? "día" : "días"}`}</span>
+            <span class="text-[11px] text-dim">${grace ? "El bot pasará al plan gratis pronto. Pega el código nuevo para no perder Pro." : "Pídele el código nuevo a tu proveedor y pégalo antes de que venza."}</span>
+          </div>
+          <a href="/admin/licencia" class="font-display font-semibold text-[11.5px]" style="border:1px solid var(--bad);color:var(--bad);padding:8px 14px">Renovar licencia →</a>
+        </div>`;
+      }
+    }
+  } catch (e) {
+    console.warn("[overview] banner de licencia falló:", e);
+  }
+
   const body = `
     <div class="flex flex-col gap-[22px]">
+      ${licenseBanner}
       ${limitsBanner}
       <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-[14px]">
         <div class="card bg-panel border border-line p-4 relative overflow-hidden" style="animation-delay:.02s">

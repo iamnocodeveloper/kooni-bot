@@ -79,6 +79,38 @@ describe("KB tab", () => {
     expect(html).toContain("El bot usaría esto");
   });
 
+  it("probar búsqueda: usa el umbral guardado (kb_min_score) para el veredicto", async () => {
+    await new SettingsRepo(new Db(env.DB)).set(SETTING_KEYS.kbMinScore, "0.9");
+    (env.AI as any).run = vi.fn(async () => ({ data: [[0.1, 0.2, 0.3]] }));
+    (env.KB as any).query = vi.fn(async () => ({
+      matches: [{ id: "a", score: 0.82, metadata: { title: "Planes", content: "Pro $12" } }],
+    }));
+    const res = await adminApp.request("/kb/search?q=cuanto%20cuesta", { headers: AUTH }, env);
+    const html = await res.text();
+    expect(html).toContain("0.82");
+    expect(html).toContain("sin información"); // 0.82 < umbral 0.90 → ⚠
+    expect(html).not.toContain("El bot usaría esto");
+  });
+
+  it("POST /kb/min-score guarda un valor válido y limpia uno fuera de rango", async () => {
+    const settings = new SettingsRepo(new Db(env.DB));
+
+    let res = await adminApp.request(
+      "/kb/min-score",
+      { method: "POST", headers: FORM, body: new URLSearchParams({ kb_min_score: "0.5" }) },
+      env,
+    );
+    expect(res.status).toBe(302);
+    expect(await settings.get(SETTING_KEYS.kbMinScore)).toBe("0.5");
+
+    res = await adminApp.request(
+      "/kb/min-score",
+      { method: "POST", headers: FORM, body: new URLSearchParams({ kb_min_score: "7" }) },
+      env,
+    );
+    expect(await settings.get(SETTING_KEYS.kbMinScore)).toBe("");
+  });
+
   it("probar búsqueda: query corta no consulta nada", async () => {
     const spy = ((env.AI as any).run = vi.fn());
     const res = await adminApp.request("/kb/search?q=a", { headers: AUTH }, env);

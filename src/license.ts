@@ -65,26 +65,62 @@ function verifyEd25519(derB64: string, data: Buffer, sigHex: string): boolean {
 }
 
 /**
- * Verifica un código de licencia v2 (Ed25519). Devuelve el payload si es válido
- * y vigente; null si no. No requiere ningún secret en el worker.
+ * Periodo de gracia tras el vencimiento de un código mensual: el Pro sigue
+ * ACTIVO 7 días más, pero el panel avisa "renueva ya". Evita cortarle el
+ * servicio a un cliente que paga por un día de demora en emitirle el código
+ * nuevo (la renovación hoy es manual: el dueño genera y envía, el cliente pega).
  */
-export function verifyLicense(code: string, env?: Env): LicensePayload | null {
+export const LICENSE_GRACE_MS = 7 * 86_400_000;
+
+export type LicenseState = "active" | "grace" | "expired" | "invalid";
+
+export interface LicenseInspection {
+  state: LicenseState;
+  payload: LicensePayload | null;
+  /** epoch_ms de vencimiento (solo monthly); null = no vence (lifetime). */
+  expiresAt: number | null;
+  /** Días hasta el vencimiento (negativo si ya venció). null = lifetime. */
+  daysLeft: number | null;
+}
+
+const INVALID: LicenseInspection = { state: "invalid", payload: null, expiresAt: null, daysLeft: null };
+
+/**
+ * Verifica firma + vigencia de un código v2 y describe su estado — la fuente
+ * única para el panel, los avisos y `verifyLicense`. No requiere secrets.
+ */
+export function inspectLicense(code: string, env?: Env): LicenseInspection {
   const pubB64 = env?.LICENSE_PUBLIC_KEY || LICENSE_PUBLIC_KEY_B64;
   const trimmed = code?.trim() ?? "";
   const prefix = "KOONI-PRO-V2-";
-  if (!trimmed.startsWith(prefix)) return null;
+  if (!trimmed.startsWith(prefix)) return INVALID;
   const rest = trimmed.slice(prefix.length);
   const dot = rest.lastIndexOf(".");
-  if (dot <= 0) return null;
+  if (dot <= 0) return INVALID;
   const enc = rest.slice(0, dot);
   const sig = rest.slice(dot + 1);
-  if (!verifyEd25519(pubB64, Buffer.from(enc, "utf8"), sig)) return null;
+  if (!verifyEd25519(pubB64, Buffer.from(enc, "utf8"), sig)) return INVALID;
   const payload = decodeLicensePayload(enc);
-  if (!payload) return null;
-  if (payload.kind === "monthly" && payload.expiry && Date.now() > payload.expiry) {
-    return null; // vencida
+  if (!payload) return INVALID;
+
+  if (payload.kind !== "monthly" || !payload.expiry) {
+    return { state: "active", payload, expiresAt: null, daysLeft: null };
   }
-  return payload;
+  const now = Date.now();
+  const daysLeft = Math.ceil((payload.expiry - now) / 86_400_000);
+  if (now <= payload.expiry) return { state: "active", payload, expiresAt: payload.expiry, daysLeft };
+  if (now <= payload.expiry + LICENSE_GRACE_MS) return { state: "grace", payload, expiresAt: payload.expiry, daysLeft };
+  return { state: "expired", payload, expiresAt: payload.expiry, daysLeft };
+}
+
+/**
+ * Verifica un código de licencia v2 (Ed25519). Devuelve el payload si la firma
+ * es válida Y el código sigue vigente (incluye el periodo de gracia de un
+ * mensual vencido); null si no. No requiere ningún secret en el worker.
+ */
+export function verifyLicense(code: string, env?: Env): LicensePayload | null {
+  const ins = inspectLicense(code, env);
+  return ins.state === "active" || ins.state === "grace" ? ins.payload : null;
 }
 
 /** ¿El código es válido Y aplica a este bot/instalación? */

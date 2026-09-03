@@ -11,6 +11,10 @@ export const SETTING_KEYS = {
   businessContext: "business_context",
   botName: "bot_name",
   tone: "tone",
+  // KB: score mínimo (0–1) para que un fragmento de searchKb cuente como match.
+  // Default 0.45 (ver KB_MIN_SCORE_DEFAULT en src/kb/query.ts). Súbelo si el bot
+  // cita cosas irrelevantes; bájalo si dice "no tengo info" con la KB llena.
+  kbMinScore: "kb_min_score",
   bufferSeconds: "buffer_seconds",
   maxChunks: "max_chunks",
   interChunkDelayMs: "inter_chunk_delay_ms",
@@ -44,14 +48,14 @@ export const SETTING_KEYS = {
   // Avisos al dueño (handoff) por Telegram DM: chat_id del dueño editable desde
   // el panel (Conexiones → card Telegram). Fallback al secret OWNER_TELEGRAM_CHAT_ID.
   ownerTelegramChatId: "owner_telegram_chat_id",
-  // Reporte nocturno (Forja+): resumen del día al dueño, configurable desde
+  // Reporte nocturno (Kooni+): resumen del día al dueño, configurable desde
   // /admin/config → "Reporte nocturno".
   nightlyReportEnabled: "nightly_report_enabled", // "0" | "1"
   nightlyReportChannel: "nightly_report_channel", // telegram | email | both
   // Módulos de pago desbloqueados por override del DUEÑO de la plataforma
   // (JSON array de ids; se setea directo en D1 — no aparece en el panel).
   moduleUnlocks: "module_unlocks",
-  // Toggles del menú Extras (Forja+): el dueño enciende/apaga cada función.
+  // Toggles del menú Extras (Kooni+): el dueño enciende/apaga cada función.
   featureBlindaje: "feature_blindaje_enabled", // "0" | "1"
   featureVigilante: "feature_vigilante_enabled", // "0" | "1"
   featureHandoff: "feature_handoff_enabled", // "0" | "1"

@@ -250,6 +250,7 @@ adminApp.get("/kb", async (c) =>
       deleted: c.req.query("deleted") === "1",
       reindexed: c.req.query("reindexed") ?? undefined,
       websync: c.req.query("websync") ?? undefined,
+      minscore: c.req.query("minscore") ?? undefined,
     }),
   ),
 );
@@ -260,8 +261,20 @@ adminApp.get("/kb/search", async (c) => {
   const q = (c.req.query("q") ?? "").trim();
   const { renderKbSearchResults } = await import("./views/kb");
   if (q.length < 2) return c.html(renderKbSearchResults(q, null));
-  const { queryKb } = await import("../kb/query");
-  return c.html(renderKbSearchResults(q, await queryKb(c.env, q)));
+  const { queryKb, resolveKbMinScore } = await import("../kb/query");
+  const [res, minScore] = await Promise.all([queryKb(c.env, q), resolveKbMinScore(c.env)]);
+  return c.html(renderKbSearchResults(q, res, minScore));
+});
+
+// Umbral de coincidencia de la KB (settings.kb_min_score). Fuera de rango o
+// vacío → se borra y vuelve al default (KB_MIN_SCORE_DEFAULT).
+adminApp.post("/kb/min-score", async (c) => {
+  const form = await c.req.formData();
+  const n = Number.parseFloat(String(form.get("kb_min_score") ?? ""));
+  const value = Number.isFinite(n) && n >= 0 && n <= 1 ? String(n) : "";
+  await new SettingsRepo(new Db(c.env.DB)).set(SETTING_KEYS.kbMinScore, value);
+  const { KB_MIN_SCORE_DEFAULT } = await import("../kb/query");
+  return c.redirect(`/admin/kb?minscore=${value || KB_MIN_SCORE_DEFAULT.toFixed(2)}`);
 });
 
 adminApp.get("/kb/new", async (c) => c.html(await renderKbEditor(null, c.env)));
@@ -828,7 +841,7 @@ adminApp.post("/conexiones/telegram", async (c) => {
 // Licencia: activa Pro pegando un código KOONI-PRO-... (validación local HMAC).
 adminApp.get("/licencia", async (c) => c.html(await renderLicencia(c.env)));
 
-// Menú Extras (Forja+): cuadrícula de funciones de pago con toggles on/off.
+// Menú Extras (Kooni+): cuadrícula de funciones de pago con toggles on/off.
 adminApp.get("/extras", async (c) => {
   const saved = c.req.query("saved") === "1";
   return c.html(await renderExtras(c.env, saved, c.req.query("report")));

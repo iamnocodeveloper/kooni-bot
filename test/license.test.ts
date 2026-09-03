@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll } from "vitest";
-import { generateLicenseV2, verifyLicense, verifyLicenseFor } from "../src/license";
+import { generateLicenseV2, verifyLicense, verifyLicenseFor, inspectLicense } from "../src/license";
 import type { Env } from "../src/env";
 import { generateKeyPairSync } from "node:crypto";
 
@@ -40,13 +40,46 @@ describe("generateLicenseV2 / verifyLicense", () => {
     expect(verifyLicense("KOONI-PRO-eyJraW5kIjoibGlmZXRpbWUifQ.deadbeef", env)).toBeNull();
   });
 
-  it("valida monthly dentro de la fecha y la rechaza vencida", () => {
+  it("valida monthly dentro de la fecha y la rechaza cuando pasó la gracia", () => {
     const future = Date.now() + 30 * 86_400_000;
     const code = generateLicenseV2(PRIV, { kind: "monthly", expiry: future });
     expect(verifyLicense(code, env)?.kind).toBe("monthly");
-    const past = Date.now() - 1000;
-    const expired = generateLicenseV2(PRIV, { kind: "monthly", expiry: past });
+    const wayPast = Date.now() - 10 * 86_400_000; // > 7 días de gracia
+    const expired = generateLicenseV2(PRIV, { kind: "monthly", expiry: wayPast });
     expect(verifyLicense(expired, env)).toBeNull();
+  });
+
+  it("monthly recién vencida sigue activa dentro del periodo de gracia (7 días)", () => {
+    const past2d = Date.now() - 2 * 86_400_000;
+    const code = generateLicenseV2(PRIV, { kind: "monthly", expiry: past2d });
+    expect(verifyLicense(code, env)?.kind).toBe("monthly"); // gracia
+    expect(inspectLicense(code, env).state).toBe("grace");
+  });
+});
+
+describe("inspectLicense (estado para el panel)", () => {
+  it("lifetime → active, sin vencimiento", () => {
+    const ins = inspectLicense(generateLicenseV2(PRIV, { kind: "lifetime" }), env);
+    expect(ins.state).toBe("active");
+    expect(ins.expiresAt).toBeNull();
+    expect(ins.daysLeft).toBeNull();
+  });
+
+  it("monthly vigente → active con daysLeft > 0", () => {
+    const exp = Date.now() + 12 * 86_400_000;
+    const ins = inspectLicense(generateLicenseV2(PRIV, { kind: "monthly", expiry: exp }), env);
+    expect(ins.state).toBe("active");
+    expect(ins.daysLeft).toBeGreaterThan(10);
+  });
+
+  it("monthly pasada la gracia → expired", () => {
+    const ins = inspectLicense(generateLicenseV2(PRIV, { kind: "monthly", expiry: Date.now() - 20 * 86_400_000 }), env);
+    expect(ins.state).toBe("expired");
+  });
+
+  it("código basura → invalid", () => {
+    expect(inspectLicense("no-es-un-codigo", env).state).toBe("invalid");
+    expect(inspectLicense("KOONI-PRO-V2-abc.def", env).state).toBe("invalid");
   });
 });
 

@@ -6,6 +6,7 @@
 import type { Env } from "../../env";
 import { Db } from "../../db/client";
 import { KbDocsRepo, FIXTURE_CHUNKS, MAX_DOC_CHARS, chunkContent, type KbDoc } from "../../kb/docs";
+import { KB_MIN_SCORE_DEFAULT, resolveKbMinScore } from "../../kb/query";
 import { layout } from "./layout";
 
 function esc(s: string): string {
@@ -33,12 +34,13 @@ function banner(tone: "ok" | "bad" | "neutral", text: string): string {
 
 export async function renderKbList(
   env: Env,
-  flash?: { saved?: boolean; deleted?: boolean; reindexed?: string; websync?: string },
+  flash?: { saved?: boolean; deleted?: boolean; reindexed?: string; websync?: string; minscore?: string },
 ): Promise<string> {
   const docs = await new KbDocsRepo(new Db(env.DB)).list();
 
   const { isModuleUnlocked } = await import("../../modules");
   const webSyncOn = await isModuleUnlocked(env, "web_sync").catch(() => false);
+  const minScore = await resolveKbMinScore(env);
 
   const bannerHtml = flash?.saved
     ? banner("ok", "✓ Guardado e indexado — el bot ya puede usarlo.")
@@ -48,7 +50,9 @@ export async function renderKbList(
         ? banner("ok", `✓ Reindexado: ${esc(flash.reindexed)} fragmentos actualizados.`)
         : flash?.websync
           ? banner("ok", `🌐 Sincronización del sitio: ${esc(flash.websync)}.`)
-          : "";
+          : flash?.minscore
+            ? banner("ok", `✓ Umbral de coincidencia guardado: ${esc(flash.minscore)}.`)
+            : "";
 
   const rows = docs.length
     ? docs
@@ -111,12 +115,20 @@ export async function renderKbList(
 
     <div class="bg-panel border border-line" style="padding:16px">
       <h3 class="font-display font-semibold text-[13px] text-cream">🔎 Probar búsqueda</h3>
-      <p class="text-dim text-[11.5px]" style="margin:2px 0 10px">Escribe una pregunta como la haría un cliente. Verás lo mismo que ve el bot (top 5 + score). Si el mejor score es menor a 0.70, el bot lo toma como "sin match" y no lo usa.</p>
+      <p class="text-dim text-[11.5px]" style="margin:2px 0 10px">Escribe una pregunta como la haría un cliente. Verás lo mismo que ve el bot (top 5 + score). Si el mejor score queda por debajo del umbral (<b class="text-cream">${minScore.toFixed(2)}</b>), el bot lo toma como "sin información" y no lo usa.</p>
       <input type="search" name="q" placeholder="Ej. ¿cuánto cuesta un chatbot?"
              hx-get="/admin/kb/search" hx-trigger="keyup changed delay:400ms, search"
              hx-target="#kb-search-out" hx-swap="innerHTML"
              style="width:100%;background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:10px 12px;font-size:12.5px;outline:none">
       <div id="kb-search-out" style="margin-top:12px"></div>
+      <form method="POST" action="/admin/kb/min-score" style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line);display:flex;flex-wrap:wrap;align-items:center;gap:8px">
+        <label for="kb_min_score" class="text-dim text-[11px]">Umbral de coincidencia (0–1)</label>
+        <input type="number" id="kb_min_score" name="kb_min_score" min="0" max="1" step="0.01"
+               value="${minScore.toFixed(2)}"
+               style="width:80px;background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:6px 8px;font-size:12px;outline:none">
+        <button type="submit" class="ghostbtn cursor-pointer" style="background:var(--panel);border:1px solid var(--line);color:var(--muted);padding:6px 12px;font-size:11px">Guardar</button>
+        <span class="text-dim text-[10.5px]">Default ${KB_MIN_SCORE_DEFAULT.toFixed(2)}. Bájalo si el bot dice "no tengo info" con la KB llena; súbelo si cita cosas irrelevantes.</span>
+      </form>
     </div>`;
 
   return layout({ title: "Conocimiento", activeTab: "kb", body, env });
@@ -126,6 +138,7 @@ export async function renderKbList(
 export function renderKbSearchResults(
   query: string,
   res: import("../../kb/query").KbQueryResult | null,
+  minScore: number = KB_MIN_SCORE_DEFAULT,
 ): string {
   if (!query || query.length < 2) return "";
   if (!res || "error" in res) {
@@ -138,12 +151,12 @@ export function renderKbSearchResults(
   }
   const top = res.results[0]?.score ?? 0;
   const verdict =
-    top >= 0.7
-      ? `<span style="color:var(--ok)">✓ El bot usaría esto (mejor score ${top.toFixed(2)}).</span>`
-      : `<span style="color:var(--bad)">⚠ Mejor score ${top.toFixed(2)} &lt; 0.70 — el bot lo tomaría como "sin información". Ajusta el documento (usa las mismas palabras que el cliente) o baja el umbral.</span>`;
+    top >= minScore
+      ? `<span style="color:var(--ok)">✓ El bot usaría esto (mejor score ${top.toFixed(2)} ≥ umbral ${minScore.toFixed(2)}).</span>`
+      : `<span style="color:var(--bad)">⚠ Mejor score ${top.toFixed(2)} &lt; umbral ${minScore.toFixed(2)} — el bot lo tomaría como "sin información". Ajusta el documento (usa las mismas palabras que el cliente) o baja el umbral abajo.</span>`;
   const rows = res.results
     .map((r) => {
-      const c = r.score >= 0.7 ? "var(--ok)" : r.score >= 0.55 ? "var(--accent-2)" : "var(--dim)";
+      const c = r.score >= minScore ? "var(--ok)" : r.score >= minScore * 0.8 ? "var(--accent-2)" : "var(--dim)";
       return `<div style="border-top:1px solid var(--line);padding:9px 0">
         <div style="display:flex;gap:10px;align-items:baseline">
           <span style="font-family:'IBM Plex Mono';font-size:12px;font-weight:700;color:${c};flex:none">${r.score.toFixed(2)}</span>
