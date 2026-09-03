@@ -454,12 +454,27 @@ async function downloadTemplate(dest) {
   writeFileSync(dest, Buffer.from(await res.arrayBuffer()));
 }
 
-// ── extracción (rutas NATIVAS: el tar de Windows no entiende /c/...) ────────
+// ── extracción ───────────────────────────────────────────────────────────────
+// Compat de tar entre shells: el bsdtar de Windows (System32\tar.exe) entiende
+// rutas "C:\…", pero el GNU tar de Git-Bash/MSYS cree que "C:" es un host remoto
+// y falla ("tar: Cannot connect to C: resolve failed"). Solución portátil:
+// correr tar con cwd fijado y pasarle SOLO nombres relativos (sin dos puntos).
+function relTo(base, p) {
+  const b = String(base).replace(/[\\/]+$/, "");
+  if (p === b) return ".";
+  if (p.startsWith(b + "\\") || p.startsWith(b + "/")) return p.slice(b.length + 1) || ".";
+  return p; // fuera de base: último recurso
+}
+function tarExtract(tgz, outDir) {
+  mkdirSync(outDir, { recursive: true });
+  const cwd = dirname(tgz);
+  execFileSync("tar", ["-xzf", basename(tgz), "-C", relTo(cwd, outDir)], { cwd });
+}
+
 function extractFresh(tgz, dir) {
   mkdirSync(dir, { recursive: true });
   const tmp = join(dir, ".kooni-extract");
-  mkdirSync(tmp, { recursive: true });
-  execFileSync("tar", ["-xzf", tgz, "-C", tmp]);
+  tarExtract(tgz, tmp);
   const root = readdirSync(tmp)[0];
   const src = join(tmp, root);
   for (const e of readdirSync(src)) {
@@ -473,8 +488,7 @@ function extractFresh(tgz, dir) {
 
 // Extrae a un dir TEMP (sin pisar nada) para leer la versión y archivos del template.
 function extractToTemp(tgz, outDir) {
-  mkdirSync(outDir, { recursive: true });
-  execFileSync("tar", ["-xzf", tgz, "-C", outDir]);
+  tarExtract(tgz, outDir);
   const root = readdirSync(outDir)[0];
   return join(outDir, root);
 }
@@ -505,10 +519,11 @@ function backupBeforeUpdate(dir, version) {
   const dest = join(backDir, `${stamp}_v${version}.tgz`);
   try {
     mkdirSync(backDir, { recursive: true });
-    execFileSync("tar", ["-czf", dest, "-C", dir,
+    // cwd = dir + ruta relativa del archivo → tar portátil (ver relTo/tarExtract).
+    execFileSync("tar", ["-czf", relTo(dir, dest), "-C", ".",
       "--exclude=./node_modules", "--exclude=./.kooni-backups", "--exclude=./.kooni-extract",
       "--exclude=./.git", "--exclude=./.wrangler", "--exclude=./.dev.vars", "--exclude=./.dev.vars.*",
-      "--exclude=./.env", "--exclude=./.env.*", "."]);
+      "--exclude=./.env", "--exclude=./.env.*", "."], { cwd: dir });
     const olds = readdirSync(backDir).filter((f) => f.endsWith(".tgz")).sort();
     for (const f of olds.slice(0, -5)) rmSync(join(backDir, f), { force: true });
     return dest;
