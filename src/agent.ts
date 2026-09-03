@@ -165,7 +165,7 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
     }
 
     // Process media (audio → transcription, image → Pro-gated multimodal marker)
-    // Menú Extras (Forja+): 'Oído y vista' enciende el entendimiento de audio y
+    // Menú Extras (Kooni+): 'Oído y vista' enciende el entendimiento de audio y
     // fotos. Si está apagado (o el módulo no está desbloqueado), se le pide al
     // cliente que escriba — no se procesa el medio.
     let processedText = payload.text ?? "";
@@ -383,7 +383,7 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
       const { setRecursoCtx } = await import("./tools/index");
       setRecursoCtx(this.state.channel as ChannelId, this.state.channelUserId);
     }
-    // Menú Extras (Forja+): la Galería (enviarRecurso) solo está disponible si
+    // Menú Extras (Kooni+): la Galería (enviarRecurso) solo está disponible si
     // el dueño la encendió Y permitió multimedia. Apagada → la tool se quita.
     if (cfg.allowMultimedia === false || !cfg.galeriaEnabled) {
       delete tools.enviarRecurso;

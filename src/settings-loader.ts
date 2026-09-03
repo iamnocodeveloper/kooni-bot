@@ -119,7 +119,7 @@ export async function resolveAgentConfig(env: Env, toolNames: string[]): Promise
     : "No hay agenda en línea configurada. NUNCA digas que agendaste, reservaste ni confirmaste una cita. " +
       "Si el cliente quiere agendar, pide los datos (día, hora, nombre, contacto) y captura el lead con captureLead; " +
       "avísale que el negocio le confirmará por mensaje.";
-  // Menú Extras (Forja+): Blindaje anti-inventos y Handoff inteligente inyectan
+  // Menú Extras (Kooni+): Blindaje anti-inventos y Handoff inteligente inyectan
   // reglas al prompt generado; el Vigilante se enciende post-respuesta (ver
   // src/features.ts). Todo se SUMA al prompt automático — nunca lo reemplaza.
   const { extrasForAgent } = await import("./features");

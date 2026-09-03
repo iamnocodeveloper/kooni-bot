@@ -4,7 +4,7 @@ import type { Env } from "../env";
 import { buildNightlyReportData, formatNightlyReport, reportDateLabel } from "../reports/nightly";
 
 /**
- * Tool del reporte del día (Forja+): el dueño puede preguntarle a su bot en su
+ * Tool del reporte del día (Kooni+): el dueño puede preguntarle a su bot en su
  * chat privado por los números del día — clientes atendidos, leads, ventas
  * calientes, clientes molestos — y el bot responde con el mismo resumen que
  * llega cada noche. Solo consulta D1; no gasta tokens de análisis.

@@ -68,7 +68,7 @@ La privada **nunca** va al worker, ni al CLI, ni al repo.
 - Los límites (contactos, mensajes/mes, canales, reglas, DMs, links).
 
 Y `unlockedModules()` (en `src/modules.ts`) decide qué **módulos de pago**
-(Extras / Forja+) están disponibles. Un módulo se activa por:
+(Extras / Kooni+) están disponibles. Un módulo se activa por:
 
 1. **Licencia con `modules`** → solo los listados.
 2. **Licencia sin `modules`** → todos (licencia completa).

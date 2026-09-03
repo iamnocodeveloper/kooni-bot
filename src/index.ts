@@ -367,7 +367,7 @@ export default {
   fetch: (request: Request, env: Env, ctx: ExecutionContext) =>
     app.fetch(request, env, ctx),
   async scheduled(event: ScheduledController, env: Env): Promise<void> {
-    // Menú Extras (Forja+): el Cazador de ventas (follow-up automático a leads
+    // Menú Extras (Kooni+): el Cazador de ventas (follow-up automático a leads
     // que se enfriaron) solo corre si el dueño lo encendió Y su módulo está
     // desbloqueado. Follow-up bot: UN mensaje breve de seguimiento a leads que
     // lo ameritan (venta abierta / 4+ preguntas), dentro de la ventana de 3-20h
@@ -378,7 +378,7 @@ export default {
       const { runFollowups } = await import("./followup/run");
       await runFollowups(env).catch((e) => console.error("followups:", e));
     }
-    // Reenganche (Forja+): segundo toque 2-5 días después del Cazador si el
+    // Reenganche (Kooni+): segundo toque 2-5 días después del Cazador si el
     // cliente sigue sin contestar. Corre solo si está activo.
     if (await isFeatureActive(env, "reenganche", settings)) {
       const { runReengagements } = await import("./followup/reengage");
@@ -405,7 +405,7 @@ export default {
     await purgeOldMessages(env);
     // Corrida nocturna del Analista de insights (F2). No debe tumbar la purga.
     await analyzeConversations(env, { limit: 50 }).catch((e) => console.error("insights:", e));
-    // Reporte nocturno (Forja+): resumen del día al dueño (Telegram/email),
+    // Reporte nocturno (Kooni+): resumen del día al dueño (Telegram/email),
     // configurable en /admin/config → "Reporte nocturno". Corre DESPUÉS del
     // análisis para que los insights del día ya estén frescos.
     const { sendNightlyReport } = await import("./reports/nightly");

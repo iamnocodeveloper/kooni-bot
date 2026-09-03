@@ -1,5 +1,5 @@
 /**
- * Funciones de pago del menú "Extras" (Forja+) — toggles por feature que el
+ * Funciones de pago del menú "Extras" (Kooni+) — toggles por feature que el
  * dueño enciende/apaga, y que actúan en el BOT o el PANEL según la función.
  *
  * Cada feature tiene:

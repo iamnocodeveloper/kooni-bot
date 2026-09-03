@@ -44,10 +44,10 @@ export async function buildTools(ctx: ToolContext) {
     // Cal.com configurado, la tool devuelve guía explícita para capturar el
     // lead en vez de agendar (ver scheduleAppointment.ts).
     scheduleAppointment: scheduleAppointmentTool(ctx.env, ctx.getConversationId),
-    // Reporte del día (Forja+): el DUEÑO pregunta en su chat y el bot responde
+    // Reporte del día (Kooni+): el DUEÑO pregunta en su chat y el bot responde
     // con los números del día (clientes, leads, ventas calientes, molestos).
     reportQuery: reportQueryTool(ctx.env),
-    // Encuestas de satisfacción (Forja+): registra la nota 1-5 y avisa al dueño
+    // Encuestas de satisfacción (Kooni+): registra la nota 1-5 y avisa al dueño
     // si es baja. El prompt solo la anuncia cuando el módulo está encendido.
     registrarCalificacion: registrarCalificacionTool(ctx.env, ctx.getConversationId),
   };

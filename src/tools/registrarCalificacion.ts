@@ -4,7 +4,7 @@ import type { Env } from "../env";
 import { Db } from "../db/client";
 
 /**
- * Encuestas de satisfacción (Forja+): registra la calificación 1-5 que el
+ * Encuestas de satisfacción (Kooni+): registra la calificación 1-5 que el
  * cliente dio al cerrar la conversación. Si la nota es baja (1-3), avisa al
  * dueño al instante para que recupere al cliente antes de una mala reseña.
  * El historial de calificaciones vive en dm_logs (kind='calificacion').

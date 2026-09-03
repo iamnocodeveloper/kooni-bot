@@ -1,4 +1,4 @@
-// Menú "Extras" (Forja+) — cuadrícula de funciones de pago que el dueño
+// Menú "Extras" (Kooni+) — cuadrícula de funciones de pago que el dueño
 // enciende/apaga. Cada tarjeta muestra: emoji, nombre, descripción, dónde actúa
 // (bot / panel) y su estado: ACTIVO (toggle on + módulo pago desbloqueado),
 // DESACTIVADO (toggle off), o 🔒 BLOQUEADO (módulo no incluido en la licencia).

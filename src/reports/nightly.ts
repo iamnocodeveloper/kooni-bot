@@ -1,5 +1,5 @@
 /**
- * Reporte nocturno (Forja+) — el "superpoder" del resumen del día.
+ * Reporte nocturno (Kooni+) — el "superpoder" del resumen del día.
  *
  * Cada noche (tick diario 0 3 * * *), DESPUÉS de que el analizador calificó las
  * conversaciones del día, el bot arma un resumen en lenguaje simple:

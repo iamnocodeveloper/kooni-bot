@@ -1,5 +1,5 @@
 /**
- * Vigilante con IA (Forja+) — revisa cada conversación y avisa al dueño cuando
+ * Vigilante con IA (Kooni+) — revisa cada conversación y avisa al dueño cuando
  * algo peligra, SIN pasarle el chat (el bot sigue atendiendo).
  *
  * Es heurístico y barato (cero tokens): detecta señales de riesgo en los

@@ -147,7 +147,7 @@ CREATE TABLE IF NOT EXISTS followup_sends (
   sent_at INTEGER NOT NULL
 );
 
--- Reenganche (Forja+): SEGUNDO toque del Cazador. followup_sends tiene PK por
+-- Reenganche (Kooni+): SEGUNDO toque del Cazador. followup_sends tiene PK por
 -- conversación (un solo toque de por vida), así que el segundo toque vive en su
 -- propia tabla: solo conversaciones que ya recibieron follow-up y siguen frías.
 CREATE TABLE IF NOT EXISTS reengagement_sends (

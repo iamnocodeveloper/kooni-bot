@@ -1,5 +1,5 @@
 /**
- * Módulos de pago (Forja+ a la carta) — features premium vendibles por
+ * Módulos de pago (Kooni+ a la carta) — features premium vendibles por
  * separado (pago único o membresía), además del Pro base.
  *
  * Cómo se activa un módulo en una instalación (cualquiera de estas gana):

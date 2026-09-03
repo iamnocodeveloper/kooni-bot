@@ -1,5 +1,5 @@
 /**
- * Reenganche (Forja+) — el segundo toque del Cazador de ventas.
+ * Reenganche (Kooni+) — el segundo toque del Cazador de ventas.
  *
  * Si el Cazador ya mandó su follow-up (3-20h) y el cliente SIGUE sin contestar,
  * el Reenganche insiste una vez más, entre 2 y 5 días después de ese primer

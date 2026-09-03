@@ -115,7 +115,7 @@ describe("buildNightlyReportData", () => {
 });
 
 describe("formatNightlyReport", () => {
-  it("formatea el resumen estilo Forja+", () => {
+  it("formatea el resumen estilo Kooni+", () => {
     const data = {
       clientesAtendidos: 14,
       leadsNuevos: 4,
