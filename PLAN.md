@@ -87,8 +87,108 @@ otra pública. La pública, en cambio, es segura de publicar — ese es el punto
 | # | Tarea | Estado |
 |---|---|---|
 | I8 | Publicar CLI en npm (`kooni-bot@0.2.17`). | ⏳ **HECHO**: 0.2.16 y 0.2.17 publicados (npm latest = 0.2.17). |
-| J1 | **Joel-nocode** (`kooni-bot-joel-nocode-ec53aa`, cuenta `joeldavidar` = 29074eb8): los fixes del panel (logout, raíz→/admin, realm) YA están en su `src/` pero **no se pueden desplegar** con la sesión actual (solo cubre b579b154/cardealerdani). Pendiente: `wrangler login` autorizando la cuenta joeldavidar (29074eb8) → `wrangler deploy`. | ⏳ Requiere login con la otra cuenta de Cloudflare |
-| F2 | Re-probar handoff en vivo. | ⏳ En pruebas. |
+| J1 | **Joel-nocode** — fixes del panel (logout, raíz→/admin, realm) sin desplegar. **DESBLOQUEADO** (2026-09-02): una sesión con wrangler logueado a la cuenta `29074eb8` sí puede. Pasos en → **§ "Working tree sin commitear"**. | ⏳ Listo para hacer (~5 min) |
+| F2 | Re-probar handoff en vivo. | ⏳ En pruebas (necesita a Joel). |
+
+## 🔜 Working tree sin commitear — para retomar (2026-09-02)
+
+> Todo lo de abajo está **en el working tree de `forja`, probado, SIN commitear**.
+> `pnpm test` → **728/728 verde** · `pnpm typecheck` → verde (corridos de verdad).
+> Decisión de Joel: **dejar en roadmap y seguir luego** — nada urgente, la beta sigue
+> con las 2 instalaciones dando feedback.
+
+### Archivos tocados (una sola tanda, 2 features independientes)
+
+| Archivo | Feature |
+|---|---|
+| `src/kb/query.ts`, `src/tools/searchKb.ts`, `src/db/settings.ts`, `src/admin/views/kb.ts`, `src/admin/routes.ts` | **W1 — Umbral KB** (ver #15) |
+| `src/license.ts`, `src/admin/views/licencia.ts`, `src/admin/views/overview.ts` | **W2 — Gracia de licencia** (ver #17 y § F) |
+| `test/tools/searchKb.test.ts`, `test/admin/kb-routes.test.ts`, `test/license.test.ts`, `test/modules.test.ts` | tests de W1 + W2 |
+| `PLAN.md` | esta bitácora |
+| `sitio-web/14-analisis-zernflow.md` (gitignored) | análisis ZernFlow + decisión (ver #16) |
+
+### W1 — Umbral KB (#15): estado
+
+- **Código:** hecho. **Cardealer:** DESPLEGADO y verificado (version `e9f0fdb6`, 2026-09-02) —
+  se copiaron los 5 archivos a `C:\Users\joeld\cardealerdaniel\src\` y `wrangler deploy`.
+- **Falta:** commit a `main` + bump de versión + `kooni-bot update` en **joel-nocode**.
+
+### W2 — Gracia de licencia (#17): estado
+
+- **Código:** hecho. **Inerte** para códigos lifetime (las 2 instalaciones actuales) → no
+  cambia nada hasta que exista un código `monthly`.
+- **Falta:** commit a `main` (+ bump). No requiere redeploy urgente (inerte).
+
+### J1 — fixes del panel de joel-nocode (logout, raíz→/admin, realm): DESBLOQUEADO
+
+- Antes bloqueado por no tener la cuenta CF `29074eb8` (joeldavidar). **En una sesión con
+  Remote Control / wrangler logueado a esa cuenta ya se puede** (esta sesión del 2026-09-02
+  vio ambas cuentas en `wrangler whoami`). Los fixes YA están en `src/` de joel-nocode.
+- **Hacer:** `cd <carpeta joel-nocode>` → `CLOUDFLARE_ACCOUNT_ID=29074eb8abdce39d39d4fc4553ee13b2 npx wrangler deploy`.
+  Si además se corre `kooni-bot update` antes, trae W1 de paso.
+
+### Orden sugerido para cerrar (próxima sesión, ~15 min)
+
+1. `forja`: `pnpm test && pnpm typecheck` (confirmar 728 verde) → commit W1 + W2 juntos →
+   bump de versión (¿v1.20.0?) → push a `main`.
+2. `kooni-bot update` en **joel-nocode** + `wrangler deploy` (cuenta `29074eb8`) → trae W1 + J1.
+3. `kooni-bot update` en **cardealer** para alinearlo con `main` (W1 ya está desplegado a mano,
+   pero conviene que su `src/` coincida con el template; ojo cuenta CF `b579b154`).
+4. Verificar `/health` 200 en ambas + probar KB en el playground de cardealer.
+
+---
+
+## Nichos por giro (bots especializados estilo Forja)
+
+> **Estado (2026-09-02):** el motor de *niche packs* ya existía (`src/niches/`,
+> `BOT_NICHE`, inyección de playbook, re-etiquetado del panel). Forja vende "14
+> bots" pero es UN motor + un archivo de config por giro. El CLI de este repo
+> (`cli/bin/cli.js` → `NICHE_SLUGS`) ya reconoce los 14 slugs; hasta ahora todos
+> caían a `generico`.
+
+### ✅ HECHO — 4 giros (`restaurante` = pack de referencia)
+
+| Pieza | Detalle |
+|---|---|
+| `src/niches/restaurante.ts` | "Reservaciones", estados `Solicitada/Confirmada/Cumplida/Cancelada`, columnas `fecha/hora/personas/ocasion`, playbook de anfitrión (reserva conversando + deriva grupos/eventos/quejas). **Pack de referencia** para los demás. |
+| `src/niches/inmobiliaria.ts` | "Prospectos", estados `Nuevo/En seguimiento/Cerrado/Perdido`, columnas `operacion/zona/presupuesto/recamaras`, playbook de calificación (compra/renta → zona → presupuesto → visita → deriva a asesor para negociar). |
+| `src/niches/clinica.ts` | "Citas", estados `Solicitada/Confirmada/Atendida/Cancelada`, columnas `especialidad/fecha/hora/motivo`, playbook de recepción con **regla dura: nunca diagnostica ni da consejo médico**; urgencias → handoff. |
+| `src/niches/barberia.ts` | "Citas", estados `Solicitada/Confirmada/Atendida/Cancelada`, columnas `servicio/barbero/fecha/hora`, playbook de agenda (servicio → barbero → día → hora; grupos/eventos → handoff). |
+| `src/niches/index.ts` | Registra los 4. |
+| `test/niches.test.ts` | Reescrito a tabla `GIROS` (`it.each`): resolución, re-etiquetado del nav, columnas, estados y playbook inyectado al prompt por cada giro. Slug "desconocido" de prueba → `giro-inexistente`. |
+| `docs/kb-plantillas/` | +6 plantillas: `{restaurante,inmobiliaria,clinica,barberia}` × (servicios/menú de ejemplo + FAQ) + tabla del README. |
+| `docs/ARQUITECTURA.md` §7 | Reescrita a la API real de `NichePack` (antes campos ficticios `name`/`leadColumns`); lista de packs incluidos + pasos para agregar giro. |
+
+Activar: `BOT_NICHE = "<giro>"` en `wrangler.toml` (el CLI ya lo estampa según el
+slug instalado).
+
+### ⏳ ROADMAP — 10 giros restantes (1 archivo cada uno)
+
+> Patrón: copiar `src/niches/restaurante.ts`, ajustar etiquetas + columnas +
+> playbook + `kbDocs`, registrar en `index.ts`, sumar fila a `GIROS` en el test.
+> Sin tocar DB ni canales. Por pedido / demanda real.
+
+| Slug (`BOT_NICHE`) | Registro capturado | Columnas sugeridas | Prioridad |
+|---|---|---|---|
+| `gimnasio` | Prospecto | plan, objetivo, horario | media |
+| `spa` | Reserva | tratamiento, fecha, hora, personas | media |
+| `dentista` | Cita | tratamiento, fecha, hora, es primera vez | media |
+| `salon` | Cita | servicio, estilista, fecha, hora | media |
+| `hoteleria` | Reserva | check-in, check-out, huéspedes, tipo de habitación | media |
+| `cafeteria` | Pedido / Reserva | tipo, fecha, hora, personas | baja |
+| `panaderia` | Pedido | producto, cantidad, fecha de entrega | baja |
+| `tienda` | Pedido / Lead | producto, cantidad, forma de entrega | baja |
+| `coach` | Prospecto | programa, objetivo, canal | baja |
+| `crm` | Lead | fuente, interés, etapa | baja |
+
+**Opcional — tools por nicho:** los tests en `test/tools/index.test.ts:59`
+verifican que el Starter NO agrega tools de nicho (`crearReservacion`,
+`calificarComprador`…). Si un giro necesita una tool propia hay que: (a) añadir
+`tools?` al tipo `NichePack`, (b) mezclarlas en `buildTools()` según
+`getNiche(env)`, (c) actualizar esos tests. No es necesario para el MVP de cada
+giro (playbook + columnas + KB alcanzan).
+
+---
 
 ## Siguientes mejoras (roadmap post-beta)
 
@@ -111,6 +211,9 @@ otra pública. La pública, en cambio, es segura de publicar — ese es el punto
 12. **Rediseño visual del panel** (`§ T`) — ✅ **HECHO y desplegado** (v1.17.0–v1.18.2). Sora + IBM Plex Mono, morado/fucsia, tema claro+oscuro con toggle, sombras suaves, 12 vistas + SVG + PWA (ícono, theme-color, botón instalar) en tokens. Ambas instalaciones en v1.18.2, visto por Joel. **Queda solo:** `web/*.html` (landing, sigue teal — pase aparte) y reescribir `docs/design-system.md`.
 13. **Chat del CRM — links y multimedia** (`§ V`) — que los links de los mensajes sean clicables/descargables y que las imágenes/videos/audios se previsualicen en el hilo (`/admin/conversations`). Hoy todo se renderiza como texto plano escapado. Pedido de Joel (2026-09-02).
 14. **"Probar el bot" (playground)** (`§ W`) — ✅ **HECHO** v1.19.0. Chat de prueba en `/admin/probar`: el dueño escribe como cliente, ve la respuesta real (prompt+modelo+KB), sin persistir ni mandar por canal. Solo tools de lectura.
+15. **🐛 Umbral de score de la KB demasiado alto (0.70)** — ✅ **HECHO (2026-09-02), pendiente commit+release.** Diagnóstico: en cardealer el bot decía "no tengo esa información" aunque la KB tiene los 71 autos indexados. Causa raíz **confirmada** consultando el Vectorize remoto de cardealer (`wrangler vectorize query`): 31 vectores sanos, contenido limpio, la búsqueda SÍ funciona — pero `@cf/baai/bge-m3` sobre contenido denso de inventario (VINs, URLs, precios) da top-score **0.60–0.63** aunque el match sea correcto (peor con consulta ES contra fichas EN). El umbral de 0.70 hacía que el modelo descartara resultados buenos. **Fix aplicado:** (a) nuevo `KB_MIN_SCORE_DEFAULT = 0.45` + `resolveKbMinScore(env)` en `src/kb/query.ts` (lee `settings.kb_min_score`, override del dueño, clamp 0–1); (b) `src/tools/searchKb.ts` filtra los hits `< min` antes de devolvérselos al modelo y su descripción ya no lleva número fijo ("si viene vacío, escala; si trae fragmentos, son confiables"); (c) `src/admin/views/kb.ts` — veredicto y colores usan el umbral real + **campo nuevo en /admin/kb para ajustarlo** (`POST /admin/kb/min-score`); (d) nueva key `kbMinScore` en `settings.ts`. Tests: +3 en `test/tools/searchKb.test.ts`, +2 en `test/admin/kb-routes.test.ts`. **`pnpm test` → 722/722 verde · `pnpm typecheck` verde** (corridos de verdad, 2026-09-02). Afecta a TODAS las instalaciones (sobre todo web_sync). **Cardealer: DESPLEGADO** (2026-09-02, version `e9f0fdb6`) — copiados los 5 archivos a `C:\Users\joeld\cardealerdaniel\src\` + `wrangler deploy`; verificado contra el Vectorize real: consultas ES de inventario dan score 0.50–0.57 (> 0.45, antes descartadas por el 0.70). **Falta:** commit a `main` de forja + bump de versión + `kooni-bot update` en joel-nocode.
+16. **Análisis ZernFlow — flujo visual tipo ManyChat** (`sitio-web/14-analisis-zernflow.md`) — ⏳ **EN ESPERA de feedback de las 2 instalaciones (beta).** Decisión 2026-09-02: NO construir el editor visual ahora (proyecto de semanas, choca con el principio "sin builders visuales" de `FLUJOS.md`, ningún cliente lo pidió). Se retoma con demanda real (2+ clientes lo piden / beta cerrada / cliente que paga ManyChat no migra sin editor). El doc trae además un Sprint 1 de tareas rápidas (T1 `src/triggers.ts`, T2/T3 playground: probar automatizaciones + ver tool calls, T4 vista de árbol read-only de `auto_rules`) — bajo riesgo, no toca `agent.ts` — y como Sprint 2 post-beta las **secuencias/drip** (la función que de verdad mueve la aguja vs ManyChat, antes que el lienzo).
+17. **Gestión de licencias de pago — mejor forma para Kooni** (`§ F`) — Modelo elegido: **híbrido** (Ed25519 offline como fuente de verdad + capa online opcional para revocar/renovar, que se mantiene MIT — no se gatea la descarga). ✅ **HECHO (2026-09-02), sin commitear** (ver "Working tree sin commitear" arriba): periodo de **gracia de 7 días** para códigos `monthly` vencidos (`LICENSE_GRACE_MS`), `inspectLicense()` como estado único, tarjeta de estado real en `/admin/licencia` (de por vida / vence en N días / gracia / vencida) y aviso en el Resumen. Inerte para lifetime. +5 tests, 728/728 verde. ⏳ **ROADMAP (construir con cliente de suscripción real, detalle completo en `§ F`):** (a) endpoint `estado-licencia` en InsForge — `active` / `active + código rotado` (auto-renovación, cliente no hace nada) / `revoked`; (b) `src/license-check.ts` + cron nocturno (fail-open; cache de revoke en `isProLicense`); (c) procesador de cobro recurrente (Stripe / Lemon Squeezy / Mercado Pago) — decisión de negocio; (d) aviso automático de vencimiento (email/push); (e) botón "renovar" en el panel de licencias; (f) login del CLI estilo Forja SOLO si los revendedores lo piden.
 
 ## Seguridad — auditoría 2026-08-31 (arreglos + pendientes)
 
@@ -186,8 +289,77 @@ otra pública. La pública, en cambio, es segura de publicar — ese es el punto
   check-in** (ya se registra en `instalaciones.email`). El login/dashboard queda para
   cuando se necesite facturar/recurrencia real.
 
-### Estado
-⏳ PLAN — no implementar hasta que se confirme la necesidad de recurrencia/facturación.
+### Forja vs Kooni — comparación (2026-09-02)
+
+| Criterio | Forja | Kooni (v2 Ed25519) | Quién gana |
+|---|---|---|---|
+| Falsificar un código | Imposible (server) | Imposible (firma Ed25519, sin secreto compartido tras S2/M11) | Empate |
+| Evitar uso de Pro gratis | Fuerte — no entrega el código premium sin llave | Débil por diseño — repo MIT público; un técnico quita `isProUnlocked()` | Forja (aceptado a propósito) |
+| Revocar una licencia | Fácil — el próximo `validate` falla | Difícil — firma offline no se revoca; solo expiración (códigos mensuales) | Forja |
+| Funciona sin internet | Necesita red para validar (con fallback) | Sí, indefinido | Kooni |
+| Ingreso recurrente / suscripción | Nativo — sin pago, se corta | Débil — lifetime = pago único; mensual "expira" pero nada fuerza renovación ni corta suave | Forja |
+| Gestión de clientes (cuentas, checkout, churn) | Dashboard + OAuth (`forjabot login`) | Joel emite códigos a mano desde su panel InsForge | Forja |
+| Fricción de instalación | Login en navegador | Pegar un código (o nada si es gratis) | Kooni |
+| Coherencia con "open source MIT" | N/A (cerrado) | Total | según estrategia |
+
+**Modelo Forja** (`cli/bin/cli.js`): `SERVER` = Worker de licencias; `forjabot login` = OAuth
+navegador → cuenta en `app.forjabots.com`; `validate`/`claim`/`redeem`/`download/<slug>` — el
+tarball del bot premium **está gated** (solo se baja con `X-License-Key` válida). `fingerprint`
+= UUID random por instalación (NO hardware — no aporta seguridad real).
+
+**Veredicto:** para **anti-falsificación** están iguales (v2 está bien). Para **ventas** Kooni
+está **peor hoy** si el modelo es suscripción; está **bien** si es lifetime fundador (plan I7).
+
+### Modelo elegido (2026-09-02)
+
+**Híbrido: Ed25519 offline como fuente de verdad + capa online OPCIONAL solo para
+revocar (abajo) y renovar (rotar el código).** El online nunca otorga Pro que la firma
+no respalde → un server comprometido no puede regalar Pro. Fail-open siempre. **NO** se
+gatea la descarga del código (se mantiene MIT). El foso de Kooni: instalación asistida
+por Claude Code + updates + comunidad/soporte + panel de licencias hospedado + white-label.
+No se copia el fingerprint de Forja — el `inst`/`uid` que Kooni ya liga al worker basta.
+
+### ✅ HECHO (2026-09-02) — worker listo para vender suscripciones
+
+| Pieza | Detalle |
+|---|---|
+| **Periodo de gracia** | `LICENSE_GRACE_MS = 7 días` en `src/license.ts`. Un código `monthly` vencido mantiene el Pro activo 7 días más (la renovación hoy es manual: el dueño genera y envía, el cliente pega — no se corta a nadie por un día de demora). `verifyLicense` ahora delega en `inspectLicense`. |
+| **`inspectLicense(code, env)`** | Fuente única de estado: `{ state: active\|grace\|expired\|invalid, payload, expiresAt, daysLeft }`. La usan el panel, el aviso del Resumen y `verifyLicense`. |
+| **Panel `/admin/licencia`** | Tarjeta de estado real: "PRO ACTIVO · de por vida" / "· vence en N días (fecha)" / ámbar si ≤ 7 días / rojo "VENCIDA — GRACIA (N días)" / "PLAN GRATIS — venció el …". |
+| **Aviso en Resumen** | Banner rojo "tu licencia vence en N días" / "periodo de gracia" con CTA → `/admin/licencia`. Solo aparece con código `monthly` por vencer. |
+| **Tests** | +4 en `test/license.test.ts` (gracia, estados de `inspectLicense`), +1 en `test/modules.test.ts`. **`pnpm test` → 728/728 verde · `pnpm typecheck` verde** (corridos de verdad, 2026-09-02). |
+
+Ships **inerte** para los códigos lifetime (ambas instalaciones actuales) — cero cambio
+de comportamiento hasta que exista un código mensual.
+
+### ⏳ ROADMAP — construir cuando haya un cliente de suscripción real
+
+> Requiere decisión de negocio (procesador de pagos) + endpoint nuevo en InsForge.
+> No arrancar hasta que Joel confirme que vende por suscripción (hoy: lifetime fundador I7).
+
+1. **Endpoint `estado-licencia` (InsForge)** — recibe `{ uid, inst, code }` con
+   `X-Kooni-Token` (ya existe como secret `KOONI_REGISTER_TOKEN` / `REGISTER_TOKEN`).
+   Responde:
+   - `{ status: "active" }` → sin cambios.
+   - `{ status: "active", code: "<v2 nuevo>" }` → **auto-renovación**: el server ya rotó
+     el código (extendió `expiry`) tras cobrar; el worker lo guarda en `settings.pro_license`.
+     Cliente no hace nada. ← la función que hace atractiva la suscripción.
+   - `{ status: "revoked" }` → chargeback / reembolso / abuso → baja a Free ya.
+   Lee de la tabla `licencias` (`activa`, `expira_en`) que YA existe.
+2. **Worker `src/license-check.ts` + cron** — `revalidateLicense(env)` en el tick nocturno:
+   si `env.LICENSE_CHECK_URL` está seteada, llama al endpoint; aplica revoke (escribe
+   `settings.license_status` = `{status, at}`) o renovación (rota `pro_license`); **fail-open**
+   si no hay red. `isProLicense` mira además ese cache: `revoked` fresco (< 3 días) → Free.
+   Nueva key `license_status` en `settings.ts`, `LICENSE_CHECK_URL?` en `env.ts`.
+3. **Cobro recurrente** — procesador (Stripe / Lemon Squeezy / Mercado Pago). Webhook
+   `payment.succeeded` → el panel de licencias rota el código; `subscription.canceled` /
+   `charge.refunded` → marca `activa=false`. Decisión de negocio: cuál y comisión.
+4. **Aviso automático de vencimiento** — el cron del panel de licencias manda email
+   "tu licencia vence en X días" (o el worker lo empuja al dueño por Telegram/PWA push).
+5. **UI del panel de licencias** — botón "renovar" por licencia (rota el código y lo
+   reenvía), estado activa/vencida/en-gracia por instalación (cruzando con `uso_instalaciones`).
+6. **Login del CLI estilo Forja** (cuentas + OAuth navegador) — SOLO si los revendedores
+   lo piden. Con `estado-licencia` + auto-renovación, el cliente final no necesita cuenta.
 
 ---
 

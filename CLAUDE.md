@@ -59,8 +59,10 @@ Cloudflare (~gratis, ~$5/mes con tráfico) y el cerebro es su propia llave de IA
 - `src/llm/provider.ts` — el cerebro (Anthropic / OpenAI / xAI, con llave propia).
 - `src/admin/` — el panel (`/admin`): Resumen, Conversaciones, Conexiones, Config, KB, Costos.
 - `src/tools/` — searchKb, handoffHuman, pauseBot, captureLead, scheduleAppointment, catalogQuery.
-- `src/niches/` — el "niche pack" genérico (Starter). Personaliza tono/columnas del panel;
-  para giros propios, agrega un pack nuevo aquí (ver `docs/ARQUITECTURA.md` § Nichos).
+- `src/niches/` — "niche packs" por giro: `generico` (Starter), `agencia-ia`, `restaurante`
+  (pack de referencia), `inmobiliaria`, `clinica`, `barberia`. Re-etiquetan el panel y aportan
+  playbook/columnas/tono. Para un giro nuevo, copia `restaurante.ts` (ver `docs/ARQUITECTURA.md`
+  § Nichos y `PLAN.md` § Nichos por giro).
 - `skill/` — asistentes para el usuario.
 
 ## Skills disponibles

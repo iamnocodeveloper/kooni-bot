@@ -58,7 +58,7 @@ para responder con tus propios documentos.
 | `src/kb/` | Documentos de la base de conocimiento (chunking + indexado a Vectorize). |
 | `src/db/` | Cliente D1 y capas por tabla (conversations, messages, leads, tickets, settings, insights, magicLinks, adminEmails, suggestions…). |
 | `src/admin/` | Panel: auth (magic links + Basic Auth), rutas y vistas (`layout.ts` = shell + tema). |
-| `src/niches/` | Packs por giro (`types.ts`, `index.ts`, `generico.ts`). Re-etiquetan el panel y aportan playbook. |
+| `src/niches/` | Packs por giro (`types.ts`, `index.ts`, `generico`, `agencia-ia`, `restaurante`, `inmobiliaria`, `clinica`, `barberia`). Re-etiquetan el panel y aportan playbook. |
 | `src/crons/` | Trabajos nocturnos (purga de mensajes >90 días, insights, flywheel, reporte al dueño). |
 | `src/flywheel/` | Mejora automática: detecta huecos de conocimiento y propone entradas de KB/lecciones. |
 | `src/insights/` | Analizador de conversaciones (Haiku): sentimiento, resolución, oportunidad de venta. |
@@ -160,32 +160,35 @@ redeploy. Cada card muestra su webhook URL (con botón copiar) — aunque
 
 ## 7. Nichos (`src/niches/`) — cómo crear uno propio
 
-Un niche pack (`NichePack`) define: id, nombre, playbook (instrucciones al agente),
-`navLabel`/`navIcon` (re-etiqueta del tab Leads) y columnas del panel.
+Un niche pack (`NichePack`, ver `types.ts`) define: `id` (= valor de `BOT_NICHE`),
+`recordSingular`/`recordPlural` (re-etiqueta "Lead"), `navLabel`/`navIcon`,
+`kpiLabel`, `statusLabels` (re-etiqueta los 4 estados del pipeline sin migrar el
+enum), `columns` (leídas de `lead.metadata` JSON), `playbook` (rellena
+`{{NICHO_PLAYBOOK}}` en el system prompt), `defaultTone` y `kbDocs`.
 
-```ts
-// src/niches/restaurante.ts (ejemplo)
-import type { NichePack } from "./types";
-export const restaurante: NichePack = {
-  id: "restaurante",
-  name: "Restaurante",
-  playbook: "Maneja reservaciones, menú y tiempos. Pregunta fecha, hora y personas.",
-  navLabel: "Reservaciones",
-  navIcon: "calendar-check",
-  leadColumns: ["nombre", "fecha", "hora", "personas", "notas"],
-  // ...
-};
-```
+**Packs incluidos:** `generico` (Starter), `agencia-ia` (venta conversacional),
+`restaurante`, `inmobiliaria`, `clinica`, `barberia`.
 
-Luego regístralo en `src/niches/index.ts`:
+**Pack de referencia: `src/niches/restaurante.ts`** — cópialo tal cual y ajusta
+los campos para tu giro (playbook, columnas, etiquetas).
 
-```ts
-import { restaurante } from "./restaurante";
-const PACKS: Record<string, NichePack> = { generico, restaurante };
-```
+Pasos:
 
-y pon `BOT_NICHE = "restaurante"` en `wrangler.toml` (`[vars]`). El dashboard se
-re-etiqueta solo; las columnas del nicho se guardan en `leads.metadata` (JSON).
+1. `src/niches/<giro>.ts` — implementa `NichePack` (parte del de `restaurante.ts`).
+2. Regístralo en `src/niches/index.ts` (`import` + una línea en `PACKS`).
+3. Test en `test/niches.test.ts` — suma una fila a `GIROS` (cubre resolución,
+   re-etiquetado del panel, columnas y el tag del playbook).
+4. Opcional: plantillas de KB en `docs/kb-plantillas/<giro>-*.md` y referéncialas
+   en `kbDocs`.
+5. Pon `BOT_NICHE = "<giro>"` en `wrangler.toml` (`[vars]`) — el CLI lo estampa
+   solo según el slug instalado (`NICHE_SLUGS` en `cli/bin/cli.js`).
+
+El dashboard se re-etiqueta solo; las columnas del nicho se guardan en
+`leads.metadata` (JSON) vía `captureLead`. Nicho ausente/desconocido → `generico`.
+
+**Roadmap de giros** (gimnasio, spa, dentista, coach, tienda, panadería,
+cafetería, salón, hotelería, CRM): el CLI ya los reconoce como slugs, pero aún
+caen a `generico` hasta que exista su archivo. Ver `PLAN.md` § Nichos por giro.
 
 ---
 
