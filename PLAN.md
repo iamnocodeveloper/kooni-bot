@@ -107,12 +107,14 @@ otra pública. La pública, en cambio, es segura de publicar — ese es el punto
 | `cfe5133` | **chore:** rebrand `"Forja+"` → `"Kooni+"` en 23 comentarios/títulos de test. Nada visible al usuario. Se conservan LICENSE (© Horizontes IA) y notas de atribución MIT. |
 | `a189124` | **v1.20.0:** W1 (umbral KB configurable, `KB_MIN_SCORE_DEFAULT=0.45` + `settings.kb_min_score` + campo en `/admin/kb`) + W2 (gracia de licencia 7 días para códigos `monthly`, `inspectLicense()`) + bump `package.json`. |
 
-### Despliegue por instalación
+### Despliegue por instalación — ✅ HECHO (2026-09-03)
 
 | Instalación | Cuenta CF | Estado v1.20.0 |
 |---|---|---|
-| **cardealer** (`kooni-bot-cardealer-daniel2-948b8b`) | `b579b154` | ⏳ **Pendiente** — `npx kooni-bot update` en `C:\Users\joeld\cardealerdaniel` (auto: pnpm install + d1 exec remoto + kb:reindex + `pnpm run deploy`). Cambio funcional real = nulo (sin `BOT_NICHE`; W1 ya estaba a mano desde 2026-09-02 version `e9f0fdb6`; W2 inerte con licencia lifetime). Solo alinea `src/` + marker de versión. |
-| **joel-nocode** (`kooni-bot-joel-nocode-ec53aa`) | `29074eb8` | ⏳ **Pendiente** — carpeta: `C:\Users\joeld\OneDrive\Escritorio\Joel-nocode`. `cd` ahí → `CLOUDFLARE_ACCOUNT_ID=29074eb8abdce39d39d4fc4553ee13b2 npx kooni-bot update --yes`. Trae W1 + J1 (fixes del panel que ya están en su `src/`) + giros. Tiene `BOT_NICHE = "agencia-ia"` (sin cambios: solo se agregaron packs nuevos). |
+| **cardealer** (`kooni-bot-cardealer-daniel2-948b8b`) | `b579b154` | ✅ **Desplegado** — `kooni-bot update` (marker + pkg 1.20.0, `/health` 200, `v1.20.0` en el pie del login). Cambio funcional real = nulo (sin `BOT_NICHE`; W1 ya estaba a mano; W2 inerte con licencia lifetime). |
+| **joel-nocode** (`kooni-bot-joel-nocode-ec53aa`) | `29074eb8` | ✅ **Desplegado** — `kooni-bot update` (1.20.0, `/health` 200, `v1.20.0` en el login). Trae W1 + J1 (logout/raíz→/admin/realm) + los 6 niche packs. Sigue en `BOT_NICHE = "agencia-ia"`. |
+
+**CLI:** `kooni-bot@0.3.2` publicado en npm (fix del `tar` en Git-Bash/MSYS, commit `7b4e327`).
 
 ### J1 — fixes del panel de joel-nocode (logout, raíz→/admin, realm)
 
