@@ -124,10 +124,14 @@ para responder con tus propios documentos.
 | Instagram + Messenger (Meta oficial) | `/webhooks/meta` | `META_VERIFY_TOKEN`, `META_APP_SECRET`, `META_PAGE_ACCESS_TOKEN` (+ `INSTAGRAM_*` si IG Login standalone) |
 | ManyChat (IG/WA/Messenger) | `/webhooks/manychat` | `MANYCHAT_API_KEY` |
 | Zernio (unificado: IG/FB/X/TG/WhatsApp/Bluesky/Reddit…) | `/webhooks/zernio` | `ZERNIO_API_KEY` (+`ZERNIO_WEBHOOK_SECRET`; se conecta desde el panel) |
+| MercadoLibre (preguntas + post-venta) | `/webhooks/mercadolibre` (+ OAuth `/webhooks/mercadolibre/oauth`) | App ID + Secret Key + tokens OAuth — todo en D1, se conecta desde el panel |
 
-Telegram y Zernio se conectan desde `/admin/conexiones` pegando el token/API key: se
-guardan en D1 (`settings`) y el canal se pone verde sin `wrangler secret put` ni
-redeploy. Cada card muestra su webhook URL (con botón copiar) — aunque
+Telegram, Zernio y MercadoLibre se conectan desde `/admin/conexiones` pegando el
+token / API key / datos de la app: se guardan en D1 (`settings`) y el canal se pone
+verde sin `wrangler secret put` ni redeploy. MercadoLibre además hace un OAuth (botón
+"Autorizar"): el access token dura ~6 h y se refresca solo (`src/channels/mercadolibreCredentials.ts`).
+MercadoLibre no firma sus webhooks — Kooni valida el `user_id` del vendedor y va a
+buscar el contenido del recurso con el token. Cada card muestra su webhook URL (con botón copiar) — aunque
 `DASHBOARD_BASE_URL` esté vacío, se usa el origin real del request.
 
 **Avisos al dueño (handoff):** `OWNER_TELEGRAM_CHAT_ID` (DM de Telegram, default),

@@ -623,10 +623,12 @@ adminApp.get("/conexiones", async (c) => {
   }
   const { listZernioAccounts } = await import("../channels/zernioAccounts");
   const { resolveTelegramToken, resolveOwnerTelegramChatId } = await import("../channels/telegramCredentials");
+  const { loadMlCredentials } = await import("../channels/mercadolibreCredentials");
   const zernioAccounts = await listZernioAccounts(c.env);
   const zernioCreds = await resolveZernioCredentials(c.env);
   const telegramToken = await resolveTelegramToken(c.env);
   const ownerChatId = await resolveOwnerTelegramChatId(c.env);
+  const mlCreds = await loadMlCredentials(c.env);
 
   // Uso de rate limit por cuenta (DM/hora) para mostrar en la card Zernio.
   const rateUsage: Record<string, { used: number; windowStart: number }> = {};
@@ -647,14 +649,24 @@ adminApp.get("/conexiones", async (c) => {
     zernioCreds,
     telegramToken,
     ownerChatId,
+    mlCreds,
     baseUrl,
-    savedKind: c.req.query("telegram") === "saved" ? "telegram" : c.req.query("zernio") === "saved" ? "zernio" : undefined,
+    savedKind:
+      c.req.query("telegram") === "saved"
+        ? "telegram"
+        : c.req.query("zernio") === "saved"
+          ? "zernio"
+          : c.req.query("ml") === "saved"
+            ? "mercadolibre"
+            : undefined,
     error:
       c.req.query("zernio") === "error"
         ? (c.req.query("msg") ?? "No se pudo validar la API key.")
         : c.req.query("telegram") === "error"
           ? (c.req.query("msg") ?? "No se pudo validar el token de Telegram.")
-          : undefined,
+          : c.req.query("ml") === "error"
+            ? (c.req.query("msg") ?? "No se pudo conectar MercadoLibre.")
+            : undefined,
   }));
 });
 
@@ -836,6 +848,48 @@ adminApp.post("/conexiones/telegram", async (c) => {
   }
 
   return c.redirect("/admin/conexiones?telegram=saved");
+});
+
+// Conectar MercadoLibre: guarda App ID + Secret + país en D1 (settings). Los
+// tokens NO se piden aquí — se obtienen en el OAuth (botón "Autorizar", que
+// arranca en GET /conexiones/mercadolibre/oauth y termina en el callback
+// público /webhooks/mercadolibre/oauth).
+adminApp.post("/conexiones/mercadolibre", async (c) => {
+  const form = await c.req.formData();
+  const repo = new SettingsRepo(new Db(c.env.DB));
+
+  if (String(form.get("clear") ?? "") === "1") {
+    const { clearMlTokens } = await import("../channels/mercadolibreCredentials");
+    await clearMlTokens(c.env);
+    await repo.set(SETTING_KEYS.mlClientId, "");
+    await repo.set(SETTING_KEYS.mlClientSecret, "");
+    return c.redirect("/admin/conexiones?ml=saved");
+  }
+
+  const clientId = String(form.get("ml_client_id") ?? "").trim();
+  const clientSecret = String(form.get("ml_client_secret") ?? "").trim();
+  const site = String(form.get("ml_site") ?? "").trim().toUpperCase();
+  if (clientId) await repo.set(SETTING_KEYS.mlClientId, clientId);
+  if (clientSecret) await repo.set(SETTING_KEYS.mlClientSecret, clientSecret);
+  if (site) await repo.set(SETTING_KEYS.mlSite, site);
+  return c.redirect("/admin/conexiones?ml=saved");
+});
+
+// Arranca el OAuth de MercadoLibre: guarda un `state` anti-CSRF y redirige al
+// login del vendedor. MercadoLibre vuelve a /webhooks/mercadolibre/oauth.
+adminApp.get("/conexiones/mercadolibre/oauth", async (c) => {
+  const { loadMlCredentials, mlAuthorizeUrl } = await import("../channels/mercadolibreCredentials");
+  const creds = await loadMlCredentials(c.env);
+  if (!creds.clientId || !creds.clientSecret) {
+    return c.redirect(
+      `/admin/conexiones?ml=error&msg=${encodeURIComponent("Primero guarda el App ID y la Secret Key.")}`,
+    );
+  }
+  const base = (c.env.DASHBOARD_BASE_URL?.trim() || new URL(c.req.url).origin).replace(/\/$/, "");
+  const redirectUri = `${base}/webhooks/mercadolibre/oauth`;
+  const state = crypto.randomUUID();
+  await new SettingsRepo(new Db(c.env.DB)).set(SETTING_KEYS.mlOauthState, state);
+  return c.redirect(mlAuthorizeUrl(creds, redirectUri, state));
 });
 
 // Licencia: activa Pro pegando un código KOONI-PRO-... (validación local HMAC).

@@ -341,6 +341,33 @@ npx wrangler secret put META_PAGE_ACCESS_TOKEN
 ```
 Webhook en Meta: `<WORKER_URL>/webhooks/meta` (un solo webhook cubre IG + Messenger)
 
+### MercadoLibre — preguntas + mensajería post-venta (gratis)
+
+La IA responde las **preguntas de tus publicaciones** y los **mensajes post-venta**
+con el comprador. Cada bot usa **su propia app** (gratis) creada en la cuenta de
+vendedor — no hay app central. **Todo se conecta desde el panel** (`/admin/conexiones`
+→ tarjeta MercadoLibre), sin `wrangler secret put` ni redeploy.
+Guía completa: `skill/references/channel-setup-guides/mercadolibre-oauth.md`
+
+1. Entra a **developers.mercadolibre.com** con la cuenta de MercadoLibre del dueño
+   (necesita 2FA activado) → **Crear aplicación**.
+2. **URI de redirect (redirect_uri):** `<WORKER_URL>/webhooks/mercadolibre/oauth`
+3. **Notificaciones (callbacks):** `<WORKER_URL>/webhooks/mercadolibre` y activa los
+   tópicos **`questions`** y **`messages`**.
+4. Permisos (scopes): **read**, **write**, **offline_access**.
+5. Copia el **App ID** y la **Secret Key**, y en el panel: elige el país, pégalos,
+   **Guardar datos** → **Autorizar con MercadoLibre** (el dueño inicia sesión y
+   acepta). La tarjeta se pone verde.
+
+Notas:
+- MercadoLibre **no firma** los webhooks: solo manda un puntero al recurso. Kooni
+  valida que el `user_id` sea el del vendedor conectado y va a buscar el contenido
+  con su token.
+- El token de acceso dura ~6 h y **se refresca solo**. El refresh token dura 6
+  meses; si el bot queda inactivo más tiempo, hay que volver a **Autorizar**.
+- Las **preguntas** son públicas: MercadoLibre prohíbe compartir datos de contacto
+  o links externos en la respuesta. La mensajería post-venta es más flexible.
+
 ### Instagram/Messenger/WhatsApp — ManyChat (visual, sin código)
 Guía: `skill/references/channel-setup-guides/manychat-webhook.md`
 ```bash

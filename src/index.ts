@@ -156,6 +156,61 @@ app.post("/webhooks/waha", async (c) => {
   }
 });
 
+// --- MercadoLibre (preguntas en publicaciones + mensajería post-venta) -----
+// MercadoLibre NO firma sus webhooks: manda solo un puntero
+// { resource, topic, user_id }. Validamos que el user_id sea el del vendedor
+// conectado (dentro de parseMercadoLibreEvents) y vamos a buscar el contenido
+// con su token. Hay que responder 200 rápido: MercadoLibre reintenta si tarda.
+app.post("/webhooks/mercadolibre", async (c) => {
+  let body: unknown;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.text("ok", 200); // ack; body no-JSON (no es una notificación)
+  }
+  try {
+    const { parseMercadoLibreEvents } = await import("./channels/mercadolibre");
+    const msgs = await parseMercadoLibreEvents(body, c.env);
+    for (const msg of msgs) {
+      const doId = c.env.AGENT.idFromName(`${msg.channel}:${msg.channelUserId}`);
+      await c.env.AGENT.get(doId)
+        .ingest(msg)
+        .catch((e) => console.error("mercadolibre ingest:", e));
+    }
+  } catch (e) {
+    console.error("mercadolibre webhook error:", e);
+  }
+  return c.text("ok", 200); // ack siempre para que MercadoLibre no reintente en loop
+});
+
+// GET = callback OAuth de MercadoLibre. El vendedor autoriza la app y ML lo
+// devuelve aquí con ?code=&state=. Intercambiamos el code por tokens y los
+// guardamos en settings. Ruta pública (ML redirige el navegador del vendedor).
+app.get("/webhooks/mercadolibre/oauth", async (c) => {
+  const code = c.req.query("code");
+  const state = c.req.query("state");
+  const errParam = c.req.query("error");
+  const base = (c.env.DASHBOARD_BASE_URL?.trim() || new URL(c.req.url).origin).replace(/\/$/, "");
+  const redirectUri = `${base}/webhooks/mercadolibre/oauth`;
+  const fail = (m: string) => c.redirect(`/admin/conexiones?ml=error&msg=${encodeURIComponent(m)}`);
+
+  if (errParam) return fail(`MercadoLibre no autorizó la app (${errParam}).`);
+  if (!code) return fail("MercadoLibre no devolvió el código de autorización.");
+
+  const { SettingsRepo, SETTING_KEYS } = await import("./db/settings");
+  const repo = new SettingsRepo(new Db(c.env.DB));
+  const savedState = await repo.get(SETTING_KEYS.mlOauthState);
+  if (!savedState || savedState !== state) {
+    return fail("La autorización no coincide (state inválido). Reintenta desde el panel.");
+  }
+  await repo.set(SETTING_KEYS.mlOauthState, "");
+
+  const { exchangeMlCode } = await import("./channels/mercadolibreCredentials");
+  const r = await exchangeMlCode(c.env, code, redirectUri);
+  if (!r.ok) return fail(r.error);
+  return c.redirect("/admin/conexiones?ml=saved");
+});
+
 // --- Meta oficial (Facebook Messenger + Instagram DMs, sin ManyChat) --------
 // GET = handshake de verificación de Meta: devuelve hub.challenge si el
 // hub.verify_token coincide con nuestro secreto. Se llama una vez al configurar

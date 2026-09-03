@@ -6,9 +6,10 @@
 > y recién entonces abres la guía específica del método. No decidas por él sin
 > explicarle el trade-off — la decisión es del dueño del negocio.
 
-El bot recibe mensajes por **5 puertas** (webhooks ya desplegados en su Worker):
+El bot recibe mensajes por varias **puertas** (webhooks ya desplegados en su Worker):
 `/webhooks/telegram`, `/webhooks/twilio`, `/webhooks/meta`, `/webhooks/manychat`,
-`/webhooks/whatsapp` (WhatsApp Cloud API oficial) y `/webhooks/zernio` (unificado).
+`/webhooks/whatsapp` (WhatsApp Cloud API oficial), `/webhooks/zernio` (unificado)
+y `/webhooks/mercadolibre` (preguntas + post-venta).
 Cada red social se puede conectar por una de estas puertas. Un mismo canal (ej.
 Instagram) tiene **más de un método**; tu trabajo es que el miembro elija el que
 le conviene.
@@ -24,6 +25,7 @@ le conviene.
 | **Facebook Messenger** | Meta oficial · ManyChat · Zernio | `/webhooks/meta` · `/webhooks/manychat` · `/webhooks/zernio` | igual que Instagram Meta oficial / `ZERNIO_API_KEY` |
 | **Telegram** | BotFather (único) · Zernio | `/webhooks/telegram` · `/webhooks/zernio` | `TELEGRAM_BOT_TOKEN` / `ZERNIO_API_KEY` |
 | **X / TikTok / Bluesky / Reddit / LinkedIn / YouTube** | Zernio (único) | `/webhooks/zernio` | `ZERNIO_API_KEY` |
+| **MercadoLibre** (preguntas de publicaciones + chat post-venta) | App OAuth propia (único) | `/webhooks/mercadolibre` (+ `/webhooks/mercadolibre/oauth`) | App ID + Secret Key de developers.mercadolibre.com — **todo desde el panel**, sin `wrangler secret put` |
 
 > **Recomendación de arranque para no técnicos:** empezar por **Telegram** (5 min,
 > gratis, sin verificaciones) para ver el bot vivo de inmediato, y en paralelo
@@ -111,6 +113,17 @@ miembro quiere las dos, se configuran juntas en `meta-oficial.md`.
 BotFather. Gratis, sin verificaciones, ~5 min. Es el mejor "primer canal" para
 que el miembro vea el bot funcionando antes de pelear con WhatsApp/Meta. Guía en
 el sub-flujo de `configurar-mi-chatbot.md` (Paso 3.1).
+
+---
+
+## MercadoLibre — método único (app OAuth propia)
+Gratis. La IA responde las **preguntas** de las publicaciones y la **mensajería
+post-venta** con el comprador. El dueño crea **su propia app** en
+developers.mercadolibre.com (necesita 2FA), pega App ID + Secret + país en
+`/admin/conexiones` y toca **Autorizar** (OAuth de un clic). No se usa
+`wrangler secret put`: todo vive en la base de datos del bot. Ojo: las respuestas
+a preguntas son **públicas** y MercadoLibre prohíbe compartir contacto/links ahí.
+Guía detallada: `mercadolibre-oauth.md`.
 
 ---
 

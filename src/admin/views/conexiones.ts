@@ -8,6 +8,7 @@ import { layout } from "./layout";
 import type { ZernioAccount } from "../../channels/zernioAccounts";
 import { zernioPlatformIcon, zernioPlatformLabel } from "../../channels/zernioAccounts";
 import type { ZernioCredentials } from "../../channels/zernioCredentials";
+import { mlConnected, ML_SITES, type MlCredentials } from "../../channels/mercadolibreCredentials";
 
 interface ChannelStatus {
   id: string;
@@ -25,7 +26,12 @@ interface ChannelStatus {
   howTo: string;
 }
 
-function channelStatuses(env: Env, zernioCreds: ZernioCredentials, telegramToken?: string): ChannelStatus[] {
+function channelStatuses(
+  env: Env,
+  zernioCreds: ZernioCredentials,
+  telegramToken?: string,
+  mlCreds?: MlCredentials,
+): ChannelStatus[] {
   const has = (v?: string) => Boolean(v && v.trim() !== "");
 
   const telegramMissing = [!has(telegramToken) && "TELEGRAM_BOT_TOKEN"].filter(
@@ -49,6 +55,14 @@ function channelStatuses(env: Env, zernioCreds: ZernioCredentials, telegramToken
   const zernioMissing = [!has(zernioCreds.apiKey) && "ZERNIO_API_KEY"].filter(
     Boolean,
   ) as string[];
+  // MercadoLibre: la app (App ID + Secret) más la autorización del vendedor
+  // (tokens). El país tiene default, no bloquea.
+  const ml = mlCreds ?? { site: "MLA", expiresAt: 0 } as MlCredentials;
+  const mlMissing = [
+    !has(ml.clientId) && "App ID",
+    !has(ml.clientSecret) && "Secret Key",
+    has(ml.clientId) && has(ml.clientSecret) && !mlConnected(ml) && "autorización del vendedor",
+  ].filter(Boolean) as string[];
   const whatsappCloudMissing = [
     !has(env.WHATSAPP_PHONE_NUMBER_ID) && "WHATSAPP_PHONE_NUMBER_ID",
     !has(env.WHATSAPP_ACCESS_TOKEN) && "WHATSAPP_ACCESS_TOKEN",
@@ -126,6 +140,21 @@ function channelStatuses(env: Env, zernioCreds: ZernioCredentials, telegramToken
           : undefined,
       howTo: "zernio.com → copia tu API key y pégala aquí. El canal queda conectado y su webhook se registra automáticamente (message.received + comment.received); el webhook secret es opcional para validar la firma.",
     },
+    {
+      id: "mercadolibre",
+      name: "MercadoLibre",
+      icon: "shopping-bag",
+      desc: "La IA responde las preguntas de tus publicaciones y los mensajes post-venta con el comprador. Necesita una app propia (gratis) en tu cuenta de vendedor.",
+      ok: mlMissing.length === 0,
+      missing: mlMissing,
+      webhookPath: "/webhooks/mercadolibre",
+      howTo:
+        "1) developers.mercadolibre.com → Crear aplicación (con tu cuenta de vendedor, necesita 2FA). " +
+        "2) En 'URI de redirect' pega la URL de OAuth de abajo. " +
+        "3) En 'Notificaciones (callbacks)' pega la URL de webhook de abajo y activa los tópicos 'questions' y 'messages'. " +
+        "4) Marca los permisos read, write y offline_access. " +
+        "5) Copia el App ID y la Secret Key, elige tu país y guárdalos aquí. Luego toca 'Autorizar con MercadoLibre'.",
+    },
   ];
 }
 
@@ -141,7 +170,7 @@ export async function renderConexiones(
   pausedChannels: string[] = [],
   zernioAccounts: ZernioAccount[] = [],
   rateUsage: Record<string, { used: number; windowStart: number }> = {},
-  opts: { zernioCreds?: ZernioCredentials; telegramToken?: string; ownerChatId?: string; baseUrl?: string; savedKind?: "telegram" | "zernio"; error?: string } = {},
+  opts: { zernioCreds?: ZernioCredentials; telegramToken?: string; ownerChatId?: string; mlCreds?: MlCredentials; baseUrl?: string; savedKind?: "telegram" | "zernio" | "mercadolibre"; error?: string } = {},
 ): Promise<string> {
   const zernioCreds = opts.zernioCreds ?? {
     apiKey: env.ZERNIO_API_KEY,
@@ -149,7 +178,8 @@ export async function renderConexiones(
   };
   const telegramToken = opts.telegramToken ?? env.TELEGRAM_BOT_TOKEN;
   const ownerChatId = opts.ownerChatId ?? env.OWNER_TELEGRAM_CHAT_ID;
-  const channels = channelStatuses(env, zernioCreds, telegramToken);
+  const mlCreds = opts.mlCreds ?? ({ site: "MLA", expiresAt: 0 } as MlCredentials);
+  const channels = channelStatuses(env, zernioCreds, telegramToken, mlCreds);
   const connected = channels.filter((ch) => ch.ok).length;
   // Fallback de base: la ruta GET pasa el origin real si DASHBOARD_BASE_URL está
   // vacío, para que las cards SIEMPRE muestren su webhook URL.
@@ -211,6 +241,64 @@ export async function renderConexiones(
           ${hasOwner ? `<label class="text-dim text-[11.5px]" style="display:flex;align-items:center;gap:7px;cursor:pointer"><input type="checkbox" name="clear_owner" value="1"> Quitar aviso</label>` : ""}
         </div>
       </form>`;
+  };
+
+  // Formulario de MercadoLibre: App ID + Secret + país (se guardan en D1), y
+  // luego el botón "Autorizar" arranca el OAuth. Los tokens se guardan solos
+  // en el callback. Todo sin `wrangler secret put` ni redeploy.
+  const mercadolibreForm = (ch: ChannelStatus) => {
+    if (ch.id !== "mercadolibre") return "";
+    const hasId = (mlCreds.clientId ?? "").trim() !== "";
+    const hasSecret = (mlCreds.clientSecret ?? "").trim() !== "";
+    const canAuthorize = hasId && hasSecret;
+    const oauthUrl = `${base}/webhooks/mercadolibre/oauth`;
+    const options = ML_SITES.map(
+      (s) => `<option value="${s.id}"${mlCreds.site === s.id ? " selected" : ""}>${esc(s.label)} (${s.id})</option>`,
+    ).join("");
+    return `
+      <div style="display:flex;flex-direction:column;gap:8px;margin-top:4px">
+        <div class="text-dim text-[10.5px] font-mono" style="display:flex;flex-direction:column;gap:5px">
+          <span>URI de redirect (OAuth) — pégala en tu app de MercadoLibre:</span>
+          <span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <span style="border:1px solid var(--line);padding:4px 8px;background:var(--bg)">${esc(oauthUrl)}</span>
+            <button type="button" class="text-[10.5px]" style="border:1px solid var(--line);color:var(--cream);padding:4px 8px;cursor:pointer;background:none"
+                    onclick="navigator.clipboard.writeText('${esc(oauthUrl)}');this.textContent='copiado ✓'">copiar</button>
+          </span>
+        </div>
+        <form method="POST" action="/admin/conexiones/mercadolibre" style="display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <label class="font-display font-semibold text-[12.5px] text-cream">País de tu cuenta</label>
+            <select name="ml_site" style="background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:10px 12px;font-size:12.5px;outline:none">${options}</select>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <label class="font-display font-semibold text-[12.5px] text-cream">App ID (client_id)</label>
+            <input type="text" name="ml_client_id" value="" autocomplete="off"
+                   placeholder="${hasId ? "hay un App ID guardado — escribe para reemplazar" : "número de tu app en developers.mercadolibre.com"}"
+                   style="background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:10px 12px;font-size:12.5px;outline:none">
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <label class="font-display font-semibold text-[12.5px] text-cream">Secret Key (client_secret)</label>
+            <input type="password" name="ml_client_secret" value="" autocomplete="off"
+                   placeholder="${hasSecret ? "secreto guardado — escribe para reemplazar" : "Secret Key de tu app"}"
+                   style="background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:10px 12px;font-size:12.5px;outline:none">
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <button type="submit" class="text-[12px] font-display font-semibold"
+                    style="border:1px solid var(--line);color:var(--cream);padding:9px 14px;cursor:pointer;background:none">Guardar datos</button>
+            ${
+              canAuthorize
+                ? `<a href="/admin/conexiones/mercadolibre/oauth" class="text-[12px] font-display font-semibold" style="border:1px solid var(--accent);color:var(--accent);padding:9px 14px;text-decoration:none">${mlConnected(mlCreds) ? "Volver a autorizar" : "Autorizar con MercadoLibre →"}</a>`
+                : ""
+            }
+            ${ch.ok || mlConnected(mlCreds) ? `<label class="text-dim text-[11.5px]" style="display:flex;align-items:center;gap:7px;cursor:pointer"><input type="checkbox" name="clear" value="1"> Quitar conexión</label>` : ""}
+          </div>
+          ${
+            mlConnected(mlCreds)
+              ? `<div class="text-[11.5px]" style="color:var(--ok)">✓ Vendedor autorizado${mlCreds.nickname ? `: <span class="font-mono">${esc(mlCreds.nickname)}</span>` : ` (id ${esc(mlCreds.userId ?? "")})`}</div>`
+              : ""
+          }
+        </form>
+      </div>`;
   };
 
   const cards = channels
@@ -315,6 +403,7 @@ export async function renderConexiones(
           ${webhook}
           ${zernioForm(ch)}
           ${telegramForm(ch)}
+          ${mercadolibreForm(ch)}
           ${zernioBlock}
           ${pauseBtn}
         </div>`;
@@ -325,7 +414,9 @@ export async function renderConexiones(
     ? `<div style="border:1px solid var(--ok);background:var(--ok-soft);color:var(--ok);padding:10px 14px;font-size:12.5px;font-weight:600">✓ Telegram conectado: webhook registrado automáticamente. Envía un mensaje a tu bot para probarlo.</div>`
     : opts.savedKind === "zernio"
       ? `<div style="border:1px solid var(--ok);background:var(--ok-soft);color:var(--ok);padding:10px 14px;font-size:12.5px;font-weight:600">✓ Zernio conectado: webhook registrado automáticamente (message.received + comment.received). Los comentarios/DMs ya deberían fluir.</div>`
-      : "";
+      : opts.savedKind === "mercadolibre"
+        ? `<div style="border:1px solid var(--ok);background:var(--ok-soft);color:var(--ok);padding:10px 14px;font-size:12.5px;font-weight:600">✓ MercadoLibre: datos guardados. Si ya autorizaste al vendedor, la IA responderá las preguntas y mensajes post-venta. Falta activar los tópicos 'questions' y 'messages' en las notificaciones de tu app.</div>`
+        : "";
   const errorBanner = opts.error
     ? `<div style="border:1px solid var(--bad);background:var(--bad-soft);color:var(--bad);padding:10px 14px;font-size:12.5px;font-weight:600">✕ ${esc(opts.error)}</div>`
     : "";
@@ -347,7 +438,12 @@ export async function renderConexiones(
 }
 
 /** Resumen corto para el badge de salud del Resumen. */
-export function connectionsSummary(env: Env, zernioCreds: ZernioCredentials, telegramToken?: string): { connected: number; total: number } {
-  const channels = channelStatuses(env, zernioCreds, telegramToken);
+export function connectionsSummary(
+  env: Env,
+  zernioCreds: ZernioCredentials,
+  telegramToken?: string,
+  mlCreds?: MlCredentials,
+): { connected: number; total: number } {
+  const channels = channelStatuses(env, zernioCreds, telegramToken, mlCreds);
   return { connected: channels.filter((ch) => ch.ok).length, total: channels.length };
 }

@@ -6,6 +6,7 @@
 import type { Env } from "../env";
 import { resolveZernioCredentials } from "./zernioCredentials";
 import { resolveTelegramToken } from "./telegramCredentials";
+import { loadMlCredentials, mlConnected } from "./mercadolibreCredentials";
 
 /** channel id (as stored in conversations.channel) → label the owner reads. */
 export const CHANNEL_LABELS: Record<string, string> = {
@@ -16,6 +17,7 @@ export const CHANNEL_LABELS: Record<string, string> = {
   messenger: "Messenger",
   manychat: "ManyChat",
   zernio: "Zernio",
+  mercadolibre: "MercadoLibre",
 };
 
 export function channelLabel(channel: string | null | undefined): string {
@@ -53,6 +55,10 @@ export async function configuredChannels(env: Env): Promise<ConfiguredChannel[]>
   const zernio = await resolveZernioCredentials(env);
   if (zernio.apiKey) {
     out.push({ id: "zernio", label: "Zernio", detail: "multicanal unificado" });
+  }
+  const ml = await loadMlCredentials(env);
+  if (mlConnected(ml)) {
+    out.push({ id: "mercadolibre", label: "MercadoLibre", detail: "preguntas + post-venta" });
   }
   return out;
 }

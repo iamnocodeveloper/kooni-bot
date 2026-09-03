@@ -48,6 +48,18 @@ export const SETTING_KEYS = {
   // Avisos al dueño (handoff) por Telegram DM: chat_id del dueño editable desde
   // el panel (Conexiones → card Telegram). Fallback al secret OWNER_TELEGRAM_CHAT_ID.
   ownerTelegramChatId: "owner_telegram_chat_id",
+  // ── MercadoLibre (preguntas + mensajería post-venta) ────────────────────
+  // App OAuth propia del dueño (una por cuenta de vendedor). TODO el estado del
+  // canal vive en settings para conectarlo sin `wrangler secret put` ni redeploy.
+  mlClientId: "ml_client_id", // App ID de la app en developers.mercadolibre.com
+  mlClientSecret: "ml_client_secret", // Secret Key de esa app
+  mlSite: "ml_site", // país: MLA | MLM | MLB | MLC | MCO | MLU | MPE | ...
+  mlAccessToken: "ml_access_token", // token de acceso (vigencia ~6h; se refresca solo)
+  mlRefreshToken: "ml_refresh_token", // refresh token (rotativo, de un solo uso)
+  mlUserId: "ml_user_id", // id del vendedor (viene del token)
+  mlNickname: "ml_nickname", // nombre visible del vendedor (para el panel)
+  mlTokenExpiresAt: "ml_token_expires_at", // epoch ms de expiración del access token
+  mlOauthState: "ml_oauth_state", // anti-CSRF del flujo OAuth (efímero)
   // Reporte nocturno (Kooni+): resumen del día al dueño, configurable desde
   // /admin/config → "Reporte nocturno".
   nightlyReportEnabled: "nightly_report_enabled", // "0" | "1"

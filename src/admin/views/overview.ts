@@ -9,6 +9,7 @@ import { handoffNotifyStatus } from "../../tools/handoffHuman";
 import { connectionsSummary } from "./conexiones";
 import { resolveZernioCredentials } from "../../channels/zernioCredentials";
 import { resolveTelegramToken } from "../../channels/telegramCredentials";
+import { loadMlCredentials } from "../../channels/mercadolibreCredentials";
 import { KbDocsRepo, FIXTURE_CHUNKS } from "../../kb/docs";
 import { InsightsRepo } from "../../db/insights";
 import { SuggestionsRepo } from "../../db/suggestions";
@@ -55,6 +56,7 @@ export async function renderOverview(env: Env): Promise<string> {
   const niche = getNiche(env);
   const zernioCreds = await resolveZernioCredentials(env);
   const telegramToken = await resolveTelegramToken(env);
+  const mlCreds = await loadMlCredentials(env);
   const oneDay = Date.now() - 86_400_000;
   const sevenDays = Date.now() - 7 * 86_400_000;
   const thirtyDays = Date.now() - 30 * 86_400_000;
@@ -384,7 +386,7 @@ export async function renderOverview(env: Env): Promise<string> {
               : `<span style="font-size:9px;color:var(--bad);border:1px solid var(--bad);padding:1px 6px">⚠ HANDOFF SIN AVISO — el bot crea tickets pero NADIE recibe notificación (configura Telegram, WhatsApp o email del dueño)</span>`;
           })()}
           ${(() => {
-            const conn = connectionsSummary(env, zernioCreds, telegramToken);
+            const conn = connectionsSummary(env, zernioCreds, telegramToken, mlCreds);
             const ok = conn.connected > 0;
             return `<a href="/admin/conexiones" style="font-size:9px;color:${ok ? "var(--ok)" : "var(--bad)"};border:1px solid ${ok ? "var(--ok)" : "var(--bad)"};padding:1px 6px;text-decoration:none">${ok ? "✓" : "⚠"} ${conn.connected}/${conn.total} canales conectados</a>`;
           })()}
