@@ -140,6 +140,13 @@ export const PAID_MODULES: PaidModule[] = [
     tipo: "membresia",
   },
   {
+    id: "auditoria",
+    nombre: "Registro de auditoría",
+    descripcion: "Ventana de solo lectura con cada acción del panel: quién entró, a qué hora, qué modificó y el valor anterior vs. el nuevo. Para auditar a tu equipo.",
+    tipo: "membresia",
+    tab: "auditoria",
+  },
+  {
     id: "web_sync",
     nombre: "Sincronizar sitio web",
     descripcion: "El bot lee páginas de tu sitio (catálogo, inventario, precios) y responde con esa información, actualizada sola cada noche. Requiere una cuenta de scraping (Decodo).",

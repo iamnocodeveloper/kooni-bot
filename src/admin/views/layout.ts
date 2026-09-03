@@ -73,6 +73,7 @@ const NAV: Section[] = [
       { id: "insights", label: "Insights", href: "/admin/insights", icon: "scan-eye" },
       { id: "stats", label: "Estadísticas", href: "/admin/stats", icon: "bar-chart-3" },
       { id: "costs", label: "Costos", href: "/admin/costs", icon: "receipt" },
+      { id: "auditoria", label: "Auditoría", href: "/admin/auditoria", icon: "history" },
     ],
   },
 ];

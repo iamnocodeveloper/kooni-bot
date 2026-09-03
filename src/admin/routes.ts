@@ -1030,6 +1030,32 @@ adminApp.get("/comentarios", async (c) => c.html(await renderComentarios(c.env))
 // Contactos: todos los que interactúan (separados de Leads).
 adminApp.get("/contactos", async (c) => c.html(await renderContactos(c.env)));
 
+// Auditoría (§ U) — solo lectura (Pro; gate en PRO_GATE + nav). Ninguna ruta
+// escribe ni borra el registro desde el panel.
+function auditQueryFrom(c: { req: { query: (k: string) => string | undefined } }) {
+  const beforeRaw = Number(c.req.query("before"));
+  return {
+    action: c.req.query("action") || undefined,
+    actorIpHash: c.req.query("actor") || undefined,
+    text: c.req.query("q") || undefined,
+    before: Number.isFinite(beforeRaw) && beforeRaw > 0 ? beforeRaw : undefined,
+  };
+}
+adminApp.get("/auditoria", async (c) => {
+  const { renderAuditoria } = await import("./views/auditoria");
+  return c.html(await renderAuditoria(c.env, auditQueryFrom(c)));
+});
+adminApp.get("/auditoria/export.csv", async (c) => {
+  const { exportAuditCsv } = await import("./views/auditoria");
+  const csv = await exportAuditCsv(c.env, auditQueryFrom(c));
+  return new Response(csv, {
+    headers: {
+      "Content-Type": "text/csv; charset=utf-8",
+      "Content-Disposition": `attachment; filename="auditoria-${Date.now()}.csv"`,
+    },
+  });
+});
+
 // Fallback: respuesta pública a comentarios que no matchean ninguna regla.
 // (checkbox + mensaje, arriba de la lista de automatizaciones)
 adminApp.post("/automatizaciones/fallback", async (c) => {

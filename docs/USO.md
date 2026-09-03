@@ -115,6 +115,11 @@ El panel está en español, tema oscuro Kooni (tinta + teal). De izquierda a der
 - **Estadísticas**: volumen, retención, desempeño en el tiempo.
 - **Costos**: gasto de IA por modelo, con **tope de presupuesto** mensual
   (`src/budget.ts`).
+- **Auditoría**: registro de **solo lectura** de cada acción de un operador del
+  panel — quién (huella de IP + navegador), cuándo, qué acción, qué modificó y el
+  valor **anterior → nuevo**. No se puede editar ni borrar; se conserva 180 días.
+  Los tokens/API keys/licencia salen **redactados**, nunca en claro. Filtros por
+  acción / texto / actor y export CSV. Tablas y captura: `§ U` de `PLAN.md`.
 
 ---
 

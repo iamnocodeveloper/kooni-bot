@@ -30,7 +30,7 @@ export const PRO_ONLY_TOOLS = ["catalogQuery"] as const;
 // ve un panel funcional (Resumen, Conversaciones, Leads, Tickets, Flujo, KB,
 // Conexiones, Config) pero sin el Analista IA, métricas, costos, mejoras ni
 // campañas — esos desbloquean con la comunidad.
-export const PRO_ONLY_TABS = ["insights", "stats", "costs", "mejoras", "campanas"] as const;
+export const PRO_ONLY_TABS = ["insights", "stats", "costs", "mejoras", "campanas", "auditoria"] as const;
 
 // Cada tab Pro se vende como un MÓDULO (ver src/modules.ts). Un código de
 // licencia puede incluir módulos específicos; la licencia legada (sin modules)
@@ -41,6 +41,7 @@ export const TAB_MODULE: Record<(typeof PRO_ONLY_TABS)[number], string> = {
   costs: "costos",
   mejoras: "mejoras",
   campanas: "campanas",
+  auditoria: "auditoria",
 };
 
 /**
