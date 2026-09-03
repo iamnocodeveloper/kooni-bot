@@ -18,7 +18,8 @@ const ACTION_LABELS: Record<string, string> = {
   "login.fail": "Contraseña incorrecta",
   "login.blocked": "Bloqueado por intentos fallidos",
   "logout": "Cerró sesión",
-  "kb.doc.save": "Guardó un documento de conocimiento",
+  "kb.doc.create": "Creó un documento de conocimiento",
+  "kb.doc.update": "Editó un documento de conocimiento",
   "kb.doc.delete": "Borró un documento de conocimiento",
   "rule.create": "Creó una automatización",
   "rule.update": "Editó una automatización",
@@ -27,13 +28,11 @@ const ACTION_LABELS: Record<string, string> = {
   "lead.status": "Cambió el estado de un lead",
   "ticket.resolve": "Resolvió un ticket",
   "conversation.pause": "Pausó una conversación",
-  "conversation.resume": "Reanudó una conversación",
+  "conversation.resume": "Reanudó una conversación (devolvió al bot)",
   "conversation.reply": "Respondió en una conversación",
-  "lesson.remove": "Quitó una lección aprendida",
   "mejora.apply": "Aplicó una mejora sugerida",
   "mejora.dismiss": "Descartó una mejora sugerida",
-  "push.subscribe": "Activó los avisos push",
-  "push.unsubscribe": "Desactivó los avisos push",
+  "campaign.send": "Envió una campaña",
 };
 
 function actionLabel(a: string): string {

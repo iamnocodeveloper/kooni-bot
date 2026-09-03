@@ -142,6 +142,48 @@ describe("gating Pro de la vista Auditoría", () => {
   });
 });
 
+describe("captura de acciones que no pasan por settings (U3)", () => {
+  it("POST /leads/:id/status deja una fila lead.status", async () => {
+    const { LeadsRepo } = await import("../../src/db/leads");
+    const leadId = await new LeadsRepo(db).create({
+      conversationId: null,
+      channelUserId: null,
+      intent: "compra",
+      name: "Ana",
+    });
+
+    const res = await adminApp.request(
+      `/leads/${leadId}/status`,
+      {
+        method: "POST",
+        headers: { ...authHeader(), "Content-Type": "application/x-www-form-urlencoded" },
+        body: "status=sold",
+      },
+      env,
+    );
+    expect(res.status).toBe(302);
+    const [row] = await new AuditRepo(db).list({ action: "lead.status" });
+    expect(row?.target).toBe(`lead:${leadId}`);
+    expect(row?.afterVal).toBe("sold");
+  });
+
+  it("POST /automatizaciones/:id/toggle deja una fila rule.toggle con antes→después", async () => {
+    const { AutoRulesRepo } = await import("../../src/db/autoRules");
+    const rules = new AutoRulesRepo(db);
+    const rule = await rules.create({ kind: "dm_reply", keywords: ["precio"], message: "Te paso el catálogo" } as never);
+
+    const res = await adminApp.request(
+      `/automatizaciones/${rule.id}/toggle`,
+      { method: "POST", headers: authHeader() },
+      env,
+    );
+    expect(res.status).toBe(302);
+    const [row] = await new AuditRepo(db).list({ action: "rule.toggle" });
+    expect(row?.beforeVal).toBe("activa");
+    expect(row?.afterVal).toBe("inactiva");
+  });
+});
+
 describe("SettingsRepo.set dentro de un request del panel", () => {
   it("el cambio queda en el registro y se ve en la ventana", async () => {
     await runWithActor({ name: "admin", ipHash: "operador1", method: "POST", path: "/admin/config" }, async () => {

@@ -23,7 +23,7 @@ import type { Env } from "../env";
 import { adminAuth, hasValidSessionCookie, verifyDashboardPassword, setSessionCookie, clearSessionCookie } from "./auth";
 import type { LoginAttemptsRepo } from "../db/loginAttempts";
 import { AuditRepo } from "../db/auditLog";
-import { runWithActor } from "../audit/context";
+import { runWithActor, recordAudit } from "../audit/context";
 import { hashIp } from "../db/loginAttempts";
 import { layout, renderUpgrade, loginPage } from "./views/layout";
 import { isProUnlocked } from "../config";
@@ -125,6 +125,25 @@ async function auditAuthEvent(
   } catch (e) {
     console.warn("[audit] evento de auth:", e);
   }
+}
+
+/**
+ * Registro de auditoría (§ U) para una acción del panel que NO pasa por
+ * `SettingsRepo.set` (KB, automatizaciones, leads, tickets, conversaciones,
+ * mejoras). El actor lo pone el middleware; best-effort, nunca bloquea.
+ */
+function audit(
+  c: { env: Env },
+  entry: {
+    action: string;
+    target?: string;
+    targetLabel?: string;
+    beforeVal?: string;
+    afterVal?: string;
+    result?: "ok" | "denied" | "error";
+  },
+): Promise<void> {
+  return recordAudit(new Db(c.env.DB), entry);
 }
 
 // --- Login del panel (rutas PÚBLICAS — van antes del guard de abajo) ---------
@@ -363,18 +382,35 @@ adminApp.post("/kb/save", async (c) => {
   const content = String(form.get("content") ?? "").trim().slice(0, MAX_DOC_CHARS);
   if (!title || !content) return c.redirect("/admin/kb");
 
-  const id = String(form.get("id") ?? "").trim() || crypto.randomUUID();
+  const rawId = String(form.get("id") ?? "").trim();
+  const id = rawId || crypto.randomUUID();
   const repo = new KbDocsRepo(new Db(c.env.DB));
+  const prev = rawId ? await repo.getById(rawId) : null;
   await repo.upsert({ id, title, content });
   const doc = (await repo.getById(id))!;
   await indexDoc(c.env, doc);
+  await audit(c, {
+    action: prev ? "kb.doc.update" : "kb.doc.create",
+    target: `kb:${id}`,
+    targetLabel: title,
+    beforeVal: prev ? `${prev.title} (${prev.content.length} car.)` : undefined,
+    afterVal: `${title} (${content.length} car.)`,
+  });
   return c.redirect("/admin/kb?saved=1");
 });
 
 adminApp.post("/kb/:id/delete", async (c) => {
   const id = c.req.param("id");
-  await new KbDocsRepo(new Db(c.env.DB)).delete(id);
+  const repo = new KbDocsRepo(new Db(c.env.DB));
+  const doc = await repo.getById(id);
+  await repo.delete(id);
   await removeDocVectors(c.env, id);
+  await audit(c, {
+    action: "kb.doc.delete",
+    target: `kb:${id}`,
+    targetLabel: doc?.title ?? id,
+    beforeVal: doc ? `${doc.title} (${doc.content.length} car.)` : undefined,
+  });
   return c.redirect("/admin/kb?deleted=1");
 });
 
@@ -487,12 +523,16 @@ adminApp.post("/mejoras/run", async (c) => {
 });
 
 adminApp.post("/mejoras/:id/apply", async (c) => {
-  const ok = await applySuggestion(c.env, c.req.param("id"));
+  const id = c.req.param("id");
+  const ok = await applySuggestion(c.env, id);
+  await audit(c, { action: "mejora.apply", target: `mejora:${id}`, result: ok ? "ok" : "error" });
   return c.redirect(ok ? "/admin/mejoras?applied=1" : "/admin/mejoras");
 });
 
 adminApp.post("/mejoras/:id/dismiss", async (c) => {
-  const ok = await dismissSuggestion(c.env, c.req.param("id"));
+  const id = c.req.param("id");
+  const ok = await dismissSuggestion(c.env, id);
+  await audit(c, { action: "mejora.dismiss", target: `mejora:${id}`, result: ok ? "ok" : "error" });
   return c.redirect(ok ? "/admin/mejoras?dismissed=1" : "/admin/mejoras");
 });
 
@@ -1083,6 +1123,11 @@ adminApp.post("/automatizaciones/save", async (c) => {
       );
     }
     await new AutoRulesRepo(new Db(c.env.DB)).create(input);
+    await audit(c, {
+      action: "rule.create",
+      targetLabel: `Automatización · ${input.keywords.join(", ").slice(0, 60)}`,
+      afterVal: input.message?.slice(0, 200),
+    });
     return c.redirect("/admin/automatizaciones?saved=1");
   } catch (e) {
     return c.redirect("/admin/automatizaciones?error=" + encodeURIComponent(String((e as Error)?.message ?? e)));
@@ -1107,7 +1152,16 @@ adminApp.post("/automatizaciones/:id/save", async (c) => {
     }
     const { Db } = await import("../db/client");
     const repo = new AutoRulesRepo(new Db(c.env.DB));
-    await repo.update(c.req.param("id"), { ...input, isActive: undefined });
+    const id = c.req.param("id");
+    const prev = await repo.get(id);
+    await repo.update(id, { ...input, isActive: undefined });
+    await audit(c, {
+      action: "rule.update",
+      target: `rule:${id}`,
+      targetLabel: `Automatización · ${input.keywords.join(", ").slice(0, 60)}`,
+      beforeVal: prev?.message?.slice(0, 200),
+      afterVal: input.message?.slice(0, 200),
+    });
     return c.redirect("/admin/automatizaciones?saved=1");
   } catch (e) {
     return c.redirect("/admin/automatizaciones?error=" + encodeURIComponent(String((e as Error)?.message ?? e)));
@@ -1118,13 +1172,31 @@ adminApp.post("/automatizaciones/:id/toggle", async (c) => {
   const { Db } = await import("../db/client");
   const repo = new AutoRulesRepo(new Db(c.env.DB));
   const rule = await repo.get(c.req.param("id"));
-  if (rule) await repo.setActive(rule.id, !rule.isActive);
+  if (rule) {
+    await repo.setActive(rule.id, !rule.isActive);
+    await audit(c, {
+      action: "rule.toggle",
+      target: `rule:${rule.id}`,
+      targetLabel: `Automatización · ${rule.keywords.join(", ").slice(0, 60)}`,
+      beforeVal: rule.isActive ? "activa" : "inactiva",
+      afterVal: rule.isActive ? "inactiva" : "activa",
+    });
+  }
   return c.redirect("/admin/automatizaciones?saved=1");
 });
 
 adminApp.post("/automatizaciones/:id/delete", async (c) => {
   const { Db } = await import("../db/client");
-  await new AutoRulesRepo(new Db(c.env.DB)).remove(c.req.param("id"));
+  const repo = new AutoRulesRepo(new Db(c.env.DB));
+  const id = c.req.param("id");
+  const rule = await repo.get(id);
+  await repo.remove(id);
+  await audit(c, {
+    action: "rule.delete",
+    target: `rule:${id}`,
+    targetLabel: rule ? `Automatización · ${rule.keywords.join(", ").slice(0, 60)}` : `rule:${id}`,
+    beforeVal: rule?.message?.slice(0, 200),
+  });
   return c.redirect("/admin/automatizaciones?saved=1");
 });
 
@@ -1172,6 +1244,12 @@ adminApp.post("/campanas/send", async (c) => {
     campaignKey,
     freeformText: freeformText || undefined,
     template: templateSid ? { sid: templateSid, variables, body: templateBody } : undefined,
+  });
+  await audit(c, {
+    action: "campaign.send",
+    target: `campaign:${campaignKey}`,
+    targetLabel: `Campaña · ${campaignKey}`,
+    afterVal: `segmento ${segmentId} — enviados: ${result.sentFreeform + result.sentTemplate}, fallidos: ${result.failed}`,
   });
   const q = new URLSearchParams({
     ok: "1",
@@ -1324,7 +1402,9 @@ adminApp.post("/leads/:id/status", async (c) => {
     ? (raw as Lead["status"])
     : "new";
   const leads = new LeadsRepo(new Db(c.env.DB));
-  await leads.setStatus(c.req.param("id"), status);
+  const id = c.req.param("id");
+  await leads.setStatus(id, status);
+  await audit(c, { action: "lead.status", target: `lead:${id}`, targetLabel: `Lead ${id}`, afterVal: status });
   return c.redirect("/admin/leads");
 });
 
@@ -1333,7 +1413,15 @@ adminApp.post("/tickets/:id/resolve", async (c) => {
   const form = await c.req.formData();
   const resolvedBy = String(form.get("resolved_by") ?? c.env.OWNER_EMAIL ?? "admin").trim() || "admin";
   const tickets = new TicketsRepo(new Db(c.env.DB));
-  await tickets.resolve(c.req.param("id"), resolvedBy);
+  const id = c.req.param("id");
+  const t = await tickets.getById(id).catch(() => null);
+  await tickets.resolve(id, resolvedBy);
+  await audit(c, {
+    action: "ticket.resolve",
+    target: `ticket:${id}`,
+    targetLabel: t?.summary ? `Ticket · ${t.summary.slice(0, 60)}` : `Ticket ${id}`,
+    afterVal: `resuelto por ${resolvedBy}`,
+  });
   return c.redirect("/admin/tickets");
 });
 
@@ -1379,6 +1467,12 @@ adminApp.post("/conversations/:id/reply", async (c) => {
   await msgs.append(id, "owner", text);
   await convs.touchLastMessage(id);
   await convs.setPausedUntil(id, Date.now() + TAKEOVER_MS);
+  await audit(c, {
+    action: "conversation.reply",
+    target: `conv:${id}`,
+    targetLabel: `Conversación · ${channelLabel(conv.channel)}`,
+    afterVal: text.slice(0, 200),
+  });
 
   c.header("X-Sent", "1");
   return c.html(
@@ -1393,6 +1487,7 @@ adminApp.post("/conversations/:id/pause", async (c) => {
   const id = c.req.param("id");
   const convs = new ConversationsRepo(new Db(c.env.DB));
   await convs.setPausedUntil(id, Date.now() + TAKEOVER_MS);
+  await audit(c, { action: "conversation.pause", target: `conv:${id}`, targetLabel: `Conversación ${id}` });
   return c.html(await renderThreadLive(c.env, id));
 });
 
@@ -1423,6 +1518,12 @@ adminApp.post("/conversations/:id/resume", async (c) => {
     const msgs = new MessagesRepo(new Db(c.env.DB));
     await msgs.append(id, "owner", summary);
   }
+  await audit(c, {
+    action: "conversation.resume",
+    target: `conv:${id}`,
+    targetLabel: `Conversación ${id}`,
+    afterVal: summary ? `nota: ${summary.slice(0, 160)}` : undefined,
+  });
   if (c.req.header("HX-Request") && !summary) return c.body(null, 204);
   return c.redirect(`/admin/conversations?c=${encodeURIComponent(id)}`);
 });
