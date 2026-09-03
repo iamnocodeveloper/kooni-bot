@@ -112,7 +112,7 @@ otra pública. La pública, en cambio, es segura de publicar — ese es el punto
 | Instalación | Cuenta CF | Estado v1.20.0 |
 |---|---|---|
 | **cardealer** (`kooni-bot-cardealer-daniel2-948b8b`) | `b579b154` | ⏳ **Pendiente** — `npx kooni-bot update` en `C:\Users\joeld\cardealerdaniel` (auto: pnpm install + d1 exec remoto + kb:reindex + `pnpm run deploy`). Cambio funcional real = nulo (sin `BOT_NICHE`; W1 ya estaba a mano desde 2026-09-02 version `e9f0fdb6`; W2 inerte con licencia lifetime). Solo alinea `src/` + marker de versión. |
-| **joel-nocode** (`kooni-bot-joel-nocode-ec53aa`) | `29074eb8` | ⏳ **Pendiente** — su carpeta **no está en esta máquina**. Cuando exista: `cd <carpeta>` → `CLOUDFLARE_ACCOUNT_ID=29074eb8abdce39d39d4fc4553ee13b2 npx kooni-bot update`. Trae W1 + J1 (fixes del panel que ya están en su `src/`) + giros. |
+| **joel-nocode** (`kooni-bot-joel-nocode-ec53aa`) | `29074eb8` | ⏳ **Pendiente** — carpeta: `C:\Users\joeld\OneDrive\Escritorio\Joel-nocode`. `cd` ahí → `CLOUDFLARE_ACCOUNT_ID=29074eb8abdce39d39d4fc4553ee13b2 npx kooni-bot update --yes`. Trae W1 + J1 (fixes del panel que ya están en su `src/`) + giros. Tiene `BOT_NICHE = "agencia-ia"` (sin cambios: solo se agregaron packs nuevos). |
 
 ### J1 — fixes del panel de joel-nocode (logout, raíz→/admin, realm)
 
