@@ -51,7 +51,11 @@ export async function queryKb(env: Env, query: string, k = 5): Promise<KbQueryRe
     if (!Array.isArray(vec)) {
       return { error: "transient", message: "embedding shape unexpected" };
     }
-    const matches = await env.KB.query(vec, { topK: k });
+    // returnMetadata: "all" es obligatorio — Vectorize NO devuelve metadata por
+    // default (solo el score/id), así que sin esto title/content llegaban
+    // vacíos aunque el score fuera bueno: el bot recibía fragmentos "en
+    // blanco" y por eso decía "no tengo información" con la KB llena.
+    const matches = await env.KB.query(vec, { topK: k, returnMetadata: "all" });
     const results: KbHit[] = (matches.matches ?? []).map((m) => ({
       title: (m.metadata?.title as string) ?? "",
       content: (m.metadata?.content as string) ?? "",

@@ -734,11 +734,15 @@ adminApp.get("/conexiones", async (c) => {
   const { listZernioAccounts } = await import("../channels/zernioAccounts");
   const { resolveTelegramToken, resolveOwnerTelegramChatId } = await import("../channels/telegramCredentials");
   const { loadMlCredentials } = await import("../channels/mercadolibreCredentials");
+  const { resolveWahaConfig } = await import("../channels/wahaCredentials");
+  const { getWahaSessionStatus } = await import("../channels/wahaApi");
   const zernioAccounts = await listZernioAccounts(c.env);
   const zernioCreds = await resolveZernioCredentials(c.env);
   const telegramToken = await resolveTelegramToken(c.env);
   const ownerChatId = await resolveOwnerTelegramChatId(c.env);
   const mlCreds = await loadMlCredentials(c.env);
+  const wahaCfg = await resolveWahaConfig(c.env);
+  const wahaStatus = await getWahaSessionStatus(wahaCfg);
 
   // Uso de rate limit por cuenta (DM/hora) para mostrar en la card Zernio.
   const rateUsage: Record<string, { used: number; windowStart: number }> = {};
@@ -760,6 +764,8 @@ adminApp.get("/conexiones", async (c) => {
     telegramToken,
     ownerChatId,
     mlCreds,
+    wahaCfg,
+    wahaStatus,
     baseUrl,
     savedKind:
       c.req.query("telegram") === "saved"
@@ -768,7 +774,9 @@ adminApp.get("/conexiones", async (c) => {
           ? "zernio"
           : c.req.query("ml") === "saved"
             ? "mercadolibre"
-            : undefined,
+            : c.req.query("waha") === "saved"
+              ? "waha"
+              : undefined,
     error:
       c.req.query("zernio") === "error"
         ? (c.req.query("msg") ?? "No se pudo validar la API key.")
@@ -776,7 +784,9 @@ adminApp.get("/conexiones", async (c) => {
           ? (c.req.query("msg") ?? "No se pudo validar el token de Telegram.")
           : c.req.query("ml") === "error"
             ? (c.req.query("msg") ?? "No se pudo conectar MercadoLibre.")
-            : undefined,
+            : c.req.query("waha") === "error"
+              ? (c.req.query("msg") ?? "No se pudo conectar con el servidor de WAHA.")
+              : undefined,
   }));
 });
 
@@ -958,6 +968,82 @@ adminApp.post("/conexiones/telegram", async (c) => {
   }
 
   return c.redirect("/admin/conexiones?telegram=saved");
+});
+
+// Conectar WAHA: guarda URL del servidor + API key + sesión en D1 (settings) y
+// crea/actualiza la sesión en el propio servidor WAHA con el webhook del
+// worker ya apuntado (POST /api/sessions o PUT + start — ver
+// channels/wahaApi.ts). Sin `wrangler secret put` ni redeploy. El QR para
+// emparejar se ve en GET /conexiones/waha/qr (proxiado: la API key nunca llega
+// al navegador).
+adminApp.post("/conexiones/waha", async (c) => {
+  const form = await c.req.formData();
+  const repo = new SettingsRepo(new Db(c.env.DB));
+
+  if (String(form.get("clear") ?? "") === "1") {
+    await repo.set(SETTING_KEYS.wahaApiUrl, "");
+    await repo.set(SETTING_KEYS.wahaApiKey, "");
+    await repo.set(SETTING_KEYS.wahaWebhookToken, "");
+    return c.redirect("/admin/conexiones?waha=saved");
+  }
+
+  const { resolveWahaConfig } = await import("../channels/wahaCredentials");
+  const { ensureWahaSession } = await import("../channels/wahaApi");
+
+  const urlInput = String(form.get("waha_api_url") ?? "").trim();
+  const keyInput = String(form.get("waha_api_key") ?? "").trim();
+  const sessionInput = String(form.get("waha_session") ?? "").trim();
+
+  // Campo vacío: conserva lo que ya había guardado (mismo patrón que Zernio/Telegram).
+  const current = await resolveWahaConfig(c.env);
+  const baseToSave = (urlInput || current.base).replace(/\/+$/, "");
+  const keyToSave = keyInput || current.apiKey || "";
+  const sessionToSave = sessionInput || current.session || "default";
+
+  if (!baseToSave || !keyToSave) {
+    return c.redirect(`/admin/conexiones?waha=error&msg=${encodeURIComponent("Falta la URL del servidor o la API key de WAHA.")}`);
+  }
+
+  await repo.set(SETTING_KEYS.wahaApiUrl, baseToSave);
+  await repo.set(SETTING_KEYS.wahaSession, sessionToSave);
+  await repo.set(SETTING_KEYS.wahaApiKey, keyToSave);
+
+  // El webhook token protege /webhooks/waha (?token=...) — se genera una sola
+  // vez y se reusa en los guardados siguientes (no rota solo).
+  let webhookToken = current.webhookToken;
+  if (!webhookToken) {
+    const bytes = new Uint8Array(24);
+    crypto.getRandomValues(bytes);
+    webhookToken = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+    await repo.set(SETTING_KEYS.wahaWebhookToken, webhookToken);
+  }
+
+  const baseUrl = (c.env.DASHBOARD_BASE_URL?.trim() || new URL(c.req.url).origin).replace(/\/$/, "");
+  const webhookUrl = `${baseUrl}/webhooks/waha?token=${encodeURIComponent(webhookToken)}`;
+
+  const result = await ensureWahaSession(
+    { base: baseToSave, session: sessionToSave, apiKey: keyToSave, webhookToken },
+    webhookUrl,
+  );
+  if (!result.ok) {
+    return c.redirect(
+      `/admin/conexiones?waha=error&msg=${encodeURIComponent("Datos guardados, pero " + (result.message ?? "no pude conectar con WAHA") + ".")}`,
+    );
+  }
+
+  return c.redirect("/admin/conexiones?waha=saved");
+});
+
+// Proxea el QR de WAHA (PNG) para emparejar WhatsApp: la API key nunca sale al
+// navegador, solo el worker la usa para pedirlo. 404 si el canal no está
+// configurado o WAHA no tiene el QR listo (ej. sesión ya emparejada).
+adminApp.get("/conexiones/waha/qr", async (c) => {
+  const { resolveWahaConfig } = await import("../channels/wahaCredentials");
+  const { fetchWahaQrPng } = await import("../channels/wahaApi");
+  const cfg = await resolveWahaConfig(c.env);
+  const png = await fetchWahaQrPng(cfg);
+  if (!png) return c.text("QR no disponible (revisa que la sesión de WAHA esté esperando el escaneo).", 404);
+  return new Response(png, { headers: { "Content-Type": "image/png", "Cache-Control": "no-store" } });
 });
 
 // Conectar MercadoLibre: guarda App ID + Secret + país en D1 (settings). Los

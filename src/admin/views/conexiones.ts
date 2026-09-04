@@ -9,6 +9,8 @@ import type { ZernioAccount } from "../../channels/zernioAccounts";
 import { zernioPlatformIcon, zernioPlatformLabel } from "../../channels/zernioAccounts";
 import type { ZernioCredentials } from "../../channels/zernioCredentials";
 import { mlConnected, ML_SITES, type MlCredentials } from "../../channels/mercadolibreCredentials";
+import type { WahaConfig } from "../../channels/wahaCredentials";
+import type { WahaSessionInfo } from "../../channels/wahaApi";
 
 interface ChannelStatus {
   id: string;
@@ -31,6 +33,7 @@ function channelStatuses(
   zernioCreds: ZernioCredentials,
   telegramToken?: string,
   mlCreds?: MlCredentials,
+  wahaCfg?: WahaConfig,
 ): ChannelStatus[] {
   const has = (v?: string) => Boolean(v && v.trim() !== "");
 
@@ -68,6 +71,11 @@ function channelStatuses(
     !has(env.WHATSAPP_ACCESS_TOKEN) && "WHATSAPP_ACCESS_TOKEN",
     !has(env.WHATSAPP_VERIFY_TOKEN || env.META_VERIFY_TOKEN) && "WHATSAPP_VERIFY_TOKEN",
     !has(env.WHATSAPP_APP_SECRET || env.META_APP_SECRET) && "WHATSAPP_APP_SECRET",
+  ].filter(Boolean) as string[];
+  const waha = wahaCfg ?? { base: "", session: "default" };
+  const wahaMissing = [
+    !has(waha.base) && "URL del servidor WAHA",
+    !has(waha.apiKey) && "API key de WAHA",
   ].filter(Boolean) as string[];
 
   return [
@@ -155,6 +163,20 @@ function channelStatuses(
         "4) Marca los permisos read, write y offline_access. " +
         "5) Copia el App ID y la Secret Key, elige tu país y guárdalos aquí. Luego toca 'Autorizar con MercadoLibre'.",
     },
+    {
+      id: "waha",
+      name: "WhatsApp (WAHA · self-hosted)",
+      icon: "qr-code",
+      desc: "Tu propio WhatsApp por QR, sin Meta ni Twilio — corre en un servidor WAHA (Docker) que tú controlas.",
+      ok: wahaMissing.length === 0,
+      missing: wahaMissing,
+      webhookPath: "/webhooks/waha",
+      securityNote:
+        wahaMissing.length === 0 && !waha.webhookToken
+          ? "Sin webhook token: el webhook acepta cualquier request (fail-open). Se genera solo al guardar la conexión."
+          : undefined,
+      howTo: "Pega la URL de tu servidor WAHA y su API key (X-Api-Key). El bot crea/arranca la sesión y registra el webhook solo — después escaneas el QR aquí mismo con tu WhatsApp.",
+    },
   ];
 }
 
@@ -170,7 +192,17 @@ export async function renderConexiones(
   pausedChannels: string[] = [],
   zernioAccounts: ZernioAccount[] = [],
   rateUsage: Record<string, { used: number; windowStart: number }> = {},
-  opts: { zernioCreds?: ZernioCredentials; telegramToken?: string; ownerChatId?: string; mlCreds?: MlCredentials; baseUrl?: string; savedKind?: "telegram" | "zernio" | "mercadolibre"; error?: string } = {},
+  opts: {
+    zernioCreds?: ZernioCredentials;
+    telegramToken?: string;
+    ownerChatId?: string;
+    mlCreds?: MlCredentials;
+    wahaCfg?: WahaConfig;
+    wahaStatus?: WahaSessionInfo | null;
+    baseUrl?: string;
+    savedKind?: "telegram" | "zernio" | "mercadolibre" | "waha";
+    error?: string;
+  } = {},
 ): Promise<string> {
   const zernioCreds = opts.zernioCreds ?? {
     apiKey: env.ZERNIO_API_KEY,
@@ -179,7 +211,9 @@ export async function renderConexiones(
   const telegramToken = opts.telegramToken ?? env.TELEGRAM_BOT_TOKEN;
   const ownerChatId = opts.ownerChatId ?? env.OWNER_TELEGRAM_CHAT_ID;
   const mlCreds = opts.mlCreds ?? ({ site: "MLA", expiresAt: 0 } as MlCredentials);
-  const channels = channelStatuses(env, zernioCreds, telegramToken, mlCreds);
+  const wahaCfg = opts.wahaCfg ?? { base: env.WAHA_API_URL ?? "", session: env.WAHA_SESSION || "default", apiKey: env.WAHA_API_KEY, webhookToken: env.WAHA_WEBHOOK_TOKEN };
+  const wahaStatus = opts.wahaStatus ?? null;
+  const channels = channelStatuses(env, zernioCreds, telegramToken, mlCreds, wahaCfg);
   const connected = channels.filter((ch) => ch.ok).length;
   // Fallback de base: la ruta GET pasa el origin real si DASHBOARD_BASE_URL está
   // vacío, para que las cards SIEMPRE muestren su webhook URL.
@@ -301,6 +335,56 @@ export async function renderConexiones(
       </div>`;
   };
 
+  // Formulario de WAHA: URL del servidor + API key + sesión (se guardan en
+  // D1). Al guardar, el worker crea/actualiza la sesión en WAHA y registra su
+  // webhook automáticamente (POST /api/sessions o PUT + start). Si la sesión
+  // queda esperando el QR, se muestra la imagen (proxiada por el worker, la
+  // API key nunca viaja al navegador).
+  const wahaForm = (ch: ChannelStatus) => {
+    if (ch.id !== "waha") return "";
+    const hasKey = (wahaCfg.apiKey ?? "").trim() !== "";
+    const keyTail = (wahaCfg.apiKey ?? "").trim().slice(-4);
+    const status = wahaStatus?.status ?? "";
+    const working = status === "WORKING";
+    const needsQr = hasKey && (status === "SCAN_QR_CODE" || status === "STARTING" || (ch.ok && !status));
+    return `
+      <form method="POST" action="/admin/conexiones/waha" style="display:flex;flex-direction:column;gap:10px;margin-top:4px">
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <label class="font-display font-semibold text-[12.5px] text-cream">URL del servidor WAHA</label>
+          <input type="text" name="waha_api_url" value="" autocomplete="off"
+                 placeholder="${wahaCfg.base ? `hay una URL guardada (${esc(wahaCfg.base)}) — escribe para reemplazar` : "http://tu-servidor-waha:3000"}"
+                 style="background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:10px 12px;font-size:12.5px;outline:none">
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <label class="font-display font-semibold text-[12.5px] text-cream">API key (X-Api-Key)</label>
+          <input type="password" name="waha_api_key" value="" autocomplete="off"
+                 placeholder="${hasKey ? `hay una key guardada (…${keyTail})` : "la API key de tu servidor WAHA"}"
+                 style="background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:10px 12px;font-size:12.5px;outline:none">
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <label class="font-display font-semibold text-[12.5px] text-cream">Sesión</label>
+          <input type="text" name="waha_session" value="" autocomplete="off"
+                 placeholder="${esc(wahaCfg.session || "default")}"
+                 style="background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:10px 12px;font-size:12.5px;outline:none">
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <button type="submit" class="text-[12px] font-display font-semibold"
+                  style="border:1px solid var(--line);color:var(--cream);padding:9px 14px;cursor:pointer;background:none">${ch.ok ? "Actualizar conexión" : "Conectar WAHA"}</button>
+          ${ch.ok ? `<label class="text-dim text-[11.5px]" style="display:flex;align-items:center;gap:7px;cursor:pointer"><input type="checkbox" name="clear" value="1"> Quitar conexión</label>` : ""}
+        </div>
+      </form>
+      ${
+        working
+          ? `<div class="text-[11.5px]" style="color:var(--ok)">✓ WhatsApp emparejado y activo${wahaCfg.session ? ` (sesión <span class="font-mono">${esc(wahaCfg.session)}</span>)` : ""}</div>`
+          : needsQr
+            ? `<div style="display:flex;flex-direction:column;gap:6px">
+                 <div class="text-[11.5px]" style="color:var(--warn)">⚠ Falta emparejar: escanea este QR con WhatsApp (Dispositivos vinculados → Vincular dispositivo).</div>
+                 <img src="/admin/conexiones/waha/qr?t=${Date.now()}" width="220" height="220" style="border:1px solid var(--line);background:#fff;padding:6px" alt="QR de WhatsApp (WAHA)">
+               </div>`
+            : ""
+      }`;
+  };
+
   const cards = channels
     .map((ch) => {
       const badge = ch.ok
@@ -404,6 +488,7 @@ export async function renderConexiones(
           ${zernioForm(ch)}
           ${telegramForm(ch)}
           ${mercadolibreForm(ch)}
+          ${wahaForm(ch)}
           ${zernioBlock}
           ${pauseBtn}
         </div>`;
@@ -416,7 +501,9 @@ export async function renderConexiones(
       ? `<div style="border:1px solid var(--ok);background:var(--ok-soft);color:var(--ok);padding:10px 14px;font-size:12.5px;font-weight:600">✓ Zernio conectado: webhook registrado automáticamente (message.received + comment.received). Los comentarios/DMs ya deberían fluir.</div>`
       : opts.savedKind === "mercadolibre"
         ? `<div style="border:1px solid var(--ok);background:var(--ok-soft);color:var(--ok);padding:10px 14px;font-size:12.5px;font-weight:600">✓ MercadoLibre: datos guardados. Si ya autorizaste al vendedor, la IA responderá las preguntas y mensajes post-venta. Falta activar los tópicos 'questions' y 'messages' en las notificaciones de tu app.</div>`
-        : "";
+        : opts.savedKind === "waha"
+          ? `<div style="border:1px solid var(--ok);background:var(--ok-soft);color:var(--ok);padding:10px 14px;font-size:12.5px;font-weight:600">✓ WAHA conectado: sesión creada/actualizada y webhook registrado. Si te pide QR, bájalo en la card de WAHA aquí abajo.</div>`
+          : "";
   const errorBanner = opts.error
     ? `<div style="border:1px solid var(--bad);background:var(--bad-soft);color:var(--bad);padding:10px 14px;font-size:12.5px;font-weight:600">✕ ${esc(opts.error)}</div>`
     : "";
@@ -443,7 +530,8 @@ export function connectionsSummary(
   zernioCreds: ZernioCredentials,
   telegramToken?: string,
   mlCreds?: MlCredentials,
+  wahaCfg?: WahaConfig,
 ): { connected: number; total: number } {
-  const channels = channelStatuses(env, zernioCreds, telegramToken, mlCreds);
+  const channels = channelStatuses(env, zernioCreds, telegramToken, mlCreds, wahaCfg);
   return { connected: channels.filter((ch) => ch.ok).length, total: channels.length };
 }

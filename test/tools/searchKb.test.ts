@@ -45,13 +45,25 @@ describe("searchKbTool", () => {
     expect(result.results[0].title).toBe("Inventario");
   });
 
-  it("returns [] when every hit is below the min score", async () => {
+  it("falls back to the best raw hits when every hit is below the min score (never claims 'nothing' with real matches in the KB)", async () => {
     const fakeEnv = {
       AI: { run: vi.fn(async () => ({ data: [[0.1, 0.2, 0.3]] })) },
       KB: { query: vi.fn(async () => ({ matches: [
-        { id: "a", score: 0.31, metadata: { title: "x", content: "x" } },
+        { id: "a", score: 0.31, metadata: { title: "Toyota Corolla 2019", content: "$11,500" } },
         { id: "b", score: 0.12, metadata: { title: "y", content: "y" } },
       ] })) },
+    } as any;
+    const tool = searchKbTool(fakeEnv);
+    const execute = tool.execute as (input: { query: string }) => Promise<any>;
+    const result = await execute({ query: "tienen una camioneta roja" });
+    expect(result.results).toHaveLength(2);
+    expect(result.results[0].title).toBe("Toyota Corolla 2019");
+  });
+
+  it("returns [] only when the KB has nothing at all for the query", async () => {
+    const fakeEnv = {
+      AI: { run: vi.fn(async () => ({ data: [[0.1, 0.2, 0.3]] })) },
+      KB: { query: vi.fn(async () => ({ matches: [] })) },
     } as any;
     const tool = searchKbTool(fakeEnv);
     const execute = tool.execute as (input: { query: string }) => Promise<any>;

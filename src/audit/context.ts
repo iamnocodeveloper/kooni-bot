@@ -51,6 +51,8 @@ export const AUDIT_SENSITIVE_KEYS = new Set<string>([
   "ml_refresh_token",
   "ml_oauth_state",
   "pro_license",
+  "waha_api_key",
+  "waha_webhook_token",
 ]);
 
 const MAX_VALUE_LEN = 2000;

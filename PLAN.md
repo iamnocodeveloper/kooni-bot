@@ -129,6 +129,94 @@ otra pública. La pública, en cambio, es segura de publicar — ese es el punto
 
 ---
 
+## 🏁 CIERRE DE ETAPA — v1.25.0 (2026-09-04)
+
+> **Estado:** `pnpm test` → **793/793** · `pnpm typecheck` → verde (corridos de
+> verdad, en este repo y en la carpeta real de cardealer-daniel). Working tree
+> del repo con `package.json` en `1.25.0`, sin commitear hasta esta entrada.
+> Disparador: sesión de soporte en vivo con el bot de **Daniel (cardealer)** —
+> "¿qué autos Kia tienes?" respondía "no tengo información" con la KB llena.
+
+### 1. Bug real de búsqueda en la KB (el que importaba) — `src/kb/query.ts`
+
+`queryKb` llamaba `env.KB.query(vec, { topK: k })` sin `returnMetadata: "all"`.
+Vectorize **no devuelve `metadata` por default** desde un cambio de su API — el
+score llegaba bien (0.54–0.57, sobre el piso) pero `title`/`content` llegaban
+**vacíos**. El bot recibía fragmentos en blanco y decía "no tengo información"
+con el inventario completo indexado. Diagnosticado con un endpoint de debug
+temporal (`/api/debug/kb`, protegido con `CONTROL_PLANE_TOKEN`) creado, usado y
+**eliminado** en la misma sesión — no queda superficie extra. Probablemente
+venía afectando **toda búsqueda de KB**, no solo autos, desde que cambió el
+default de Vectorize. Test nuevo (`test/kb/query.test.ts`) que lo fija.
+
+### 2. "Autos parecidos" cuando nada supera el piso — `src/tools/searchKb.ts`
+
+`KB_MIN_SCORE_DEFAULT` (0.45) descartaba a `[]` cuando NINGÚN resultado
+cruzaba el piso, aunque la KB tuviera algo relacionado (común en listados de
+autos, que rara vez pasan de ~0.65 aunque el match sea bueno). Ahora, si nada
+cruza el piso pero hay resultados crudos, se entregan los mejores 3 igual — el
+score bajo (más la descripción de la tool, actualizada) le dice al modelo que
+son "parecidos", no el exacto. Dos tests reescritos en
+`test/tools/searchKb.test.ts`.
+
+### 3. WAHA (WhatsApp self-hosted) — integrado de punta a punta
+
+El adaptador (`src/channels/waha.ts`) y el webhook (`/webhooks/waha`) ya
+existían; faltaba todo lo demás. Nuevo:
+
+- `src/channels/wahaCredentials.ts` — config efectiva (settings en D1 primero,
+  env de fallback), mismo patrón que `telegramCredentials.ts`.
+- `src/channels/wahaApi.ts` — llamadas reales a la API de gestión de sesiones
+  de WAHA (verificadas contra su OpenAPI real, `waha.devlike.pro/swagger/openapi.json`):
+  estado de sesión, crear/actualizar/arrancar, y traer el QR de emparejar.
+- Tarjeta nueva en `/admin/conexiones` — pegar URL + API key + sesión **sin
+  `wrangler secret put` ni redeploy**; al guardar, el worker crea/actualiza la
+  sesión en WAHA con el webhook ya apuntado, y si falta emparejar, **muestra el
+  QR ahí mismo** (proxiado — la API key nunca llega al navegador).
+- 4 settings nuevas (`waha_api_url/session/api_key/webhook_token`), con las dos
+  últimas registradas en `AUDIT_SENSITIVE_KEYS` (se redactan en el log de
+  auditoría). Tests: `wahaCredentials.test.ts`, `wahaApi.test.ts`.
+- Probado en modo prueba en cardealer-daniel: sesión creada, QR emparejable
+  confirmado (PNG válido bajado y verificado).
+
+### 4. Sin links del inventario scrapeado — `src/kb/webSync.ts`
+
+Pedido de Joel: el bot no debe mandar los links de "Ver listado completo" del
+inventario scrapeado en el chat (de otras fuentes — KB propia, `customFields`,
+prompt — sí puede). `stripMarkdownLinks()` nuevo: convierte `[texto](url)` →
+`texto`, aplicado SOLO en el pipeline de Web Sync, después de
+`trimBoilerplate`. Verificado en la KB real de Daniel: contenido con VIN/precio
+reales, cero `http` en el texto.
+
+### Desplegado y verificado en cardealer-daniel (`b579b154…`, 2026-09-04)
+
+| Paso | Resultado |
+|---|---|
+| Deploy 1 (bugs #1+#2) | `/health` → 200 |
+| Deploy 2 (WAHA) | `/health` → 200, sesión WAHA creada y QR verificado |
+| Deploy 3 (#4, sin links) | `/health` → 200 |
+| Web Sync — URL de autos | `web_sync_urls` traía solo ~113 de 396 autos con la URL sin filtro. Se probó `?limit=500` para traer los 396 — **rompió el scrape** (el sitio devolvió su homepage en vez del feed `/llm/inventory/`). Revertido de inmediato a la URL que ya andaba; verificado que volvió a traer autos reales. **Sigue sin estar los 396 completos** — pendiente, sin apuro (§ ver "Pendiente" abajo). |
+| `KB_REINDEX_TOKEN` | Rotado 2 veces durante el diagnóstico (necesario para disparar el scrape manual sin la `DASHBOARD_PASSWORD` de Daniel). Si estaba guardado en algún script de Daniel/Joel, ya no sirve. |
+| `CONTROL_PLANE_TOKEN` | Creado para el debug temporal del punto 1, **eliminado** al cerrar. No queda en el worker. |
+
+### Pendiente (no urgente)
+
+- **Cobertura del inventario**: solo ~113 de 396 autos indexados. Probar valores
+  intermedios de `limit` (ej. 150–250) con verificación de contenido ANTES de
+  dejarlos puestos (no repetir el tropiezo de `limit=500`), o paginar con más
+  de una URL si el sitio lo permite.
+- **Fotos de autos**: el feed `/llm/inventory/` no trae imágenes — "adjuntar
+  imagen si la hay" (pedido de Joel) no tiene de dónde tomarla hoy. Si aparece
+  una fuente con fotos, hay que sumarlas al pipeline de Web Sync y a
+  `OutgoingReply.imageUrl`.
+- **`wrangler` de esta máquina** quedó logueado como la cuenta de Daniel
+  (`b579b154…`) para poder desplegar — falta devolverlo a la cuenta de Joel.
+- **§ X** (arriba en este archivo) — multiusuario/agentes humanos + panel
+  central estilo Forja: análisis guardado, **no arrancar** hasta que haga
+  falta de verdad (ver disparadores ahí).
+
+---
+
 ## Nichos por giro (bots especializados estilo Forja)
 
 > **Estado (2026-09-02):** el motor de *niche packs* ya existía (`src/niches/`,
@@ -1440,6 +1528,60 @@ Riesgo: bajo en Fase 1; medio en Fase 2 (tocar `ingest` + un proxy nuevo).
 
 **Posibles mejoras (no pedidas):** botón "usar este chat como base de una lección"
 (alimentar el flywheel), o permitir elegir el modelo para comparar respuestas.
+
+---
+
+## X. Multiusuario (agentes humanos) + panel central de cuenta — PLAN FUTURO ⏳
+
+> **Pedido (Joel, 2026-09-04):** activar agentes humanos de atención (multiusuario)
+> dentro del bot, gateado como un Extra más; y evaluar un panel central estilo
+> **Forja** (cuenta con correo, gratis/pago, marketplace, docs, "mis instalaciones")
+> donde el usuario se registra, instala y luego inicia sesión con ese correo.
+> **No implementar todavía** — hoy solo hay 2 instalaciones reales (Joel + Cardealer
+> Dani), no hay volumen que lo justifique. Queda como diseño para cuando haga falta.
+
+### A. Agentes humanos dentro de un bot (bajo riesgo, reusa código ya existente)
+
+- Ya existe el esqueleto **dormido**: `admin_emails` (`role: owner|staff`) y
+  `magic_links` en `src/db/schema.sql` / `src/db/adminEmails.ts` /
+  `src/db/magicLinks.ts` — creados en algún momento, **sin conectar** a
+  `src/admin/auth.ts` (que hoy es un solo usuario `admin` + `DASHBOARD_PASSWORD`).
+- Diseño: reactivar esas tablas, sesión por cookie firmada con secreto **por
+  usuario** (no el `DASHBOARD_PASSWORD` global, para poder revocar un agente sin
+  matar la sesión del dueño). Panel recortado para agentes (Conversaciones/Tickets,
+  sin Config/Licencia/Costos). `tickets` (`src/db/tickets.ts`) necesitaría
+  `assigned_to` y notificar al agente asignado en vez de siempre a `OWNER_EMAIL`.
+- Se activa como Extra nuevo (`src/features.ts` + `src/modules.ts`, mismo patrón
+  que `cazador`/`oido_vista`): módulo `equipo` con límite de asientos por tier
+  (Free = solo dueño, Pro = N agentes).
+
+### B. Panel central de cuenta estilo Forja (cambio de producto, no una feature)
+
+- **Ya evaluado a fondo en `§ F`** (arriba) — comparación Forja vs Kooni, y la
+  decisión tomada el 2026-09-02 fue **NO construir login/cuentas central** salvo
+  que lo pidan revendedores (roadmap `§ F`, punto 6). Este ítem no reabre esa
+  decisión, solo la actualiza con la parte de multiusuario/marketplace/docs que
+  no estaba cubierta ahí.
+- `admin-pagos/` (InsForge, privado) ya tiene la forma de un backend central:
+  `clientes`, `licencias`, `instalaciones`, `uso_instalaciones` + edge functions
+  `auth-login`, `registrar-instalacion`, `registrar-uso`, `healthcheck`. Hoy es
+  solo tuyo (panel de licencias); volverlo un panel público con signup
+  gratis/pago, marketplace y docs es extender eso, no empezar de cero.
+- **Riesgo a decidir cuando se retome:** si el login de cada `/admin` pasara a
+  depender de la cuenta central, un bot que vive 100% en la Cloudflare del dueño
+  quedaría sin acceso si el servicio central se cae — contradice "vive en tu
+  cuenta, sin dependencias obligatorias". Recomendado: cuenta central = identidad
+  + marketplace + visibilidad de instalaciones (como ya hace `admin-pagos` con
+  licencias); login a cada bot sigue siendo local (§ A) con SSO opcional vía
+  token firmado (mismo mecanismo Ed25519 que ya usa `license.ts`), nunca como
+  único camino de entrada.
+
+### Disparador para retomar
+
+- **A**: cuando un cliente pida explícitamente tener empleados atendiendo desde
+  el mismo panel (hoy nadie lo pidió).
+- **B**: cuando haya varias instalaciones/revendedores simultáneos y administrar
+  licencias a mano (hoja de cálculo, `gen-license.ts`) deje de alcanzar — no antes.
 
 ---
 

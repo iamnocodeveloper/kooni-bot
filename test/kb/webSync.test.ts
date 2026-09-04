@@ -3,7 +3,7 @@ import { createTestMiniflare } from "../helpers/miniflareSetup";
 import { Db } from "../../src/db/client";
 import { SettingsRepo, SETTING_KEYS } from "../../src/db/settings";
 import { KbDocsRepo } from "../../src/kb/docs";
-import { parseWebSyncUrls, webDocId, runWebSync, trimBoilerplate, splitParts } from "../../src/kb/webSync";
+import { parseWebSyncUrls, webDocId, runWebSync, trimBoilerplate, splitParts, stripMarkdownLinks } from "../../src/kb/webSync";
 import type { Env } from "../../src/env";
 
 describe("parseWebSyncUrls / webDocId", () => {
@@ -34,6 +34,23 @@ describe("parseWebSyncUrls / webDocId", () => {
   it("trimBoilerplate no rompe texto sin marcadores", () => {
     const plain = "Este es un texto corto sin precios ni menús.";
     expect(trimBoilerplate(plain)).toBe(plain);
+  });
+
+  it("stripMarkdownLinks: deja el texto del link, nunca la URL (el bot no debe mandar links del inventario)", () => {
+    const raw =
+      "-   [2020 Kia Sorento LX](http://x.com/inventory/used-2020-kia-sorento-lx/) Pre-Owned\n" +
+      "    85,110 miles $17,593 VIN: 5XYPG4A38LG625285 [View Full Listing →](http://x.com/inventory/used-2020-kia-sorento-lx/)";
+    const out = stripMarkdownLinks(raw);
+    expect(out).toContain("2020 Kia Sorento LX");
+    expect(out).toContain("View Full Listing →");
+    expect(out).toContain("VIN: 5XYPG4A38LG625285");
+    expect(out).not.toContain("http://");
+    expect(out).not.toContain("(");
+  });
+
+  it("stripMarkdownLinks no toca texto sin links", () => {
+    const plain = "Kia Sorento 2020, $17,593, VIN: 5XYPG4A38LG625285";
+    expect(stripMarkdownLinks(plain)).toBe(plain);
   });
 
   it("splitParts: un texto corto → 1 parte; uno largo → varias en salto de línea", () => {

@@ -76,6 +76,21 @@ export function trimBoilerplate(raw: string): string {
   return s.trim();
 }
 
+/**
+ * Quita los links de markdown del contenido scrapeado — deja el texto del
+ * link (`[2020 Kia Sorento](url)` → `2020 Kia Sorento`) pero nunca la URL.
+ *
+ * Pedido del dueño: el bot NO debe mandar links del inventario/catálogo
+ * scrapeado en el chat (se ven como spam o el cliente los copia fuera de
+ * WhatsApp) — pero SÍ puede seguir mandando links que vengan de otro lado
+ * (KB escrita a mano, `customFields`, el prompt). Por eso esto se aplica
+ * SOLO acá, en el pipeline de Web Sync, y no globalmente: es la única fuente
+ * de esos links de "Ver listado completo" por auto/producto.
+ */
+export function stripMarkdownLinks(text: string): string {
+  return text.replace(/\[([^\]]*)\]\([^)]*\)/g, "$1");
+}
+
 /** Hash rápido (djb2) del texto — para saltar re-embebidos sin cambios. */
 function quickHash(s: string): string {
   let h = 5381;
@@ -160,7 +175,7 @@ export async function runWebSync(env: Env): Promise<WebSyncSummary> {
       continue;
     }
     summary.scraped++;
-    const full = trimBoilerplate(r.content);
+    const full = stripMarkdownLinks(trimBoilerplate(r.content));
     const parts = splitParts(full, MAX_DOC_CHARS, MAX_PARTS);
     const hash = quickHash(full);
     const baseId = webDocId(url);

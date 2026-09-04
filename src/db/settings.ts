@@ -96,6 +96,13 @@ export const SETTING_KEYS = {
   webSyncUrls: "web_sync_urls", // URLs (una por línea o coma)
   webSyncState: "web_sync_state", // JSON { [url]: { hash, at, chars } } — anti re-embebido
   webSyncLastRun: "web_sync_last_run", // epoch ms de la última corrida
+  // WAHA (WhatsApp self-hosted, Docker): datos editables desde el panel
+  // (Conexiones → WAHA), mismo patrón que Telegram/Zernio — sin
+  // `wrangler secret put` ni redeploy. Fallback a las vars/secrets de env.
+  wahaApiUrl: "waha_api_url", // http://<host>:3000 del servidor WAHA
+  wahaSession: "waha_session", // nombre de sesión (default "default")
+  wahaApiKey: "waha_api_key", // X-Api-Key de WAHA
+  wahaWebhookToken: "waha_webhook_token", // ?token=... del webhook entrante (autogenerado)
 } as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[keyof typeof SETTING_KEYS];
@@ -153,6 +160,10 @@ export const SETTING_LABELS: Record<string, string> = {
   [SETTING_KEYS.commentFallbackMessage]: "Texto de la respuesta pública a comentarios",
   [SETTING_KEYS.webSyncEnabled]: "Web Sync activado",
   [SETTING_KEYS.webSyncUrls]: "URLs de Web Sync",
+  [SETTING_KEYS.wahaApiUrl]: "URL del servidor WAHA",
+  [SETTING_KEYS.wahaSession]: "Sesión de WAHA",
+  [SETTING_KEYS.wahaApiKey]: "API key de WAHA",
+  [SETTING_KEYS.wahaWebhookToken]: "Webhook token de WAHA",
 };
 
 /** Toggles del menú Extras (Kooni+) — etiquetas para el registro de auditoría. */

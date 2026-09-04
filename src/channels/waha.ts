@@ -18,15 +18,16 @@
  */
 import type { ChannelAdapter, IncomingMessage, OutgoingReply } from "./shared";
 import type { Env } from "../env";
+import { resolveWahaConfig, type WahaConfig } from "./wahaCredentials";
 
 const DEFAULT_SESSION = "default";
 
-interface WahaConfig {
-  base: string;
-  session: string;
-  apiKey?: string;
-}
-
+/**
+ * Config SOLO de env (vars/secrets, sin mirar settings/D1). La usan los
+ * lugares que no pueden ser async (tests, utilidades sync). El canal en vivo
+ * (webhook + envío) usa `resolveWahaConfig` (async), que además mira lo que
+ * el dueño haya guardado desde el panel (Conexiones → WAHA).
+ */
 export function wahaConfig(env: Env): WahaConfig {
   return {
     base: (env.WAHA_API_URL ?? "").trim().replace(/\/+$/, ""),
@@ -47,11 +48,11 @@ function headers(cfg: WahaConfig): Record<string, string> {
  * con WAHA_WEBHOOK_TOKEN configurado, exige que la URL traiga ?token=...
  */
 export async function verifyWahaWebhook(request: Request, env: Env): Promise<boolean> {
-  if (!wahaConfig(env).base) return false; // canal no configurado en esta instalación
-  const token = env.WAHA_WEBHOOK_TOKEN?.trim();
-  if (!token) return true; // sin secret configurado, no hay nada que validar
+  const cfg = await resolveWahaConfig(env);
+  if (!cfg.base) return false; // canal no configurado en esta instalación
+  if (!cfg.webhookToken) return true; // sin token configurado, no hay nada que validar
   try {
-    return new URL(request.url).searchParams.get("token") === token;
+    return new URL(request.url).searchParams.get("token") === cfg.webhookToken;
   } catch {
     return false;
   }
@@ -93,7 +94,7 @@ export const wahaAdapter: ChannelAdapter = {
   },
 
   async sendReply(reply: OutgoingReply, env: Env): Promise<void> {
-    const cfg = wahaConfig(env);
+    const cfg = await resolveWahaConfig(env);
     if (!cfg.base) throw new Error("WAHA_API_URL not set");
     const h = headers(cfg);
     const chatId = reply.channelUserId;
