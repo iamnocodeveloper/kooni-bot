@@ -201,10 +201,17 @@ reales, cero `http` en el texto.
 
 ### Pendiente (no urgente)
 
-- **Cobertura del inventario**: solo ~113 de 396 autos indexados. Probar valores
-  intermedios de `limit` (ej. 150–250) con verificación de contenido ANTES de
-  dejarlos puestos (no repetir el tropiezo de `limit=500`), o paginar con más
-  de una URL si el sitio lo permite.
+- **Cobertura del inventario — techo confirmado en 100 de 396** (2026-09-04,
+  post-cierre): se probó `?limit=200` con el mismo cuidado (verificar contenido
+  ANTES de dejarlo puesto) — **misma falla que `limit=500`**, homepage en vez
+  del feed. Revertido y verificado de nuevo: la URL sin parámetro YA trae
+  exactamente 100 VIN (el mismo techo que `limit=100`, confirmado por Daniel).
+  Conclusión: **100 es el máximo real de este endpoint** — no hay manera de
+  sacar más con `limit`. Para los ~296 autos restantes haría falta paginar
+  (`page=2`, `offset`, o algo así — sin confirmar si el sitio lo soporta) o
+  separar por `type=new`/`type=used` (este último devuelve 0, roto del lado
+  del sitio). Ninguno de los dos se probó — requiere más investigación
+  específica del sitio de Daniel antes de tocar su config de nuevo.
 - **Fotos de autos**: el feed `/llm/inventory/` no trae imágenes — "adjuntar
   imagen si la hay" (pedido de Joel) no tiene de dónde tomarla hoy. Si aparece
   una fuente con fotos, hay que sumarlas al pipeline de Web Sync y a
