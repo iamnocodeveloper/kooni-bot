@@ -835,7 +835,7 @@ function collectAnswers(flags) {
 
 // Pregunta lo que falte, uno a uno. En interactivo muestra menús reales; en
 // no-interactivo (`--yes`/agente) usa defaults. `defaultDir` alimenta el slug.
-async function onboarding(rl, answers, defaultDir) {
+async function onboarding(rl, answers, defaultDir, flags = {}) {
   console.log("\n  " + C.dim(t().prep));
 
   if (!answers.slug) {
@@ -1450,7 +1450,7 @@ async function cmdInit(flags, rest) {
     // config
     console.log("\n  " + C.cyan("◇ ") + C.b(t().runInit));
     const answers = collectAnswers(flags);
-    await onboarding(rl, answers, basename(dir));
+    await onboarding(rl, answers, basename(dir), flags);
 
     const meta = stampWrangler(dir, answers, answers.uid);
     const kbToken = "kooni-reindex-" + randomUUID().replace(/-/g, "").slice(0, 12);
