@@ -14,8 +14,9 @@ negocio y pégalo. La KB del panel vive en D1 (tabla `kb_docs`), se edita desde
 | `planes-y-precios.md` | Planes y precios de la licencia de Kooni. |
 | `canales-y-costos.md` | Canales que conecta y costo de infraestructura. |
 | `faq-kooni.md` | Preguntas frecuentes sobre Kooni. |
-| `restaurante-menu-ejemplo.md` | Menú y precios de ejemplo (giro `restaurante`). Reemplázalo por tu carta real. |
-| `restaurante-faq.md` | Preguntas frecuentes de un restaurante (horario, reservas, pagos…). |
+| `restaurante-menu-ejemplo.md` | Menú, combos, zonas de entrega y mínimo (giro `restaurante`). Reemplázalo por tu carta real o cárgalo desde `/admin` → Menú. |
+| `restaurante-faq.md` | Preguntas reales de un comensal que pide delivery (zonas, demora, pago, combos, opciones sin gluten…). |
+| `restaurante-casos-limite.md` | Reglas para fuera de horario, zona no cubierta, producto agotado, pedido incompleto, cambios y reclamos. |
 | `inmobiliaria-propiedades-ejemplo.md` | Fichas de propiedades de ejemplo (giro `inmobiliaria`). Reemplázalas por tu inventario. |
 | `inmobiliaria-faq.md` | Preguntas frecuentes de una inmobiliaria (requisitos, visitas, comisión…). |
 | `clinica-servicios-ejemplo.md` | Especialidades, precios y horario de ejemplo (giro `clinica`). |

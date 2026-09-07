@@ -433,6 +433,82 @@ CREATE TABLE IF NOT EXISTS audit_log (
 CREATE INDEX IF NOT EXISTS idx_audit_at ON audit_log(at);
 CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_log(action, at);
 
+-- ── Nicho RESTAURANTE (pack "pedidos") ────────────────────────────────────────
+-- Todo lo de aca activa SOLO con BOT_NICHE=restaurante. Las tablas son
+-- idempotentes (IF NOT EXISTS) y no afectan a instalaciones de otros giros:
+-- nunca se escriben. Ver src/niches/restaurante.ts y docs/ARQUITECTURA.md.
+
+-- Productos del menu, editables desde el panel (para este nicho reemplazan al
+-- array `catalog` de member/config.local.ts). category agrupa en el menu.
+CREATE TABLE IF NOT EXISTS products (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT,
+  price REAL NOT NULL DEFAULT 0,
+  category TEXT,
+  image_url TEXT,
+  active INTEGER NOT NULL DEFAULT 1,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_products_active ON products(active, category);
+
+-- Pedidos. status: recibido -> confirmado -> preparacion -> camino -> entregado
+-- (o cancelado). El timestamp de cada cambio de estado vive en order_events
+-- (para los reportes). driver_* y track_code se llenan en el Entregable 4 (reparto).
+CREATE TABLE IF NOT EXISTS orders (
+  id TEXT PRIMARY KEY,
+  conversation_id TEXT,
+  channel TEXT NOT NULL,
+  channel_user_id TEXT,
+  customer_name TEXT,
+  customer_phone TEXT,
+  address TEXT,
+  delivery_zone TEXT,
+  subtotal REAL NOT NULL DEFAULT 0,
+  delivery_fee REAL NOT NULL DEFAULT 0,
+  total REAL NOT NULL DEFAULT 0,
+  payment_method TEXT,
+  payment_proof_url TEXT,
+  status TEXT NOT NULL DEFAULT 'recibido',
+  notes TEXT,
+  driver_name TEXT,
+  driver_phone TEXT,
+  track_code TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status, created_at);
+CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at);
+CREATE INDEX IF NOT EXISTS idx_orders_phone ON orders(customer_phone);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_track ON orders(track_code);
+
+CREATE TABLE IF NOT EXISTS order_items (
+  id TEXT PRIMARY KEY,
+  order_id TEXT NOT NULL,
+  product_id TEXT,
+  name TEXT NOT NULL,
+  qty INTEGER NOT NULL DEFAULT 1,
+  unit_price REAL NOT NULL DEFAULT 0,
+  notes TEXT,
+  FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id);
+
+-- Linea de tiempo del pedido: una fila por cambio de estado. Alimenta los
+-- reportes (tiempos, horas pico) y la pagina de seguimiento del cliente.
+CREATE TABLE IF NOT EXISTS order_events (
+  id TEXT PRIMARY KEY,
+  order_id TEXT NOT NULL,
+  status TEXT NOT NULL,
+  note TEXT,
+  at INTEGER NOT NULL,
+  FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_order_events_order ON order_events(order_id, at);
+
 -- PWA: suscripciones push de los dispositivos del dueno (panel instalado como
 -- app). endpoint es unico por navegador y dispositivo. p256dh y auth son las
 -- claves del cliente en base64url que devuelve pushManager.subscribe

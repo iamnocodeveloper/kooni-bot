@@ -18,7 +18,7 @@ const GIROS: {
   columns: string[];
 }[] = [
   { id: "agencia-ia", navLabel: "Prospectos", recordPlural: "Prospectos", statusNew: "Nuevo", playbookTag: "playbook_de_venta", columns: ["servicio", "plan", "canal"] },
-  { id: "restaurante", navLabel: "Reservaciones", recordPlural: "Reservaciones", statusNew: "Solicitada", playbookTag: "playbook_restaurante", columns: ["fecha", "hora", "personas", "ocasion"] },
+  { id: "restaurante", navLabel: "Consultas", recordPlural: "Consultas", statusNew: "Nueva", playbookTag: "playbook_restaurante", columns: ["tipo", "fecha", "personas"] },
   { id: "inmobiliaria", navLabel: "Prospectos", recordPlural: "Prospectos", statusNew: "Nuevo", playbookTag: "playbook_inmobiliaria", columns: ["operacion", "zona", "presupuesto", "recamaras"] },
   { id: "clinica", navLabel: "Citas", recordPlural: "Citas", statusNew: "Solicitada", playbookTag: "playbook_clinica", columns: ["especialidad", "fecha", "hora", "motivo"] },
   { id: "barberia", navLabel: "Citas", recordPlural: "Citas", statusNew: "Solicitada", playbookTag: "playbook_barberia", columns: ["servicio", "barbero", "fecha", "hora"] },
@@ -92,5 +92,21 @@ describe("cableado del playbook al prompt", () => {
     expect(prompt).toContain(`<${g.playbookTag}>`);
     expect(prompt).toContain("captureLead");
     expect(prompt).toContain("searchKb");
+  });
+});
+
+describe("hooks del pack (restaurante)", () => {
+  it("declara el motor de pedidos, la tool tomarPedido y las secciones extra", () => {
+    const n = getNiche(envWith("restaurante"));
+    expect(n.hooks?.orderEngine).toBe(true);
+    expect(n.hooks?.extraTools).toContain("tomarPedido");
+    expect(n.hooks?.navExtra?.map((x) => x.id)).toEqual(["pedidos", "menu", "reportes"]);
+    expect(n.interviewQuestions && n.interviewQuestions.length).toBeGreaterThan(3);
+  });
+
+  it("los packs livianos no traen hooks", () => {
+    for (const id of ["generico", "clinica", "barberia"]) {
+      expect(getNiche(envWith(id)).hooks).toBeUndefined();
+    }
   });
 });

@@ -1,49 +1,69 @@
-# Preguntas frecuentes — Restaurante (plantilla)
+# Preguntas frecuentes — Restaurante con delivery (plantilla)
 
 > Ajusta cada respuesta a tu negocio y pégala en `/admin` → Conocimiento →
-> Nuevo documento. Borra lo que no aplique.
+> Nuevo documento. El bot responde SOLO con lo que esté aquí — mantenlo al día.
+> Las que dicen `[así]` son datos tuyos que hay que llenar.
 
-## ¿Cuál es el horario?
+## ¿Hacen delivery? ¿A qué zonas?
 
-Lunes a domingo de 1:00 pm a 11:00 pm. La cocina cierra 30 minutos antes.
+Sí. Llegamos a: `[Zona A — $XX]`, `[Zona B — $XX]`, `[Zona C — $XX]`. Si tu
+dirección está fuera de esas zonas, no llegamos por ahora, pero puedes pasar a
+retirar al local.
 
-## ¿Dónde están ubicados?
+## ¿Cuánto cuesta el envío?
 
-[Calle y número, colonia, ciudad]. Referencia: [algo cercano]. Mapa: [enlace].
+Depende de la zona: `[Zona A $XX, Zona B $XX, Zona C $XX]`. El costo exacto sale
+al confirmar tu dirección.
 
-## ¿Necesito reservación?
+## ¿Cuánto demora el pedido?
 
-No es obligatoria, pero en fin de semana y después de las 8:00 pm se recomienda.
-Para grupos de 10 o más, siempre con reservación.
+En promedio `[30–45 minutos]` desde que se confirma. En horas pico (`[viernes y
+sábado noche]`) puede tardar un poco más — te avisamos si es el caso.
 
-## ¿Tienen estacionamiento?
+## ¿Cuál es el mínimo de pedido?
 
-[Sí, propio y sin costo / Valet parking $XX / No, pero hay estacionamiento
-público a media cuadra].
+`[$XXX]` sin contar el envío. `[O: no hay mínimo.]`
 
-## ¿Aceptan mascotas?
+## ¿Cómo puedo pagar?
 
-[Sí, en la terraza / No se permiten mascotas, salvo animales de servicio].
+`[Efectivo al repartidor (llevar cambio), transferencia, tarjeta con terminal en
+la puerta]`. Si pagas por transferencia, te pedimos la captura del comprobante
+antes de confirmar.
+
+## ¿Qué trae el combo / la promo?
+
+`[Combo familiar: 4 hamburguesas + papas grandes + 1.5 L de refresco — $XXX.]`
+`[Promo del día: …]`. El detalle está en el menú (documento
+`restaurante-menu-ejemplo`).
 
 ## ¿Tienen opciones vegetarianas, veganas o sin gluten?
 
-Sí: [platillos concretos]. Avísanos de cualquier alergia al reservar o al llegar
-y la cocina lo toma en cuenta.
+`[Sí: bowl de vegetales, ensalada de la casa (pedir sin crutones para sin
+gluten), … ]`. Avísanos de cualquier alergia en las notas del pedido y la cocina
+lo toma en cuenta.
 
-## ¿Cuáles son las formas de pago?
+## ¿Cuál es el horario para pedir?
 
-Efectivo, tarjeta de débito y crédito, y transferencia. [Agrega apps si aplica].
+`[Lunes a domingo de 1:00 pm a 11:00 pm]`. La cocina toma pedidos hasta
+`[30 minutos antes de cerrar]`. Fuera de ese horario el bot no puede tomar el
+pedido.
 
-## ¿Hacen servicio a domicilio o para llevar?
+## ¿Dónde están? / ¿Puedo pasar a retirar?
 
-[Sí, por [app/teléfono], radio de X km / Solo para llevar / No por ahora].
+`[Calle y número, colonia, ciudad]`. Referencia: `[algo cercano]`. Sí, puedes
+pasar a retirar sin costo de envío — te avisamos cuando esté listo.
 
-## ¿Puedo celebrar un cumpleaños o evento privado?
+## ¿Puedo cambiar o cancelar mi pedido?
 
-Sí. Para eventos, menú cerrado, pastel o decoración, te pasamos con el equipo
-para coordinar fecha, número de personas y detalles.
+Si todavía no salió de la cocina, sí — dilo en el chat y lo ajustamos. Si ya está
+en camino, te pasamos con una persona del local.
+
+## Ya hice mi pedido, ¿cómo sé en qué va?
+
+Te avisamos por aquí en cada paso: confirmado → en preparación → en camino →
+entregado. También tienes un link de seguimiento cuando se confirma.
 
 ## ¿El menú de esta plantilla es el real?
 
 No. Reemplázalo por tu menú y tus precios reales en el documento
-`restaurante-menu-ejemplo`.
+`restaurante-menu-ejemplo`, o cárgalo desde `/admin` → Menú.

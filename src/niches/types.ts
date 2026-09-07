@@ -10,6 +10,30 @@ export interface NicheColumn {
   label: string;
 }
 
+/**
+ * Extensiones opcionales de un pack. La mayoría de los nichos NO las usan (solo
+ * re-etiquetan el panel). Un pack "pesado" como `restaurante` las declara para
+ * sumar tools, secciones del panel y el motor de pedidos.
+ */
+export interface NicheHooks {
+  /**
+   * Nombres de tools que este pack agrega al agente. `buildTools` las registra
+   * solo cuando `BOT_NICHE` coincide con el pack. La tool en sí vive en
+   * `src/tools/`.
+   */
+  extraTools?: string[];
+  /**
+   * Ítems extra en el nav lateral del panel. La ruta la monta el pack en
+   * `src/admin/routes.ts`. `section` = grupo del nav ("Bandeja", "Análisis"…).
+   */
+  navExtra?: { id: string; label: string; icon: string; href: string; section?: string }[];
+  /**
+   * El pack usa el motor de pedidos (tablas orders / order_items / order_events
+   * de schema.sql). Lo consultan los reportes y la página pública de seguimiento.
+   */
+  orderEngine?: boolean;
+}
+
 export interface NichePack {
   /** id estable = valor de BOT_NICHE (ej. "restaurante"). */
   id: string;
@@ -36,4 +60,11 @@ export interface NichePack {
   defaultTone: string;
   /** Docs de KB sugeridos para el setup del giro. */
   kbDocs: string[];
+  /**
+   * Preguntas de la entrevista inicial específicas del giro (además de las
+   * genéricas del CLI / skill). Se muestran al configurar el bot.
+   */
+  interviewQuestions?: string[];
+  /** Extensiones del pack (tools, secciones, motor de pedidos). Ver NicheHooks. */
+  hooks?: NicheHooks;
 }

@@ -5,18 +5,45 @@
 
 ---
 
+## 🍽️ NICHO RESTAURANTE — pack "pedidos" (en construcción, 2026-09-07)
+
+Spec de Joel: el bot toma pedidos de punta a punta + dashboard de 6 reportes +
+PWA con sonido. **Alcance:** NO es gestión de restaurante (sin mesas, cocina,
+stock, empleados, caja). Motor = repo público (embudo); pack de contenido =
+privado más adelante. Una instalación = un restaurante (no multi-tenant).
+
+| Fase | Estado |
+|---|---|
+| **A. Fundación** | ✅ **HECHO** — `schema.sql` (+`products`, `orders`, `order_items`, `order_events`, idempotentes) · `NichePack.hooks` (`extraTools`/`navExtra`/`orderEngine`) + `interviewQuestions` · `src/niches/restaurante.ts` reescrito "reservas"→"pedidos" · `src/db/orders.ts` (OrdersRepo + máquina de estados `canTransition`) · `src/db/products.ts` (ProductsRepo) · KB: `restaurante-faq` reescrito para delivery + nuevo `restaurante-casos-limite` + `restaurante-menu-ejemplo` con zonas/combos/mínimo · tests `test/db/orders.test.ts` (+18) y `test/db/products.test.ts` (+4) · `test/niches.test.ts` actualizado. tsc + suite verdes. |
+| **B. Flujo de pedido** | ⏳ tool `tomarPedido` (multi-turno en `conv.metadata`) · avisos de cambio de estado al cliente por su canal + al dueño (reusa `src/replies/sender.ts` + push) · wiring de `hooks.extraTools` en `buildTools` |
+| **C. 6 reportes en 1 pantalla** | ⏳ `src/admin/views/reportes-restaurante.ts` + `src/reports/restaurante.ts` (queries con acción sugerida, reusa charts de `stats.ts`) · export CSV · wiring de `hooks.navExtra` en `layout.ts` + rutas |
+| **D. PWA sonido + menú** | ⏳ alerta sonora al pedido nuevo (reusa push existente) · `/admin/menu` (CRUD productos) · layout touch |
+| **E4 reparto · E6 menú web** | 🅱️ BACKLOG (decisión de Joel: "luego") |
+
+Estados del pedido: `recibido → confirmado → preparacion → camino → entregado`
+(+ `cancelado`). `canTransition` permite avanzar 1+ pasos o cancelar; nunca
+retroceder ni mover un pedido terminal.
+
+Estimación restante (B+C+D): ~9 días.
+
+---
+
 ## 🧹 LIMPIEZA + DECISIÓN DE REPO (2026-09-07)
 
-**Decisión de Joel:** NO se crea un segundo repo (`kooni-packs`). El repo se
-queda **privado por ahora "hasta definir"** el modelo comercial. Cuando se haga
-público hay que sacar antes: `PLAN.md`, `docs/BITACORA-*.md` (nombres de clientes
-reales + IDs de cuenta Cloudflare) → mover a `admin-pagos/` o `.private/`. La
-separación de nichos por rubro (barbería/clínica/inmobiliaria/restaurante →
-privado) también queda para cuando el repo sea público.
+**Decisión de Joel (2026-09-07):** NO se crea segundo repo (`kooni-packs`). El
+repo **se deja PÚBLICO** para que `npx kooni-bot init`/`update` sigan funcionando
+para todos (se descartó ponerlo privado).
 
-**Nota codeload:** con el repo privado, `npx kooni-bot init` NO funciona para
-gente nueva (GitHub codeload da 404 sin auth). Las 2 instalaciones actuales ya
-tienen el código. Al volver público se restablece solo.
+**Deuda abierta** (el repo ya es público con esto adentro, no es urgente pero
+conviene resolver antes de promocionarlo):
+- `PLAN.md` + `docs/BITACORA-*.md` tienen nombres de clientes reales
+  (Daniel/cardealer) + IDs de cuenta Cloudflare → mover a `admin-pagos/`. Ojo:
+  ya están en el historial de git (repo nació público) — limpieza total exige
+  `git filter-repo`.
+- Nichos por rubro (barbería/clínica/inmobiliaria/restaurante) = "Kit de agencia
+  $149" pero visibles gratis. Migrar a carga desde `member/niche.local.ts`.
+- Falta `NOTICE.md` (marca), `SECURITY.md`, `CHANGELOG.md`, CLA en
+  `CONTRIBUTING.md`.
 
 **Borrado (commit de limpieza):**
 - `cli/` — CLI legacy de Forja (su README decía "no usar", traía "para revenderlo")

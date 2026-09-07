@@ -1,8 +1,25 @@
-# Menú y precios — Restaurante (ejemplo)
+# Menú y precios — Restaurante con delivery (ejemplo)
 
 > Plantilla. Reemplaza cada sección por tu carta real y tus precios vigentes.
 > El bot responde precios y platillos SOLO con lo que esté aquí — mantenlo al día.
-> Pégalo en `/admin` → Conocimiento → Nuevo documento.
+> Puedes cargar el menú producto por producto desde `/admin` → **Menú** (así el
+> bot y el menú web lo toman solos), o pegarlo aquí como documento de KB.
+
+## Combos
+
+- Combo individual: hamburguesa + papas chicas + refresco — $XXX
+- Combo familiar: 4 hamburguesas + papas grandes + refresco 1.5 L — $XXX
+
+## Zonas de entrega y envío
+
+- Zona A (centro) — $XX · ~30 min
+- Zona B (norte) — $XX · ~40 min
+- Zona C (sur) — $XX · ~45 min
+- Fuera de esas zonas: solo retiro en el local.
+
+## Mínimo de pedido
+
+$XXX sin contar el envío. (O: sin mínimo.)
 
 ## Entradas
 

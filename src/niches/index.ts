@@ -7,7 +7,7 @@ import { inmobiliaria } from "./inmobiliaria";
 import { clinica } from "./clinica";
 import { barberia } from "./barberia";
 
-export type { NichePack, NicheColumn } from "./types";
+export type { NichePack, NicheColumn, NicheHooks } from "./types";
 
 // Registro de packs. Agregar un nicho = importar su archivo y sumarlo aquí.
 // `restaurante` es el pack de referencia para nuevos giros (gimnasio, spa,

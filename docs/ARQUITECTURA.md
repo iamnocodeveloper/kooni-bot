@@ -190,6 +190,24 @@ Pasos:
 El dashboard se re-etiqueta solo; las columnas del nicho se guardan en
 `leads.metadata` (JSON) vía `captureLead`. Nicho ausente/desconocido → `generico`.
 
+### Packs "pesados" (`hooks`)
+
+La mayoría de los packs solo re-etiquetan. Uno que necesita más — tools propias,
+secciones nuevas del panel, tablas propias — declara `hooks` (`NicheHooks` en
+`types.ts`):
+
+- `extraTools: string[]` — tools que el pack suma al agente (`buildTools` las
+  registra solo si `BOT_NICHE` coincide). La tool vive en `src/tools/`.
+- `navExtra: [...]` — ítems extra del nav lateral; la ruta la monta el pack en
+  `src/admin/routes.ts`.
+- `orderEngine: true` — el pack usa el **motor de pedidos** (tablas `products`,
+  `orders`, `order_items`, `order_events` de `schema.sql`, repos
+  `src/db/orders.ts` y `src/db/products.ts`). Idempotente: las tablas no afectan
+  a instalaciones de otros giros.
+
+`restaurante` es el pack de referencia de este tipo (toma pedidos por chat +
+sección `/admin/pedidos` + `/admin/menu` + `/admin/reportes`).
+
 **Roadmap de giros** (gimnasio, spa, dentista, coach, tienda, panadería,
 cafetería, salón, hotelería, CRM): el CLI ya los reconoce como slugs, pero aún
 caen a `generico` hasta que exista su archivo. Ver `PLAN.md` § Nichos por giro.
