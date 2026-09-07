@@ -234,13 +234,8 @@ export async function reportChannelStatus(env: Env): Promise<{ telegram: boolean
 }
 
 async function doSend(env: Env, now: number): Promise<ReportSendResult> {
-  // Gate de módulo de pago: sin el módulo (o Pro completo / override del dueño)
-  // el reporte NO se envía. Fail-closed: es una feature premium.
-  const { isModuleUnlocked } = await import("../modules");
-  if (!(await isModuleUnlocked(env, REPORT_MODULE_ID))) {
-    console.warn("[reporte nocturno] módulo no activado — se omite el envío");
-    return { sentTo: [], reason: "module_locked" };
-  }
+  // MODELO (2026-09-07): el reporte nocturno está disponible en todos los planes
+  // (se activa solo con su toggle, más abajo vía `reason: "disabled"`).
   const settings = (await new SettingsRepo(new Db(env.DB)).all().catch(() => ({}))) as Record<string, string>;
   const channel = settings[SETTING_KEYS.nightlyReportChannel] ?? "telegram";
   const data = await buildNightlyReportData(env, now);

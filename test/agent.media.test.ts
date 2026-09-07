@@ -180,7 +180,9 @@ describe("SupportAgent.ingest — media (Task 6.3)", () => {
     );
   });
 
-  it("free tier: strips the image and informs the bot it's unsupported", async () => {
+  // MODELO (2026-09-07): el análisis de imágenes NO está gateado por tier — solo
+  // por el toggle "Oído y vista" del dueño. Free y Pro se comportan igual.
+  it("free tier: mantiene la imagen como marcador [IMAGE_URL] (sin gate por plan)", async () => {
     const { agent } = makeAgent({ tier: "free" });
     stubConversations();
 
@@ -193,8 +195,8 @@ describe("SupportAgent.ingest — media (Task 6.3)", () => {
 
     const buffered = agent.state.pendingMessages[0].text;
     expect(buffered).toContain("mira esto");
-    expect(buffered).toContain("no soporta análisis de imágenes");
-    expect(buffered).not.toContain("IMAGE_URL");
+    expect(buffered).toContain("[IMAGE_URL: https://example.com/pic.png]");
+    expect(buffered).not.toContain("no soporta análisis de imágenes");
   });
 
   it("pro tier: keeps the image as an [IMAGE_URL] marker in the buffer", async () => {

@@ -89,14 +89,6 @@ describe("runWebSync", () => {
       KB: { upsert: kbUpsert, deleteByIds: vi.fn(async () => ({})) },
       AI: { run: vi.fn(async () => ({ data: [[0.1, 0.2, 0.3]] })) },
     } as unknown as Env;
-    // Desbloquear el módulo por override del dueño.
-    await new SettingsRepo(db).set(SETTING_KEYS.moduleUnlocks, JSON.stringify(["web_sync"]));
-  });
-
-  it("omite si el módulo está bloqueado", async () => {
-    await new SettingsRepo(db).set(SETTING_KEYS.moduleUnlocks, "[]");
-    const r = await runWebSync(env);
-    expect(r.skipped).toContain("web_sync");
   });
 
   it("omite si falta DECODO_AUTH", async () => {

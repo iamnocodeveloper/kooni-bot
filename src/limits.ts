@@ -140,6 +140,34 @@ export async function checkLimit(env: Env, resource: keyof UsageCounts, extra = 
   }
 }
 
+/**
+ * ¿Se puede conectar UN canal más? El llamador pasa cuántos hay conectados
+ * AHORA (lo sabe la vista de Conexiones) y si el canal que se intenta guardar
+ * ya estaba conectado (en ese caso no suma, solo se está actualizando).
+ * Fail-open. Pro (maxChannels = null) → siempre permitido.
+ */
+export async function checkChannelLimit(
+  env: Env,
+  connectedNow: number,
+  alreadyConnected = false,
+): Promise<LimitCheck> {
+  try {
+    const limits = await getLimits(env);
+    const max = limits.maxChannels;
+    if (max === null) return { allowed: true, limit: null, used: connectedNow, resource: "channels" };
+    if (alreadyConnected) return { allowed: true, limit: max, used: connectedNow, resource: "channels" };
+    return { allowed: connectedNow + 1 <= max, limit: max, used: connectedNow, resource: "channels" };
+  } catch (e) {
+    console.warn("[limits] checkChannelLimit falló — fail-open:", e);
+    return { allowed: true, limit: null, used: connectedNow, resource: "channels" };
+  }
+}
+
+/** Mensaje corto para el panel cuando se topa el límite de canales del plan gratis. */
+export function channelLimitMessage(limit: number): string {
+  return `Tu plan gratis permite ${limit} ${limit === 1 ? "canal conectado" : "canales conectados"}. Desconecta uno o activa Pro (Licencia) para conectar más.`;
+}
+
 /** Mensaje amable de límite alcanzado (se muestra 1 vez por conversación). */
 export function limitMessage(resource: string, used: number, limit: number): string {
   const labels: Record<string, string> = {

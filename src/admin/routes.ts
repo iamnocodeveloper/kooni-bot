@@ -96,6 +96,34 @@ import { renderBusinessContext } from "../businessContext";
 export const adminApp = new Hono<{ Bindings: Env }>();
 
 /**
+ * Gate del límite de canales del plan gratis (`checkChannelLimit`). Devuelve una
+ * respuesta de redirección con el error si NO se puede conectar un canal más, o
+ * `null` si sí se puede (o si el canal ya estaba conectado, o Pro). Fail-open.
+ * `channelId` es el id de `channelStatuses` (telegram, zernio, waha, mercadolibre);
+ * `qsKey` es el prefijo del query string de error de esa card.
+ */
+async function channelLimitGate(
+  c: { env: Env; redirect: (url: string) => Response },
+  channelId: string,
+  qsKey: string,
+): Promise<Response | null> {
+  try {
+    const { countConnectedChannels } = await import("./views/conexiones");
+    const { checkChannelLimit, channelLimitMessage } = await import("../limits");
+    const { connected, byId } = await countConnectedChannels(c.env);
+    const chk = await checkChannelLimit(c.env, connected, byId[channelId] === true);
+    if (!chk.allowed) {
+      return c.redirect(
+        `/admin/conexiones?${qsKey}=error&msg=${encodeURIComponent(channelLimitMessage(chk.limit ?? 0))}`,
+      );
+    }
+  } catch (e) {
+    console.warn("[limits] channelLimitGate falló — fail-open:", e);
+  }
+  return null;
+}
+
+/**
  * Registro de auditoría (§ U) para eventos de login/logout — se llama a mano
  * porque estas rutas van ANTES del guard y del middleware de actor. Best-effort:
  * nunca bloquea ni rompe el login.
@@ -283,22 +311,16 @@ adminApp.use("*", async (c, next) => {
   );
 });
 
-// Gate de tier: el panel free ve el nav Pro bloqueado; si aun así navega a una
-// ruta Pro (URL directa, bookmark, click al item bloqueado), servimos la página
-// de upgrade en vez de la vista real. Los datos Pro nunca se exponen en free.
-const PRO_GATE: Array<[string, string]> = [
-  ["/admin/insights", "Insights"],
-  ["/admin/stats", "Estadísticas"],
-  ["/admin/costs", "Costos"],
-  ["/admin/mejoras", "Mejoras"],
-  ["/admin/campanas", "Campañas"],
-  ["/admin/auditoria", "Auditoría"],
-];
+// MODELO (2026-09-07): sin gate de tier por feature. TODAS las secciones del
+// panel están disponibles en todos los planes; free y Pro se diferencian solo
+// por los límites de cantidad (src/limits.ts). Se deja `PRO_GATE` vacío por si
+// se quiere volver a un modelo con paywall.
+const PRO_GATE: Array<[string, string]> = [];
 adminApp.use("*", async (c, next) => {
-  if (await isProUnlocked(c.env)) return next();
+  if (PRO_GATE.length === 0) return next();
   const path = c.req.path;
   const hit = PRO_GATE.find(([pre]) => path === pre || path.startsWith(pre + "/"));
-  if (hit) return c.html(await renderUpgrade(c.env, hit[1]));
+  if (hit && !(await isProUnlocked(c.env))) return c.html(await renderUpgrade(c.env, hit[1]));
   return next();
 });
 
@@ -832,6 +854,10 @@ adminApp.post("/conexiones/zernio", async (c) => {
     return c.redirect("/admin/conexiones?zernio=saved");
   }
 
+  // Límite de canales del plan gratis (no aplica si Zernio ya estaba conectado).
+  const znLimited = await channelLimitGate(c, "zernio", "zernio");
+  if (znLimited) return znLimited;
+
   const apiKey = String(form.get("zernio_api_key") ?? "").trim();
   const webhookSecret = String(form.get("zernio_webhook_secret") ?? "").trim();
 
@@ -919,6 +945,10 @@ adminApp.post("/conexiones/telegram", async (c) => {
     return c.redirect("/admin/conexiones?telegram=saved");
   }
 
+  // Límite de canales del plan gratis (no aplica si Telegram ya estaba conectado).
+  const tgLimited = await channelLimitGate(c, "telegram", "telegram");
+  if (tgLimited) return tgLimited;
+
   const token = String(form.get("telegram_bot_token") ?? "").trim();
   // Campo vacío: conserva el token existente.
   const tokenToSave = token || existing || "";
@@ -993,6 +1023,10 @@ adminApp.post("/conexiones/waha", async (c) => {
     await repo.set(SETTING_KEYS.wahaWebhookToken, "");
     return c.redirect("/admin/conexiones?waha=saved");
   }
+
+  // Límite de canales del plan gratis (no aplica si WAHA ya estaba conectado).
+  const wahaLimited = await channelLimitGate(c, "waha", "waha");
+  if (wahaLimited) return wahaLimited;
 
   const { resolveWahaConfig } = await import("../channels/wahaCredentials");
   const { ensureWahaSession } = await import("../channels/wahaApi");
@@ -1088,6 +1122,9 @@ adminApp.get("/conexiones/mercadolibre/oauth", async (c) => {
       `/admin/conexiones?ml=error&msg=${encodeURIComponent("Primero guarda el App ID y la Secret Key.")}`,
     );
   }
+  // Límite de canales del plan gratis (no aplica si ML ya estaba conectado).
+  const mlLimited = await channelLimitGate(c, "mercadolibre", "ml");
+  if (mlLimited) return mlLimited;
   const base = (c.env.DASHBOARD_BASE_URL?.trim() || new URL(c.req.url).origin).replace(/\/$/, "");
   const redirectUri = `${base}/webhooks/mercadolibre/oauth`;
   const state = crypto.randomUUID();
@@ -1366,10 +1403,6 @@ adminApp.get("/config", async (c) => {
 // resultado en la query para el banner de la sección.
 adminApp.post("/config/report-test", async (c) => {
   try {
-    const { isModuleUnlocked } = await import("../modules");
-    if (!(await isModuleUnlocked(c.env, "nightly_report"))) {
-      return c.redirect("/admin/extras?report=" + encodeURIComponent("err:El módulo Reporte nocturno no está activado en esta instalación. Actívalo en la pestaña Licencia o pídelo a tu proveedor."));
-    }
     const { sendReportTest } = await import("../reports/nightly");
     const res = await sendReportTest(c.env);
     if (res.sentTo.length === 0) {

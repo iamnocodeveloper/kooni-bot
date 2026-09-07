@@ -38,8 +38,8 @@ export async function renderKbList(
 ): Promise<string> {
   const docs = await new KbDocsRepo(new Db(env.DB)).list();
 
-  const { isModuleUnlocked } = await import("../../modules");
-  const webSyncOn = await isModuleUnlocked(env, "web_sync").catch(() => false);
+  // Web sync está disponible en todos los planes (solo pide DECODO_AUTH).
+  const webSyncOn = true;
   const minScore = await resolveKbMinScore(env);
 
   const bannerHtml = flash?.saved

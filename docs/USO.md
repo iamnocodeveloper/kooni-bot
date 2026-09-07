@@ -32,11 +32,12 @@ El panel está en español, tema oscuro Kooni (tinta + teal). De izquierda a der
 | **Inicio → Resumen** | Estado del bot: canales conectados, mensajes del día, clientes únicos, leads, costo del mes, alerts (badges rojos). |
 | **Bandeja** | Conversaciones, Leads, Tickets (escalaciones), Campañas. |
 | **Mi Agente** | Flujo (cómo piensa el bot), Conocimiento (KB), Mejoras (flywheel), Conexiones, Configuración. |
-| **Análisis** *(Pro)* | Insights (IA), Estadísticas, Costos. |
+| **Análisis** | Insights (IA), Estadísticas, Costos. |
 
-> Las secciones de **Análisis** y **Campañas/Mejoras** requieren una **licencia Pro**
-> activa en `/admin/licencia` (código `KOONI-PRO-V2-…`). En free se ven bloqueadas con
-> un candado.
+> **Todas las secciones están disponibles en el plan gratis.** Lo único que
+> separa Free de Pro son los **límites de cantidad** (contactos, mensajes/mes,
+> canales…) — ver `docs/PLANES.md`. La licencia Pro (`/admin/licencia`, código
+> `KOONI-PRO-V2-…`) quita esos topes.
 
 ---
 
@@ -66,7 +67,7 @@ El panel está en español, tema oscuro Kooni (tinta + teal). De izquierda a der
 - Se crean con `handoffHuman`; el dueño recibe aviso (Telegram/correo/WhatsApp).
 - Resolver desde aquí deja registro (`resolved_by`, `resolved_at`).
 
-### Campañas *(Pro)*
+### Campañas
 - Difusiones a segmentos (por interés/objeción etiquetados en `conv_labels`).
 - Seguimientos automáticos (un follow-up por conversación, con candado anti-duplicado).
 
@@ -85,7 +86,7 @@ El panel está en español, tema oscuro Kooni (tinta + teal). De izquierda a der
 - Los datos estructurados (horarios, precios, ubicación) NO van aquí: van en
   **Configuración → Información del negocio**.
 
-### Mejoras *(Pro)*
+### Mejoras
 - Sugerencias del **flywheel**: el bot detecta preguntas que no pudo responder
   (`missed_kb`) y propone entradas de KB o lecciones. Aprueba/descarta desde aquí.
 
@@ -107,7 +108,7 @@ El panel está en español, tema oscuro Kooni (tinta + teal). De izquierda a der
 
 ---
 
-## 5. Análisis *(Pro)*
+## 5. Análisis
 
 - **Insights**: resumen IA por conversación (sentimiento, resolución, bot_score,
   temas, oportunidad de venta). Se genera con un modelo barato (Haiku) cuando la

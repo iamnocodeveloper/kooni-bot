@@ -119,20 +119,20 @@ describe("rutas /admin/auditoria", () => {
   });
 });
 
-describe("gating Pro de la vista Auditoría", () => {
-  it("está declarada como tab Pro y como módulo vendible", () => {
-    expect(PRO_ONLY_TABS).toContain("auditoria");
-    expect(PAID_MODULES.some((m) => m.id === "auditoria" && m.tab === "auditoria")).toBe(true);
+describe("vista Auditoría — disponible en todos los planes", () => {
+  it("ya NO está en PRO_ONLY_TABS (sin gate por feature)", () => {
+    expect(PRO_ONLY_TABS).not.toContain("auditoria");
+    // Sigue en el catálogo de módulos solo para etiquetas del panel.
+    expect(PAID_MODULES.some((m) => m.id === "auditoria")).toBe(true);
   });
 
-  it("free: el ítem de nav Auditoría sale bloqueado (apunta a /admin/upgrade)", async () => {
+  it("free: el ítem de nav Auditoría linkea a su vista real", async () => {
     const freeEnv = { DB: makeDb({}) } as unknown as Env;
     const html = await layout({ title: "T", activeTab: "overview", body: "x", env: freeEnv });
-    expect(html).not.toContain('href="/admin/auditoria"');
-    expect(html).toContain("Auditoría"); // el label sigue visible, pero bloqueado
+    expect(html).toContain('href="/admin/auditoria"');
   });
 
-  it("pro: el ítem de nav Auditoría linkea a su vista real", async () => {
+  it("pro: igual — el ítem de nav Auditoría linkea a su vista real", async () => {
     const proEnv = {
       DB: makeDb({ pro_license: testLicense.code }),
       LICENSE_PUBLIC_KEY: testLicense.pub,

@@ -1,5 +1,4 @@
 import type { Env } from "../env";
-import { isProUnlocked } from "../config";
 import { searchKbTool } from "./searchKb";
 import { handoffHumanTool } from "./handoffHuman";
 import { pauseBotTool } from "./pauseBot";
@@ -30,10 +29,9 @@ export interface ToolContext {
 }
 
 export async function buildTools(ctx: ToolContext) {
-  // Free tier base set. captureLead y scheduleAppointment van aquí a propósito: el bot
-  // Starter (free) captura prospectos Y agenda citas — Cal.com lo pone el dueño con su
-  // propia cuenta/llave, sin costo para Kooni, así que es valor central sin gate. Lo Pro
-  // es consultar catálogo/inventario y las tools avanzadas por nicho.
+  // TODAS las tools están disponibles en todos los planes — free y Pro se
+  // diferencian solo por límites de cantidad (src/limits.ts). Cal.com lo pone
+  // el dueño con su propia cuenta; catalogQuery necesita catálogo cargado.
   const tools: Record<string, any> = {
     searchKb: searchKbTool(ctx.env),
     handoffHuman: handoffHumanTool(ctx.env, ctx.getConversationId),
@@ -52,10 +50,9 @@ export async function buildTools(ctx: ToolContext) {
     registrarCalificacion: registrarCalificacionTool(ctx.env, ctx.getConversationId),
   };
 
-  // Pro tier additions
-  if (await isProUnlocked(ctx.env)) {
-    tools.catalogQuery = catalogQueryTool(ctx.env);
-  }
+  // Consulta de catálogo/inventario — disponible siempre; devuelve vacío con
+  // guía si el dueño aún no cargó catálogo.
+  tools.catalogQuery = catalogQueryTool(ctx.env);
 
   // Fase A: enviarRecurso — activable desde Configuración (allow_multimedia).
   // El agente llama setRecursoCtx antes del loop con el canal real.

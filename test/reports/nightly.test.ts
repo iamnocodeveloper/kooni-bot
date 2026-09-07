@@ -179,16 +179,16 @@ describe("sendNightlyReport / sendReportTest", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("no envía si el módulo nightly_report está bloqueado (gate de pago)", async () => {
+  it("el reporte nocturno funciona SIN módulo desbloqueado (sin gate de pago)", async () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
+    // makeDbStub({}) → sin module_unlocks. Antes esto daba reason "module_locked".
     const res = await sendReportTest(
       envWith(makeDbStub({}), { TELEGRAM_BOT_TOKEN: "t", OWNER_TELEGRAM_CHAT_ID: "1" }),
       1_800_000_000_000,
     );
-    expect(res.reason).toBe("module_locked");
-    expect(res.sentTo).toHaveLength(0);
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(res.reason).not.toBe("module_locked");
+    expect(res.sentTo).toContain("telegram");
   });
 });
 

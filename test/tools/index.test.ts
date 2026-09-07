@@ -16,44 +16,35 @@ function makeCtx(tier: "free" | "pro", calcom?: boolean): ToolContext {
   return { env, getConversationId: () => "conv-1" };
 }
 
+const ALL_TOOLS = [
+  "captureLead",
+  "catalogQuery",
+  "enviarRecurso",
+  "handoffHuman",
+  "pauseBot",
+  "registrarCalificacion",
+  "reportQuery",
+  "scheduleAppointment",
+  "searchKb",
+  "snoozeUser",
+];
+
 describe("buildTools", () => {
-  it("registra las 9 tools base (scheduleAppointment siempre — evita alucinaciones)", async () => {
-    const tools = await buildTools(makeCtx("free"));
-    expect(Object.keys(tools).sort()).toEqual([
-      "captureLead",
-      "enviarRecurso",
-      "handoffHuman",
-      "pauseBot",
-      "registrarCalificacion",
-      "reportQuery",
-      "scheduleAppointment",
-      "searchKb",
-      "snoozeUser",
-    ]);
-    expect(tools.scheduleAppointment).toBeDefined();
-    expect(tools.reportQuery).toBeDefined();
-    expect(tools.registrarCalificacion).toBeDefined();
+  it("registra el set completo de tools (mismas en free y pro — sin gate por feature)", async () => {
+    const free = await buildTools(makeCtx("free"));
+    expect(Object.keys(free).sort()).toEqual(ALL_TOOLS);
+    expect(free.scheduleAppointment).toBeDefined();
+    expect(free.reportQuery).toBeDefined();
+    expect(free.registrarCalificacion).toBeDefined();
   });
 
-  it("free tier captura leads; pro agrega catálogo (Pro-only)", async () => {
+  it("catalogQuery está disponible en todos los planes", async () => {
     const free = await buildTools(makeCtx("free"));
     expect(free.captureLead).toBeDefined();
-    expect(free.catalogQuery).toBeUndefined();
+    expect(free.catalogQuery).toBeDefined();
 
     const pro = await buildTools(makeCtx("pro"));
-    expect(pro.catalogQuery).toBeDefined();
-    expect(Object.keys(pro).sort()).toEqual([
-      "captureLead",
-      "catalogQuery",
-      "enviarRecurso",
-      "handoffHuman",
-      "pauseBot",
-      "registrarCalificacion",
-      "reportQuery",
-      "scheduleAppointment",
-      "searchKb",
-      "snoozeUser",
-    ]);
+    expect(Object.keys(pro).sort()).toEqual(ALL_TOOLS);
   });
 
   it("el Starter genérico no agrega tools de nicho (aunque BOT_NICHE traiga un giro)", async () => {

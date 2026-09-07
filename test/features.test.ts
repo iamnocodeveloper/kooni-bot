@@ -51,7 +51,9 @@ function env(settings: Record<string, string>, extra: Partial<Env> = {}): Env {
   } as unknown as Env;
 }
 
-const UNLOCKED = { module_unlocks: JSON.stringify(["blindaje", "vigilante", "handoff_smart", "cazador", "oido_vista", "voz_marca", "multiidioma", "encuestas"]) };
+// MODELO (2026-09-07): sin paywall por módulo — `unlocked` es SIEMPRE true.
+// Lo único que activa/desactiva una función Extra es su toggle del dueño.
+const UNLOCKED = {};
 
 const FEATURES_ON = {
   feature_blindaje_enabled: "1",
@@ -77,10 +79,12 @@ describe("extrasState", () => {
     expect(st.blindaje.unlocked).toBe(true);
   });
 
-  it("toggle on pero módulo bloqueado → on=true, unlocked=false (el panel lo muestra 🔒 y la función no actúa)", async () => {
+  it("unlocked es siempre true (sin paywall por módulo)", async () => {
     const st = await extrasState(env({}), { feature_blindaje_enabled: "1" });
     expect(st.blindaje.on).toBe(true);
-    expect(st.blindaje.unlocked).toBe(false);
+    expect(st.blindaje.unlocked).toBe(true);
+    const st2 = await extrasState(env({}), {});
+    expect(st2.vigilante.unlocked).toBe(true);
   });
 });
 
@@ -110,8 +114,8 @@ describe("extrasForAgent", () => {
     expect(r.vigilanteEnabled).toBe(true);
   });
 
-  it("módulo bloqueado → la función no actúa aunque el toggle esté on", async () => {
-    const r = await extrasForAgent(env({}), { feature_blindaje_enabled: "1", feature_vigilante_enabled: "1" });
+  it("toggle off → la función no actúa (aunque no haya paywall)", async () => {
+    const r = await extrasForAgent(env({}), {});
     expect(r.extraInstructions).toHaveLength(0);
     expect(r.vigilanteEnabled).toBe(false);
   });
@@ -131,10 +135,9 @@ describe("extrasForAgent", () => {
 });
 
 describe("isFeatureActive", () => {
-  it("true solo con toggle on Y módulo desbloqueado", async () => {
-    expect(await isFeatureActive(env({}), "cazador", { ...UNLOCKED, feature_cazador_enabled: "1" })).toBe(true);
-    expect(await isFeatureActive(env({}), "cazador", { feature_cazador_enabled: "1" })).toBe(false);
-    expect(await isFeatureActive(env({}), "cazador", { ...UNLOCKED })).toBe(false);
+  it("true con el toggle on; false con el toggle off", async () => {
+    expect(await isFeatureActive(env({}), "cazador", { feature_cazador_enabled: "1" })).toBe(true);
+    expect(await isFeatureActive(env({}), "cazador", {})).toBe(false);
     expect(await isFeatureActive(env({}), "no_existe", {})).toBe(false);
   });
 });

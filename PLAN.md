@@ -5,6 +5,53 @@
 
 ---
 
+## 🏁 CIERRE DE ETAPA — v1.27.0 (2026-09-07): modelo "solo límites de cantidad"
+
+> **Decisión de Joel:** el plan gratis da acceso a **TODAS las funciones**; lo
+> único que separa Free de Pro son **límites de cantidad** (contactos,
+> mensajes/mes, canales…). Se eliminó todo el paywall por feature.
+
+**Qué cambió:**
+
+- `src/config.ts` — `PRO_ONLY_TOOLS` y `PRO_ONLY_TABS` vacíos; `isTabAllowed` /
+  `isToolAvailable` → siempre `true`.
+- `src/modules.ts` — `unlockedModules()` devuelve SIEMPRE todos los módulos;
+  `isModuleUnlocked()` → siempre `true`. `PAID_MODULES` se conserva solo para las
+  etiquetas del panel (menú Extras). Los "Extras" se activan solo con su toggle.
+- `src/admin/routes.ts` — `PRO_GATE` vacío (Insights/Stats/Costs/Mejoras/Campañas/
+  Auditoría abiertos en free). Gate nuevo `channelLimitGate()` en los POST de
+  Conexiones (Telegram/Zernio/WAHA/MercadoLibre).
+- `src/agent.ts` — sin gate de plan en el análisis de imágenes (solo el toggle
+  "Oído y vista"). **Nuevo:** el tope `maxMessagesPerMonth` ahora SÍ se hace
+  cumplir en cada entrante (antes solo se mostraba).
+- `src/limits.ts` — `checkChannelLimit()` + `channelLimitMessage()` nuevos.
+- `src/tools/index.ts` — `catalogQuery` se registra siempre.
+- `src/tools/handoffHuman.ts` — aviso al dueño por WhatsApp sin gate de plan.
+- `src/kb/webSync.ts`, `src/reports/nightly.ts` — sin gate de módulo (solo el
+  secret/toggle que ya pedían).
+- `src/admin/views/licencia.ts` — quita la tarjeta "Módulos de pago"; deja solo
+  la de límites del plan gratis. `docs/PLANES.md` reescrito.
+
+**Límites del plan gratis** (`FREE_LIMITS` en `src/limits.ts` — cambiar ahí):
+50 contactos · 500 mensajes/mes · 2 canales · 5 reglas · 100 auto-DM/mes ·
+3 links · 1 cuenta Zernio · 7 d de logs. Pro = todo `null` (sin tope).
+
+**Precios (actualizados 2026-09-07):** Gratis $0 (código MIT + límites) ·
+Licencia fundador **$39** / Pro **$12/mes** (quita límites) · Kit de agencia
+**$149** (packs por rubro + marca blanca + soporte — fuera del repo, no es "el
+código"). Sustituye el rango $29–49 / $9–15 del § I7.
+
+**Cómo revertir** a un modelo con paywall: repoblar `PRO_ONLY_*` / `PRO_GATE` y
+devolver la lógica de licencia a `unlockedModules()`/`isModuleUnlocked()` (está
+en git). El catálogo `PAID_MODULES` sigue intacto.
+
+**Pendiente menor:** `maxChannels` solo aplica a canales conectados por panel
+(Twilio/Meta/ManyChat entran por `wrangler secret put` y no pasan por el gate).
+El aviso de límite de mensajes/mes se repite en cada entrante (sin dedupe — mismo
+patrón que el de contactos).
+
+---
+
 ## 🏁 CIERRE DE ETAPA — BETA (histórico)
 
 > ⬇️ Este bloque es el cierre de la etapa BETA (`v1.0.9`). El estado **actual** vive

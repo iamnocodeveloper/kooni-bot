@@ -264,11 +264,14 @@ export async function renderOverview(env: Env): Promise<string> {
   let limitsBanner = "";
   try {
     const { getLimits, getUsage } = await import("../../limits");
+    const { countConnectedChannels } = await import("./conexiones");
     const limits = await getLimits(env);
     const usage = await getUsage(env);
+    const channels = await countConnectedChannels(env).catch(() => ({ connected: 0, byId: {} }));
     const rows: { label: string; used: number; limit: number | null }[] = [
       { label: "contactos", used: usage.contacts, limit: limits.maxContacts },
       { label: "mensajes/mes", used: usage.messagesThisMonth, limit: limits.maxMessagesPerMonth },
+      { label: "canales", used: channels.connected, limit: limits.maxChannels },
       { label: "reglas", used: usage.rules, limit: limits.maxRules },
       { label: "respuestas automáticas/mes", used: usage.autoDmsThisMonth, limit: limits.maxAutoDmsPerMonth },
     ];

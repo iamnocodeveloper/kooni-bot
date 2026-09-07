@@ -535,3 +535,28 @@ export function connectionsSummary(
   const channels = channelStatuses(env, zernioCreds, telegramToken, mlCreds, wahaCfg);
   return { connected: channels.filter((ch) => ch.ok).length, total: channels.length };
 }
+
+/**
+ * Cuenta cuántos canales están conectados AHORA — resuelve las credenciales por
+ * su cuenta. Lo usa el gate del límite de canales del plan gratis
+ * (`checkChannelLimit`) en las rutas POST de Conexiones. `byId` dice qué canal
+ * está conectado, para saber si el que se intenta guardar ya estaba.
+ */
+export async function countConnectedChannels(
+  env: Env,
+): Promise<{ connected: number; byId: Record<string, boolean> }> {
+  const { resolveZernioCredentials } = await import("../../channels/zernioCredentials");
+  const { resolveTelegramToken } = await import("../../channels/telegramCredentials");
+  const { loadMlCredentials } = await import("../../channels/mercadolibreCredentials");
+  const { resolveWahaConfig } = await import("../../channels/wahaCredentials");
+  const [zernioCreds, telegramToken, mlCreds, wahaCfg] = await Promise.all([
+    resolveZernioCredentials(env),
+    resolveTelegramToken(env),
+    loadMlCredentials(env),
+    resolveWahaConfig(env),
+  ]);
+  const channels = channelStatuses(env, zernioCreds, telegramToken, mlCreds, wahaCfg);
+  const byId: Record<string, boolean> = {};
+  for (const ch of channels) byId[ch.id] = ch.ok;
+  return { connected: channels.filter((ch) => ch.ok).length, byId };
+}

@@ -1,86 +1,75 @@
 # Kooni — Planes: Free vs Pro
 
-> Cómo funciona el modelo de **versión gratis + versión de pago**:
-> qué desbloquea cada tier, cómo se controla, y cómo crecer a un modelo de pago
-> cuando esté listo. (Uso interno hoy; el modelo de cobro se detalla después.)
+> **Modelo (desde 2026-09-07):** *todas las funciones están disponibles en el
+> plan gratis.* No hay ninguna feature bloqueada por tier. Lo único que separa
+> Free de Pro son **límites de cantidad** (contactos, mensajes/mes, canales…).
+> Pro los quita todos.
 
 ---
 
-## 1. El modelo
+## 1. El modelo en una frase
 
-- **Starter (Free)** — el bot funciona completo para cualquier negocio: responde
-  con IA, captura leads, escala a humano, agenda con Cal.com, KB, multicanal.
-- **Pro (pago)** — desbloquea análisis y crecimiento: Insights IA, Estadísticas,
-  Costos, Mejoras (flywheel), Campañas, catálogo de productos, y los **giros
-  (niche packs)** con panel a la medida.
+**Free = Kooni completo, con topes de uso. Pro = Kooni completo, sin topes.**
 
-> El tier real lo controla una **licencia Pro** (código `KOONI-PRO-V2-…`, firma Ed25519)
-> pegada en `/admin/licencia`. `BOT_TIER` en `wrangler.toml` es solo informativo desde la
-> migración v2 — ya no desbloquea nada por sí solo. Los giros son archivos propios en
-> `src/niches/` (sin servidor de licencias externo).
+- Mismo cerebro, mismos canales, mismo panel, mismas tools, mismas automatizaciones,
+  mismos "Extras" (analista IA, campañas, oído/vista, voz de marca, web sync…).
+- El plan gratis solo corta la **cantidad**: cuántos contactos registra, cuántos
+  mensajes procesa al mes, cuántos canales conecta, etc.
+- Al topar un límite el bot **no se apaga**: responde una vez "llegaste al límite"
+  y deja de procesar ese recurso hasta el mes siguiente (o hasta que se active Pro).
 
-## 2. Qué incluye cada tier (código real)
+## 2. Límites del plan gratis (código real: `src/limits.ts`)
 
-| Función | Free | Pro |
-|---|---|---|
-| Responder con IA (todos los canales) | ✅ | ✅ |
-| Base de conocimiento (RAG, sube documentos) | ✅ | ✅ |
-| Captura de leads (`captureLead`) | ✅ | ✅ |
-| Agendar citas Cal.com (`scheduleAppointment`) | ✅ | ✅ |
-| Escalar a humano (`handoffHuman`, avisos) | ✅ | ✅ |
-| Entender audio (Whisper) | ✅ | ✅ |
-| Panel: Resumen, Conversaciones, Leads, Tickets, Flujo, KB, Conexiones, Config | ✅ | ✅ |
-| **Insights IA** (resumen/sentimiento por conversación) | 🔒 | ✅ |
-| **Estadísticas** (volumen, retención) | 🔒 | ✅ |
-| **Costos** (gasto de IA con tope mensual) | 🔒 | ✅ |
-| **Mejoras** (flywheel: el bot propone KB/lecciones) | 🔒 | ✅ |
-| **Campañas** (difusiones por segmento) | 🔒 | ✅ |
-| **Catálogo** (`catalogQuery` — productos/inventario) | 🔒 | ✅ |
-| **Imágenes** (el bot "ve" fotos) | 🔒 | ✅ |
-| **Giros (niche packs)** con panel a la medida | 🔒 | ✅ |
+| Recurso | Free | Pro | Se hace cumplir en |
+|---|---|---|---|
+| Contactos únicos | 50 | ∞ | `agent.ts` (conversación nueva) |
+| Mensajes IA / mes | 500 | ∞ | `agent.ts` (cada entrante) |
+| Canales conectados | 2 | ∞ | `routes.ts` (POST de Conexiones) |
+| Reglas de automatización | 5 | ∞ | `routes.ts` (`auto_rules`) |
+| Respuestas automáticas (auto-DM) / mes | 100 | ∞ | `channels/zernio.ts` |
+| Links trackeados | 3 | ∞ | `limits.checkLimit("trackedLinks")` |
+| Cuentas Zernio | 1 | ∞ | (definido; se muestra en el panel) |
+| Historial de logs | 7 días | ∞ | (definido; la purga real es a 90 d) |
 
-> Implementación: `src/config.ts` (`PRO_ONLY_TOOLS`, `PRO_ONLY_TABS`),
-> `src/tools/index.ts` (gating de `catalogQuery`), `src/admin/views/layout.ts`
-> (tabs bloqueados con candado + nota de upgrade interna).
+Todos los chequeos son **fail-open**: si el conteo falla, el mensaje pasa.
 
-## 3. Cómo se controla
+- `FREE_LIMITS` / `PRO_LIMITS` en `src/limits.ts` — cambia ahí los números.
+- `PRO_LIMITS` = todo `null` (sin tope).
+- `checkChannelLimit()` — gate de canales; `channelLimitGate()` en `routes.ts` lo
+  aplica a las cards de Telegram, Zernio, WAHA y MercadoLibre. **Nota:** los
+  canales que se conectan por `wrangler secret put` (Twilio, Meta, ManyChat) NO
+  pasan por el panel, así que ese tope solo aplica a los canales de panel.
+
+## 3. Cómo se controla el tier
 
 | Mecanismo | Cómo |
 |---|---|
-| **Tier del bot** | Licencia Pro (`KOONI-PRO-V2-…`, Ed25519) pegada en `/admin/licencia`. `BOT_TIER` en `wrangler.toml` es solo informativo. |
-| **Panel** | En Pro se ven Análisis/Campañas; en Free se ven bloqueados con candado |
-| **Tools** | `catalogQuery` solo existe en Pro; las demás son libres |
-| **Nota de upgrade** | La página de upgrade explica cómo activar Pro (sin links externos) |
+| **Tier del bot** | Licencia Pro (`KOONI-PRO-V2-…`, Ed25519) pegada en `/admin/licencia`. Sin licencia válida → Free (con límites). `BOT_TIER` en `wrangler.toml` es solo informativo. |
+| **Funciones** | Ninguna gateada. `PRO_ONLY_TOOLS` y `PRO_ONLY_TABS` (en `src/config.ts`) quedaron vacíos; `unlockedModules()` devuelve siempre todo. |
+| **Límites** | `getLimits(env)` → `PRO_LIMITS` si hay licencia válida, `FREE_LIMITS` si no. |
 
-> Por bot: cada instancia desplegada tiene SU tier. Un bot free y uno pro
-> pueden convivir en la misma cuenta con recursos separados.
+> Por bot: cada instancia desplegada tiene SU licencia. Un bot free y uno pro
+> conviven en la misma cuenta con recursos separados.
 
-## 4. Camino a un modelo de pago (roadmap — pendiente de detallar)
+## 4. Volver a un modelo con paywall (si algún día se quiere)
 
-Cuando quieras cobrar, las piezas ya preparadas son:
+Todo quedó preparado para revertir:
 
-1. **Giros premium como producto.** Crear `src/niches/*.ts` por giro (barbería,
-   restaurante, clínica…) y ofrecerlos como el diferenciador de pago
-   (patrón: `docs/FLUJOS.md` § Nivel 3).
-2. **Licencias por bot.** El tier se decide por bot: el plan pago activa una
-   licencia Pro (`KOONI-PRO-V2-…`) + giros. Opciones:
-   - **Simple (hoy):** entregar el repo/config al cliente con su tier y su
-     propia Cloudflare (self-host).
-   - **Con dashboard central (después):** el bot ya trae `/api/*` (conteos,
-     protegido por `CONTROL_PLANE_TOKEN`) y `PEER_BOTS` (selector de proyectos)
-     — la base para un panel multibot.
-3. **Cobro.** Stripe/Mercado Pago vía el dashboard central (no implementado aún
-   — se detalla en una iteración futura).
-4. **Blindaje anti-piratería.** Los giros premium pueden vivir en un repo/carpeta
-   aparte (`member/` se conserva en updates; los nichos se entregan como archivos
-   de config, no como secreto).
+- Repoblar `PRO_ONLY_TOOLS` / `PRO_ONLY_TABS` / `PRO_GATE` (en `routes.ts`).
+- Devolver a `unlockedModules()` / `isModuleUnlocked()` (en `src/modules.ts`) la
+  lógica de licencia + `module_unlocks` (está en el historial de git).
+- El catálogo `PAID_MODULES` sigue intacto (se usa para las etiquetas del panel).
 
-## 5. Recomendación (lo simple primero)
+## 5. Los tres niveles
 
-1. Sigue con **un solo bot Pro** para ti (internal) y prueba todo.
-2. Cuando quieras vender: **cobra por bot desplegado** (instalación +
-   configuración + mantenimiento), con el tier pro como "feature".
-3. Documenta cada giro como un archivo (`src/niches/`) — el "catálogo" de tu
-   oferta. Eso ES el producto.
+| Nivel | Precio | Qué entrega |
+|---|---|---|
+| **Gratis** | $0 | El código completo (MIT), con los límites de uso del panel (§ 2). |
+| **Licencia** | fundador **$39** · Pro **$12/mes** | Quita los límites de uso del panel. Código `KOONI-PRO-V2-…` (`kind: monthly` con 7 días de gracia). |
+| **Kit de agencia** | **$149** | Packs de conocimiento por rubro, materiales de marca blanca, guía de venta y soporte de implementación. **NO es "el código"** — el código ya es gratis. Vive fuera de este repo. |
 
-Detalle de despliegue para producción: [`DESPLIEGUE.md`](./DESPLIEGUE.md).
+> El código nunca es lo que se paga: es MIT y es el embudo. Lo que se cobra es
+> quitar topes (Licencia) o contenido + servicio (Kit de agencia).
+
+Detalle de despliegue para producción: [`DESPLIEGUE.md`](./DESPLIEGUE.md) ·
+Licencias: [`LICENCIAS.md`](./LICENCIAS.md).

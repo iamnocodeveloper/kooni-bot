@@ -1,18 +1,17 @@
 /**
- * Módulos de pago (Kooni+ a la carta) — features premium vendibles por
- * separado (pago único o membresía), además del Pro base.
+ * Catálogo de funciones "Extras" (Kooni+).
  *
- * Cómo se activa un módulo en una instalación (cualquiera de estas gana):
- *   1. BOT_TIER=pro en wrangler.toml              → todos los módulos.
- *   2. Licencia KOONI-PRO-... con payload.modules  → solo los listados.
- *      (un código SIN campo modules = licencia legada → TODOS los módulos)
- *   3. Setting module_unlocks (JSON array)         → override del DUEÑO de la
- *      plataforma: activa módulos a mano por instalación sin generar códigos
- *      (se setea directo en D1 o desde el admin de pagos; NO está en el panel
- *      del cliente).
+ * MODELO (2026-09-07): **todas las funciones están disponibles en TODOS los
+ * planes.** No hay paywall por feature — el free y el Pro tienen exactamente el
+ * mismo set de capacidades. Lo único que separa a Pro del free son los
+ * **límites de cantidad** (contactos, mensajes/mes, canales…) en `src/limits.ts`.
+ *
+ * Este array sigue siendo la fuente de verdad de las etiquetas/descripciones que
+ * el panel muestra en el menú Extras; el dueño activa o apaga cada función con
+ * su propio toggle. `unlockedModules()` / `isModuleUnlocked()` devuelven SIEMPRE
+ * "todo desbloqueado" — quedaron como no-ops para no tocar los ~15 llamadores.
  */
 import type { Env } from "./env";
-import { Db } from "./db/client";
 
 export interface PaidModule {
   id: string;
@@ -154,68 +153,34 @@ export const PAID_MODULES: PaidModule[] = [
   },
 ];
 
-/** Setting (D1) con el override del dueño de la plataforma: JSON array de ids. */
+/**
+ * Setting (D1) legado — override del dueño para activar módulos sueltos.
+ * Ya no hace falta (todo viene desbloqueado); se conserva la constante para no
+ * romper imports y por si se quiere volver a un modelo con paywall.
+ */
 export const MODULE_UNLOCKS_SETTING = "module_unlocks";
 
 const MODULE_BY_ID = new Map(PAID_MODULES.map((m) => [m.id, m]));
+const ALL_MODULE_IDS: readonly string[] = PAID_MODULES.map((m) => m.id);
 
 export function moduleById(id: string): PaidModule | undefined {
   return MODULE_BY_ID.get(id);
 }
 
-function parseJsonList(raw: string | null | undefined): string[] {
-  if (!raw) return [];
-  try {
-    const arr = JSON.parse(raw);
-    return Array.isArray(arr) ? arr.filter((x) => typeof x === "string") : [];
-  } catch {
-    return [];
-  }
-}
-
 /**
- * Módulos desbloqueados en esta instalación (tier pro → todos; licencia con
- * modules → los listados; licencia legada sin modules → todos; override del
- * dueño se SUMA a todo lo anterior). Acepta un snapshot de settings para
- * evitar re-leer la tabla cuando el llamador ya la tiene.
+ * Módulos desbloqueados en esta instalación. MODELO ACTUAL: **todos, siempre**
+ * — no hay paywall por feature; lo que separa free de Pro son los límites de
+ * cantidad (`src/limits.ts`). Se mantiene `async` y la firma para no tocar los
+ * llamadores. `_env`/`_settings` quedan sin usar a propósito.
  */
-export async function unlockedModules(env: Env, settingsSnapshot?: Record<string, string>): Promise<Set<string>> {
-  const out = new Set<string>();
-  const all = () => PAID_MODULES.forEach((m) => out.add(m.id));
-
-  try {
-    const { SettingsRepo, SETTING_KEYS } = await import("./db/settings");
-    const settings = settingsSnapshot ?? (await new SettingsRepo(new Db(env.DB)).all());
-    const get = (k: string) => settings[k]?.trim() || undefined;
-
-    // 1) Override del dueño de la plataforma (activación manual por instalación).
-    for (const id of parseJsonList(get(MODULE_UNLOCKS_SETTING))) {
-      if (MODULE_BY_ID.has(id)) out.add(id);
-    }
-
-    // 2) Licencia Pro con módulos.
-    const code = get(SETTING_KEYS.proLicense);
-    if (code) {
-      const { verifyLicenseFor } = await import("./license");
-      if (verifyLicenseFor(env, code, { instanceUid: env.BOT_INSTANCE_ID })) {
-        const { verifyLicense } = await import("./license");
-        const payload = verifyLicense(code, env);
-        if (payload) {
-          // Licencia legada (sin campo modules) = Pro completo → todos.
-          if (payload.modules === undefined) all();
-          else for (const id of payload.modules) if (MODULE_BY_ID.has(id)) out.add(id);
-        }
-      }
-    }
-  } catch (e) {
-    console.warn("[modules] falló la lectura de módulos — fail-open:", e);
-  }
-
-  return out;
+export async function unlockedModules(
+  _env: Env,
+  _settingsSnapshot?: Record<string, string>,
+): Promise<Set<string>> {
+  return new Set(ALL_MODULE_IDS);
 }
 
-/** ¿Este módulo está desbloqueado? (usado por gates de features y tabs). */
-export async function isModuleUnlocked(env: Env, id: string): Promise<boolean> {
-  if (!MODULE_BY_ID.has(id)) return true; // módulo desconocido = no gatear
-  return (await unlockedModules(env)).has(id);
+/** ¿Este módulo está desbloqueado? Siempre sí (ver `unlockedModules`). */
+export async function isModuleUnlocked(_env: Env, _id: string): Promise<boolean> {
+  return true;
 }

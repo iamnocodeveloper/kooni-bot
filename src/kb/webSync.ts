@@ -2,7 +2,6 @@ import type { Env } from "../env";
 import { Db } from "../db/client";
 import { SettingsRepo, SETTING_KEYS } from "../db/settings";
 import { KbDocsRepo, indexDoc, removeDocVectors, MAX_DOC_CHARS } from "./docs";
-import { isModuleUnlocked } from "../modules";
 import { scrapeUrl, decodoConfigured } from "../integrations/decodo";
 
 // Sincroniza páginas web a la KB del bot. Pensado para UNA instalación (un
@@ -143,9 +142,8 @@ export interface WebSyncSummary {
 export async function runWebSync(env: Env): Promise<WebSyncSummary> {
   const empty: WebSyncSummary = { scraped: 0, updated: 0, unchanged: 0, errors: [] };
 
-  if (!(await isModuleUnlocked(env, "web_sync"))) {
-    return { ...empty, skipped: "módulo web_sync no desbloqueado" };
-  }
+  // MODELO (2026-09-07): web_sync disponible en todos los planes — solo pide el
+  // secret DECODO_AUTH (cuenta de scraping del dueño).
   if (!decodoConfigured(env)) {
     return { ...empty, skipped: "falta el secret DECODO_AUTH" };
   }

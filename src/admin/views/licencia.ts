@@ -5,7 +5,6 @@ import { Db } from "../../db/client";
 import { SettingsRepo, SETTING_KEYS } from "../../db/settings";
 import { inspectLicense } from "../../license";
 import { FREE_LIMITS } from "../../limits";
-import { PAID_MODULES, unlockedModules } from "../../modules";
 
 const fecha = (ms: number) => new Date(ms).toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" });
 
@@ -54,14 +53,14 @@ export async function renderLicencia(env: Env, msg?: string, isError?: boolean):
              <span style="font-size:10px;letter-spacing:.14em;color:var(--ok);border:1px solid var(--ok);background:var(--ok-soft);padding:3px 10px;font-weight:700">● PRO ACTIVO</span>
              <span class="text-dim text-[11px] font-mono">${esc(vigencia)}</span>
            </div>
-           <p class="text-muted text-[12px]" style="margin:0">Sin límites: contactos, mensajes, canales, automatizaciones, links trackeados y más.${soon ? " <b class=\"text-cream\">Tu código vence pronto</b> — pídele el nuevo a tu proveedor." : ""}</p>
+           <p class="text-muted text-[12px]" style="margin:0">Todas las funciones activas y <b class="text-cream">sin límites de uso</b>: contactos, mensajes/mes, canales, automatizaciones y links trackeados.${soon ? " <b class=\"text-cream\">Tu código vence pronto</b> — pídele el nuevo a tu proveedor." : ""}</p>
          </div>`
         : `<div class="bg-panel border" style="padding:18px 20px;display:flex;flex-direction:column;gap:8px">
            <div style="display:flex;align-items:center;gap:9px">
              <span style="font-size:10px;letter-spacing:.14em;color:var(--dim);border:1px solid var(--line);padding:3px 10px;font-weight:600">○ PLAN GRATIS</span>
              ${ins?.state === "expired" ? `<span class="text-dim text-[11px] font-mono">${esc(vigencia)}</span>` : ""}
            </div>
-           <p class="text-muted text-[12px]" style="margin:0">${ins?.state === "expired" ? "Tu licencia venció. Pega un código nuevo para reactivar Pro." : "Todas las funciones disponibles, con límites de uso. Activa Pro para quitar los límites."}</p>
+           <p class="text-muted text-[12px]" style="margin:0">${ins?.state === "expired" ? "Tu licencia venció. Pega un código nuevo para volver a Pro." : "<b class=\"text-cream\">Todas las funciones están activas</b> — igual que en Pro. El plan gratis solo tiene límites de cantidad (abajo); Pro los quita."}</p>
          </div>`;
 
   const limitsList = Object.entries({
@@ -77,37 +76,11 @@ export async function renderLicencia(env: Env, msg?: string, isError?: boolean):
     .map(([k, v]) => `<div style="display:flex;justify-content:space-between;border:1px solid var(--line);background:var(--panel2);padding:7px 10px;font-size:12px"><span class="text-muted">${esc(k)}</span><span class="font-mono text-cream">${esc(v)}</span></div>`)
     .join("");
 
-  // ── Módulos de pago (Kooni+ a la carta) ──────────────────────────────────
-  const mods = await unlockedModules(env);
-  const moduleRows = PAID_MODULES.map((m) => {
-    const on = mods.has(m.id);
-    return `<div style="display:flex;align-items:flex-start;gap:12px;border:1px solid ${on ? "var(--ok)" : "var(--line)"};background:var(--panel2);padding:11px 12px">
-      <span style="font-size:14px;flex:none;margin-top:1px">${on ? "🔓" : "🔒"}</span>
-      <div style="min-width:0;flex:1">
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-          <span class="text-[13px] font-semibold text-cream">${esc(m.nombre)}</span>
-          <span class="text-[9px] tracking-wide border px-1.5" style="color:var(--dim);border-color:var(--line)">${m.tipo === "pago_unico" ? "PAGO ÚNICO" : "MEMBRESÍA"}</span>
-          ${on ? `<span class="text-[9px] tracking-wide border px-1.5" style="color:var(--ok);border-color:var(--ok)">ACTIVO</span>` : `<span class="text-[9px] tracking-wide border px-1.5" style="color:var(--accent2);border-color:var(--accent2)">BLOQUEADO</span>`}
-        </div>
-        <p class="text-dim text-[11.5px]" style="margin:3px 0 0">${esc(m.descripcion)}</p>
-      </div>
-    </div>`;
-  }).join("");
-
-  const modulesCard = `
-    <div class="bg-panel border" style="padding:18px 20px;display:flex;flex-direction:column;gap:10px">
-      <div style="display:flex;flex-direction:column;gap:2px">
-        <h3 class="font-display font-semibold text-[13.5px] text-cream">Módulos de pago (a la carta)</h3>
-        <p class="text-muted text-[12px]">Features premium vendibles por separado. Un código Pro sin módulos activa TODO (licencia completa); un código con módulos activa solo los incluidos. ${payload?.modules ? `Tu código actual incluye: <span class="font-mono">${esc(payload.modules.join(", "))}</span>.` : ""}</p>
-      </div>
-      <div style="display:flex;flex-direction:column;gap:6px">${moduleRows}</div>
-    </div>`;
-
   const body = `
     <div style="display:flex;flex-direction:column;gap:18px">
       <div style="display:flex;flex-direction:column;gap:2px">
         <h2 class="font-display font-semibold text-[15px] text-cream">Licencia</h2>
-        <p class="text-muted text-[12.5px]">Activa el plan Pro pegando tu código. Se valida localmente (sin servidores).</p>
+        <p class="text-muted text-[12.5px]">Todas las funciones vienen activas en el plan gratis. Pro solo quita los límites de cantidad. Se valida localmente (sin servidores).</p>
       </div>
       ${banner}
       ${statusCard}
@@ -122,11 +95,10 @@ export async function renderLicencia(env: Env, msg?: string, isError?: boolean):
           </div>
         </form>
       </div>
-      ${modulesCard}
       <div class="bg-panel border" style="padding:18px 20px;display:flex;flex-direction:column;gap:10px">
         <h3 class="font-display font-semibold text-[13.5px] text-cream">Límites del plan gratis</h3>
         <div style="display:flex;flex-direction:column;gap:6px">${limitsList}</div>
-        <p class="text-dim text-[11px]" style="margin:0">Pro quita todos los límites.</p>
+        <p class="text-dim text-[11px]" style="margin:0">Ninguna función está bloqueada — estos son los únicos topes. Pro los quita todos.</p>
       </div>
     </div>`;
 

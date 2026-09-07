@@ -5,7 +5,6 @@ import type { Env } from "./env";
 import { Db } from "./db/client";
 import { ConversationsRepo } from "./db/conversations";
 import { MessagesRepo } from "./db/messages";
-import { isProUnlocked } from "./config";
 import { resolveAgentConfig } from "./settings-loader";
 import { buildTools } from "./tools";
 import { buildMultimodalUserMessage } from "./media/vision";
@@ -111,28 +110,35 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
       console.warn("[contacts] no se pudo registrar el contacto:", e);
     }
 
-    // ── Límite de contactos (free): si hay una conversación nueva y se llegó
-    // al tope, se responde amablemente una vez y no se procesa. Fail-open.
+    // ── Límites de uso del plan (free): contactos (solo en conversación nueva)
+    // y mensajes/mes (en cada entrante). Si se llegó al tope, se responde
+    // amablemente UNA vez y no se procesa con la IA. Fail-open: cualquier error
+    // en el chequeo deja pasar el mensaje.
     if (payload.text && !payload.isOwnerMessage) {
       try {
         const { checkLimit, limitMessage } = await import("./limits");
         const convCount = await convs.count();
         const isNew = convCount > 0 && conv.started_at === conv.last_message_at; // recién creada
-        if (isNew) {
-          const check = await checkLimit(this.env, "contacts");
+        // Conversación nueva: contactos + mensajes/mes. Conversación existente:
+        // solo mensajes/mes.
+        const checks = isNew
+          ? (["contacts", "messagesThisMonth"] as const)
+          : (["messagesThisMonth"] as const);
+        for (const res of checks) {
+          const check = await checkLimit(this.env, res);
           if (!check.allowed) {
-            const msg = limitMessage("contacts", check.used, check.limit ?? 0);
+            const msg = limitMessage(res, check.used, check.limit ?? 0);
             await new MessagesRepo(db).append(conv.id, "assistant", msg);
             await pickAdapter(payload.channel as ChannelId).sendReply(
               { channel: payload.channel as ChannelId, channelUserId: payload.channelUserId, chunks: [msg] },
               this.env,
             );
-            console.warn(`[limits] contactos al tope (${check.used}/${check.limit}) — conversación ${conv.id} rechazada`);
+            console.warn(`[limits] ${res} al tope (${check.used}/${check.limit}) — conversación ${conv.id} no procesada`);
             return { acknowledged: true };
           }
         }
       } catch (e) {
-        console.warn("[limits] chequeo de contactos falló — fail-open:", e);
+        console.warn("[limits] chequeo de uso falló — fail-open:", e);
       }
     }
 
@@ -215,19 +221,15 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
     if (payload.imageUrl) {
       if (oidoVistaOn) {
         hasImage = true;
-        // Pro-only: if free tier, strip the image and inform the bot owner-side
-        if (!(await isProUnlocked(this.env))) {
-          processedText =
-            (processedText || "") +
-            "\n(El cliente mandó una imagen, pero tu plan no soporta análisis de imágenes.)";
-        } else {
-          processedText =
-            (processedText || "(imagen sin caption)") +
-            // MASKED: a Telegram file URL carries the bot token inside, and this
-            // marker gets persisted in D1 (and shown in the dashboard, and
-            // included in exports). See src/telegramFiles.ts.
-            `\n[IMAGE_URL: ${maskTelegramToken(refFor(payload.channel, payload.imageUrl))}]`;
-        }
+        // Análisis de imágenes disponible en todos los planes (gate solo el
+        // toggle "Oído y vista" del dueño). El límite de plan es de cantidad,
+        // no de features — ver src/limits.ts.
+        processedText =
+          (processedText || "(imagen sin caption)") +
+          // MASKED: a Telegram file URL carries the bot token inside, and this
+          // marker gets persisted in D1 (and shown in the dashboard, and
+          // included in exports). See src/telegramFiles.ts.
+          `\n[IMAGE_URL: ${maskTelegramToken(refFor(payload.channel, payload.imageUrl))}]`;
       } else {
         processedText = (processedText || "") + "\n(El cliente mandó una foto; esta instalación no tiene 'Oído y vista' activado. Pídele que describa.)";
       }
@@ -375,7 +377,7 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
     const lastUserMsg = history[history.length - 1];
     if (lastUserMsg) {
       const imgMatch = lastUserMsg.content.match(/\[IMAGE_URL: (.+?)\]/);
-      if (imgMatch && (await isProUnlocked(this.env))) {
+      if (imgMatch) {
         // The token was masked before storing; it goes back in only here, to
         // fetch the file. It never leaves this call. `stripRef` undoes the
         // `waha:` scheme tag (§ V Fase 2) that only the panel's media proxy
