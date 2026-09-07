@@ -162,7 +162,6 @@ Todo en el ecosistema de Cloudflare: un solo `pnpm run deploy` y está en línea
 │   └── db/schema.sql    #   esquema D1
 ├── member/              # Datos del negocio (NUNCA se sobrescriben en updates)
 ├── skill/               # Skills para Claude Code (instalar, actualizar, reporte…)
-├── cli/                 # CLI legacy (solo referencia histórica — no usar)
 ├── cli-kooni/           # CLI de instalación: npx kooni-bot init/update
 ├── docs/                # Documentación de Kooni (identidad, arquitectura, despliegue)
 └── assets/              # Logo y favicon de Kooni

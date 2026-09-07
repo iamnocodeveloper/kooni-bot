@@ -184,8 +184,8 @@ Pasos:
    re-etiquetado del panel, columnas y el tag del playbook).
 4. Opcional: plantillas de KB en `docs/kb-plantillas/<giro>-*.md` y referéncialas
    en `kbDocs`.
-5. Pon `BOT_NICHE = "<giro>"` en `wrangler.toml` (`[vars]`) — el CLI lo estampa
-   solo según el slug instalado (`NICHE_SLUGS` en `cli/bin/cli.js`).
+5. Pon `BOT_NICHE = "<giro>"` en la sección `[vars]` de `wrangler.toml` y
+   redespliega (`pnpm run deploy`). Nicho ausente/desconocido → `generico`.
 
 El dashboard se re-etiqueta solo; las columnas del nicho se guardan en
 `leads.metadata` (JSON) vía `captureLead`. Nicho ausente/desconocido → `generico`.

@@ -5,6 +5,31 @@
 
 ---
 
+## 🧹 LIMPIEZA + DECISIÓN DE REPO (2026-09-07)
+
+**Decisión de Joel:** NO se crea un segundo repo (`kooni-packs`). El repo se
+queda **privado por ahora "hasta definir"** el modelo comercial. Cuando se haga
+público hay que sacar antes: `PLAN.md`, `docs/BITACORA-*.md` (nombres de clientes
+reales + IDs de cuenta Cloudflare) → mover a `admin-pagos/` o `.private/`. La
+separación de nichos por rubro (barbería/clínica/inmobiliaria/restaurante →
+privado) también queda para cuando el repo sea público.
+
+**Nota codeload:** con el repo privado, `npx kooni-bot init` NO funciona para
+gente nueva (GitHub codeload da 404 sin auth). Las 2 instalaciones actuales ya
+tienen el código. Al volver público se restablece solo.
+
+**Borrado (commit de limpieza):**
+- `cli/` — CLI legacy de Forja (su README decía "no usar", traía "para revenderlo")
+- `.github/workflows/publish-cli.yml` — roto (apuntaba a `santmun/forja`)
+- `morfllm.code-workspace` — cruft (apuntaba a `../morfllm`)
+- `como-funciona.html` — 88 KB, branding naranja viejo, sin referencias
+- refs a `cli/bin/cli.js` en `README.md` y `docs/ARQUITECTURA.md`
+
+El CLI real es `cli-kooni/` (`kooni-bot`, npm 0.3.3). `web/` y `admin-pagos/`
+siguen gitignored (repos aparte del dueño).
+
+---
+
 ## 🏁 CIERRE DE ETAPA — v1.27.0 (2026-09-07): modelo "solo límites de cantidad"
 
 > **Decisión de Joel:** el plan gratis da acceso a **TODAS las funciones**; lo
