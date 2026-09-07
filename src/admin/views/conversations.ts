@@ -14,11 +14,13 @@
 import type { Env } from "../../env";
 import { Db } from "../../db/client";
 import { InsightsRepo } from "../../db/insights";
+import { MessagesRepo, type MessageButton } from "../../db/messages";
 import { SENTIMENT_BADGE } from "./insights";
 import { costOfUsage, type ModelId } from "../../pricing";
 import { channelLabel } from "../../channels/labels";
 import { layout } from "./layout";
 import { fmtDateTime } from "../format";
+import { TELEGRAM_TOKEN_MASK } from "../../telegramFiles";
 
 /** Tiempo relativo corto en español (ej. "hace 5 min", "hace 2 h", "hace 3 d"). */
 function ago(ms: number | null | undefined): string {
@@ -54,6 +56,90 @@ const SENTIMENT_COLOR: Record<string, string> = {
 
 function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
+}
+
+// Extensiones que se ofrecen para descargar en vez de solo abrir en una pestaña.
+const DOWNLOADABLE_EXT = /\.(pdf|jpe?g|png|gif|webp|mp4|mov|mp3|wav|csv|xlsx?|docx?|zip)(?=[?#]|$)/i;
+
+// [IMAGE_URL: ...] / [AUDIO_URL: ...] — marcadores que `agent.ts` deja en
+// `messages.content` cuando el cliente manda una foto/audio (§ V Fase 2). Se
+// quitan del texto visible y se convierten en una vista previa real.
+const MEDIA_MARKER_RE = /\n?\[(IMAGE|AUDIO)_URL: (.+?)\]/g;
+
+/** Separa el texto normal de las referencias de media que trae un mensaje. */
+export function extractMedia(content: string): { text: string; images: string[]; audios: string[] } {
+  const images: string[] = [];
+  const audios: string[] = [];
+  const text = content
+    .replace(MEDIA_MARKER_RE, (_m, kind: string, ref: string) => {
+      (kind === "IMAGE" ? images : audios).push(ref);
+      return "";
+    })
+    .trim();
+  return { text, images, audios };
+}
+
+/**
+ * De la referencia guardada a un `src` seguro para el navegador. Telegram y
+ * WAHA necesitan credenciales del servidor para volver a descargar el
+ * archivo — pasan por el proxy de `src/admin/media.ts`, que nunca expone el
+ * token/API key. El resto (WhatsApp Cloud ya firmado, Meta, Zernio) se sirve
+ * directo: son CDNs del proveedor, sin credencial que proteger acá.
+ */
+export function mediaSrc(ref: string): string {
+  if (ref.startsWith("waha:")) return `/admin/media/waha?u=${encodeURIComponent(ref.slice(5))}`;
+  if (ref.includes(TELEGRAM_TOKEN_MASK)) return `/admin/media/telegram?u=${encodeURIComponent(ref)}`;
+  return ref;
+}
+
+/**
+ * Chips de los botones que se adjuntaron a una respuesta (§ V Fase 3). Los de
+ * tipo `url` salen como link real (el dueño puede abrirlo); los `callback`
+ * solo tienen sentido dentro del canal real (Telegram/Zernio), así que en el
+ * panel se muestran informativos, no clicables.
+ */
+export function buttonChipHtml(buttons: MessageButton[]): string {
+  if (!buttons.length) return "";
+  const chips = buttons
+    .map((b) =>
+      b.kind === "url" && b.value
+        ? `<a href="${escapeHtml(b.value)}" target="_blank" rel="noopener noreferrer" style="font-size:11px;color:var(--accent-2);border:1px solid var(--linelit);background:var(--panel2);padding:4px 10px;border-radius:999px;text-decoration:none">${escapeHtml(b.label)} ↗</a>`
+        : `<span title="Botón de respuesta rápida — solo funciona dentro del canal real" style="font-size:11px;color:var(--muted);border:1px dashed var(--linelit);background:var(--panel2);padding:4px 10px;border-radius:999px">${escapeHtml(b.label)}</span>`,
+    )
+    .join("");
+  return `<div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end">${chips}</div>`;
+}
+
+/** Miniaturas de imagen (click → abrir grande) + reproductores de audio. */
+function mediaHtml(images: string[], audios: string[]): string {
+  if (images.length === 0 && audios.length === 0) return "";
+  const imgs = images
+    .map(
+      (u) =>
+        `<img src="${escapeHtml(mediaSrc(u))}" loading="lazy" alt="Imagen del cliente" style="max-width:220px;max-height:220px;border-radius:8px;border:1px solid var(--line);cursor:pointer;display:block" onclick="window.open(this.src, '_blank')">`,
+    )
+    .join("");
+  const auds = audios
+    .map((u) => `<audio controls preload="metadata" style="max-width:260px" src="${escapeHtml(mediaSrc(u))}"></audio>`)
+    .join("");
+  return `<div style="display:flex;flex-direction:column;gap:6px">${imgs}${auds}</div>`;
+}
+
+/**
+ * Envuelve URLs http(s) en `<a>` clicable (y `download` si termina en una
+ * extensión conocida). Recibe texto YA escapado (`escapeHtml`) — el resultado
+ * sigue siendo HTML seguro: solo agrega tags alrededor, nunca decodifica nada.
+ */
+export function linkify(escapedText: string): string {
+  return escapedText.replace(/https?:\/\/[^\s<>]+/g, (match) => {
+    // Puntuación de cierre de frase que casi nunca es parte de la URL.
+    const trailMatch = match.match(/[.,;:!?)\]]+$/);
+    const trail = trailMatch ? trailMatch[0] : "";
+    const url = trail ? match.slice(0, -trail.length) : match;
+    if (!url) return match;
+    const downloadAttr = DOWNLOADABLE_EXT.test(url) ? " download" : "";
+    return `<a href="${url}" target="_blank" rel="noopener noreferrer"${downloadAttr}>${url}</a>${trail}`;
+  });
 }
 
 function modelShort(modelId: string): string {
@@ -288,6 +374,9 @@ export async function renderThreadLive(env: Env, convId: string): Promise<string
     "SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at DESC LIMIT 100",
     [convId],
   );
+  // Botones adjuntos a las respuestas del bot (§ V Fase 3) — una sola pasada
+  // para todo el hilo en vez de una consulta por mensaje.
+  const buttonsByMsg = await new MessagesRepo(db).buttonsForMessages(msgs.map((m) => m.id));
 
   const now = Date.now();
   const paused = conv.paused_until && conv.paused_until > now;
@@ -374,9 +463,11 @@ export async function renderThreadLive(env: Env, convId: string): Promise<string
       }
 
       if (m.role === "user") {
+        const { text, images, audios } = extractMedia(m.content);
         return `
         <div style="display:flex;flex-direction:column;align-items:flex-start;gap:4px;max-width:78%">
-          <div style="background:var(--panel2);border:1px solid var(--line);padding:9px 13px;font-size:12.5px;line-height:1.5;white-space:pre-wrap;color:var(--cream)">${escapeHtml(m.content)}</div>
+          ${mediaHtml(images, audios)}
+          <div style="background:var(--panel2);border:1px solid var(--line);padding:9px 13px;font-size:12.5px;line-height:1.5;white-space:pre-wrap;color:var(--cream)">${linkify(escapeHtml(text))}</div>
           <span style="font-size:9.5px;color:var(--dim)">${time}</span>
         </div>`;
       }
@@ -392,7 +483,8 @@ export async function renderThreadLive(env: Env, convId: string): Promise<string
       return `
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;max-width:78%;margin-left:auto">
         ${chips}
-        <div style="${bubbleBg};padding:9px 13px;font-size:12.5px;line-height:1.5;white-space:pre-wrap;color:var(--cream)">${escapeHtml(m.content)}</div>
+        <div style="${bubbleBg};padding:9px 13px;font-size:12.5px;line-height:1.5;white-space:pre-wrap;color:var(--cream)">${linkify(escapeHtml(m.content))}</div>
+        ${buttonChipHtml(buttonsByMsg.get(m.id) ?? [])}
         <span style="font-size:9.5px;color:var(--dim)">${meta}</span>
       </div>`;
     })

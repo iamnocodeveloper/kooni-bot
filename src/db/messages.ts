@@ -2,6 +2,13 @@ import { Db } from "./client";
 
 export type MessageRole = "user" | "assistant" | "tool" | "owner";
 
+/** Botón adjunto a una respuesta (§ V Fase 3) — ver `message_buttons` en schema.sql. */
+export interface MessageButton {
+  label: string;
+  kind: "url" | "callback";
+  value: string | null;
+}
+
 export interface Message {
   id: string;
   conversation_id: string;
@@ -61,6 +68,42 @@ export class MessagesRepo {
       ],
     );
     return id;
+  }
+
+  /** Guarda los botones que se adjuntaron a una respuesta (§ V Fase 3). */
+  async saveButtons(
+    messageId: string,
+    buttons: { text: string; url?: string; callback?: string }[],
+  ): Promise<void> {
+    for (const [idx, b] of buttons.entries()) {
+      await this.db.run(
+        `INSERT INTO message_buttons (id, message_id, idx, label, kind, value) VALUES (?, ?, ?, ?, ?, ?)`,
+        [
+          crypto.randomUUID(),
+          messageId,
+          idx,
+          b.text,
+          b.url ? "url" : "callback",
+          b.url ?? b.callback ?? null,
+        ],
+      );
+    }
+  }
+
+  /** Botones de varios mensajes de una sola pasada (evita N+1 al pintar el hilo). */
+  async buttonsForMessages(messageIds: string[]): Promise<Map<string, MessageButton[]>> {
+    const byMessage = new Map<string, MessageButton[]>();
+    if (messageIds.length === 0) return byMessage;
+    const placeholders = messageIds.map(() => "?").join(",");
+    const rows = await this.db.all<{ message_id: string; label: string; kind: "url" | "callback"; value: string | null }>(
+      `SELECT message_id, label, kind, value FROM message_buttons WHERE message_id IN (${placeholders}) ORDER BY idx ASC`,
+      messageIds,
+    );
+    for (const r of rows) {
+      if (!byMessage.has(r.message_id)) byMessage.set(r.message_id, []);
+      byMessage.get(r.message_id)!.push({ label: r.label, kind: r.kind, value: r.value });
+    }
+    return byMessage;
   }
 
   async lastN(conversationId: string, n: number): Promise<Message[]> {

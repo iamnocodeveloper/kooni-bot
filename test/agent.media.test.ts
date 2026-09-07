@@ -154,7 +154,11 @@ describe("SupportAgent.ingest — media (Task 6.3)", () => {
 
     expect(agent.env.AI.run).toHaveBeenCalled();
     expect(agent.state.pendingMessages).toHaveLength(1);
-    expect(agent.state.pendingMessages[0].text).toBe("hola desde un audio");
+    // §V Fase 2: además de la transcripción, se guarda un marcador para poder
+    // reproducir el audio original en el panel (docs/PLAN.md).
+    expect(agent.state.pendingMessages[0].text).toBe(
+      "hola desde un audio\n[AUDIO_URL: https://example.com/voice.ogg]",
+    );
   });
 
   it("falls back to a friendly message when transcription throws", async () => {
@@ -169,8 +173,10 @@ describe("SupportAgent.ingest — media (Task 6.3)", () => {
       audioUrl: "https://example.com/voice.ogg",
     });
 
+    // §V Fase 2: el marcador de previsualización se guarda igual aunque la
+    // transcripción falle — el dueño puede escuchar el audio desde el panel.
     expect(agent.state.pendingMessages[0].text).toBe(
-      "(no pude entender el audio)",
+      "(no pude entender el audio)\n[AUDIO_URL: https://example.com/voice.ogg]",
     );
   });
 

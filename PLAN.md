@@ -224,6 +224,104 @@ reales, cero `http` en el texto.
 
 ---
 
+## 🏁 CIERRE DE ETAPA — v1.26.0 (2026-09-07)
+
+> **Estado:** `pnpm test` y `pnpm typecheck` verdes. `package.json` → `1.26.0`.
+> Recoge el trabajo de **§ V** (Chat del CRM: links + media + botones), que ya
+> estaba en el working tree marcado "HECHO (2026-09-05)" sin commitear.
+
+Qué entró:
+
+- **§ V Fase 1** — `linkify()` en `renderThreadLive`: los `http(s)://…` del hilo
+  salen como `<a target="_blank" rel="noopener">`, con `download` si la URL
+  termina en extensión de archivo conocida.
+- **§ V Fase 2** — previsualización de media entrante. Marcador `[AUDIO_URL: …]`
+  nuevo (el audio del cliente ahora se guarda además de transcribirse); proxies
+  autenticados `/admin/media/telegram` y `/admin/media/waha` (`src/admin/media.ts`)
+  detrás del guard de `/admin/*` — el token de Telegram y la API key de WAHA
+  nunca llegan al navegador. WAHA valida que la URL sea del host configurado
+  (anti-SSRF). Helpers `refFor`/`stripRef` en `agent.ts`. Resto de canales: se
+  muestran directo, mejor esfuerzo.
+- **§ V Fase 3** — los botones del menú ahora se **persisten** (`message_buttons`,
+  tabla nueva idempotente en `schema.sql`; `MessagesRepo.saveButtons()` /
+  `.buttonsForMessages()`). El cálculo de `buttons` se adelantó a antes de
+  `msgs.append`. El panel los muestra como chip (`url` → link real, `callback` →
+  chip informativo).
+- Tests nuevos: `conversations-linkify`, `conversations-media`, `media`,
+  `agent.refFor`, `conversations-buttons`, `db/messages` (botones).
+
+Fuera de alcance (sin empezar): media **saliente** (lo que manda el bot/dueño y
+`enviarRecurso`), video (ningún canal entrega `videoUrl`), Twilio/WhatsApp Cloud
+re-firmado.
+
+**Instalaciones ya vivas:** `pnpm db:apply:remote` para crear `message_buttons`
+(idempotente, no toca datos) + redeploy. `npx kooni-bot update` lo hace solo.
+
+---
+
+## 🔎 REVISIÓN DE INSTALACIÓN — `npx kooni-bot` (2026-09-07)
+
+> Disparador: "revisa el proyecto y el npm/npx para una instalación de demo,
+> verifica que todo esté en orden y documenta hallazgos". Se probó el CLI
+> publicado (`kooni-bot@0.3.2`) y un `init` real no-interactivo contra un
+> directorio temporal (`--no-deploy`). El deploy a Cloudflare NO se probó
+> (requiere cuenta + gasto real); esa parte se revisó solo leyendo el código.
+
+### ✅ Lo que está bien
+
+- `pnpm test` → **828/828** · `pnpm typecheck` → verde (rama `clean-main`).
+- `kooni-bot@0.3.2` en npm === `cli-kooni/bin/kooni.js` local (byte a byte).
+- `npx kooni-bot version` / `help` → OK.
+- `init` (con el fix de abajo) genera correctamente `wrangler.toml` (namespaced
+  con uid), `member/config.local.ts`, `.dev.vars` y `.kooni-bot.json`. No deja
+  archivos temporales (`.kooni-extract`, `.tgz`).
+- `git remote` = `iamnocodeveloper/kooni-bot`, coincide con el `REPO` del CLI.
+
+### 🐛 H-CLI-1 — `init --yes` (modo agente/CI) crasheaba — ✅ RESUELTO Y PUBLICADO
+
+`npx kooni-bot init --yes …` (la ruta no-interactiva que usan Claude Code / el
+skill `/configurar-mi-chatbot` y CI) abortaba con
+**`ReferenceError: flags is not defined`** justo después de descargar el template.
+Causa: `onboarding(rl, answers, defaultDir)` no recibía `flags` pero lo usaba en
+`!!(flags.license || answers.licenseCode)` (líneas ~930/934). En interactivo el
+ternario corta antes y nunca toca `flags` → por eso no se había visto. Afecta a
+**todo `--yes`**, se pase o no `--license`.
+
+- **Fix (commit `0435ed2`, en `clean-main` y `main`):** `onboarding()` ahora
+  recibe `flags = {}` y `cmdInit` se lo pasa.
+- **Publicado:** `kooni-bot@0.3.3` en npm (2026-09-07). Verificado:
+  `npx kooni-bot@latest init --yes --no-deploy` completa sin el crash y baja el
+  template v1.25.0.
+- **Raíz del problema:** `cli-kooni/` no tiene ni un test y no está en la suite
+  de vitest (`include: test/**/*.test.ts`). Sugerencia: smoke test de
+  `parseFlags` + `collectAnswers` + `onboarding` no-interactivo.
+
+### ⚠️ H-CLI-2 — la rama `main` va una versión atrás de lo que se instala
+
+El CLI descarga el template de `iamnocodeveloper/kooni-bot@main`. Hoy:
+
+| | Versión | KB search fix (Vectorize sin metadata) | Canal WAHA |
+|---|---|---|---|
+| `origin/main` (lo que instala `npx kooni-bot`) | **1.24.0** | ❌ no | ❌ no |
+| `origin/clean-main` (dev) | 1.25.0 + working tree | ✅ sí | ✅ sí |
+
+✅ **RESUELTO (2026-09-07):** `git push origin clean-main:main` — `main` ahora
+está en `0435ed2` (v1.25.0 + KB fix + WAHA + el fix del CLI). `npx kooni-bot
+init` ya descarga el template arreglado.
+
+### 📝 Menores
+
+- `.bot-version` (1.24.0) ≠ `package.json` (1.25.0). Cosmético: lo regenera
+  `predeploy` y está en `.gitignore`.
+- CLAUDE.md dice "NO se usa el CLI" — se refiere al `cli/` legacy (`forjabot`),
+  pero el README y el skill `kooni` promueven `npx kooni-bot`. Conviene que
+  CLAUDE.md aclare que el veto es solo al `cli/` viejo.
+- `deployBot`/`cmdDeploy`: `const licenseCode = …` (línea ~1203) queda sin uso.
+- En esta máquina hay un skill `forja` y un skill `kooni` registrados en
+  `~/.claude/skills/` — el de `forja` es del CLI legacy, se puede borrar.
+
+---
+
 ## Nichos por giro (bots especializados estilo Forja)
 
 > **Estado (2026-09-02):** el motor de *niche packs* ya existía (`src/niches/`,
@@ -1480,7 +1578,7 @@ Lo que hay de media hoy:
 - **Audio entrante** → se transcribe a texto; el audio original no se guarda.
 - **WhatsApp Cloud** ya tiene un proxy firmado del media (`/webhooks/whatsapp/media/:id`).
 
-### Fase 1 — Links (fácil, sin esquema)
+### Fase 1 — Links (fácil, sin esquema) — ✅ HECHO (2026-09-05)
 
 En `renderThreadLive`, después de escapar, una pasada de "linkify": envolver
 `https?://\S+` en `<a href target="_blank" rel="noopener noreferrer">`. Para
@@ -1488,29 +1586,110 @@ En `renderThreadLive`, después de escapar, una pasada de "linkify": envolver
 (`.pdf .jpg .png .mp4 .mp3 .csv .xlsx …`), agregar `download`. Tests: que un link
 en el contenido salga como `<a>` y que el texto normal no se rompa.
 
-### Fase 2 — Previsualización de media (esquema + ingest + proxy)
+**Implementado:** función `linkify()` (exportada) en `src/admin/views/conversations.ts`,
+aplicada sobre las dos burbujas de mensaje (cliente y bot/dueño). 7 tests nuevos en
+`test/admin/conversations-linkify.test.ts`. `pnpm test` (800/800) y `tsc --noEmit`
+verdes. Sin cambios de esquema ni de `ingest` — bajo riesgo, ya en el working tree.
 
-1. **Persistir el media al entrar.** Tabla `message_media (id, message_id,
-   kind [image|video|audio|file], mime, url_proxy, created_at)` o
-   `messages.metadata` JSON. Se llena en `agent.ingest` cuando el payload trae
-   `imageUrl` / `audioUrl` (todos los canales, no solo el multimodal Pro).
-2. **Proxy firmado por canal.** Generalizar el patrón de WhatsApp
-   (`/webhooks/whatsapp/media/:id`) a Telegram / Zernio / Meta: una ruta
-   `/admin/media/:id` (con auth de panel) que resuelve la URL real (des-enmascara
-   el token de Telegram sólo acá) y hace stream del archivo. Nunca exponer el
-   token ni la URL cruda al HTML.
-3. **Render en la burbuja.** En `renderThreadLive`, si el mensaje tiene media:
-   `<img loading="lazy">` / `<video controls preload="metadata">` /
-   `<audio controls>` con `src` = el proxy. Miniatura con `max-height` y click →
-   abrir grande (reusar `#modal-root`).
-4. **Audio entrante:** guardar el audio además de transcribirlo, para poder
-   escucharlo en el panel (hoy solo queda el texto).
-5. **Salientes con media:** cuando el dueño responde con imagen/audio desde el
-   panel (si se agrega esa opción) o el bot manda un recurso de la Galería —
-   registrar y mostrar igual.
+### Fase 2 — Previsualización de media — ✅ HECHO, alcance recortado (2026-09-05)
 
-Esfuerzo: Fase 1 ~1h · Fase 2 ~1 día (el proxy por canal es lo que lleva tiempo).
-Riesgo: bajo en Fase 1; medio en Fase 2 (tocar `ingest` + un proxy nuevo).
+> **Corrección de diseño, antes de escribir código:** la URL de WhatsApp
+> (`signedMediaUrl` en `whatsapp.ts`) **expira a los 10 minutos** (`MEDIA_TTL_MS`)
+> — es un proxy pensado para el análisis de imagen inmediato, NO para guardar y
+> volver a ver el hilo días después. Guardar esa URL tal cual habría dejado la
+> vista previa rota pasado ese rato.
+>
+> **Decisión de alcance:** en vez de la tabla `message_media` + proxy genérico
+> para los 8 canales (que exigía resolver Twilio con Basic Auth y WhatsApp
+> re-firmando por `media_id`, sin poder probarlos en vivo), se construyó para
+> los canales que **de verdad usan las 2 instalaciones reales** — Telegram y
+> WAHA — dejando el resto en "se muestra directo, mejor esfuerzo":
+>
+> | Canal | Qué se guarda en el marcador | Cómo se ve en el panel |
+> |---|---|---|
+> | Telegram | el marcador enmascarado que ya existía (`maskTelegramToken`) | proxy nuevo `/admin/media/telegram` — desenmascara + pide el archivo con el token, igual que ya hacía la visión IA |
+> | WAHA | la URL con prefijo `waha:` | proxy nuevo `/admin/media/waha` — agrega la `X-Api-Key` del cliente; **valida que la URL sea del mismo host configurado antes de pedirla (si no, 400)** — sin ese chequeo cualquiera con acceso al panel podría usar la ruta como proxy abierto (SSRF) y de paso filtrar la API key a otro destino |
+> | WhatsApp Cloud / Meta (Messenger/IG) / Zernio / ManyChat | la URL tal cual llega | se muestra directo (`<img>`/`<audio>` apuntan a esa URL); riesgo aceptado de que ya no sirva si pasó mucho tiempo — mismo riesgo que ya tenía la visión IA con estos canales |
+> | Twilio / MercadoLibre / canal "aprendido" | — | fuera de alcance (sin instalación real que los use; MercadoLibre no soporta adjuntos) |
+>
+> Sin tabla nueva ni cambio de esquema: se reusó el mecanismo de marcador en
+> texto que ya existía para imágenes (`[IMAGE_URL: ...]`), extendido con
+> `[AUDIO_URL: ...]` — **el audio entrante ahora se guarda además de
+> transcribirse** (antes solo quedaba el texto). Funciona en cuanto se
+> despliega, sin `db:apply:remote` en las instalaciones ya vivas.
+
+**Implementado:**
+- `src/agent.ts` — marcador `[AUDIO_URL: ...]` (mismo patrón que imagen, mismo
+  gate de "Oído y vista"); helpers `refFor`/`stripRef` (exportados) que marcan
+  la referencia de WAHA con el prefijo `waha:` para el proxy y la destejen antes
+  de pasarla a la visión IA.
+- `src/admin/media.ts` (nuevo) — `serveTelegramMedia`/`serveWahaMedia`, montados
+  en `/admin/media/telegram` y `/admin/media/waha` (`routes.ts`), detrás del
+  mismo guard de auth que el resto de `/admin/*`.
+- `src/admin/views/conversations.ts` — `extractMedia()` saca los marcadores del
+  texto visible; `mediaSrc()` decide si la referencia va al proxy o directo;
+  `mediaHtml()` renderiza `<img>` (miniatura, click → abrir grande) y `<audio
+  controls>` arriba de la burbuja del cliente.
+- Tests nuevos: `test/admin/conversations-media.test.ts`,
+  `test/admin/media.test.ts` (incluye el caso SSRF bloqueado), `test/agent.refFor.test.ts`.
+  `pnpm test` y `tsc --noEmit` verdes.
+
+**Fuera de este alcance (queda para después, sin empezar):**
+- Twilio (necesitaría Basic Auth) y WhatsApp Cloud con re-firmado por `media_id`
+  — nadie los usa en real hoy.
+- Punto 5 del plan original: medios **salientes** (el dueño responde con
+  imagen/audio desde el panel, o `enviarRecurso`/Galería) — hoy solo se
+  previsualiza lo que **manda el cliente**, no lo que envía el bot/dueño.
+- Video: ningún canal entrega `videoUrl` hoy (`IncomingMessage` no tiene ese
+  campo) — no hay de dónde previsualizarlo.
+
+Esfuerzo real: Fase 1 ~1h · Fase 2 (alcance recortado) ~2h. Riesgo: bajo — sin
+tabla nueva, `ingest()` solo gana un `+=` más siguiendo el patrón que ya existía.
+
+### Fase 3 — Botones enviados no se veían en el hilo — ✅ HECHO (2026-09-05)
+
+> **Pedido (Joel, 2026-09-05):** revisar si en las conversaciones de Instagram los
+> botones se ven / son clickeables en `/admin/conversations`.
+>
+> **Hallazgo:** no era un bug de Instagram en particular — **ningún canal** los
+> mostraba, porque **los botones nunca se guardaban**. En
+> `agent.ts::processBuffer`, `msgs.append(convId, "assistant", assistantText,
+> {...})` persistía `modelUsed`/tokens/`toolCalls`, pero los `buttons` (menú
+> configurado en `cfg.menuButtons`) se calculaban **DESPUÉS** de guardar el
+> mensaje, y solo se usaban para el envío real (`adapter.sendReply({ ...,
+> buttons })`) — nunca llegaban a D1. El cliente sí los veía (Instagram/
+> Telegram/Zernio los renderizan nativos); el panel no tenía de dónde sacarlos.
+
+**Implementado** (sin columna nueva en `messages` — misma razón que la Fase 2:
+`schema.sql` tiene que seguir siendo idempotente para instalaciones ya
+desplegadas, y SQLite no tiene `ALTER TABLE ADD COLUMN IF NOT EXISTS`):
+
+- `message_buttons` — tabla NUEVA en `schema.sql` (`id, message_id, idx,
+  label, kind['url'|'callback'], value`), con `ON DELETE CASCADE`.
+- `MessagesRepo.saveButtons()` / `.buttonsForMessages()` (`src/db/messages.ts`)
+  — la segunda trae los botones de TODO el hilo en una sola consulta (`IN
+  (...)`), no una por mensaje.
+- `agent.ts::processBuffer` — el cálculo de `buttons` (menú configurado) se
+  adelantó a ANTES de `msgs.append`; con el id que devuelve, se llama
+  `saveButtons` (best-effort: si falla, no bloquea el envío — el cliente igual
+  recibe los botones, solo no quedaría el chip en el panel).
+- `renderThreadLive` (`conversations.ts`) — `buttonChipHtml()` nueva: botones
+  `url` salen como link real (`target="_blank"`); los `callback` salen como
+  chip informativo (el postback solo tiene sentido dentro del canal real, el
+  panel es de solo lectura).
+- Tests: `test/db/messages.test.ts` (repo, contra D1 real vía Miniflare),
+  `test/admin/conversations-buttons.test.ts` (render puro, incluye caso XSS).
+  `pnpm test` (827/827) y `tsc --noEmit` verdes.
+
+**Fuera de este alcance (queda para después):** los botones/imagen/audio que
+manda la tool `enviarRecurso` (`src/tools/enviarRecurso.ts`) van por un camino
+DISTINTO — `sendReplyCapped` directo desde el `execute()` de la tool, sin pasar
+por `msgs.append` en absoluto. Ese envío ni siquiera queda como fila propia en
+`messages` hoy (ya era así antes de esta Fase 3, no es una regresión) — solo el
+chip genérico "→ enviarRecurso «nombre»" (el que ya existía) deja rastro. Para
+que el panel muestre TAMBIÉN lo que manda `enviarRecurso` (imagen/audio/botones
+reales, no solo el nombre del recurso) hay que registrar esa fila aparte —
+pendiente, sin empezar.
 
 ---
 

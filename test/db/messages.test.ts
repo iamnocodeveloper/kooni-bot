@@ -48,4 +48,41 @@ describe("MessagesRepo", () => {
     expect(msgs).toHaveLength(1);
     expect(msgs[0].content).toBe("new");
   });
+
+  // § V Fase 3 (docs/PLAN.md) — botones adjuntos a una respuesta.
+  describe("saveButtons / buttonsForMessages", () => {
+    it("guarda y devuelve los botones de un mensaje, en orden", async () => {
+      const msgId = await msgRepo.append(convId, "assistant", "elige una opción");
+      await msgRepo.saveButtons(msgId, [
+        { text: "Ver catálogo", url: "https://ejemplo.com/catalogo" },
+        { text: "Agendar", callback: "agendar_click" },
+      ]);
+      const byMsg = await msgRepo.buttonsForMessages([msgId]);
+      expect(byMsg.get(msgId)).toEqual([
+        { label: "Ver catálogo", kind: "url", value: "https://ejemplo.com/catalogo" },
+        { label: "Agendar", kind: "callback", value: "agendar_click" },
+      ]);
+    });
+
+    it("mensaje sin botones: no aparece en el mapa", async () => {
+      const msgId = await msgRepo.append(convId, "assistant", "sin botones");
+      const byMsg = await msgRepo.buttonsForMessages([msgId]);
+      expect(byMsg.has(msgId)).toBe(false);
+    });
+
+    it("lista vacía de ids no consulta nada y devuelve un mapa vacío", async () => {
+      const byMsg = await msgRepo.buttonsForMessages([]);
+      expect(byMsg.size).toBe(0);
+    });
+
+    it("agrupa botones de varios mensajes en una sola pasada", async () => {
+      const id1 = await msgRepo.append(convId, "assistant", "uno");
+      const id2 = await msgRepo.append(convId, "assistant", "dos");
+      await msgRepo.saveButtons(id1, [{ text: "A", url: "https://a.test" }]);
+      await msgRepo.saveButtons(id2, [{ text: "B", url: "https://b.test" }]);
+      const byMsg = await msgRepo.buttonsForMessages([id1, id2]);
+      expect(byMsg.get(id1)).toEqual([{ label: "A", kind: "url", value: "https://a.test" }]);
+      expect(byMsg.get(id2)).toEqual([{ label: "B", kind: "url", value: "https://b.test" }]);
+    });
+  });
 });

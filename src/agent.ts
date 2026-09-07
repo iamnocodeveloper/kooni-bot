@@ -20,6 +20,23 @@ import { costOfUsage } from "./pricing";
 import type { ChannelId, ReplyButton } from "./channels/shared";
 import { maskTelegramToken, unmaskTelegramToken } from "./telegramFiles";
 
+/**
+ * Referencia que se guarda en el marcador `[IMAGE_URL: ...]`/`[AUDIO_URL: ...]`
+ * (§ V Fase 2, previsualización en el panel). Para la mayoría de los canales es
+ * la URL tal cual llegó — Telegram ya se enmascara aparte (`maskTelegramToken`).
+ * WAHA es el único otro canal cuyo archivo necesita credencial propia para
+ * volver a descargarse después (self-hosted, protegido con su API key) — se
+ * marca con el prefijo `waha:` para que `src/admin/media.ts` sepa proxyarlo.
+ */
+export function refFor(channel: string, url: string): string {
+  return channel === "waha" ? `waha:${url}` : url;
+}
+
+/** Inverso de `refFor`: quita el prefijo `waha:` para volver a tener una URL fetcheable. */
+export function stripRef(ref: string): string {
+  return ref.startsWith("waha:") ? ref.slice(5) : ref;
+}
+
 export interface SupportAgentState {
   conversationId: string | null;
   channel: string;
@@ -184,6 +201,12 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
           console.error("[ingest] transcription failed:", e);
           processedText = "(no pude entender el audio)";
         }
+        // Marcador de previsualización (§ V Fase 2): el panel puede reproducir
+        // el audio original además de mostrar la transcripción. Mismo mecanismo
+        // que [IMAGE_URL: ...] — enmascarado, nunca el token/URL crudo en D1.
+        // `waha:` distingue el único otro canal cuyo archivo necesita un proxy
+        // con credencial propia (ver src/admin/media.ts); el resto pasa directo.
+        processedText += `\n[AUDIO_URL: ${maskTelegramToken(refFor(payload.channel, payload.audioUrl))}]`;
       } else {
         processedText = (processedText || "") + "\n(El cliente mandó un audio; esta instalación no tiene 'Oído y vista' activado. Pídele que escriba.)";
       }
@@ -203,7 +226,7 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
             // MASKED: a Telegram file URL carries the bot token inside, and this
             // marker gets persisted in D1 (and shown in the dashboard, and
             // included in exports). See src/telegramFiles.ts.
-            `\n[IMAGE_URL: ${maskTelegramToken(payload.imageUrl)}]`;
+            `\n[IMAGE_URL: ${maskTelegramToken(refFor(payload.channel, payload.imageUrl))}]`;
         }
       } else {
         processedText = (processedText || "") + "\n(El cliente mandó una foto; esta instalación no tiene 'Oído y vista' activado. Pídele que describa.)";
@@ -354,9 +377,11 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
       const imgMatch = lastUserMsg.content.match(/\[IMAGE_URL: (.+?)\]/);
       if (imgMatch && (await isProUnlocked(this.env))) {
         // The token was masked before storing; it goes back in only here, to
-        // fetch the file. It never leaves this call.
+        // fetch the file. It never leaves this call. `stripRef` undoes the
+        // `waha:` scheme tag (§ V Fase 2) that only the panel's media proxy
+        // needs — the vision call wants a plain fetchable URL.
         const imageUrl = unmaskTelegramToken(
-          imgMatch[1],
+          stripRef(imgMatch[1]),
           this.env.TELEGRAM_BOT_TOKEN,
         );
         const cleanText = lastUserMsg.content
@@ -554,14 +579,31 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
       assistantText = "Algo falló de mi lado, intenta de nuevo en un momento.";
     }
 
+    // Fase A: adjuntar botones del menú (si están configurados). Se calcula
+    // ANTES de persistir el mensaje para poder guardarlos junto con él
+    // (§ V Fase 3 — si no, el panel nunca sabría qué botones se mandaron).
+    let buttons: ReplyButton[] | undefined;
+    if (cfg.menuButtons.length > 0 && cfg.allowMultimedia) {
+      buttons = cfg.menuButtons;
+    }
+
     // Persist assistant message (with usage + model_used + tool calls)
-    await msgs.append(convId, "assistant", assistantText, {
+    const assistantMsgId = await msgs.append(convId, "assistant", assistantText, {
       modelUsed: usedModelId,
       inputTokens,
       outputTokens,
       cachedInputTokens: cachedTokens,
       toolCalls: toolCallsMade.length > 0 ? toolCallsMade : undefined,
     });
+    if (buttons && buttons.length > 0) {
+      try {
+        await msgs.saveButtons(assistantMsgId, buttons);
+      } catch (e) {
+        // Nunca bloquear el envío por esto: sin fila en message_buttons, el
+        // panel simplemente no muestra el chip — el cliente igual los recibe.
+        console.warn("[processBuffer] no se pudieron guardar los botones:", e);
+      }
+    }
 
     // Update state for next turn
     this.setState({
@@ -573,13 +615,6 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
     const chunks = chunkReply(assistantText, cfg.maxChunks);
     const channel = this.state.channel as ChannelId;
     const adapter = pickAdapter(channel);
-
-    // Fase A: adjuntar botones del menú (si están configurados y no vienen otros
-    // botones en la respuesta — ej. enviarRecurso ya los puso).
-    let buttons: ReplyButton[] | undefined;
-    if (cfg.menuButtons.length > 0 && cfg.allowMultimedia) {
-      buttons = cfg.menuButtons;
-    }
 
     await adapter.sendReply(
       {

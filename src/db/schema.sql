@@ -31,6 +31,24 @@ CREATE TABLE IF NOT EXISTS messages (
 CREATE INDEX IF NOT EXISTS idx_msg_conv_created ON messages(conversation_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_msg_created ON messages(created_at);
 
+-- Botones adjuntos a una respuesta del bot (§ V Fase 3, docs/PLAN.md). Tabla
+-- NUEVA en vez de una columna en `messages`: `schema.sql` se reaplica tal cual
+-- en instalaciones ya desplegadas (`pnpm db:apply:remote`, documentado como
+-- idempotente en docs/ARQUITECTURA.md) y SQLite no tiene
+-- `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` — una tabla nueva sí es segura de
+-- re-crear con `IF NOT EXISTS`, una columna nueva en una tabla existente no.
+-- kind: 'url' | 'callback'
+CREATE TABLE IF NOT EXISTS message_buttons (
+  id TEXT PRIMARY KEY,
+  message_id TEXT NOT NULL,
+  idx INTEGER NOT NULL,
+  label TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  value TEXT,
+  FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_message_buttons_message ON message_buttons(message_id);
+
 CREATE TABLE IF NOT EXISTS leads (
   id TEXT PRIMARY KEY,
   conversation_id TEXT,

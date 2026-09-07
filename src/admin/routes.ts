@@ -37,6 +37,7 @@ import {
   renderSuggestionBox,
   inboxParamsFrom,
 } from "./views/conversations";
+import { serveTelegramMedia, serveWahaMedia } from "./media";
 import { pickAdapter } from "../replies/sender";
 import { channelLabel } from "../channels/labels";
 import type { ChannelId } from "../channels/shared";
@@ -573,6 +574,12 @@ adminApp.get("/conversations/thread/:id", async (c) =>
 adminApp.get("/conversations/:id", (c) =>
   c.redirect(`/admin/conversations?c=${encodeURIComponent(c.req.param("id"))}`),
 );
+
+// Previsualización de media entrante en el hilo (§ V Fase 2) — proxy
+// autenticado (mismo guard de /admin/*): el token/API key nunca llega al
+// navegador. Ver src/admin/media.ts.
+adminApp.get("/media/telegram", (c) => serveTelegramMedia(c.req.query("u") ?? "", c.env));
+adminApp.get("/media/waha", (c) => serveWahaMedia(c.req.query("u") ?? "", c.env));
 
 // Insights tab. Visiting it opportunistically grades a few pending
 // conversations in the background (waitUntil) so the tab catches up on its own
