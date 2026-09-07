@@ -9,6 +9,7 @@ import { catalogQueryTool } from "./catalogQuery";
 import { reportQueryTool } from "./reportQuery";
 import { registrarCalificacionTool } from "./registrarCalificacion";
 import { enviarRecursoTool, type RecursoCtx } from "./enviarRecurso";
+import { getNiche } from "../niches";
 import type { ChannelId } from "../channels/shared";
 
 // Contexto compartido para tools que necesitan el canal real (enviarRecurso).
@@ -57,6 +58,14 @@ export async function buildTools(ctx: ToolContext) {
   // Fase A: enviarRecurso — activable desde Configuración (allow_multimedia).
   // El agente llama setRecursoCtx antes del loop con el canal real.
   tools.enviarRecurso = enviarRecursoTool(ctx.env, ctx.getConversationId, getRecursoCtx);
+
+  // Tools que declara el niche pack activo (packs "pesados", ver NicheHooks).
+  // Ej.: BOT_NICHE=restaurante → tomarPedido. Reusa el ctx de canal de enviarRecurso.
+  const extraTools = getNiche(ctx.env).hooks?.extraTools ?? [];
+  if (extraTools.includes("tomarPedido")) {
+    const { tomarPedidoTool } = await import("./tomarPedido");
+    tools.tomarPedido = tomarPedidoTool(ctx.env, ctx.getConversationId, getRecursoCtx);
+  }
 
   return tools;
 }

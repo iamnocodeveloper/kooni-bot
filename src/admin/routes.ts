@@ -1534,6 +1534,27 @@ adminApp.post("/leads/:id/status", async (c) => {
   return c.redirect("/admin/leads");
 });
 
+// ── Nicho RESTAURANTE: cambiar el estado de un pedido ────────────────────────
+// El cambio válido dispara el aviso al cliente por su canal (src/orders/notify).
+adminApp.post("/pedidos/:id/status", async (c) => {
+  const { OrdersRepo } = await import("../db/orders");
+  const { notifyCustomerStatus } = await import("../orders/notify");
+  const form = await c.req.formData();
+  const to = String(form.get("status") ?? "").trim();
+  const note = String(form.get("note") ?? "").trim() || undefined;
+  const id = c.req.param("id");
+  const repo = new OrdersRepo(new Db(c.env.DB));
+  const before = await repo.get(id);
+  const updated = await repo.setStatus(id, to as never, note);
+  if (!updated) {
+    await audit(c, { action: "order.status", target: `order:${id}`, beforeVal: before?.status, afterVal: `${to} (rechazado)`, result: "error" });
+    return c.redirect("/admin/pedidos?err=transicion");
+  }
+  await notifyCustomerStatus(c.env, updated);
+  await audit(c, { action: "order.status", target: `order:${id}`, targetLabel: `Pedido ${before?.track_code ?? id}`, beforeVal: before?.status, afterVal: to });
+  return c.redirect("/admin/pedidos");
+});
+
 // Resolve a support ticket.
 adminApp.post("/tickets/:id/resolve", async (c) => {
   const form = await c.req.formData();

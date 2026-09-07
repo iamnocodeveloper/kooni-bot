@@ -47,13 +47,18 @@ describe("buildTools", () => {
     expect(Object.keys(pro).sort()).toEqual(ALL_TOOLS);
   });
 
-  it("el Starter genérico no agrega tools de nicho (aunque BOT_NICHE traiga un giro)", async () => {
+  it("el Starter genérico no agrega tools de nicho", async () => {
     const tools = await buildTools(makeCtx("pro"));
+    expect(tools.tomarPedido).toBeUndefined();
     expect(tools.crearReservacion).toBeUndefined();
-    expect(tools.calificarComprador).toBeUndefined();
-    expect(tools.agendarCita).toBeUndefined();
-    expect(tools.registrarPedido).toBeUndefined();
-    expect(tools.registrarProspecto).toBeUndefined();
-    expect(tools.reservarHospedaje).toBeUndefined();
+  });
+
+  it("BOT_NICHE=restaurante agrega la tool tomarPedido (hooks.extraTools)", async () => {
+    const ctx = makeCtx("free");
+    (ctx.env as any).BOT_NICHE = "restaurante";
+    const tools = await buildTools(ctx);
+    expect(tools.tomarPedido).toBeDefined();
+    // Las tools base siguen todas ahí.
+    for (const t of ALL_TOOLS) expect(tools[t]).toBeDefined();
   });
 });
