@@ -51,7 +51,7 @@ export const restaurante: NichePack = {
     orderEngine: true,
     extraTools: ["tomarPedido"],
     navExtra: [
-      { id: "pedidos", label: "Pedidos", icon: "shopping-bag", href: "/admin/pedidos", section: "Bandeja" },
+      { id: "pedidos", label: "Pedidos", icon: "shopping-bag", href: "/admin/pedidos", section: "Inbox" },
       { id: "menu", label: "Menú", icon: "book-open", href: "/admin/menu", section: "Mi Agente" },
       { id: "reportes", label: "Reportes", icon: "bar-chart-3", href: "/admin/reportes", section: "Análisis" },
     ],

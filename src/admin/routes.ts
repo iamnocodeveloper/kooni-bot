@@ -1555,6 +1555,107 @@ adminApp.post("/pedidos/:id/status", async (c) => {
   return c.redirect("/admin/pedidos");
 });
 
+// ── Nicho RESTAURANTE: vistas Pedidos / Menú / Reportes ─────────────────────
+// El nav solo las muestra si BOT_NICHE=restaurante (hooks.navExtra); igual
+// redirigimos si no es el giro, para no servir una vista vacía por URL directa.
+function isRestaurante(c: { env: Env }): boolean {
+  return (c.env.BOT_NICHE ?? "").trim().toLowerCase() === "restaurante";
+}
+
+adminApp.get("/pedidos", async (c) => {
+  if (!isRestaurante(c)) return c.redirect("/admin/overview");
+  const { renderPedidos } = await import("./views/pedidos");
+  return c.html(await renderPedidos(c.env, { filter: c.req.query("status"), err: c.req.query("err"), tv: c.req.query("tv") === "1" }));
+});
+
+// Feed liviano para el sonido/badge de la pantalla de Pedidos: los ids de los
+// pedidos activos + el timestamp del más nuevo. El cliente lo pide cada ~15 s y
+// suena si aparece un id que no tenía. No depende de push ni del sistema operativo.
+adminApp.get("/pedidos/feed", async (c) => {
+  if (!isRestaurante(c)) return c.json({ ids: [], latestAt: 0 });
+  const { OrdersRepo } = await import("../db/orders");
+  const active = await new OrdersRepo(new Db(c.env.DB)).active();
+  return c.json({
+    ids: active.map((o) => o.id),
+    latestAt: active.reduce((m, o) => Math.max(m, o.created_at), 0),
+    count: active.length,
+  });
+});
+
+adminApp.get("/menu", async (c) => {
+  if (!isRestaurante(c)) return c.redirect("/admin/overview");
+  const { renderMenu } = await import("./views/menu-editor");
+  return c.html(await renderMenu(c.env, c.req.query("saved") === "1"));
+});
+
+adminApp.post("/menu", async (c) => {
+  const { ProductsRepo } = await import("../db/products");
+  const f = await c.req.formData();
+  const name = String(f.get("name") ?? "").trim();
+  const price = Number(f.get("price"));
+  if (!name || !Number.isFinite(price) || price < 0) return c.redirect("/admin/menu");
+  const id = await new ProductsRepo(new Db(c.env.DB)).create({
+    name,
+    price,
+    category: String(f.get("category") ?? "").trim() || null,
+    description: String(f.get("description") ?? "").trim() || null,
+  });
+  await audit(c, { action: "menu.product.create", target: `product:${id}`, targetLabel: name });
+  return c.redirect("/admin/menu?saved=1");
+});
+
+adminApp.post("/menu/:id", async (c) => {
+  const { ProductsRepo } = await import("../db/products");
+  const f = await c.req.formData();
+  const id = c.req.param("id");
+  const price = Number(f.get("price"));
+  await new ProductsRepo(new Db(c.env.DB)).update(id, {
+    name: String(f.get("name") ?? "").trim() || undefined,
+    price: Number.isFinite(price) && price >= 0 ? price : undefined,
+    category: f.has("category") ? String(f.get("category") ?? "").trim() || null : undefined,
+    description: f.has("description") ? String(f.get("description") ?? "").trim() || null : undefined,
+  });
+  await audit(c, { action: "menu.product.update", target: `product:${id}` });
+  return c.redirect("/admin/menu?saved=1");
+});
+
+adminApp.post("/menu/:id/toggle", async (c) => {
+  const { ProductsRepo } = await import("../db/products");
+  const repo = new ProductsRepo(new Db(c.env.DB));
+  const id = c.req.param("id");
+  const p = await repo.get(id);
+  if (p) await repo.setActive(id, p.active === 0);
+  await audit(c, { action: "menu.product.toggle", target: `product:${id}`, afterVal: p && p.active === 0 ? "activo" : "agotado" });
+  return c.redirect("/admin/menu");
+});
+
+adminApp.post("/menu/:id/delete", async (c) => {
+  const { ProductsRepo } = await import("../db/products");
+  const id = c.req.param("id");
+  await new ProductsRepo(new Db(c.env.DB)).delete(id);
+  await audit(c, { action: "menu.product.delete", target: `product:${id}` });
+  return c.redirect("/admin/menu");
+});
+
+adminApp.get("/reportes", async (c) => {
+  if (!isRestaurante(c)) return c.redirect("/admin/overview");
+  const { renderReportesRestaurante, windowFromQuery } = await import("./views/reportes-restaurante");
+  return c.html(await renderReportesRestaurante(c.env, windowFromQuery(new URL(c.req.url).searchParams)));
+});
+
+adminApp.get("/reportes/export.csv", async (c) => {
+  if (!isRestaurante(c)) return c.redirect("/admin/overview");
+  const { windowFromQuery } = await import("./views/reportes-restaurante");
+  const { buildRestaurantReports, reportsToCsv } = await import("../reports/restaurante");
+  const r = await buildRestaurantReports(c.env, windowFromQuery(new URL(c.req.url).searchParams));
+  return new Response(reportsToCsv(r), {
+    headers: {
+      "Content-Type": "text/csv; charset=utf-8",
+      "Content-Disposition": `attachment; filename="reportes-restaurante.csv"`,
+    },
+  });
+});
+
 // Resolve a support ticket.
 adminApp.post("/tickets/:id/resolve", async (c) => {
   const form = await c.req.formData();

@@ -48,11 +48,15 @@ export function iconSvg(env: Env): string {
 
 export function manifest(env: Env): string {
   const b = brand(env);
+  const esResto = (env.BOT_NICHE ?? "").trim().toLowerCase() === "restaurante";
   return JSON.stringify({
     name: `${b.name} · Panel`,
     short_name: b.name,
-    description: `Panel de ${b.name}: conversaciones, prospectos y avisos.`,
-    start_url: "/admin/overview",
+    description: esResto
+      ? `Panel de ${b.name}: pedidos, menú y avisos.`
+      : `Panel de ${b.name}: conversaciones, prospectos y avisos.`,
+    // El restaurante abre en Pedidos (es la pantalla de mostrador).
+    start_url: esResto ? "/admin/pedidos?tv=1" : "/admin/overview",
     scope: "/admin/",
     display: "standalone",
     orientation: "portrait-primary",
@@ -62,11 +66,17 @@ export function manifest(env: Env): string {
     icons: [
       { src: "/admin/icon.svg", sizes: "any", type: "image/svg+xml", purpose: "any maskable" },
     ],
-    shortcuts: [
-      { name: "Conversaciones", url: "/admin/conversations" },
-      { name: "Prospectos", url: "/admin/leads" },
-      { name: "Tickets", url: "/admin/tickets" },
-    ],
+    shortcuts: esResto
+      ? [
+          { name: "Pedidos", url: "/admin/pedidos" },
+          { name: "Menú", url: "/admin/menu" },
+          { name: "Reportes", url: "/admin/reportes" },
+        ]
+      : [
+          { name: "Conversaciones", url: "/admin/conversations" },
+          { name: "Prospectos", url: "/admin/leads" },
+          { name: "Tickets", url: "/admin/tickets" },
+        ],
   });
 }
 

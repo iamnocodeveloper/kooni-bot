@@ -16,9 +16,15 @@ privado más adelante. Una instalación = un restaurante (no multi-tenant).
 |---|---|
 | **A. Fundación** | ✅ **HECHO** — `schema.sql` (+`products`, `orders`, `order_items`, `order_events`, idempotentes) · `NichePack.hooks` (`extraTools`/`navExtra`/`orderEngine`) + `interviewQuestions` · `src/niches/restaurante.ts` reescrito "reservas"→"pedidos" · `src/db/orders.ts` (OrdersRepo + máquina de estados `canTransition`) · `src/db/products.ts` (ProductsRepo) · KB: `restaurante-faq` reescrito para delivery + nuevo `restaurante-casos-limite` + `restaurante-menu-ejemplo` con zonas/combos/mínimo · tests `test/db/orders.test.ts` (+18) y `test/db/products.test.ts` (+4) · `test/niches.test.ts` actualizado. tsc + suite verdes. |
 | **B. Flujo de pedido** | ✅ **HECHO** — `src/tools/tomarPedido.ts` (reconcilia precios contra `products`, crea el pedido, avisa al dueño) · `src/orders/notify.ts` (`notifyCustomerStatus` por el canal del cliente + botón de seguimiento · `notifyOwnerNewOrder` = push PWA + DM Telegram) · `buildTools` registra `tomarPedido` cuando `hooks.extraTools` lo declara · `POST /admin/pedidos/:id/status` (transición válida → aviso al cliente + auditoría). Tests: `test/tools/tomarPedido.test.ts` (4), `test/orders/notify.test.ts` (5), `test/tools/index.test.ts` +1. El "carrito a mitad" lo maneja el modelo en la conversación (re-muestra el resumen); `tomarPedido` se llama solo al final. |
-| **C. 6 reportes en 1 pantalla** | ⏳ `src/admin/views/reportes-restaurante.ts` + `src/reports/restaurante.ts` (queries con acción sugerida, reusa charts de `stats.ts`) · export CSV · wiring de `hooks.navExtra` en `layout.ts` + rutas |
-| **D. PWA sonido + menú** | ⏳ alerta sonora al pedido nuevo (reusa push existente) · `/admin/menu` (CRUD productos) · layout touch |
+| **C. 6 reportes + panel de pedidos** | ✅ **HECHO** — `src/reports/restaurante.ts` (los 6 reportes, cada uno con acción sugerida + `reportsToCsv`) · `src/admin/views/reportes-restaurante.ts` (1 pantalla, filtro por fechas, sparkline + heatmap mini) · `src/admin/views/pedidos.ts` (lista + botones de estado que avisan al cliente) · `src/admin/views/menu-editor.ts` (CRUD de `products`, marcar agotado) · rutas `GET /admin/{pedidos,menu,reportes}` + `/reportes/export.csv` + `POST /admin/menu*` (guard `BOT_NICHE=restaurante`) · `hooks.navExtra` cableado en `layout.ts`. Tests: `test/reports/restaurante.test.ts` (6), `test/admin/pedidos-menu.test.ts` (6). |
+| **D. PWA sonido + layout mostrador** | ✅ **HECHO** — `GET /admin/pedidos/feed` (ids activos + latestAt) · `pedidos.ts` poll cada 15 s + **beep con Web Audio** (sin archivo, sin depender del SO) + `navigator.vibrate` + botón "Activar sonido" (el gesto que desbloquea el audio) + `?tv=1` "modo mostrador" (todo más grande) · `pwa.ts` manifest del restaurante abre en `/admin/pedidos?tv=1` con shortcuts Pedidos/Menú/Reportes. Tests: +5 en `pedidos-menu.test.ts`. |
 | **E4 reparto · E6 menú web** | 🅱️ BACKLOG (decisión de Joel: "luego") |
+
+**Pendiente antes de cerrar el pack:** documentar el nicho en `docs/USO.md` /
+`docs/ARQUITECTURA.md`; mover el pack de conocimiento (`interviewQuestions`,
+playbook, KB) a `member/niche.local.ts` cuando se separe lo comercial (§ repo).
+Push del cliente sigue con VAPID como complemento; en la tablet del mostrador el
+sonido del poll es el canal principal (iOS limita push en PWA).
 
 Estados del pedido: `recibido → confirmado → preparacion → camino → entregado`
 (+ `cancelado`). `canTransition` permite avanzar 1+ pasos o cancelar; nunca

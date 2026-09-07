@@ -109,6 +109,8 @@ para responder con tus propios documentos.
 | `settings` | Overlay key/value editado desde el panel (sin redeploy). |
 | `admin_emails`, `magic_links` | Autenticación del panel (magic links por email). |
 | `tracked_links`, `keyword_hits`, `conv_labels`, `template_sends` | Segmentación y campañas. |
+| `push_subscriptions`, `push_events` | Avisos push a la PWA del dueño. |
+| `products`, `orders`, `order_items`, `order_events` | Motor de pedidos del nicho `restaurante` (solo se escriben con `BOT_NICHE=restaurante`). |
 
 **Migraciones:** `pnpm db:apply:remote` aplica `schema.sql` en la nube (idempotente).
 

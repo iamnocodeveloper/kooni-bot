@@ -127,8 +127,32 @@ El panel está en español, tema oscuro Kooni (tinta + teal). De izquierda a der
 ## 6. Nichos (giros)
 
 Con `BOT_NICHE` en `wrangler.toml` el panel se re-etiqueta (ej. "Leads" →
-"Reservaciones") y el bot adopta el playbook del giro. Cómo crear un nicho propio:
+"Consultas") y el bot adopta el playbook del giro. Cómo crear un nicho propio:
 `docs/ARQUITECTURA.md` §7.
+
+### `BOT_NICHE=restaurante` — toma de pedidos
+
+Enciende un pack "pesado": el bot toma pedidos de delivery/retiro de punta a
+punta y el panel gana tres secciones nuevas.
+
+- **Pedidos** (`/admin/pedidos`) — la cola de pedidos. Cada uno avanza con un
+  toque: `Recibido → Confirmado → En preparación → En camino → Entregado` (o
+  `Cancelado`). Cada cambio le llega al cliente por su chat con un link de
+  seguimiento. **Modo mostrador** (botón arriba a la derecha) agranda todo para
+  una tablet; con "Activar sonido" prendido, **suena al entrar un pedido nuevo**
+  (aunque la pantalla esté en otra pestaña). Instalá el panel como PWA en la
+  tablet y abre directo en esta pantalla.
+- **Menú** (`/admin/menu`) — los productos que el bot puede vender: nombre,
+  precio, categoría, descripción. "Marcar agotado" y el bot deja de ofrecerlo al
+  instante. El bot usa el menú para armar el pedido con los precios reales.
+- **Reportes** (`/admin/reportes`) — seis números para decidir (ventas, ticket
+  promedio, productos que rotan / que no, horas pico, clientes —incluye los que
+  **dejaron de pedir**—, salud del bot). Cada uno termina en una acción sugerida.
+  Filtro por fechas + export CSV.
+
+El pedido se guarda en su propia tabla (`orders`), no en Leads. La pestaña
+"Consultas" (Leads re-etiquetado) queda para catering, eventos y reclamos que el
+bot escala a una persona.
 
 ---
 

@@ -429,10 +429,16 @@ function brandOverrides(b: Brand): string {
 }
 
 function sidebar(activeTab: string, locked: (id: string) => boolean, niche: NichePack | null, tierLabel: string, brand: Brand = { name: "Kooni", logo: "", primary: "", primarySoft: "", accent2: "", bg: "", panel: "" }): string {
+  // Ítems extra que aporta el niche pack activo (packs "pesados", ver NicheHooks).
+  // Se insertan en la sección que declaran (por su label): restaurante → Pedidos
+  // en "Inbox", Menú en "Mi Agente", Reportes en "Análisis".
+  const navExtra = niche?.hooks?.navExtra ?? [];
   const sections = NAV.map((sec) => {
-    const hasActive = sec.items.some((i) => i.id === activeTab);
+    const extraHere = navExtra.filter((e) => e.section === sec.label);
+    const secItems = [...sec.items, ...extraHere.map((e) => ({ id: e.id, label: e.label, href: e.href, icon: e.icon }))];
+    const hasActive = secItems.some((i) => i.id === activeTab);
     const labelColor = hasActive ? "var(--accent)" : "var(--dim)";
-    const items = sec.items
+    const items = secItems
       .map((raw) => {
         const i = applyNiche(raw, niche);
         return locked(i.id) ? navItemLocked(i) : navItem(i, i.id === activeTab);
