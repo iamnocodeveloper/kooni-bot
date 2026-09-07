@@ -13,6 +13,7 @@ export const barberia: NichePack = {
   navIcon: "scissors",
   kpiLabel: "Citas",
   statusLabels: {
+    entrada: "Entrada",
     new: "Solicitada",
     contacted: "Confirmada",
     sold: "Atendida",

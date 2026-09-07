@@ -16,8 +16,18 @@ ayudas un montón.
 2. En tu fork, crea una rama y haz tu cambio. Si usas Claude Code, pídele que lo haga y que
    corra `pnpm test` + `pnpm typecheck` antes.
 3. Abre un **Pull Request** hacia `main` de este repo, explicando **qué cambia y por qué**.
-4. El CI corre los tests solo. Un maintainer lo revisa y lo mergea. (Tú no mergeas directo —
+4. En la descripción del PR, incluí la línea **`Acepto el CLA.md (v1.0).`** (ver abajo).
+5. El CI corre los tests solo. Un maintainer lo revisa y lo mergea. (Tú no mergeas directo —
    así protegemos la plantilla de todos.)
+
+### CLA — Acuerdo de Licencia de Contribuyente
+Antes de mergear un PR necesitamos que aceptes el [`CLA.md`](./CLA.md). Es corto:
+seguís siendo dueño de tu código, pero le das al proyecto una licencia amplia que
+**incluye poder relicenciarlo más adelante** (por ejemplo, para separar lo
+comercial). Sin esto, cambiar la licencia del proyecto exigiría el permiso de
+cada persona que haya contribuido — por eso se pide desde el primer PR.
+
+Para aceptar: poné `Acepto el CLA.md (v1.0).` en la descripción del PR.
 
 ### Reglas
 - **No toques `member/`** (es la config de cada quien). Cambios solo en `src/`, `test/`,
@@ -25,6 +35,8 @@ ayudas un montón.
 - **Un PR = un solo tema.** Enfocado y chico = se revisa y mergea más rápido.
 - Si tu **agente** abrió el PR, **revisa el diff tú mismo** antes — tú eres responsable.
 - **Nada de secrets ni API keys** en el código (van como `wrangler secret`).
+- **Marca:** el código es MIT; el nombre "Kooni", el logo y el dominio **no** — ver
+  [`NOTICE.md`](./NOTICE.md).
 
 ## Dudas rápidas
 Para uso interno: documenta decisiones en `docs/`. Los issues (si usas GitHub) son para bugs

@@ -486,6 +486,32 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
       console.warn("[SupportAgent] customer facts lookup failed:", e);
     }
 
+    // Etapa de la ficha en el panel (kanban): si el dueño (o el propio bot) ya
+    // la movió, el bot lo tiene en cuenta para dar continuidad. `entrada` = sin
+    // clasificar → no se le dice nada. Enhancement, nunca crítico.
+    try {
+      const { LeadsRepo } = await import("./db/leads");
+      const lead = await new LeadsRepo(db).byConversation(convId);
+      if (lead && lead.status !== "entrada") {
+        const label: Record<string, string> = {
+          new: "con interés (nuevo)",
+          contacted: "en conversación / contactado",
+          sold: "ganado (compró o agendó)",
+          lost: "perdido / se enfrió",
+        };
+        const notaReciente = (lead.notes ?? "").split("\n").slice(-1)[0]?.trim();
+        system.push({
+          role: "system",
+          content:
+            `<ficha_panel>\nEste contacto está marcado como "${label[lead.status] ?? lead.status}" en el panel.` +
+            (notaReciente ? `\nÚltima nota: ${notaReciente}` : "") +
+            `\nRetomá desde ahí. Si la situación cambió (avanzó, se comprometió, o se enfrió), usá moverLead.\n</ficha_panel>`,
+        });
+      }
+    } catch (e) {
+      console.warn("[SupportAgent] lead stage lookup failed:", e);
+    }
+
     let assistantText = "";
     let inputTokens = 0;
     let outputTokens = 0;
@@ -612,6 +638,16 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
       ...this.state,
       toolCallsInLast2Turns: toolCallCount,
     });
+
+    // Toda conversación real deja una ficha en el panel: si el bot no capturó ni
+    // movió un lead, queda como "comunicación de entrada" para que el dueño la
+    // vea en el kanban y la clasifique (o lo haga el bot después). Best-effort.
+    try {
+      const { LeadsRepo } = await import("./db/leads");
+      await new LeadsRepo(db).ensureEntrada(convId);
+    } catch (e) {
+      console.warn("[processBuffer] ensureEntrada falló:", e);
+    }
 
     // Chunk + send via the channel adapter
     const chunks = chunkReply(assistantText, cfg.maxChunks);

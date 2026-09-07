@@ -13,6 +13,7 @@ export const clinica: NichePack = {
   navIcon: "stethoscope",
   kpiLabel: "Citas",
   statusLabels: {
+    entrada: "Entrada",
     new: "Solicitada",
     contacted: "Confirmada",
     sold: "Atendida",

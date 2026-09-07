@@ -47,11 +47,15 @@ export interface NichePack {
   /** KPI del Resumen (reemplaza "Leads captados"). */
   kpiLabel: string;
   /**
-   * Re-etiqueta los 4 estados canónicos del lead para el pipeline del giro.
-   * El enum de la columna `status` NO cambia (new|contacted|sold|lost) — solo
-   * su presentación, así no hay migración ni se rompe el handler de estados.
+   * Re-etiqueta los 5 estados canónicos del lead para el pipeline del giro.
+   * El enum de la columna `status` NO cambia — solo su presentación:
+   *   entrada  → comunicación de entrada (sin clasificar todavía)
+   *   new      → clasificado / con intención
+   *   contacted → en conversación
+   *   sold     → cerrado / ganado
+   *   lost     → descartado / perdido
    */
-  statusLabels: { new: string; contacted: string; sold: string; lost: string };
+  statusLabels: { entrada: string; new: string; contacted: string; sold: string; lost: string };
   /** Columnas extra que se leen de lead.metadata (JSON), en orden. */
   columns: NicheColumn[];
   /** Playbook del giro que rellena {{NICHO_PLAYBOOK}} en el system prompt. */

@@ -21,6 +21,7 @@ const ALL_TOOLS = [
   "catalogQuery",
   "enviarRecurso",
   "handoffHuman",
+  "moverLead",
   "pauseBot",
   "registrarCalificacion",
   "reportQuery",

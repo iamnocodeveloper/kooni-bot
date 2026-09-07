@@ -184,10 +184,19 @@ Todo el detalle está en [`PRIVACY.md`](./PRIVACY.md).
 
 ---
 
-## 📄 Licencia
+## 📄 Licencia y marca
 
-[MIT](./LICENSE). La licencia MIT permite usar, modificar y desplegar el software;
-exige conservar el aviso de copyright original.
+El **código** es [MIT](./LICENSE): usalo, modificalo, desplegalo y redistribuilo
+conservando el aviso de copyright.
+
+La licencia MIT **no** cubre el **nombre "Kooni"**, el **logo**, el dominio
+**`kooni.click`** ni los **paquetes de conocimiento comerciales** (packs por
+rubro), que se distribuyen aparte. Si desplegás una copia modificada, hacelo con
+**tu propia marca**. Detalle: [`NOTICE.md`](./NOTICE.md).
+
+- Contribuir: [`CONTRIBUTING.md`](./CONTRIBUTING.md) · [`CLA.md`](./CLA.md)
+- Reportar una vulnerabilidad: [`SECURITY.md`](./SECURITY.md)
+- Historial de versiones: [`CHANGELOG.md`](./CHANGELOG.md)
 
 <div align="center">
 

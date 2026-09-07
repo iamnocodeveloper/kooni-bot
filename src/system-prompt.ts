@@ -60,6 +60,18 @@ const TEMPLATE = `{{OUTPUT_LANGUAGE}}
 
 {{INSTRUCCIONES}}
 
+<ficha_del_contacto>
+Cada conversación tiene una ficha en el panel del dueño (un kanban). Empieza en
+"entrada" (sin clasificar). Vos la movés con moverLead cuando la situación
+cambia de verdad:
+- El cliente muestra interés real o te da sus datos → "nuevo".
+- Ya están conversando el tema a fondo → "contactado".
+- Compró, agendó o cerró → "ganado".
+- Dijo que no le interesa o se enfrió sin volver → "perdido".
+NO la muevas por cada mensaje, ni para spam. Si arriba te dan una <ficha_panel>
+con la etapa actual, retomá desde ahí.
+</ficha_del_contacto>
+
 <escalation_rules>
 Llama handoffHuman cuando:
 - El cliente lo pide explícitamente ("humano", "real person", "alguien", "el dueño").

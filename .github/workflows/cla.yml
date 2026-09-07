@@ -1,0 +1,32 @@
+# Chequeo simple de CLA: el cuerpo del PR debe contener "Acepto el CLA.md".
+# Sin dependencias ni tokens: solo lee el evento del PR. Si más adelante querés
+# el flujo con firma persistida (checkbox + archivo de firmas), reemplazá este
+# job por contributor-assistant/github-action y agregá el secret PAT.
+name: CLA
+
+on:
+  pull_request_target:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  cla:
+    runs-on: ubuntu-latest
+    steps:
+      - name: El PR acepta el CLA
+        env:
+          BODY: ${{ github.event.pull_request.body }}
+          LOGIN: ${{ github.event.pull_request.user.login }}
+        run: |
+          # Los mantenedores del repo no necesitan re-aceptar en cada PR.
+          case "$LOGIN" in
+            iamnocodeveloper|simatecve|santmun) echo "Mantenedor — OK"; exit 0 ;;
+          esac
+          if printf '%s' "$BODY" | grep -qiE 'acepto el cla\.md'; then
+            echo "CLA aceptado en el cuerpo del PR."
+          else
+            echo "::error::Falta aceptar el CLA. Agregá al cuerpo del PR la línea: Acepto el CLA.md (v1.0)."
+            exit 1
+          fi

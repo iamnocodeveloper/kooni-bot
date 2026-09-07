@@ -13,6 +13,7 @@ export const agenciaIa: NichePack = {
   navIcon: "user-plus",
   kpiLabel: "Prospectos captados",
   statusLabels: {
+    entrada: "Entrada",
     new: "Nuevo",
     contacted: "En conversación",
     sold: "Cliente",

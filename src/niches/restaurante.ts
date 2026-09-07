@@ -22,6 +22,7 @@ export const restaurante: NichePack = {
   navIcon: "help-circle",
   kpiLabel: "Consultas",
   statusLabels: {
+    entrada: "Entrada",
     new: "Nueva",
     contacted: "En trámite",
     sold: "Resuelta",

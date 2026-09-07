@@ -1,5 +1,10 @@
 import { Db } from "./client";
 
+// entrada = comunicación de entrada (una conversación que llegó pero el bot
+// todavía no le sacó una intención). new..lost = el pipeline de siempre.
+export type LeadStatus = "entrada" | "new" | "contacted" | "sold" | "lost";
+export const LEAD_STATUSES: readonly LeadStatus[] = ["entrada", "new", "contacted", "sold", "lost"];
+
 export interface Lead {
   id: string;
   conversation_id: string | null;
@@ -8,7 +13,7 @@ export interface Lead {
   channel_user_id: string | null;
   intent: string;
   notes: string | null;
-  status: "new" | "contacted" | "sold" | "lost";
+  status: LeadStatus;
   exported_to: string | null;
   external_id: string | null;
   /** JSON con los campos propios del nicho (o null). Ver leadMetadata(). */
@@ -86,7 +91,57 @@ export class LeadsRepo {
     );
   }
 
-  async setStatus(id: string, status: Lead["status"]): Promise<void> {
+  /** El lead ligado a una conversación (para dar continuidad al bot). */
+  async byConversation(conversationId: string): Promise<Lead | null> {
+    return this.db.first<Lead>(
+      "SELECT * FROM leads WHERE conversation_id = ? ORDER BY created_at DESC LIMIT 1",
+      [conversationId],
+    );
+  }
+
+  /**
+   * Si la conversación todavía no tiene lead, crea uno en estado `entrada`
+   * (comunicación de entrada, sin clasificar). Devuelve el lead existente o el
+   * nuevo. Idempotente: nunca crea un segundo lead para la misma conversación.
+   */
+  async ensureEntrada(conversationId: string): Promise<Lead> {
+    const existing = await this.byConversation(conversationId);
+    if (existing) return existing;
+    // Datos de contacto: de la propia conversación.
+    const conv = await this.db.first<{ display_name: string | null; channel_user_id: string | null }>(
+      "SELECT display_name, channel_user_id FROM conversations WHERE id = ?",
+      [conversationId],
+    );
+    const id = crypto.randomUUID();
+    const now = Date.now();
+    await this.db.run(
+      `INSERT INTO leads (id, conversation_id, name, contact, channel_user_id, intent, status, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, 'entrada', ?, ?)`,
+      [
+        id,
+        conversationId,
+        conv?.display_name ?? null,
+        conv?.channel_user_id ?? null,
+        conv?.channel_user_id ?? null,
+        "(comunicación de entrada — sin clasificar)",
+        now,
+        now,
+      ],
+    );
+    return (await this.byConversation(conversationId))!;
+  }
+
+  async setStatus(id: string, status: LeadStatus, note?: string): Promise<void> {
+    if (note && note.trim()) {
+      const cur = await this.db.first<{ notes: string | null }>("SELECT notes FROM leads WHERE id = ?", [id]);
+      const stamp = new Date().toISOString().slice(0, 16).replace("T", " ");
+      const merged = `${cur?.notes ? cur.notes + "\n" : ""}[${stamp}] ${note.trim()}`;
+      await this.db.run(
+        "UPDATE leads SET status = ?, notes = ?, updated_at = ? WHERE id = ?",
+        [status, merged, Date.now(), id],
+      );
+      return;
+    }
     await this.db.run(
       "UPDATE leads SET status = ?, updated_at = ? WHERE id = ?",
       [status, Date.now(), id],

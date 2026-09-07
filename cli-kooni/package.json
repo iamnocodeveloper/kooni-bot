@@ -1,6 +1,6 @@
 {
   "name": "kooni-bot",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "Kooni — instala tu asistente de IA multicanal (WhatsApp, Instagram, Messenger, Telegram) en TU Cloudflare, en un comando.",
   "license": "MIT",
   "type": "module",
@@ -13,10 +13,20 @@
   "keywords": [
     "chatbot",
     "ai",
+    "ai-agent",
     "whatsapp",
+    "whatsapp-bot",
     "instagram",
+    "messenger",
     "telegram",
+    "telegram-bot",
+    "multichannel",
     "cloudflare",
+    "cloudflare-workers",
+    "claude-code",
+    "self-hosted",
+    "open-source",
+    "spanish",
     "kooni"
   ],
   "files": [

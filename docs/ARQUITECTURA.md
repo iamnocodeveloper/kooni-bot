@@ -54,7 +54,7 @@ para responder con tus propios documentos.
 | `src/config.ts` | Tier (free/pro), tools y tabs Pro, buffer de segundos. |
 | `src/llm/provider.ts` | Selección de proveedor/modelo (fast/smart) y llamadas de chat. |
 | `src/channels/` | Adaptadores por canal: `telegram`, `twilio` (WhatsApp), `meta` (IG+Messenger), `manychat`, `whatsapp` (Cloud API), `shared`. |
-| `src/tools/` | Herramientas del agente: `searchKb`, `handoffHuman`, `captureLead`, `scheduleAppointment`, `catalogQuery`, `pauseBot`, `snoozeUser`. |
+| `src/tools/` | Herramientas del agente: `searchKb`, `handoffHuman`, `captureLead`, `moverLead` (mueve la ficha en el kanban), `scheduleAppointment`, `catalogQuery`, `registrarCalificacion`, `reportQuery`, `enviarRecurso`, `pauseBot`, `snoozeUser` · `tomarPedido` (solo `BOT_NICHE=restaurante`). |
 | `src/kb/` | Documentos de la base de conocimiento (chunking + indexado a Vectorize). |
 | `src/db/` | Cliente D1 y capas por tabla (conversations, messages, leads, tickets, settings, insights, magicLinks, adminEmails, suggestions…). |
 | `src/admin/` | Panel: auth (magic links + Basic Auth), rutas y vistas (`layout.ts` = shell + tema). |

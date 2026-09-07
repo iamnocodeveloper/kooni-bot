@@ -14,3 +14,9 @@
 - [ ] El PR es de un solo tema (enfocado y chico)
 - [ ] Si tu agente (Claude) hizo el PR, revisaste el diff tú mismo antes de abrirlo
 - [ ] No hay secrets ni API keys en el código
+
+## CLA
+- [ ] Acepto el [CLA.md](../CLA.md) (v1.0).
+
+<!-- Escribí también, en texto, la línea:  Acepto el CLA.md (v1.0).  -->
+Acepto el CLA.md (v1.0).

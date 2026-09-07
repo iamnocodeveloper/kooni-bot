@@ -57,10 +57,17 @@ El panel está en español, tema oscuro Kooni (tinta + teal). De izquierda a der
   y marcar resuelta.
 - Filtros por canal y estado.
 
-### Leads
-- Prospectos capturados automáticamente (`captureLead`): nombre, contacto, intención.
-- Según el nicho, las columnas cambian (ej. "Reservaciones" con fecha/hora/personas).
-- Exportar: skill `/exportar` (CSV/JSON vía D1).
+### Leads — kanban
+- **Toda conversación real deja una ficha.** Si el bot le sacó una intención, la
+  ficha entra en "Nuevo"; si no, queda en **"Entrada"** (comunicación de
+  entrada, sin clasificar).
+- **Vista Kanban** (por defecto): 5 columnas — Entrada · Nuevo · Contactado ·
+  Vendido · Perdido (re-etiquetadas por nicho). **Arrastrá** una tarjeta a otra
+  columna, o usá el "mover…" de cada tarjeta. También hay vista **Tabla**.
+- **El bot también mueve las fichas**: cuando el cliente muestra interés, se
+  compromete, compra o se enfría, el bot la mueve solo y deja una nota. La
+  próxima vez que ese cliente escriba, el bot **retoma desde esa etapa**.
+- Exportar: botón CSV, o la skill `/exportar` (CSV/JSON vía D1).
 
 ### Tickets (escalaciones)
 - Conversaciones que el bot no pudo resolver o pidieron humano.

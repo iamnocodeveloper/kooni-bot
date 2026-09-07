@@ -13,6 +13,7 @@ export const inmobiliaria: NichePack = {
   navIcon: "building-2",
   kpiLabel: "Prospectos",
   statusLabels: {
+    entrada: "Entrada",
     new: "Nuevo",
     contacted: "En seguimiento",
     sold: "Cerrado",

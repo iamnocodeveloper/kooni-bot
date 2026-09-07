@@ -4,6 +4,7 @@ import { handoffHumanTool } from "./handoffHuman";
 import { pauseBotTool } from "./pauseBot";
 import { snoozeUserTool } from "./snoozeUser";
 import { captureLeadTool } from "./captureLead";
+import { moverLeadTool } from "./moverLead";
 import { scheduleAppointmentTool } from "./scheduleAppointment";
 import { catalogQueryTool } from "./catalogQuery";
 import { reportQueryTool } from "./reportQuery";
@@ -39,6 +40,8 @@ export async function buildTools(ctx: ToolContext) {
     pauseBot: pauseBotTool(ctx.env, ctx.getConversationId),
     snoozeUser: snoozeUserTool(ctx.env, ctx.getConversationId),
     captureLead: captureLeadTool(ctx.env, ctx.getConversationId),
+    // Mover la ficha de esta conversación en el kanban del panel (bot ↔ dueño).
+    moverLead: moverLeadTool(ctx.env, ctx.getConversationId),
     // Se registra SIEMPRE: sin ella el modelo alucina reservas. Cuando no hay
     // Cal.com configurado, la tool devuelve guía explícita para capturar el
     // lead en vez de agendar (ver scheduleAppointment.ts).

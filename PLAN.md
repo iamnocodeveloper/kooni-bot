@@ -5,6 +5,36 @@
 
 ---
 
+## 🗂️ KANBAN DE LEADS + "comunicación de entrada" (v1.29.0, 2026-09-07)
+
+Pedido de Joel: un kanban para ver los leads capturados; las conversaciones sin
+intención quedan como **comunicación de entrada** y el bot O el dueño las mueven,
+y el bot lo tiene en cuenta después. **Disponible para todos** (sin gate).
+
+- **5.º estado `entrada`** — antes de `new`. `LeadStatus`/`LEAD_STATUSES` en
+  `src/db/leads.ts`; los 6 niche packs suman `statusLabels.entrada` ("Entrada").
+  No es migración: la columna `status` no tiene CHECK, es un valor más.
+- **Toda conversación real deja ficha** — `agent.ts::processBuffer` llama
+  `LeadsRepo.ensureEntrada(convId)` al final (idempotente, best-effort). Los
+  datos de contacto salen de la fila `conversations`.
+- **Kanban** — `src/admin/views/leads.ts` reescrito: vista kanban por defecto
+  (5 columnas, drag&drop nativo + `<select>` por tarjeta para touch) y
+  `?vista=tabla` para la tabla. `POST /admin/leads/:id/status` acepta header
+  `x-kanban:1` → responde 204 y el JS mueve la tarjeta (sin recargar).
+- **El bot mueve la ficha** — tool nueva `moverLead(etapa, nota)` (siempre
+  disponible). Mapea etiquetas de negocio ("contactado", "ganado"…) a los
+  estados canónicos. La nota queda en `leads.notes` con timestamp (prefijo
+  "bot:").
+- **El bot sabe la etapa** — `agent.ts` inyecta un bloque `<ficha_panel>` con el
+  estado actual + última nota cuando `status != entrada`. `system-prompt.ts`
+  gana `<ficha_del_contacto>` explicando cuándo usar `moverLead`.
+
+Tests: `test/db/leads.test.ts` (+4), `test/tools/moverLead.test.ts` (5),
+`test/admin/leads-kanban.test.ts` (5), `test/tools/index.test.ts` (moverLead en
+el set). `package.json` → 1.29.0.
+
+---
+
 ## 🍽️ NICHO RESTAURANTE — pack "pedidos" (en construcción, 2026-09-07)
 
 Spec de Joel: el bot toma pedidos de punta a punta + dashboard de 6 reportes +
@@ -40,16 +70,22 @@ Estimación restante (B+C+D): ~9 días.
 repo **se deja PÚBLICO** para que `npx kooni-bot init`/`update` sigan funcionando
 para todos (se descartó ponerlo privado).
 
-**Deuda abierta** (el repo ya es público con esto adentro, no es urgente pero
-conviene resolver antes de promocionarlo):
-- `PLAN.md` + `docs/BITACORA-*.md` tienen nombres de clientes reales
+**Deuda abierta:**
+- ✅ **Hecho (v1.29.0):** `NOTICE.md` (marca ES/EN), `SECURITY.md`,
+  `CHANGELOG.md`, `CLA.md` + sección en `CONTRIBUTING.md` + check en
+  `.github/workflows/cla.yml` + línea en el PR template.
+- ⏳ `PLAN.md` + `docs/BITACORA-*.md` tienen nombres de clientes reales
   (Daniel/cardealer) + IDs de cuenta Cloudflare → mover a `admin-pagos/`. Ojo:
   ya están en el historial de git (repo nació público) — limpieza total exige
   `git filter-repo`.
-- Nichos por rubro (barbería/clínica/inmobiliaria/restaurante) = "Kit de agencia
-  $149" pero visibles gratis. Migrar a carga desde `member/niche.local.ts`.
-- Falta `NOTICE.md` (marca), `SECURITY.md`, `CHANGELOG.md`, CLA en
-  `CONTRIBUTING.md`.
+- ⏳ Nichos por rubro (barbería/clínica/inmobiliaria/restaurante) = "Kit de
+  agencia $149" pero visibles gratis. Migrar a carga desde
+  `member/niche.local.ts`.
+- ⏳ Topics + descripción del repo en GitHub (whatsapp-bot, ai-agent, chatbot,
+  cloudflare-workers, telegram-bot, instagram, claude-code, open-source,
+  multichannel, spanish). Keywords equivalentes en `package.json`.
+- ⏳ README como embudo (GIF del bot + dashboard, "qué incluye / qué no",
+  costo real del demo).
 
 **Borrado (commit de limpieza):**
 - `cli/` — CLI legacy de Forja (su README decía "no usar", traía "para revenderlo")

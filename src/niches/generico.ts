@@ -10,7 +10,7 @@ export const generico: NichePack = {
   navLabel: "Leads",
   navIcon: "user-plus",
   kpiLabel: "Leads captados",
-  statusLabels: { new: "Nuevo", contacted: "Contactado", sold: "Vendido", lost: "Perdido" },
+  statusLabels: { entrada: "Entrada", new: "Nuevo", contacted: "Contactado", sold: "Vendido", lost: "Perdido" },
   columns: [],
   playbook: "",
   defaultTone: "",

@@ -741,7 +741,9 @@ adminApp.post("/agente/tools/:name/toggle", async (c) => {
   return c.html((await renderNodeModal(c.env, `tool:${name}`, true)) + toastOob("✓ Guardado"));
 });
 
-adminApp.get("/leads", async (c) => c.html(await renderLeads(c.env)));
+adminApp.get("/leads", async (c) =>
+  c.html(await renderLeads(c.env, c.req.query("vista") === "tabla" ? "tabla" : "kanban")),
+);
 
 adminApp.get("/tickets", async (c) => c.html(await renderTickets(c.env)));
 
@@ -1518,20 +1520,22 @@ adminApp.get("/leads/export.csv", async (c) => {
 
 // --- Mutating actions (HTMX / plain form posts) -----------------------------
 
-const LEAD_STATUSES: ReadonlyArray<Lead["status"]> = ["new", "contacted", "sold", "lost"];
-
-// Mark a lead's status (nuevo / contactado / vendido / perdido).
+// Mover un lead en el kanban (entrada / nuevo / contactado / vendido / perdido).
+// Lo llama el drag&drop del kanban, el <select> de la tabla, y —cuando el dueño
+// lo mueve— la ficha del lead queda actualizada para que el bot la lea después.
 adminApp.post("/leads/:id/status", async (c) => {
+  const { LEAD_STATUSES } = await import("../db/leads");
   const form = await c.req.formData();
   const raw = String(form.get("status") ?? "new");
-  const status: Lead["status"] = (LEAD_STATUSES as readonly string[]).includes(raw)
-    ? (raw as Lead["status"])
-    : "new";
+  const note = String(form.get("note") ?? "").trim() || undefined;
+  const status = (LEAD_STATUSES as readonly string[]).includes(raw) ? (raw as (typeof LEAD_STATUSES)[number]) : "new";
   const leads = new LeadsRepo(new Db(c.env.DB));
   const id = c.req.param("id");
-  await leads.setStatus(id, status);
+  await leads.setStatus(id, status, note);
   await audit(c, { action: "lead.status", target: `lead:${id}`, targetLabel: `Lead ${id}`, afterVal: status });
-  return c.redirect("/admin/leads");
+  // El kanban hace fetch (no navega): devolvemos 204 y el JS mueve la tarjeta.
+  if (c.req.header("x-kanban") === "1") return new Response(null, { status: 204 });
+  return c.redirect(`/admin/leads${form.get("vista") === "tabla" ? "?vista=tabla" : ""}`);
 });
 
 // ── Nicho RESTAURANTE: cambiar el estado de un pedido ────────────────────────
