@@ -32,11 +32,21 @@ export type ScrapeResult =
   | { ok: true; content: string; statusCode: number }
   | { ok: false; error: string };
 
+export interface ScrapeOptions {
+  /** false → pide el contenido sin convertir a Markdown (HTML crudo si el sitio lo da). */
+  markdown?: boolean;
+  timeoutMs?: number;
+}
+
 /**
- * Scrapea una URL y devuelve su contenido en Markdown. Fail-soft: cualquier
- * error se devuelve como `{ ok: false }` — nunca lanza.
+ * Scrapea una URL y devuelve su contenido. Fail-soft: cualquier error se
+ * devuelve como `{ ok: false }` — nunca lanza.
+ *
+ * `markdown: true` (default) trae el contenido en Markdown, listo para la KB.
+ * Con `markdown: false` el `content` puede venir en HTML — se usa para leer
+ * `og:image` de una ficha de auto cuando el Markdown no trae imágenes.
  */
-export async function scrapeUrl(env: Env, url: string): Promise<ScrapeResult> {
+export async function scrapeUrl(env: Env, url: string, opts: ScrapeOptions = {}): Promise<ScrapeResult> {
   const auth = authHeader(env);
   if (!auth) return { ok: false, error: "DECODO_AUTH no configurado" };
 
@@ -52,9 +62,9 @@ export async function scrapeUrl(env: Env, url: string): Promise<ScrapeResult> {
         url,
         proxy_pool: "premium",
         headless: "html",
-        markdown: true,
+        markdown: opts.markdown ?? true,
       }),
-      signal: AbortSignal.timeout(60_000),
+      signal: AbortSignal.timeout(opts.timeoutMs ?? 60_000),
     });
 
     if (!res.ok) {

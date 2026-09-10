@@ -496,11 +496,29 @@ adminApp.post("/kb/web-sync", async (c) => {
     msg = `omitido: ${r.skipped}`;
   } else {
     msg = `${r.updated} actualizadas · ${r.unchanged} sin cambios`;
+    if (r.vehicles !== undefined) {
+      msg += ` · ${r.vehicles} autos`;
+      if ((r.imagesPending ?? 0) > 0) msg += ` · ${r.imagesPending} fotos pendientes (se buscan en segundo plano)`;
+    }
     if (r.errors.length) {
       // Mostrar el primer error concreto (no solo el conteo).
       const e = r.errors[0];
       msg += ` · error en ${new URL(e.url).pathname}${new URL(e.url).search}: ${e.error.slice(0, 160)}`;
     }
+  }
+  // Las fotos de autos nuevos/cambiados van en background (delta acotado).
+  if (r.vehicles !== undefined && (r.imagesPending ?? 0) > 0) {
+    c.executionCtx.waitUntil(
+      (async () => {
+        const { refreshVehicleImages } = await import("../kb/inventory");
+        const { Db } = await import("../db/client");
+        const img = await refreshVehicleImages(c.env, new Db(c.env.DB)).catch((e) => {
+          console.error("webSync fotos (background):", e);
+          return { fetched: 0, failed: 0, pending: 0 };
+        });
+        console.log(`[webSync] fotos en background: ${img.fetched} ok, ${img.failed} fallaron, ${img.pending} pendientes`);
+      })(),
+    );
   }
   return c.redirect(`/admin/kb?websync=${encodeURIComponent(msg)}`);
 });

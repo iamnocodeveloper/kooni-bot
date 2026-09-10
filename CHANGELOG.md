@@ -5,6 +5,29 @@ Cambios notables de Kooni. Formato aproximado de
 
 El CLI `kooni-bot` se versiona aparte (npm) — ver la nota de cada versión.
 
+## [1.30.0] — 2026-09-10
+
+### Agregado — Web Sync "modo inventario" (bot de autos)
+
+- **Inventario estructurado**: si la página scrapeada parsea como listado de
+  vehículos, Web Sync guarda un store en D1 (`settings.web_sync_vehicles`: VIN,
+  título, precio, millas, condición, URL de ficha) en vez de un blob de texto.
+  Los docs de KB siguen **sin links** (regla v1.25) + un doc `-resumen` con las
+  marcas reales y reglas anti-alucinación.
+- **Tool `inventarioQuery`**: disponibilidad exacta (marca/modelo/condición/
+  precio/VIN). Si una marca no está, devuelve 0 matches y las marcas disponibles
+  — el bot no contesta de memoria.
+- **Tool `fichaAuto`**: entrega la **ficha real de UN auto** — link de la página
+  y **foto** (`og:image`) — solo cuando el cliente pide ese auto o da su VIN. La
+  URL sale del store parseado, nunca la inventa el modelo.
+- **Fotos**: el feed no trae imágenes; se scrapean de la ficha con Decodo
+  (batch nocturno acotado con `refreshVehicleImages` + bajo demanda cacheada).
+- `scrapeUrl` acepta `markdown:false` para leer `og:image` cuando el Markdown no
+  trae imágenes; el disparo manual y el tick nocturno corren el batch de fotos en
+  background (`executionCtx.waitUntil`).
+- El pipeline cae al **modo texto legacy** si el contenido no parece inventario,
+  así que las demás instalaciones con Web Sync no cambian de comportamiento.
+
 ## [1.29.0] — 2026-09-07
 
 ### Agregado

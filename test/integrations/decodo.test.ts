@@ -38,6 +38,24 @@ describe("scrapeUrl", () => {
     expect(init.headers.Authorization).toMatch(/^Basic /);
   });
 
+  it("permite pedir HTML (markdown: false) — para leer og:image de fichas", async () => {
+    const fetchMock = vi.fn(
+      async (_url: string, _init: RequestInit) =>
+        new Response(
+          JSON.stringify({ results: [{ content: "<html><meta property=\"og:image\" content=\"https://cdn/x.jpg\"></html>", status_code: 200 }] }),
+          { status: 200 },
+        ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const r = await scrapeUrl(env({ DECODO_AUTH: "user:pass" }), "https://x.com/vehicle/1", { markdown: false });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.content).toContain("og:image");
+
+    const body = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
+    expect(body.markdown).toBe(false);
+  });
+
   it("ok:false si no hay auth, si el HTTP falla o si viene vacío", async () => {
     expect((await scrapeUrl(env(), "https://x.com")).ok).toBe(false);
 

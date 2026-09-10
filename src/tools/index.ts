@@ -10,6 +10,7 @@ import { catalogQueryTool } from "./catalogQuery";
 import { reportQueryTool } from "./reportQuery";
 import { registrarCalificacionTool } from "./registrarCalificacion";
 import { enviarRecursoTool, type RecursoCtx } from "./enviarRecurso";
+import { inventarioQueryTool, fichaAutoTool } from "./inventario";
 import { getNiche } from "../niches";
 import type { ChannelId } from "../channels/shared";
 
@@ -57,6 +58,12 @@ export async function buildTools(ctx: ToolContext) {
   // Consulta de catálogo/inventario — disponible siempre; devuelve vacío con
   // guía si el dueño aún no cargó catálogo.
   tools.catalogQuery = catalogQueryTool(ctx.env);
+
+  // Inventario web sincronizado (Web Sync modo inventario): consulta exacta y
+  // ficha+link real por auto. Si no hay store, ambas devuelven guía (no tool
+  // fantasma: el modelo usa searchKb). La ficha envía foto por el canal real.
+  tools.inventarioQuery = inventarioQueryTool(ctx.env);
+  tools.fichaAuto = fichaAutoTool(ctx.env, getRecursoCtx);
 
   // Fase A: enviarRecurso — activable desde Configuración (allow_multimedia).
   // El agente llama setRecursoCtx antes del loop con el canal real.

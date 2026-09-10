@@ -21,7 +21,7 @@ export interface TestTurnResult {
   model: string;
 }
 
-const READ_ONLY_TOOLS = new Set(["searchKb", "catalogQuery", "reportQuery"]);
+const READ_ONLY_TOOLS = new Set(["searchKb", "catalogQuery", "reportQuery", "inventarioQuery"]);
 
 const TEST_NOTE = `<modo_prueba>
 Estás en una prueba interna del dueño del negocio, no con un cliente real. Las

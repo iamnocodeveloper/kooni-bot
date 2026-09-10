@@ -4,6 +4,7 @@ import { Db } from "../../src/db/client";
 import { SettingsRepo, SETTING_KEYS } from "../../src/db/settings";
 import { KbDocsRepo } from "../../src/kb/docs";
 import { parseWebSyncUrls, webDocId, runWebSync, trimBoilerplate, splitParts, stripMarkdownLinks } from "../../src/kb/webSync";
+import { loadVehicleStore } from "../../src/kb/inventory";
 import type { Env } from "../../src/env";
 
 describe("parseWebSyncUrls / webDocId", () => {
@@ -126,5 +127,80 @@ describe("runWebSync", () => {
     const r = await runWebSync(env);
     expect(r.errors).toHaveLength(1);
     expect(r.updated).toBe(0);
+  });
+
+  it("modo inventario: docs compactos sin links + doc resumen + store; 2ª corrida sin cambios no re-embebe", async () => {
+    const url = "https://www.greenwaykiawestpalmbeach.com/llm/inventory/";
+    await new SettingsRepo(db).set(SETTING_KEYS.webSyncUrls, url);
+    const feed = `-   [2022 Kia Telluride SX](https://www.greenwaykiawestpalmbeach.com/inventory/used/2022-kia-telluride-sx) New
+    45,210 miles $46,990 VIN: 5XYPH4A56KG123456
+-   [2020 Kia Sorento LX](https://www.greenwaykiawestpalmbeach.com/inventory/used/2020-kia-sorento-lx) Pre-Owned
+    85,110 miles $17,593 VIN: 5XYPG4A38LG625285
+-   [2021 Chevrolet Equinox LT](https://www.greenwaykiawestpalmbeach.com/inventory/used/2021-chevrolet-equinox-lt) Used
+    33,004 miles $21,400 VIN: 2GNAXKEV9M6123456
+-   [2022 Toyota Camry SE](https://www.greenwaykiawestpalmbeach.com/inventory/used/2022-toyota-camry-se) Certified
+    22,100 miles $28,990 VIN: 4T1G11AK8NU123456`;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ results: [{ content: feed, status_code: 200 }] }), { status: 200 })),
+    );
+    // AI mock adaptativo: indexDoc embebe por lote (varios chunks por corrida).
+    const envInv = {
+      ...env,
+      AI: {
+        run: vi.fn(async (_model: string, input: { text: unknown }) => ({
+          data: (Array.isArray(input.text) ? input.text : [input.text]).map(() => [0.1, 0.2, 0.3]),
+        })),
+      },
+    } as unknown as Env;
+
+    const r1 = await runWebSync(envInv);
+    expect(r1.updated).toBe(1);
+    expect(r1.vehicles).toBe(4);
+    expect(r1.imagesPending).toBe(4);
+
+    const id = webDocId(url);
+    const doc = await new KbDocsRepo(db).getById(id);
+    expect(doc?.content).toContain("2020 Kia Sorento LX");
+    expect(doc?.content).toContain("$17,593");
+    expect(doc?.content).not.toMatch(/https?:\/\//);
+
+    // Doc resumen con marcas reales + reglas (lo que responde "¿qué marcas tienen?").
+    const sum = await new KbDocsRepo(db).getById(`${id}-resumen`);
+    expect(sum?.content).toContain("Marcas disponibles: Kia (2), Chevrolet (1), Toyota (1)");
+    expect(sum?.content).toContain("REGLAS");
+
+    const store = await loadVehicleStore(db);
+    expect(Object.keys(store.vehicles)).toHaveLength(4);
+    const sorento = Object.values(store.vehicles).find((v) => v.vin === "5XYPG4A38LG625285");
+    expect(sorento?.listingUrl).toContain("2020-kia-sorento-lx");
+
+    // Sin cambios → no re-embebe ni pisa el store.
+    const r2 = await runWebSync(envInv);
+    expect(r2.unchanged).toBe(1);
+    expect(r2.updated).toBe(0);
+    expect((await loadVehicleStore(db)).vehicles).toHaveProperty(sorento!.key);
+  });
+
+  it("modo texto (no inventario) se mantiene sin store ni resumen", async () => {
+    await new SettingsRepo(db).set(SETTING_KEYS.webSyncUrls, "https://x.com/faq");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ results: [{ content: "### Horarios\nLun a Vie 9-18.", status_code: 200 }] }), { status: 200 })),
+    );
+    const envTxt = {
+      ...env,
+      AI: {
+        run: vi.fn(async (_model: string, input: { text: unknown }) => ({
+          data: (Array.isArray(input.text) ? input.text : [input.text]).map(() => [0.1, 0.2, 0.3]),
+        })),
+      },
+    } as unknown as Env;
+    const r = await runWebSync(envTxt);
+    expect(r.updated).toBe(1);
+    expect(r.vehicles).toBeUndefined();
+    const sum = await new KbDocsRepo(db).getById(`${webDocId("https://x.com/faq")}-resumen`);
+    expect(sum).toBeNull();
+    expect(Object.keys((await loadVehicleStore(db)).vehicles)).toHaveLength(0);
   });
 });

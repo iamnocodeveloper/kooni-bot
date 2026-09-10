@@ -1,9 +1,3 @@
-import type { Env } from "../env";
-import { Db } from "../db/client";
-import { SettingsRepo, SETTING_KEYS } from "../db/settings";
-import { KbDocsRepo, indexDoc, removeDocVectors, MAX_DOC_CHARS } from "./docs";
-import { scrapeUrl, decodoConfigured } from "../integrations/decodo";
-
 // Sincroniza páginas web a la KB del bot. Pensado para UNA instalación (un
 // cliente que quiere que el bot conteste con la info de su sitio). Dos candados
 // independientes, ambos fallan cerrados:
@@ -14,10 +8,42 @@ import { scrapeUrl, decodoConfigured } from "../integrations/decodo";
 // Cada URL configurada → un documento de KB `web:<slug>` (visible y borrable
 // desde /admin/kb). Se re-embebe SOLO si el contenido cambió (hash). El bot lo
 // encuentra solo vía searchKb — no hay plumbing nuevo en el agente.
+//
+// MODO INVENTARIO (v1.30): si la página parsea como listado de vehículos, en
+// vez del blob de texto (stripMarkdownLinks, regla v1.25) se guarda:
+//   - docs de KB compactos por auto (sin links) + un doc `-resumen` con las
+//     marcas reales y reglas anti-alucinación,
+//   - el inventario estructurado en settings (`web_sync_vehicles`) para las
+//     tools inventarioQuery / fichaAuto (link real de ficha + foto).
+// Las fotos NO vienen en el feed: se scrapea la ficha de cada auto con Decodo
+// (delta nocturno acotado + bajo demanda). Si el contenido no parece
+// inventario, el pipeline queda igual que antes (modo texto).
+
+import type { Env } from "../env";
+import { Db } from "../db/client";
+import { SettingsRepo, SETTING_KEYS } from "../db/settings";
+import { KbDocsRepo, indexDoc, removeDocVectors, MAX_DOC_CHARS } from "./docs";
+import { scrapeUrl, decodoConfigured } from "../integrations/decodo";
+import {
+  parseInventory,
+  looksLikeInventory,
+  renderInventoryParts,
+  renderVehicleBlock,
+  renderInventorySummary,
+  mergeVehicleStore,
+  loadVehicleStore,
+  saveVehicleStore,
+  listStoredVehicles,
+  pendingImageCount,
+  refreshVehicleImages,
+  type Vehicle,
+} from "./inventory";
 
 const MAX_URLS = 10;
 /** Si una página pasa MAX_DOC_CHARS, se parte en hasta N docs `web:<slug>`, `-2`, `-3`… */
 const MAX_PARTS = 8;
+/** Fotos por corrida nocturna (delta). El resto se completa en corridas siguientes o bajo demanda. */
+export const MAX_IMG_BATCH = 20;
 
 /** Parte el texto en trozos de <= max chars, cortando en salto de línea. */
 export function splitParts(text: string, max: number, maxParts: number): string[] {
@@ -46,6 +72,8 @@ interface UrlState {
   chars: number;
   /** Cuántos docs `web:<slug>[-n]` genera esta URL (1 si cabe en un doc). */
   parts?: number;
+  /** "inv" = modo inventario (store + doc compacto), "text" = blob legacy. */
+  mode?: string;
 }
 
 /**
@@ -84,7 +112,9 @@ export function trimBoilerplate(raw: string): string {
  * WhatsApp) — pero SÍ puede seguir mandando links que vengan de otro lado
  * (KB escrita a mano, `customFields`, el prompt). Por eso esto se aplica
  * SOLO acá, en el pipeline de Web Sync, y no globalmente: es la única fuente
- * de esos links de "Ver listado completo" por auto/producto.
+ * de esos links de "Ver listado completo" por auto/producto. (En el modo
+ * inventario los links de ficha no van al texto de la KB: viajan por la tool
+ * fichaAuto, validados contra el store.)
  */
 export function stripMarkdownLinks(text: string): string {
   return text.replace(/\[([^\]]*)\]\([^)]*\)/g, "$1");
@@ -131,15 +161,31 @@ export function webDocId(url: string): string {
   return `web:${label}-${quickHash(canon)}`;
 }
 
+/** id del doc "resumen + reglas" del modo inventario (una por URL). */
+function inventorySummaryDocId(url: string): string {
+  return `${webDocId(url)}-resumen`;
+}
+
 export interface WebSyncSummary {
   skipped?: string;
   scraped: number;
   updated: number;
   unchanged: number;
   errors: { url: string; error: string }[];
+  /** Modo inventario: autos en el store al cierre de la corrida. */
+  vehicles?: number;
+  imagesFetched?: number;
+  imagesFailed?: number;
+  /** Fotos pendientes (autos nuevos/cambiados que aún no tienen foto). */
+  imagesPending?: number;
 }
 
-export async function runWebSync(env: Env): Promise<WebSyncSummary> {
+export interface WebSyncRunOptions {
+  /** true en el tick nocturno: además del sync del feed, corre el batch de fotos. */
+  images?: boolean;
+}
+
+export async function runWebSync(env: Env, opts: WebSyncRunOptions = {}): Promise<WebSyncSummary> {
   const empty: WebSyncSummary = { scraped: 0, updated: 0, unchanged: 0, errors: [] };
 
   // MODELO (2026-09-07): web_sync disponible en todos los planes — solo pide el
@@ -165,6 +211,10 @@ export async function runWebSync(env: Env): Promise<WebSyncSummary> {
   const kb = new KbDocsRepo(db);
   const summary: WebSyncSummary = { scraped: 0, updated: 0, unchanged: 0, errors: [] };
 
+  // Agregador del modo inventario (una instalación → típicamente UNA URL).
+  let inventorySeen = false;
+  const allVehicles: Vehicle[] = [];
+
   for (const url of urls) {
     const r = await scrapeUrl(env, url);
     if (!r.ok) {
@@ -173,11 +223,32 @@ export async function runWebSync(env: Env): Promise<WebSyncSummary> {
       continue;
     }
     summary.scraped++;
-    const full = stripMarkdownLinks(trimBoilerplate(r.content));
-    const parts = splitParts(full, MAX_DOC_CHARS, MAX_PARTS);
+
+    const trimmed = trimBoilerplate(r.content);
+    const parsed = parseInventory(trimmed, url);
+    // Modo inventario: entra si parsea bien, o si la URL YA estaba en modo
+    // inventario y el feed sigue trayendo autos (aunque sean pocos).
+    const prevMode = state[url]?.mode;
+    const isInv = looksLikeInventory(parsed)
+      ? true
+      : prevMode === "inv" && parsed.length >= 1
+        ? true
+        : false;
+
+    const full = isInv
+      ? parsed.map(renderVehicleBlock).join("\n\n")
+      : stripMarkdownLinks(trimmed);
+    const parts = isInv
+      ? renderInventoryParts(parsed, MAX_DOC_CHARS, MAX_PARTS)
+      : splitParts(full, MAX_DOC_CHARS, MAX_PARTS);
     const hash = quickHash(full);
     const baseId = webDocId(url);
     const prevParts = state[url]?.parts ?? 1;
+
+    if (isInv) {
+      inventorySeen = true;
+      allVehicles.push(...parsed);
+    }
 
     if (state[url]?.hash === hash && prevParts === parts.length) {
       summary.unchanged++;
@@ -202,9 +273,29 @@ export async function runWebSync(env: Env): Promise<WebSyncSummary> {
         await removeDocVectors(env, id).catch(() => {});
         await kb.delete(id).catch(() => {});
       }
-      state[url] = { hash, at: Date.now(), chars: full.length, parts: parts.length };
+
+      // Doc "resumen + reglas" del modo inventario (1 por URL, chico).
+      const summaryDocId = inventorySummaryDocId(url);
+      if (isInv) {
+        const sumContent = renderInventorySummary(parsed, base, url);
+        await kb.upsert({ id: summaryDocId, title: `Inventario web — ${base} — resumen`, content: sumContent });
+        const sumDoc = await kb.getById(summaryDocId);
+        if (sumDoc) await indexDoc(env, sumDoc);
+      } else {
+        // Salió del modo inventario → el resumen ya no aplica.
+        await removeDocVectors(env, summaryDocId).catch(() => {});
+        await kb.delete(summaryDocId).catch(() => {});
+      }
+
+      state[url] = {
+        hash,
+        at: Date.now(),
+        chars: full.length,
+        parts: parts.length,
+        mode: isInv ? "inv" : "text",
+      };
       summary.updated++;
-      console.log(`[webSync] ${url} → ${parts.length} doc(s), ${full.length} chars`);
+      console.log(`[webSync] ${url} → ${parts.length} doc(s) ${isInv ? "(inventario)" : "(texto)"}, ${full.length} chars`);
     } catch (e) {
       const msg = String((e as Error)?.message ?? e);
       console.error(`[webSync] ${url}: fallo al guardar/indexar: ${msg}`);
@@ -212,7 +303,7 @@ export async function runWebSync(env: Env): Promise<WebSyncSummary> {
     }
   }
 
-  // Limpiar docs de URLs que ya no están en la config (todas sus partes).
+  // Limpiar docs de URLs que ya no están en la config (partes + resumen).
   for (const oldUrl of Object.keys(state)) {
     if (!urls.includes(oldUrl)) {
       const baseId = webDocId(oldUrl);
@@ -222,9 +313,38 @@ export async function runWebSync(env: Env): Promise<WebSyncSummary> {
         await removeDocVectors(env, id).catch(() => {});
         await kb.delete(id).catch(() => {});
       }
+      const sumId = inventorySummaryDocId(oldUrl);
+      await removeDocVectors(env, sumId).catch(() => {});
+      await kb.delete(sumId).catch(() => {});
       delete state[oldUrl];
-      console.log(`[webSync] ${oldUrl} salió de la config → ${n} doc(s) eliminados`);
+      console.log(`[webSync] ${oldUrl} salió de la config → docs eliminados`);
     }
+  }
+
+  // ── Modo inventario: mantener el store estructurado (tools) ──────────────
+  // Solo se toca si esta corrida vio inventario: si el feed falló entero o la
+  // página dejó de parsear, se conserva el último store conocido (no se borra).
+  if (inventorySeen) {
+    try {
+      const prev = await loadVehicleStore(db);
+      const merged = mergeVehicleStore(prev, allVehicles);
+      await saveVehicleStore(db, merged);
+      summary.vehicles = listStoredVehicles(merged).length;
+      summary.imagesPending = pendingImageCount(merged);
+
+      if (opts.images) {
+        const img = await refreshVehicleImages(env, db);
+        summary.imagesFetched = img.fetched;
+        summary.imagesFailed = img.failed;
+        summary.imagesPending = img.pending;
+      }
+    } catch (e) {
+      console.error(`[webSync] inventario: fallo al guardar el store: ${String((e as Error)?.message ?? e)}`);
+    }
+  } else if (listStoredVehicles(await loadVehicleStore(db).catch(() => ({ updatedAt: 0, vehicles: {} }))).length > 0) {
+    // Había inventario de corridas previas pero esta corrida no vio ninguno
+    // (p. ej. la URL salió de la config): el store se limpia igual.
+    await saveVehicleStore(db, { updatedAt: Date.now(), vehicles: {} }).catch(() => {});
   }
 
   await repo.set(SETTING_KEYS.webSyncState, JSON.stringify(state));

@@ -96,6 +96,10 @@ export const SETTING_KEYS = {
   webSyncUrls: "web_sync_urls", // URLs (una por línea o coma)
   webSyncState: "web_sync_state", // JSON { [url]: { hash, at, chars } } — anti re-embebido
   webSyncLastRun: "web_sync_last_run", // epoch ms de la última corrida
+  // Inventario estructurado (modo inventario de Web Sync): JSON con los autos
+  // parseados (VIN, precio, ficha URL, foto) para las tools inventarioQuery y
+  // fichaAuto. Sin esto, el bot contestaría solo con el blob de texto de la KB.
+  webSyncVehicles: "web_sync_vehicles", // JSON { updatedAt, vehicles: { [key]: VehicleStored } }
   // WAHA (WhatsApp self-hosted, Docker): datos editables desde el panel
   // (Conexiones → WAHA), mismo patrón que Telegram/Zernio — sin
   // `wrangler secret put` ni redeploy. Fallback a las vars/secrets de env.
@@ -160,6 +164,7 @@ export const SETTING_LABELS: Record<string, string> = {
   [SETTING_KEYS.commentFallbackMessage]: "Texto de la respuesta pública a comentarios",
   [SETTING_KEYS.webSyncEnabled]: "Web Sync activado",
   [SETTING_KEYS.webSyncUrls]: "URLs de Web Sync",
+  [SETTING_KEYS.webSyncVehicles]: "Inventario Web Sync (autos parseados)",
   [SETTING_KEYS.wahaApiUrl]: "URL del servidor WAHA",
   [SETTING_KEYS.wahaSession]: "Sesión de WAHA",
   [SETTING_KEYS.wahaApiKey]: "API key de WAHA",

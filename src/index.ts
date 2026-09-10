@@ -393,6 +393,21 @@ app.post("/kb/web-sync", async (c) => {
   }
   const { runWebSync } = await import("./kb/webSync");
   const r = await runWebSync(c.env);
+  // Las fotos de los autos nuevos/cambiados se buscan en segundo plano (delta
+  // acotado) para que este disparo no cuelgue al llamador.
+  if (r.vehicles !== undefined && (r.imagesPending ?? 0) > 0) {
+    c.executionCtx.waitUntil(
+      (async () => {
+        const { refreshVehicleImages } = await import("./kb/inventory");
+        const { Db } = await import("./db/client");
+        const img = await refreshVehicleImages(c.env, new Db(c.env.DB)).catch((e) => {
+          console.error("webSync fotos (background):", e);
+          return { fetched: 0, failed: 0, pending: 0 };
+        });
+        console.log(`[webSync] fotos en background: ${img.fetched} ok, ${img.failed} fallaron, ${img.pending} pendientes`);
+      })(),
+    );
+  }
   return c.json({ ok: true, ...r }, 200);
 });
 
@@ -499,10 +514,18 @@ export default {
 
     // Web Sync (módulo web_sync, una instalación): scrapea las páginas
     // configuradas → KB. No-op si el módulo está bloqueado o falta DECODO_AUTH.
+    // En el tick nocturno también corre el batch de fotos de fichas (delta).
     try {
       const { runWebSync } = await import("./kb/webSync");
-      const r = await runWebSync(env);
-      if (!r.skipped) console.log(`[webSync] noche: ${r.updated} actualizadas, ${r.unchanged} sin cambios, ${r.errors.length} errores`);
+      const r = await runWebSync(env, { images: true });
+      if (!r.skipped) {
+        console.log(
+          `[webSync] noche: ${r.updated} actualizadas, ${r.unchanged} sin cambios, ${r.errors.length} errores` +
+            (r.vehicles !== undefined
+              ? ` · ${r.vehicles} autos en store, fotos: ${r.imagesFetched ?? 0} ok / ${r.imagesFailed ?? 0} err / ${r.imagesPending ?? 0} pend`
+              : ""),
+        );
+      }
     } catch (e) {
       console.error("webSync:", e);
     }
