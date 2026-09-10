@@ -5,6 +5,25 @@ Cambios notables de Kooni. Formato aproximado de
 
 El CLI `kooni-bot` se versiona aparte (npm) — ver la nota de cada versión.
 
+## [1.37.0] — 2026-09-10
+
+### Agregado — Cobros por voz: configuración de Vapi y Retell
+
+- Nueva sección **Conexiones → “Cobros por voz: Vapi / Retell”** con todos los
+  campos para conectar cada plataforma: API key, Assistant/Agent ID, Phone
+  Number ID / número saliente, webhook secret, API base URL, proveedor activo,
+  objetivo/tono del guion de cobranza y intentos máximos por deudor.
+- Webhooks listos para pegar en cada dashboard: `POST /webhooks/vapi` (header
+  `X-Vapi-Secret`) y `POST /webhooks/retell` (`x-retell-signature`); por ahora
+  ack + log (el flujo de llamadas se cablea en la próxima etapa).
+- `src/integrations/voiceProviders.ts`: resolución de credenciales (settings D1
+  gana; env fallback), claves nuevas en `SETTING_KEYS`/`SETTING_LABELS` y
+  redacción de los secretos en el registro de auditoría.
+
+### Notas de la etapa (cardealer)
+- Cierre documentado en `PLAN.md` → § CIERRE DE ETAPA — cardealer-daniel.
+- Webhooks de WhatsApp/IG/WAHA y el flujo de inventario tal como quedaron.
+
 ## [1.36.0] — 2026-09-10
 
 ### Agregado

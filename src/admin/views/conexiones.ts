@@ -11,6 +11,7 @@ import type { ZernioCredentials } from "../../channels/zernioCredentials";
 import { mlConnected, ML_SITES, type MlCredentials } from "../../channels/mercadolibreCredentials";
 import type { WahaConfig } from "../../channels/wahaCredentials";
 import type { WahaSessionInfo } from "../../channels/wahaApi";
+import { vapiConfigured, retellConfigured, type VoiceConfig } from "../../integrations/voiceProviders";
 
 interface ChannelStatus {
   id: string;
@@ -199,8 +200,9 @@ export async function renderConexiones(
     mlCreds?: MlCredentials;
     wahaCfg?: WahaConfig;
     wahaStatus?: WahaSessionInfo | null;
+    voiceCfg?: VoiceConfig;
     baseUrl?: string;
-    savedKind?: "telegram" | "zernio" | "mercadolibre" | "waha";
+    savedKind?: "telegram" | "zernio" | "mercadolibre" | "waha" | "vapi" | "retell" | "voz";
     error?: string;
   } = {},
 ): Promise<string> {
@@ -213,6 +215,15 @@ export async function renderConexiones(
   const mlCreds = opts.mlCreds ?? ({ site: "MLA", expiresAt: 0 } as MlCredentials);
   const wahaCfg = opts.wahaCfg ?? { base: env.WAHA_API_URL ?? "", session: env.WAHA_SESSION || "default", apiKey: env.WAHA_API_KEY, webhookToken: env.WAHA_WEBHOOK_TOKEN };
   const wahaStatus = opts.wahaStatus ?? null;
+  const voiceCfg: VoiceConfig =
+    opts.voiceCfg ??
+    ({
+      provider: "",
+      vapi: { baseUrl: "https://api.vapi.ai" },
+      retell: { baseUrl: "https://api.retellai.com" },
+      objective: "",
+      maxAttempts: 3,
+    } as VoiceConfig);
   const channels = channelStatuses(env, zernioCreds, telegramToken, mlCreds, wahaCfg);
   const connected = channels.filter((ch) => ch.ok).length;
   // Fallback de base: la ruta GET pasa el origin real si DASHBOARD_BASE_URL está
@@ -503,10 +514,100 @@ export async function renderConexiones(
         ? `<div style="border:1px solid var(--ok);background:var(--ok-soft);color:var(--ok);padding:10px 14px;font-size:12.5px;font-weight:600">✓ MercadoLibre: datos guardados. Si ya autorizaste al vendedor, la IA responderá las preguntas y mensajes post-venta. Falta activar los tópicos 'questions' y 'messages' en las notificaciones de tu app.</div>`
         : opts.savedKind === "waha"
           ? `<div style="border:1px solid var(--ok);background:var(--ok-soft);color:var(--ok);padding:10px 14px;font-size:12.5px;font-weight:600">✓ WAHA conectado: sesión creada/actualizada y webhook registrado. Si te pide QR, bájalo en la card de WAHA aquí abajo.</div>`
-          : "";
+          : opts.savedKind === "vapi"
+            ? `<div style="border:1px solid var(--ok);background:var(--ok-soft);color:var(--ok);padding:10px 14px;font-size:12.5px;font-weight:600">✓ Vapi guardado. Pegá el Server URL de arriba en el dashboard de Vapi (Assistant → Server URL).</div>`
+            : opts.savedKind === "retell"
+              ? `<div style="border:1px solid var(--ok);background:var(--ok-soft);color:var(--ok);padding:10px 14px;font-size:12.5px;font-weight:600">✓ Retell guardado. Pegá el Webhook URL de arriba en el dashboard de Retell.</div>`
+              : opts.savedKind === "voz"
+                ? `<div style="border:1px solid var(--ok);background:var(--ok-soft);color:var(--ok);padding:10px 14px;font-size:12.5px;font-weight:600">✓ Parámetros de la cartera por voz guardados.</div>`
+                : "";
   const errorBanner = opts.error
     ? `<div style="border:1px solid var(--bad);background:var(--bad-soft);color:var(--bad);padding:10px 14px;font-size:12.5px;font-weight:600">✕ ${esc(opts.error)}</div>`
     : "";
+
+  // ── Cobros por voz (Vapi / Retell) ────────────────────────────────────────
+  // Solo configuración: deja todos los campos listos para conectar cada
+  // proveedor (API key, assistant/agent, número, webhook secret y la URL del
+  // webhook a pegar en su dashboard).
+  const voiceInputStyle =
+    "background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:9px 11px;font-size:12.5px;outline:none;width:100%";
+  const vField = (label: string, html: string, hint?: string) => `
+    <label style="display:flex;flex-direction:column;gap:4px">
+      <span class="text-[11px]" style="color:var(--muted)">${label}</span>
+      ${html}
+      ${hint ? `<span class="text-[10.5px] text-dim">${hint}</span>` : ""}
+    </label>`;
+  const vBadge = (ok: boolean) =>
+    ok
+      ? `<span class="text-[10px]" style="border:1px solid var(--ok);color:var(--ok);background:var(--ok-soft);padding:3px 9px;letter-spacing:.08em">LISTO</span>`
+      : `<span class="text-[10px] text-dim" style="border:1px solid var(--line);padding:3px 9px;letter-spacing:.08em">FALTA</span>`;
+  const vWebhook = (path: string) => `
+    <div class="text-dim text-[10.5px] font-mono" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <span>Webhook URL:</span>
+      <span style="border:1px solid var(--line);padding:4px 8px;background:var(--bg);word-break:break-all">${esc((base || "") + path)}</span>
+      <button type="button" class="text-[10.5px]" style="border:1px solid var(--line);color:var(--cream);padding:4px 8px;cursor:pointer;background:none"
+              onclick="navigator.clipboard.writeText('${esc((base || "") + path)}');this.textContent='copiado ✓'">copiar</button>
+    </div>`;
+  const vapiOk = vapiConfigured(voiceCfg.vapi);
+  const retellOk = retellConfigured(voiceCfg.retell);
+
+  const vapiCard = `
+    <div class="bg-panel border" style="padding:18px 20px;display:flex;flex-direction:column;gap:10px;border-color:${vapiOk ? "var(--ok)" : "var(--line)"}">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+        <div class="font-display font-semibold text-[13.5px] text-cream">Vapi (voz)</div>
+        ${vBadge(vapiOk)}
+      </div>
+      <p class="text-dim text-[12px]" style="margin:0">Agente de voz para llamar a los deudores de la cartera. Créalo en dashboard.vapi.ai, pega aquí sus datos y su Server URL abajo.</p>
+      ${vWebhook("/webhooks/vapi")}
+      <form method="POST" action="/admin/conexiones/vapi" style="display:flex;flex-direction:column;gap:10px;margin-top:4px">
+        ${vField("Private API key", `<input type="password" name="vapi_api_key" value="" autocomplete="off" placeholder="sk_live_… (vacío = conservar)" style="${voiceInputStyle}">`, "dashboard.vapi.ai → API Keys")}
+        ${vField("Assistant ID", `<input type="text" name="vapi_assistant_id" value="${esc(voiceCfg.vapi.assistantId ?? "")}" autocomplete="off" placeholder="asst_…" style="${voiceInputStyle}">`, "El asistente que contesta la llamada")}
+        ${vField("Phone Number ID", `<input type="text" name="vapi_phone_number_id" value="${esc(voiceCfg.vapi.phoneNumberId ?? "")}" autocomplete="off" placeholder="pn_…" style="${voiceInputStyle}">`, "Phone Numbers → id del número saliente")}
+        ${vField("Webhook secret", `<input type="password" name="vapi_webhook_secret" value="" autocomplete="off" placeholder="(secreto del Server URL, opcional)" style="${voiceInputStyle}">`, "Se recibe en el header X-Vapi-Secret y se valida el webhook")}
+        ${vField("API base URL", `<input type="text" name="vapi_api_base_url" value="${esc(voiceCfg.vapi.baseUrl ?? "")}" autocomplete="off" placeholder="https://api.vapi.ai" style="${voiceInputStyle}">`)}
+        <label class="text-dim text-[11.5px]" style="display:flex;align-items:center;gap:7px;cursor:pointer">
+          <input type="checkbox" name="make_active" value="1" ${voiceCfg.provider === "vapi" ? "checked" : ""}> Usar Vapi como proveedor activo de cobros
+        </label>
+        <div style="display:flex;gap:12px;align-items:center">
+          <button type="submit" class="font-display font-semibold text-[12px]" style="background:var(--accent);color:#0b0b0b;border:none;padding:9px 16px;cursor:pointer">Guardar Vapi</button>
+          ${vapiOk ? `<label class="text-dim text-[11.5px]" style="display:flex;align-items:center;gap:7px;cursor:pointer"><input type="checkbox" name="clear" value="1"> Quitar conexión</label>` : ""}
+        </div>
+      </form>
+    </div>`;
+
+  const retellCard = `
+    <div class="bg-panel border" style="padding:18px 20px;display:flex;flex-direction:column;gap:10px;border-color:${retellOk ? "var(--ok)" : "var(--line)"}">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+        <div class="font-display font-semibold text-[13.5px] text-cream">Retell (voz)</div>
+        ${vBadge(retellOk)}
+      </div>
+      <p class="text-dim text-[12px]" style="margin:0">Alternativa a Vapi para las llamadas de cobranza. Crea el agente en dashboard.retellai.com y pega aquí sus datos.</p>
+      ${vWebhook("/webhooks/retell")}
+      <form method="POST" action="/admin/conexiones/retell" style="display:flex;flex-direction:column;gap:10px;margin-top:4px">
+        ${vField("API key", `<input type="password" name="retell_api_key" value="" autocomplete="off" placeholder="key_… (vacío = conservar)" style="${voiceInputStyle}">`, "dashboard.retellai.com → API Keys")}
+        ${vField("Agent ID", `<input type="text" name="retell_agent_id" value="${esc(voiceCfg.retell.agentId ?? "")}" autocomplete="off" placeholder="agent_…" style="${voiceInputStyle}">`, "El agente que contesta la llamada")}
+        ${vField("Número saliente", `<input type="text" name="retell_phone_number" value="${esc(voiceCfg.retell.phoneNumber ?? "")}" autocomplete="off" placeholder="+1561…" style="${voiceInputStyle}">`, "Número comprado en Retell (E.164). Opcional si el agente ya lo trae.")}
+        ${vField("Webhook secret", `<input type="password" name="retell_webhook_secret" value="" autocomplete="off" placeholder="(secreto del webhook, opcional)" style="${voiceInputStyle}">`, "Se usa para verificar los webhooks de Retell")}
+        ${vField("API base URL", `<input type="text" name="retell_api_base_url" value="${esc(voiceCfg.retell.baseUrl ?? "")}" autocomplete="off" placeholder="https://api.retellai.com" style="${voiceInputStyle}">`)}
+        <label class="text-dim text-[11.5px]" style="display:flex;align-items:center;gap:7px;cursor:pointer">
+          <input type="checkbox" name="make_active" value="1" ${voiceCfg.provider === "retell" ? "checked" : ""}> Usar Retell como proveedor activo de cobros
+        </label>
+        <div style="display:flex;gap:12px;align-items:center">
+          <button type="submit" class="font-display font-semibold text-[12px]" style="background:var(--accent);color:#0b0b0b;border:none;padding:9px 16px;cursor:pointer">Guardar Retell</button>
+          ${retellOk ? `<label class="text-dim text-[11.5px]" style="display:flex;align-items:center;gap:7px;cursor:pointer"><input type="checkbox" name="clear" value="1"> Quitar conexión</label>` : ""}
+        </div>
+      </form>
+    </div>`;
+
+  const vozComun = `
+    <div class="bg-panel border border-line" style="padding:18px 20px;display:flex;flex-direction:column;gap:10px">
+      <div class="font-display font-semibold text-[13.5px] text-cream">Cartera de cobros — parámetros</div>
+      <form method="POST" action="/admin/conexiones/voz" style="display:flex;flex-direction:column;gap:10px">
+        ${vField("Objetivo / tono del guion", `<textarea name="cobros_voice_objective" rows="3" style="${voiceInputStyle};resize:vertical" placeholder="Ej: recordar el saldo, ofrecer plan de pagos, tono firme pero respetuoso">${esc(voiceCfg.objective)}</textarea>`, "Contexto que el agente de voz usa durante la llamada")}
+        ${vField("Intentos máximos por deudor", `<input type="number" name="cobros_voice_max_attempts" min="1" max="10" value="${voiceCfg.maxAttempts}" style="${voiceInputStyle}">`)}
+        <button type="submit" class="font-display font-semibold text-[12px]" style="background:var(--accent);color:#0b0b0b;border:none;padding:9px 16px;cursor:pointer;align-self:flex-start">Guardar parámetros</button>
+      </form>
+    </div>`;
 
   const body = `
     <div style="display:flex;flex-direction:column;gap:18px">
@@ -518,6 +619,15 @@ export async function renderConexiones(
       </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px">
         ${cards}
+      </div>
+      <div style="display:flex;flex-direction:column;gap:2px;margin-top:6px">
+        <h2 class="font-display font-semibold text-[15px] text-cream">Cobros por voz: Vapi / Retell</h2>
+        <p class="text-muted text-[12.5px]">Llamadas con IA para la cartera de cobros. Elegí el proveedor activo y pegá sus datos; el webhook de cada plataforma ya está listo para pegar en su dashboard.</p>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px">
+        ${vapiCard}
+        ${retellCard}
+        ${vozComun}
       </div>
     </div>`;
 

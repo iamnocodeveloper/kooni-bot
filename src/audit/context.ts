@@ -53,6 +53,10 @@ export const AUDIT_SENSITIVE_KEYS = new Set<string>([
   "pro_license",
   "waha_api_key",
   "waha_webhook_token",
+  "vapi_api_key",
+  "vapi_webhook_secret",
+  "retell_api_key",
+  "retell_webhook_secret",
 ]);
 
 const MAX_VALUE_LEN = 2000;

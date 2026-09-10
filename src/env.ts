@@ -117,6 +117,21 @@ export interface Env {
   WAHA_SESSION?: string;       // var: nombre de sesión (default "default")
   WAHA_WEBHOOK_TOKEN?: string; // secret: ?token=... para validar el webhook entrante
 
+  // ── Cobros por voz (Vapi / Retell) ─────────────────────────────────────
+  // Proveedores de llamadas con IA. Igual que WAHA/Zernio: lo normal es
+  // configurarlos desde el panel (Conexiones → Cobros por voz), que guarda en
+  // settings de D1; estas vars son el fallback para bots viejos/CI.
+  VAPI_API_KEY?: string;            // secret: Private API key de Vapi
+  VAPI_ASSISTANT_ID?: string;       // var: id del Assistant
+  VAPI_PHONE_NUMBER_ID?: string;    // var: id del número saliente
+  VAPI_WEBHOOK_SECRET?: string;     // secret: valida el header X-Vapi-Secret
+  VAPI_API_BASE_URL?: string;       // var: default https://api.vapi.ai
+  RETELL_API_KEY?: string;          // secret: API key de Retell
+  RETELL_AGENT_ID?: string;         // var: agent_id
+  RETELL_PHONE_NUMBER?: string;     // var: número saliente (E.164)
+  RETELL_WEBHOOK_SECRET?: string;   // secret: verificación del webhook
+  RETELL_API_BASE_URL?: string;     // var: default https://api.retellai.com
+
   // ── Cal.com (agenda real para scheduleAppointment) ───────────────────────
   // Con estas vars, el bot consulta disponibilidad real y reserva en Cal.com.
   // Sin ellas, scheduleAppointment solo registra la cita para que el dueño la confirme.

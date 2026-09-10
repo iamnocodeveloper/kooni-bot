@@ -1925,3 +1925,58 @@ pendiente, sin empezar.
 9. **Scraping web → KB** (`§ L`) — ✅ código v1.15.0; falta activar URLs en cardealer.
 10. **Rediseño visual** (`§ T`) — aprobado, siguiente bloque. Proponer paleta primero.
 11. **Campañas** (`§ R`) — ⏸️ **PAUSADO TOTALMENTE** por Joel. Archivado; no se retoma salvo pedido explícito.
+
+---
+
+## 🏁 CIERRE DE ETAPA — cardealer-daniel (+ v1.37.0, 2026-09-10)
+
+> **Estado:** `pnpm test` verde (salvo flakes de `EADDRINUSE` de miniflare que
+> pasan aislados). `package.json` → **1.37.0**. Deploy en producción de Daniel
+> (cuenta CF `b579b154…`), `/health` → `ok`.
+
+### Lo que se cerró con cardealer (Daniel autos)
+- **Inventario (Web Sync “modo inventario”)**: **449 autos reales** (298 nuevos ·
+  126 usados · 25 certificados) con condición/año/marca/modelo/VIN y el **link
+  real de la ficha**, tanto en el store como en la KB (docs sin links + resumen
+  de marcas con reglas anti-alucinación).
+  - El feed `/llm/inventory/` de DealerInspire **murió** (hoy sirve la home).
+    Fuente nueva: **sitemap de inventario** de DealerInspire. Hoy el sitemap da
+    **403 (Cloudflare)**; mientras tanto la KB se reconstruye desde el store con
+    `POST /kb/rebuild` (sin scrapear).
+  - Detalle por ficha (precio/millas/foto) desde el **JSON-LD** (autoritativo) +
+    widget *Transparent Price*. Cobertura al cierre: **~124 con precio, ~261 con
+    foto, 449 con link**; el resto se completa bajo demanda o en el nightly
+    (`POST /kb/enrich`, `?force=1` para reintentar errores).
+  - **Bug crítico corregido**: un scrape vacío **borraba el store completo**
+    (la rama de “no vi inventario” también corría ante errores). Ahora solo quita
+    autos cuyo feed ya no está configurado. Los datos se recuperaron con **D1
+    Time Travel**.
+- **Links clickeables**: `toPlainLinks()` (Markdown → URL plana) aplicado al
+  enviar y al guardar; WhatsApp/Instagram ya no reciben `[texto](url)` literal.
+- **Zernio / Instagram**: el webhook apuntaba a un worker con el nombre viejo
+  (`kooni-bot-cardealer-dani-…` en vez de `…-daniel2-…`) → **404**. Corregido por
+  la API de Zernio y reenviados los eventos caídos.
+- **WAHA (WhatsApp self-hosted)**: la sesión `Cars` estaba **`FAILED`**
+  (deslogueada) → quedó en **`SCAN_QR_CODE`**, esperando que Daniel re-escanee el
+  QR (panel → Conexiones → WAHA).
+
+### Nuevo en esta etapa — Cobros por voz (Vapi / Retell)
+Configuración completa (aún sin cablear el flujo de llamadas):
+- Sección **Conexiones → “Cobros por voz: Vapi / Retell”** con TODOS los campos:
+  API key, Assistant/Agent ID, Phone Number ID / número saliente, webhook secret,
+  API base URL, proveedor activo, objetivo/tono del guion y intentos máximos por
+  deudor.
+- Webhooks listos para pegar en cada dashboard: `POST /webhooks/vapi` (header
+  `X-Vapi-Secret`) y `POST /webhooks/retell` (`x-retell-signature`); por ahora
+  ack + log.
+- `src/integrations/voiceProviders.ts` (resolución settings D1 → env), claves en
+  `SETTING_KEYS`/`SETTING_LABELS` y redacción en el registro de auditoría.
+
+### Pendiente (cuando se retome)
+- **WAHA**: re-escanear el QR para volver a `WORKING`.
+- **Inventario**: terminar el enriquecimiento cuando Decodo se recupere
+  (`/kb/enrich?force=1`) y refrescar la KB (`/kb/rebuild`).
+- **Sitemap 403**: reintentar el sync normal, o pedirle a Daniel un feed oficial
+  del dealer si Cloudflare sigue bloqueando.
+- **Cobros por voz**: cablear el disparo de llamadas + registrar el resultado del
+  webhook en la cartera (`collection_cases` / `collection_contact_attempts`).

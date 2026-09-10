@@ -107,6 +107,25 @@ export const SETTING_KEYS = {
   wahaSession: "waha_session", // nombre de sesión (default "default")
   wahaApiKey: "waha_api_key", // X-Api-Key de WAHA
   wahaWebhookToken: "waha_webhook_token", // ?token=... del webhook entrante (autogenerado)
+  // ── Cobros por voz (Vapi / Retell) ──────────────────────────────────────
+  // Proveedores de llamadas con IA para la cartera de cobros. TODO editable
+  // desde el panel (Conexiones → Cobros por voz) sin `wrangler secret put`.
+  voiceProvider: "voice_provider", // "" (ninguno) | "vapi" | "retell" — el activo
+  // Vapi (dashboard.vapi.ai)
+  vapiApiKey: "vapi_api_key", // Private API key (sk_live_…)
+  vapiAssistantId: "vapi_assistant_id", // id del Assistant que contesta
+  vapiPhoneNumberId: "vapi_phone_number_id", // id del número saliente (Phone Numbers)
+  vapiWebhookSecret: "vapi_webhook_secret", // secret del Server URL (header X-Vapi-Secret)
+  vapiApiBaseUrl: "vapi_api_base_url", // default https://api.vapi.ai
+  // Retell (dashboard.retellai.com)
+  retellApiKey: "retell_api_key", // API key (key_…)
+  retellAgentId: "retell_agent_id", // agent_id que contesta
+  retellPhoneNumber: "retell_phone_number", // número comprado desde el que se llama (E.164)
+  retellWebhookSecret: "retell_webhook_secret", // secreto de verificación del webhook
+  retellApiBaseUrl: "retell_api_base_url", // default https://api.retellai.com
+  // Común a la cartera de cobros por voz
+  cobrosVoiceObjective: "cobros_voice_objective", // objetivo/tono del guion de cobranza
+  cobrosVoiceMaxAttempts: "cobros_voice_max_attempts", // intentos por deudor (default 3)
 } as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[keyof typeof SETTING_KEYS];
@@ -169,6 +188,19 @@ export const SETTING_LABELS: Record<string, string> = {
   [SETTING_KEYS.wahaSession]: "Sesión de WAHA",
   [SETTING_KEYS.wahaApiKey]: "API key de WAHA",
   [SETTING_KEYS.wahaWebhookToken]: "Webhook token de WAHA",
+  [SETTING_KEYS.voiceProvider]: "Proveedor de voz (cobros)",
+  [SETTING_KEYS.vapiApiKey]: "Vapi — API key",
+  [SETTING_KEYS.vapiAssistantId]: "Vapi — Assistant ID",
+  [SETTING_KEYS.vapiPhoneNumberId]: "Vapi — Phone Number ID",
+  [SETTING_KEYS.vapiWebhookSecret]: "Vapi — Webhook secret",
+  [SETTING_KEYS.vapiApiBaseUrl]: "Vapi — API base URL",
+  [SETTING_KEYS.retellApiKey]: "Retell — API key",
+  [SETTING_KEYS.retellAgentId]: "Retell — Agent ID",
+  [SETTING_KEYS.retellPhoneNumber]: "Retell — número saliente",
+  [SETTING_KEYS.retellWebhookSecret]: "Retell — Webhook secret",
+  [SETTING_KEYS.retellApiBaseUrl]: "Retell — API base URL",
+  [SETTING_KEYS.cobrosVoiceObjective]: "Cobros por voz — objetivo/tono",
+  [SETTING_KEYS.cobrosVoiceMaxAttempts]: "Cobros por voz — intentos por deudor",
 };
 
 /** Toggles del menú Extras (Kooni+) — etiquetas para el registro de auditoría. */

@@ -792,6 +792,8 @@ adminApp.get("/conexiones", async (c) => {
   const mlCreds = await loadMlCredentials(c.env);
   const wahaCfg = await resolveWahaConfig(c.env);
   const wahaStatus = await getWahaSessionStatus(wahaCfg);
+  const { resolveVoiceConfig } = await import("../integrations/voiceProviders");
+  const voiceCfg = await resolveVoiceConfig(c.env);
 
   // Uso de rate limit por cuenta (DM/hora) para mostrar en la card Zernio.
   const rateUsage: Record<string, { used: number; windowStart: number }> = {};
@@ -815,6 +817,7 @@ adminApp.get("/conexiones", async (c) => {
     mlCreds,
     wahaCfg,
     wahaStatus,
+    voiceCfg,
     baseUrl,
     savedKind:
       c.req.query("telegram") === "saved"
@@ -825,7 +828,13 @@ adminApp.get("/conexiones", async (c) => {
             ? "mercadolibre"
             : c.req.query("waha") === "saved"
               ? "waha"
-              : undefined,
+              : c.req.query("vapi") === "saved"
+                ? "vapi"
+                : c.req.query("retell") === "saved"
+                  ? "retell"
+                  : c.req.query("voz") === "saved"
+                    ? "voz"
+                    : undefined,
     error:
       c.req.query("zernio") === "error"
         ? (c.req.query("msg") ?? "No se pudo validar la API key.")
@@ -835,7 +844,11 @@ adminApp.get("/conexiones", async (c) => {
             ? (c.req.query("msg") ?? "No se pudo conectar MercadoLibre.")
             : c.req.query("waha") === "error"
               ? (c.req.query("msg") ?? "No se pudo conectar con el servidor de WAHA.")
-              : undefined,
+              : c.req.query("vapi") === "error"
+                ? (c.req.query("msg") ?? "No se pudo validar la API key de Vapi.")
+                : c.req.query("retell") === "error"
+                  ? (c.req.query("msg") ?? "No se pudo validar la API key de Retell.")
+                  : undefined,
   }));
 });
 
@@ -1105,6 +1118,108 @@ adminApp.get("/conexiones/waha/qr", async (c) => {
   const png = await fetchWahaQrPng(cfg);
   if (!png) return c.text("QR no disponible (revisa que la sesión de WAHA esté esperando el escaneo).", 404);
   return new Response(png, { headers: { "Content-Type": "image/png", "Cache-Control": "no-store" } });
+});
+
+// ── Cobros por voz: Vapi / Retell ─────────────────────────────────────────
+// Guarda las credenciales de cada proveedor de voz en D1 (settings) para
+// conectarlos sin `wrangler secret put`. Campo vacío = conserva el valor actual
+// (mismo patrón que Zernio/Telegram/WAHA). Valida la API key contra el
+// proveedor (best-effort: si no hay red, igual se guarda).
+// POR AHORA es solo configuración; el flujo de llamadas se cablea después.
+async function saveVoiceProvider(c: any, provider: "vapi" | "retell"): Promise<Response> {
+  const form = await c.req.formData();
+  const repo = new SettingsRepo(new Db(c.env.DB));
+  const { resolveVoiceConfig, VAPI_DEFAULT_BASE, RETELL_DEFAULT_BASE } = await import("../integrations/voiceProviders");
+  const current = await resolveVoiceConfig(c.env);
+  const field = (n: string) => String(form.get(n) ?? "").trim();
+
+  if (field("clear") === "1") {
+    const keys =
+      provider === "vapi"
+        ? [SETTING_KEYS.vapiApiKey, SETTING_KEYS.vapiAssistantId, SETTING_KEYS.vapiPhoneNumberId, SETTING_KEYS.vapiWebhookSecret, SETTING_KEYS.vapiApiBaseUrl]
+        : [SETTING_KEYS.retellApiKey, SETTING_KEYS.retellAgentId, SETTING_KEYS.retellPhoneNumber, SETTING_KEYS.retellWebhookSecret, SETTING_KEYS.retellApiBaseUrl];
+    for (const k of keys) await repo.set(k, "");
+    if (current.provider === provider) await repo.set(SETTING_KEYS.voiceProvider, "");
+    return c.redirect(`/admin/conexiones?${provider}=saved`);
+  }
+
+  const makeActive = field("make_active") === "1";
+
+  if (provider === "vapi") {
+    const apiKey = field("vapi_api_key") || current.vapi.apiKey || "";
+    const assistantId = field("vapi_assistant_id") || current.vapi.assistantId || "";
+    const phoneNumberId = field("vapi_phone_number_id") || current.vapi.phoneNumberId || "";
+    const webhookSecret = field("vapi_webhook_secret") || current.vapi.webhookSecret || "";
+    const baseUrl = (field("vapi_api_base_url") || current.vapi.baseUrl || VAPI_DEFAULT_BASE).replace(/\/+$/, "");
+    if (!apiKey) {
+      return c.redirect(`/admin/conexiones?vapi=error&msg=${encodeURIComponent("Falta la API key de Vapi.")}`);
+    }
+    await repo.set(SETTING_KEYS.vapiApiKey, apiKey);
+    await repo.set(SETTING_KEYS.vapiAssistantId, assistantId);
+    await repo.set(SETTING_KEYS.vapiPhoneNumberId, phoneNumberId);
+    await repo.set(SETTING_KEYS.vapiWebhookSecret, webhookSecret);
+    await repo.set(SETTING_KEYS.vapiApiBaseUrl, baseUrl);
+    if (makeActive) await repo.set(SETTING_KEYS.voiceProvider, "vapi");
+    try {
+      const res = await fetch(`${baseUrl}/assistant`, {
+        headers: { Authorization: `Bearer ${apiKey}` },
+        signal: AbortSignal.timeout(8000),
+      });
+      if (!res.ok && res.status !== 404) {
+        return c.redirect(
+          `/admin/conexiones?vapi=error&msg=${encodeURIComponent(`Datos guardados, pero Vapi respondió HTTP ${res.status} al validar la API key.`)}`,
+        );
+      }
+    } catch {
+      /* sin red: se guardó igual */
+    }
+    return c.redirect("/admin/conexiones?vapi=saved");
+  }
+
+  // Retell
+  const apiKey = field("retell_api_key") || current.retell.apiKey || "";
+  const agentId = field("retell_agent_id") || current.retell.agentId || "";
+  const phoneNumber = field("retell_phone_number") || current.retell.phoneNumber || "";
+  const webhookSecret = field("retell_webhook_secret") || current.retell.webhookSecret || "";
+  const baseUrl = (field("retell_api_base_url") || current.retell.baseUrl || RETELL_DEFAULT_BASE).replace(/\/+$/, "");
+  if (!apiKey) {
+    return c.redirect(`/admin/conexiones?retell=error&msg=${encodeURIComponent("Falta la API key de Retell.")}`);
+  }
+  await repo.set(SETTING_KEYS.retellApiKey, apiKey);
+  await repo.set(SETTING_KEYS.retellAgentId, agentId);
+  await repo.set(SETTING_KEYS.retellPhoneNumber, phoneNumber);
+  await repo.set(SETTING_KEYS.retellWebhookSecret, webhookSecret);
+  await repo.set(SETTING_KEYS.retellApiBaseUrl, baseUrl);
+  if (makeActive) await repo.set(SETTING_KEYS.voiceProvider, "retell");
+  try {
+    const res = await fetch(`${baseUrl}/list-agents`, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok && res.status !== 404) {
+      return c.redirect(
+        `/admin/conexiones?retell=error&msg=${encodeURIComponent(`Datos guardados, pero Retell respondió HTTP ${res.status} al validar la API key.`)}`,
+      );
+    }
+  } catch {
+    /* sin red: se guardó igual */
+  }
+  return c.redirect("/admin/conexiones?retell=saved");
+}
+
+adminApp.post("/conexiones/vapi", (c) => saveVoiceProvider(c, "vapi"));
+adminApp.post("/conexiones/retell", (c) => saveVoiceProvider(c, "retell"));
+
+// Parámetros comunes de la cartera por voz (objetivo + intentos máximos).
+adminApp.post("/conexiones/voz", async (c) => {
+  const form = await c.req.formData();
+  const repo = new SettingsRepo(new Db(c.env.DB));
+  const objective = String(form.get("cobros_voice_objective") ?? "").trim();
+  const attemptsRaw = String(form.get("cobros_voice_max_attempts") ?? "").trim();
+  const attempts = Math.min(10, Math.max(1, Number(attemptsRaw) || 3));
+  await repo.set(SETTING_KEYS.cobrosVoiceObjective, objective);
+  await repo.set(SETTING_KEYS.cobrosVoiceMaxAttempts, String(attempts));
+  return c.redirect("/admin/conexiones?voz=saved");
 });
 
 // Conectar MercadoLibre: guarda App ID + Secret + país en D1 (settings). Los

@@ -156,6 +156,48 @@ app.post("/webhooks/waha", async (c) => {
   }
 });
 
+// ── Webhooks de voz (cobros): Vapi / Retell ────────────────────────────────
+// Por ahora SOLO ack: dejan el endpoint listo para pegar en el dashboard de
+// cada plataforma (es la "Server URL" / "Webhook URL" que muestra Conexiones).
+// Cuando se cablee el flujo de cobranza por voz, acá se registrará el resultado
+// de la llamada en la cartera (collection_cases / collection_contact_attempts).
+app.post("/webhooks/vapi", async (c) => {
+  const raw = await c.req.text();
+  const { resolveVoiceConfig } = await import("./integrations/voiceProviders");
+  const cfg = await resolveVoiceConfig(c.env);
+  const secret = (cfg.vapi.webhookSecret ?? "").trim();
+  if (secret && c.req.header("x-vapi-secret") !== secret && c.req.header("x-vapi-signature") !== secret) {
+    return c.text("unauthorized", 401);
+  }
+  try {
+    const body = JSON.parse(raw || "{}") as { message?: { type?: string }; type?: string };
+    console.log("[vapi] webhook:", String(body?.message?.type ?? body?.type ?? "evento"));
+  } catch {
+    /* body no-JSON: ack igual */
+  }
+  return c.json({ ok: true }, 200);
+});
+
+app.post("/webhooks/retell", async (c) => {
+  const raw = await c.req.text();
+  const { resolveVoiceConfig } = await import("./integrations/voiceProviders");
+  const cfg = await resolveVoiceConfig(c.env);
+  const secret = (cfg.retell.webhookSecret ?? "").trim();
+  // Retell firma con x-retell-signature (HMAC-SHA256 del body). La verificación
+  // completa queda para la fase de integración; por ahora, si hay secret
+  // configurado, exigimos que venga el header.
+  if (secret && !c.req.header("x-retell-signature")) {
+    return c.text("unauthorized", 401);
+  }
+  try {
+    const body = JSON.parse(raw || "{}") as { event?: string };
+    console.log("[retell] webhook:", String(body?.event ?? "evento"));
+  } catch {
+    /* ack igual */
+  }
+  return c.json({ ok: true }, 200);
+});
+
 // --- MercadoLibre (preguntas en publicaciones + mensajería post-venta) -----
 // MercadoLibre NO firma sus webhooks: manda solo un puntero
 // { resource, topic, user_id }. Validamos que el user_id sea el del vendedor
