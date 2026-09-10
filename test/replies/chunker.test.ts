@@ -45,6 +45,15 @@ describe("chunkReply", () => {
     expect(stripMarkdown("* item")).toBe("• item");
   });
 
+  it("convierte links Markdown a texto plano con la URL visible (clickeable en el canal)", () => {
+    expect(stripMarkdown("Mirá la [2021 RAV4](https://x.com/inventory/used-rav4/)")).toBe(
+      "Mirá la 2021 RAV4 (https://x.com/inventory/used-rav4/)",
+    );
+    expect(stripMarkdown("<https://x.com/inventory/a/>")).toBe("https://x.com/inventory/a/");
+    // chunkReply (lo que se envía) también queda con URL plana.
+    expect(chunkReply("Ficha: [RAV4](https://x.com/a/)")[0]).toBe("Ficha: RAV4 (https://x.com/a/)");
+  });
+
   it("leaves plain text and numbered lists untouched", () => {
     expect(stripMarkdown("Precio: $250 (2 x $125)")).toBe("Precio: $250 (2 x $125)");
     expect(stripMarkdown("1. Primero\n2. Segundo")).toBe("1. Primero\n2. Segundo");

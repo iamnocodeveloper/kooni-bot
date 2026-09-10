@@ -1,14 +1,20 @@
 const DEFAULT_MAX_CHUNKS = 3;
 
+import { toPlainLinks } from "./format";
+
 /**
  * Limpia el Markdown de la respuesta antes de enviarla. Ningún canal del bot lo
  * renderiza: el widget web pinta con textContent (los símbolos llegan crudos) y
  * WhatsApp usa *un* asterisco para negrita, no dos — así que **texto** se ve
  * roto en todos lados. El <style_guide> ya pide texto plano, pero el modelo a
  * veces pone negritas igual; esto es la red de seguridad.
+ *
+ * Los links `[texto](url)` se convierten a texto plano con la URL visible
+ * (ver `toPlainLinks`) — si no, WhatsApp/Instagram los reciben literales y no
+ * quedan clickeables.
  */
 export function stripMarkdown(text: string): string {
-  return text
+  return toPlainLinks(text)
     .replace(/(\*\*|__)([^\n]+?)\1/g, "$2") // **negrita** / __negrita__ → negrita
     .replace(/`([^`\n]+)`/g, "$1") //          `código` → código
     .replace(/^\s{0,3}#{1,6}\s+/gm, "") //     # Encabezado → sin marcador

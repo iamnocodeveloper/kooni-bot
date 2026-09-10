@@ -5,6 +5,19 @@ Cambios notables de Kooni. Formato aproximado de
 
 El CLI `kooni-bot` se versiona aparte (npm) — ver la nota de cada versión.
 
+## [1.35.0] — 2026-09-10
+
+### Agregado
+
+- **KB del inventario con datos reales completos**: al renderizar los docs del
+  listado se superponen precio/millas/condición ya enriquecidos del store (el
+  sitemap solo trae título/condición/VIN) — el listado queda completo y real.
+- **Links clickeables**: `toPlainLinks()` convierte `[texto](url)` a
+  `texto (url)` y `<url>` a `url`; aplicado en `stripMarkdown` (todo lo que se
+  envía) y al guardar la respuesta del agente (CRM consistente). WhatsApp e
+  Instagram no renderizan Markdown: antes llegaba el link literal sin ser
+  clickeable.
+
 ## [1.34.1] — 2026-09-10
 
 ### Arreglado

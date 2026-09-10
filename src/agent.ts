@@ -9,6 +9,7 @@ import { resolveAgentConfig } from "./settings-loader";
 import { buildTools } from "./tools";
 import { buildMultimodalUserMessage } from "./media/vision";
 import { chunkReply } from "./replies/chunker";
+import { toPlainLinks } from "./replies/format";
 import { pickAdapter } from "./replies/sender";
 import { selectModel } from "./upgrade/modelSelector";
 import type { Tier } from "./upgrade/modelSelector";
@@ -641,6 +642,10 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
     if (!assistantText || !assistantText.trim()) {
       assistantText = "Algo falló de mi lado, intenta de nuevo en un momento.";
     }
+
+    // Links Markdown → texto plano con URL visible. Se guarda ya normalizado
+    // para que el CRM y el canal muestren lo mismo (y queden clickeables).
+    assistantText = toPlainLinks(assistantText);
 
     // Fase A: adjuntar botones del menú (si están configurados). Se calcula
     // ANTES de persistir el mensaje para poder guardarlos junto con él

@@ -37,6 +37,7 @@ import {
   pendingImageCount,
   refreshVehicleImages,
   type Vehicle,
+  type VehicleStore,
 } from "./inventory";
 
 const MAX_URLS = 10;
@@ -214,6 +215,9 @@ export async function runWebSync(env: Env, opts: WebSyncRunOptions = {}): Promis
   // Agregador del modo inventario (una instalación → típicamente UNA URL).
   let inventorySeen = false;
   const allVehicles: Vehicle[] = [];
+  // Store ANTES del sync: el sitemap no trae precio/millas, así que al renderizar
+  // la KB se superponen los datos ya enriquecidos de cada ficha (si los hay).
+  const storeBefore: VehicleStore = await loadVehicleStore(db).catch(() => ({ updatedAt: 0, vehicles: {} }));
 
   for (const url of urls) {
     const r = await scrapeUrl(env, url);
@@ -235,11 +239,26 @@ export async function runWebSync(env: Env, opts: WebSyncRunOptions = {}): Promis
         ? true
         : false;
 
+    // Overlay de datos reales ya enriquecidos (precio/millas/condición) para que
+    // la KB muestre TODO lo que se extrajo de la ficha, no solo lo del sitemap.
+    const renderList: Vehicle[] = isInv
+      ? parsed.map((v) => {
+          const s = storeBefore.vehicles[v.key];
+          if (!s) return v;
+          return {
+            ...v,
+            price: v.price ?? s.price,
+            miles: v.miles ?? s.miles,
+            condition: v.condition ?? s.condition,
+          };
+        })
+      : parsed;
+
     const full = isInv
-      ? parsed.map(renderVehicleBlock).join("\n\n")
+      ? renderList.map(renderVehicleBlock).join("\n\n")
       : stripMarkdownLinks(trimmed);
     const parts = isInv
-      ? renderInventoryParts(parsed, MAX_DOC_CHARS, MAX_PARTS)
+      ? renderInventoryParts(renderList, MAX_DOC_CHARS, MAX_PARTS)
       : splitParts(full, MAX_DOC_CHARS, MAX_PARTS);
     const hash = quickHash(full);
     const baseId = webDocId(url);
@@ -277,7 +296,7 @@ export async function runWebSync(env: Env, opts: WebSyncRunOptions = {}): Promis
       // Doc "resumen + reglas" del modo inventario (1 por URL, chico).
       const summaryDocId = inventorySummaryDocId(url);
       if (isInv) {
-        const sumContent = renderInventorySummary(parsed, base, url);
+        const sumContent = renderInventorySummary(renderList, base, url);
         await kb.upsert({ id: summaryDocId, title: `Inventario web — ${base} — resumen`, content: sumContent });
         const sumDoc = await kb.getById(summaryDocId);
         if (sumDoc) await indexDoc(env, sumDoc);
