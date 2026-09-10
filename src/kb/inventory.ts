@@ -730,20 +730,22 @@ export async function fetchVehicleDetails(
   if (!vehicle.listingUrl) return out;
   const timeoutMs = opts.timeoutMs ?? 60_000;
   try {
-    const md = await scrapeUrl(env, vehicle.listingUrl, { markdown: true, timeoutMs });
-    if (md.ok) {
-      const img = extractImageFromMarkdown(md.content);
-      if (img) out.imageUrl = absUrl(vehicle.listingUrl, img);
-      out.price = extractPriceFromText(md.content);
-      out.miles = extractMilesFromText(md.content);
+    // 1) HTML primero: el JSON-LD de la ficha es la fuente AUTORITATIVA de
+    // precio/millas (el texto libre del markdown puede traer precios de autos
+    // "similares" u otros montos). De paso trae og:image.
+    const html = await scrapeUrl(env, vehicle.listingUrl, { markdown: false, timeoutMs });
+    if (html.ok) {
+      const d = extractDetailsFromHtml(html.content);
+      out.price = d.price;
+      out.miles = d.miles;
+      if (d.image) out.imageUrl = absUrl(vehicle.listingUrl, d.image);
     }
-    if (!out.imageUrl || out.price === null) {
-      const html = await scrapeUrl(env, vehicle.listingUrl, { markdown: false, timeoutMs });
-      if (html.ok) {
-        const d = extractDetailsFromHtml(html.content);
-        out.imageUrl = out.imageUrl ?? (d.image ? absUrl(vehicle.listingUrl, d.image) : null);
-        out.price = out.price ?? d.price;
-        out.miles = out.miles ?? d.miles;
+    // 2) Solo si falta la foto, markdown (más liviano) para sacarla inline.
+    if (!out.imageUrl) {
+      const md = await scrapeUrl(env, vehicle.listingUrl, { markdown: true, timeoutMs });
+      if (md.ok) {
+        const img = extractImageFromMarkdown(md.content);
+        if (img) out.imageUrl = absUrl(vehicle.listingUrl, img);
       }
     }
   } catch {
@@ -769,11 +771,15 @@ export async function fetchVehicleImage(
 export async function refreshVehicleImages(
   env: Env,
   db: Db,
-  opts: { max?: number; timeoutMs?: number } = {},
+  opts: { max?: number; timeoutMs?: number; keys?: string[] } = {},
 ): Promise<{ fetched: number; failed: number; pending: number }> {
   const max = opts.max ?? 20;
   const store = await loadVehicleStore(db);
-  const candidates = imageCandidates(store).slice(0, max);
+  const candidates = (
+    opts.keys && opts.keys.length
+      ? listStoredVehicles(store).filter((v) => opts.keys!.includes(v.key))
+      : imageCandidates(store)
+  ).slice(0, max);
   let fetched = 0;
   let failed = 0;
   const workers = Math.min(3, candidates.length);

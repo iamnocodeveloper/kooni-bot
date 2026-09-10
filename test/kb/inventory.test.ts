@@ -349,25 +349,16 @@ describe("ensureVehicleImage (bajo demanda, con Decodo)", () => {
     const key = Object.keys(store.vehicles)[0];
     await saveVehicleStore(db, store);
 
+    const VDP = `<html><head><script type="application/ld+json">{"@type":"Car","offers":{"price":17593},"mileageFromOdometer":{"value":45210},"image":"https://cdn.greenway.com/sorento.jpg"}</script></head></html>`;
     const fetchMock = vi.fn(async () =>
-      new Response(
-        JSON.stringify({
-          results: [
-            {
-              content: "![auto](https://cdn.greenway.com/sorento.jpg)\nSale Price $17,593\n45,210 miles",
-              status_code: 200,
-            },
-          ],
-        }),
-        { status: 200 },
-      ),
+      new Response(JSON.stringify({ results: [{ content: VDP, status_code: 200 }] }), { status: 200 }),
     );
     vi.stubGlobal("fetch", fetchMock);
 
     const env = { DB: d1, DECODO_AUTH: "user:pass" } as unknown as Env;
     const img = await ensureVehicleImage(env, db, key, { timeoutMs: 5000 });
     expect(img).toBe("https://cdn.greenway.com/sorento.jpg");
-    expect(fetchMock).toHaveBeenCalledTimes(1); // markdown trajo foto + precio → no pide HTML
+    expect(fetchMock).toHaveBeenCalledTimes(1); // HTML (JSON-LD) trajo foto + precio → no pide markdown
 
     const after = await loadVehicleStore(db);
     expect(after.vehicles[key].imgStatus).toBe("ok");

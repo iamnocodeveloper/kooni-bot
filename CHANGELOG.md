@@ -5,6 +5,17 @@ Cambios notables de Kooni. Formato aproximado de
 
 El CLI `kooni-bot` se versiona aparte (npm) — ver la nota de cada versión.
 
+## [1.33.0] — 2026-09-10
+
+### Arreglado — precio correcto (JSON-LD autoritativo, no texto libre)
+
+- `fetchVehicleDetails` ahora scrapea la **ficha en HTML primero** y toma precio/
+  millas del **JSON-LD**. El texto libre del markdown puede traer precios de
+  autos "similares" u otros montos (se vio un "$52,110" en un Dodge Durango
+  2005). El markdown queda solo como respaldo para la **foto**.
+- `POST /kb/enrich?key=vin:…` permite forzar el refetch de autos puntuales
+  (para reparar datos ya guardados).
+
 ## [1.32.0] — 2026-09-10
 
 ### Agregado — detalle completo de cada auto (precio/millas/foto) + link

@@ -421,9 +421,14 @@ app.post("/kb/enrich", async (c) => {
   }
   const raw = Number(c.req.query("max") ?? 12);
   const max = Number.isFinite(raw) ? Math.min(Math.max(Math.trunc(raw), 1), 40) : 12;
+  // `key` (coma-separado) fuerza refetch de autos puntuales (para reparar datos).
+  const keys = (c.req.query("key") ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
   const { refreshVehicleImages } = await import("./kb/inventory");
   const { Db } = await import("./db/client");
-  const r = await refreshVehicleImages(c.env, new Db(c.env.DB), { max, timeoutMs: 25_000 });
+  const r = await refreshVehicleImages(c.env, new Db(c.env.DB), { max, timeoutMs: 25_000, keys });
   return c.json({ ok: true, ...r }, 200);
 });
 
