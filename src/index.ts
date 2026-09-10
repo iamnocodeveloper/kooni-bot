@@ -426,9 +426,11 @@ app.post("/kb/enrich", async (c) => {
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
+  // `force=1` ignora el cooldown de errores (reintento manual tras una caída de Decodo).
+  const force = c.req.query("force") === "1";
   const { refreshVehicleImages } = await import("./kb/inventory");
   const { Db } = await import("./db/client");
-  const r = await refreshVehicleImages(c.env, new Db(c.env.DB), { max, timeoutMs: 25_000, keys });
+  const r = await refreshVehicleImages(c.env, new Db(c.env.DB), { max, timeoutMs: 25_000, keys, force });
   return c.json({ ok: true, ...r }, 200);
 });
 

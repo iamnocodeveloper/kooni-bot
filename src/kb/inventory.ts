@@ -833,14 +833,17 @@ export async function fetchVehicleImage(
 export async function refreshVehicleImages(
   env: Env,
   db: Db,
-  opts: { max?: number; timeoutMs?: number; keys?: string[] } = {},
+  opts: { max?: number; timeoutMs?: number; keys?: string[]; force?: boolean } = {},
 ): Promise<{ fetched: number; failed: number; pending: number }> {
   const max = opts.max ?? 20;
   const store = await loadVehicleStore(db);
+  const needs = (v: StoredVehicle) => !!v.listingUrl && (v.imgStatus !== "ok" || v.price === null);
   const candidates = (
     opts.keys && opts.keys.length
       ? listStoredVehicles(store).filter((v) => opts.keys!.includes(v.key))
-      : imageCandidates(store)
+      : opts.force
+        ? listStoredVehicles(store).filter(needs) // ignora el cooldown (reintento manual)
+        : imageCandidates(store)
   ).slice(0, max);
   let fetched = 0;
   let failed = 0;
