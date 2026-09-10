@@ -5,6 +5,13 @@ Cambios notables de Kooni. Formato aproximado de
 
 El CLI `kooni-bot` se versiona aparte (npm) — ver la nota de cada versión.
 
+## [1.33.1] — 2026-09-10
+
+### Arreglado
+
+- Refetch forzado por `key` (`/kb/enrich?key=…`) sobrescribe precio/millas
+  aunque el scrape devuelva null, para reparar datos ya guardados.
+
 ## [1.33.0] — 2026-09-10
 
 ### Arreglado — precio correcto (JSON-LD autoritativo, no texto libre)

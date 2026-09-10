@@ -790,8 +790,14 @@ export async function refreshVehicleImages(
       const d = await fetchVehicleDetails(env, v, { timeoutMs: opts.timeoutMs });
       const cur = store.vehicles[v.key];
       if (cur) {
-        if (d.price !== null) cur.price = d.price;
-        if (d.miles !== null) cur.miles = d.miles;
+        if (opts.keys && opts.keys.length) {
+          // Refetch forzado (reparación): sobrescribe aunque venga null.
+          cur.price = d.price;
+          cur.miles = d.miles;
+        } else {
+          if (d.price !== null) cur.price = d.price;
+          if (d.miles !== null) cur.miles = d.miles;
+        }
         if (d.imageUrl) cur.imageUrl = d.imageUrl;
         cur.imgStatus = cur.imageUrl ? "ok" : "error";
         cur.imgAt = Date.now();
