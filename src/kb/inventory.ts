@@ -38,10 +38,21 @@ export interface Vehicle {
   feedUrl: string;
 }
 
+export interface VehiclePricing {
+  listPrice: number | null;
+  discount: number | null;
+  dealerFee: number | null;
+  adminFee: number | null;
+  tagFee: number | null;
+  transparentPrice: number | null;
+}
+
 export interface StoredVehicle extends Vehicle {
   imageUrl: string | null;
   imgStatus: "ok" | "pendiente" | "error";
   imgAt: number | null;
+  /** Desglose de precio de la ficha (Price/Discount/Fees/Transparent Price). */
+  pricing?: VehiclePricing | null;
   /** Epoch ms en que el auto entró o cambió por última vez. */
   changedAt: number;
 }
@@ -542,6 +553,7 @@ export function mergeVehicleStore(prev: VehicleStore, current: Vehicle[]): Vehic
       price,
       miles,
       condition,
+      pricing: old?.pricing ?? null,
       imageUrl: photoInvalid ? null : old.imageUrl,
       imgStatus: old && !photoInvalid ? old.imgStatus : "pendiente",
       imgAt: old && !photoInvalid ? old.imgAt : null,
@@ -677,6 +689,7 @@ export function extractDetailsFromHtml(html: string): {
   price: number | null;
   miles: number | null;
   image: string | null;
+  pricing: VehiclePricing;
 } {
   const re = /<script[^>]+application\/ld\+json[^>]*>([\s\S]*?)<\/script>/gi;
   let price: number | null = null;
@@ -706,13 +719,51 @@ export function extractDetailsFromHtml(html: string): {
     }
   }
   if (!image) image = extractImageFromHtml(html);
-  return { price, miles, image };
+  const pricing = extractPricingFromText(stripTags(html));
+  return { price: pricing.transparentPrice ?? price, miles, image, pricing };
+}
+
+/** Quita tags/entidades de un HTML para poder aplicar regex de texto. */
+export function stripTags(html: string): string {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&#0?39;/g, "'")
+    .replace(/&quot;/gi, '"')
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Monto que sigue a una etiqueta, ej. "Dealer Fee $1,199". */
+function amountAfter(text: string, label: string): number | null {
+  const re = new RegExp(label + "[^\\d$]{0,50}\\$\\s?([\\d][\\d,]*)", "i");
+  const m = re.exec(text);
+  return m ? toNum(m[1]) : null;
+}
+
+/**
+ * Desglose de precio tal como lo publica la ficha (widget "Transparent Price"
+ * de Greenway/DealerInspire): lista, descuento, fees y precio transparente.
+ */
+export function extractPricingFromText(text: string): VehiclePricing {
+  return {
+    listPrice: amountAfter(text, "(?:^|[^a-z])(?:List Price|MSRP|Price)"),
+    discount: amountAfter(text, "Dealer Discount"),
+    dealerFee: amountAfter(text, "Dealer Fee"),
+    adminFee: amountAfter(text, "(?:Admin|Administrative) Processing Fee"),
+    tagFee: amountAfter(text, "Tag Agency Fee"),
+    transparentPrice: amountAfter(text, "Transparent Price"),
+  };
 }
 
 export interface VehicleDetails {
   imageUrl: string | null;
   price: number | null;
   miles: number | null;
+  pricing: VehiclePricing;
 }
 
 /**
@@ -726,18 +777,24 @@ export async function fetchVehicleDetails(
   vehicle: Vehicle,
   opts: { timeoutMs?: number } = {},
 ): Promise<VehicleDetails> {
-  const out: VehicleDetails = { imageUrl: null, price: null, miles: null };
+  const out: VehicleDetails = {
+    imageUrl: null,
+    price: null,
+    miles: null,
+    pricing: { listPrice: null, discount: null, dealerFee: null, adminFee: null, tagFee: null, transparentPrice: null },
+  };
   if (!vehicle.listingUrl) return out;
   const timeoutMs = opts.timeoutMs ?? 60_000;
   try {
     // 1) HTML primero: el JSON-LD de la ficha es la fuente AUTORITATIVA de
     // precio/millas (el texto libre del markdown puede traer precios de autos
-    // "similares" u otros montos). De paso trae og:image.
+    // "similares" u otros montos). De paso trae og:image y el widget de precio.
     const html = await scrapeUrl(env, vehicle.listingUrl, { markdown: false, timeoutMs });
     if (html.ok) {
       const d = extractDetailsFromHtml(html.content);
       out.price = d.price;
       out.miles = d.miles;
+      out.pricing = d.pricing;
       if (d.image) out.imageUrl = absUrl(vehicle.listingUrl, d.image);
     }
     // 2) Solo si falta la foto, markdown (más liviano) para sacarla inline.
@@ -794,9 +851,11 @@ export async function refreshVehicleImages(
           // Refetch forzado (reparación): sobrescribe aunque venga null.
           cur.price = d.price;
           cur.miles = d.miles;
+          cur.pricing = d.pricing;
         } else {
           if (d.price !== null) cur.price = d.price;
           if (d.miles !== null) cur.miles = d.miles;
+          if (d.pricing.transparentPrice !== null || d.pricing.listPrice !== null) cur.pricing = d.pricing;
         }
         if (d.imageUrl) cur.imageUrl = d.imageUrl;
         cur.imgStatus = cur.imageUrl ? "ok" : "error";
@@ -843,6 +902,7 @@ export async function ensureVehicleDetails(
   const d = await fetchVehicleDetails(env, v, { timeoutMs: opts.timeoutMs ?? 20_000 });
   if (d.price !== null) v.price = d.price;
   if (d.miles !== null) v.miles = d.miles;
+  if (d.pricing.transparentPrice !== null || d.pricing.listPrice !== null) v.pricing = d.pricing;
   if (d.imageUrl) v.imageUrl = d.imageUrl;
   v.imgStatus = v.imageUrl ? "ok" : "error";
   v.imgAt = Date.now();

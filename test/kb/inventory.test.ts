@@ -15,6 +15,7 @@ import {
   extractDetailsFromHtml,
   extractPriceFromText,
   extractMilesFromText,
+  extractPricingFromText,
   mergeVehicleStore,
   loadVehicleStore,
   saveVehicleStore,
@@ -203,6 +204,19 @@ describe("detalle de la ficha (JSON-LD): precio/millas/foto", () => {
   it("extractMilesFromText parsea millas", () => {
     expect(extractMilesFromText("45,210 miles")).toBe(45210);
     expect(extractMilesFromText("sin datos")).toBeNull();
+  });
+
+  it("extractPricingFromText saca el desglose completo del widget Transparent Price", () => {
+    const t =
+      "Price $30,744 Dealer Discount $3,997 Dealer Fee $1,199 Admin Processing Fee $399 Private Tag Agency Fee $189 WPB Kia Transparent Price $28,534";
+    expect(extractPricingFromText(t)).toEqual({
+      listPrice: 30744,
+      discount: 3997,
+      dealerFee: 1199,
+      adminFee: 399,
+      tagFee: 189,
+      transparentPrice: 28534,
+    });
   });
 });
 

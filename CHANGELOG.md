@@ -5,6 +5,19 @@ Cambios notables de Kooni. Formato aproximado de
 
 El CLI `kooni-bot` se versiona aparte (npm) — ver la nota de cada versión.
 
+## [1.34.0] — 2026-09-10
+
+### Agregado — desglose de precio de la ficha (Price/Discount/Fees/Transparent)
+
+- `extractPricingFromText` + `stripTags`: saca el desglose del widget de precio
+  de la ficha (Price, Dealer Discount, Dealer Fee, Admin Processing Fee, Tag
+  Agency Fee, WPB Kia Transparent Price) y lo guarda en `StoredVehicle.pricing`.
+- El **precio principal** del auto pasa a ser el *Transparent Price* cuando
+  existe (es el que expone el JSON-LD `offers.price`).
+- `fichaAuto` devuelve `desglosePrecio` y la instrucción pide mostrarlo.
+- `mergeVehicleStore` preserva el desglose entre syncs livianos.
+- Se quitó el endpoint temporal de diagnóstico.
+
 ## [1.33.1] — 2026-09-10
 
 ### Arreglado

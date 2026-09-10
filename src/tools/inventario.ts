@@ -180,6 +180,7 @@ export function fichaAutoTool(
         precio: enriched.price,
         millas: enriched.miles,
         url: enriched.listingUrl,
+        desglosePrecio: enriched.pricing ?? null,
       };
 
       const ctx = getCtx();
@@ -209,6 +210,7 @@ export function fichaAutoTool(
           : { enviada: false, nota: "Sin foto disponible todavía (se intenta de noche)." },
         instruccion:
           "Pasale al cliente la ficha COMPLETA en texto: nombre exacto, condición, millas, precio y VIN. " +
+          "Si trae desglosePrecio, mostralo (precio de lista, descuento y fees) y cerrá con el precio final. " +
           "Incluí SIEMPRE el link de la ficha (url). Si algún dato viene null, decí que se consulta — no lo inventes.",
       };
     },

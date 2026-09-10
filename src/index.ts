@@ -432,41 +432,6 @@ app.post("/kb/enrich", async (c) => {
   return c.json({ ok: true, ...r }, 200);
 });
 
-// DIAGNÓSTICO TEMPORAL — devuelve el scrape crudo de una ficha para ver el
-// formato real de precios. Quitar tras depurar.
-app.post("/kb/peek", async (c) => {
-  const expected = c.env.KB_REINDEX_TOKEN ?? "";
-  if (!expected || !tokensMatch(c.req.header("X-Reindex-Token") ?? "", expected)) {
-    return c.json({ ok: false, error: "unauthorized" }, 401);
-  }
-  const url = c.req.query("url") ?? "";
-  if (!url) return c.json({ ok: false, error: "falta url" }, 400);
-  const { scrapeUrl } = await import("./integrations/decodo");
-  const md = await scrapeUrl(c.env, url, { markdown: true, timeoutMs: 60_000 });
-  const html = await scrapeUrl(c.env, url, { markdown: false, timeoutMs: 60_000 });
-  const priceLines = (txt: string) =>
-    txt
-      .split("\n")
-      .filter((l) => /price|discount|fee|tag|transparent|\$\s?[\d,]{3,}/i.test(l))
-      .slice(0, 80)
-      .join("\n")
-      .slice(0, 4000);
-  const ld =
-    html.ok
-      ? (html.content.match(/<script[^>]+application\/ld\+json[^>]*>[\s\S]*?<\/script>/gi) ?? [])
-          .slice(0, 3)
-          .map((s) => s.slice(0, 3000))
-      : [];
-  return c.json(
-    {
-      ok: true,
-      md: md.ok ? { status: md.statusCode, len: md.content.length, priceLines: priceLines(md.content) } : { error: md.error },
-      html: html.ok ? { status: html.statusCode, len: html.content.length, ld } : { error: html.error },
-    },
-    200,
-  );
-});
-
 app.notFound((c) => c.text("not found", 404));
 
 // La raíz del worker redirige al panel: en cualquier dispositivo, entrar a la
