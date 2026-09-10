@@ -276,6 +276,7 @@ export async function renderInboxList(env: Env, p: InboxParams): Promise<string>
        (SELECT COUNT(*) FROM leads l WHERE l.conversation_id = c.id) as lead_count,
        (SELECT status FROM leads l WHERE l.conversation_id = c.id ORDER BY created_at DESC LIMIT 1) as lead_status,
        (SELECT COUNT(*) FROM tickets t WHERE t.conversation_id = c.id AND t.status != 'resolved') as open_tickets,
+       (SELECT COUNT(*) FROM conversation_labels cl WHERE cl.conversation_id = c.id AND cl.label = 'atencion_humana') as needs_human,
        (SELECT sentiment FROM conversation_insights i WHERE i.conversation_id = c.id) as ai_sentiment
      FROM conversations c
      ${whereSql}
@@ -292,6 +293,7 @@ export async function renderInboxList(env: Env, p: InboxParams): Promise<string>
         badges.push(`<span style="${smallPill(b.color)}">${b.txt}</span>`);
       }
       if (r.open_tickets > 0) badges.push(`<span style="${smallPill("var(--accent-2)")}">🔔</span>`);
+      if (r.needs_human > 0) badges.push(`<span style="${smallPill("var(--bad)")}">⚑ atención humana</span>`);
       if (paused) badges.push(`<span style="${smallPill("var(--dim)")}">⏸</span>`);
       if (r.ai_sentiment === "frustrated" || r.ai_sentiment === "angry") {
         const s = SENTIMENT_BADGE[r.ai_sentiment as string];
@@ -385,6 +387,23 @@ export async function renderThreadLive(env: Env, convId: string): Promise<string
       "SELECT COUNT(*) as n FROM tickets WHERE conversation_id = ? AND status != 'resolved'",
       [convId],
     ))?.n ?? 0;
+  // Etiqueta "Atención humana" (la pone el bot al escalar, o el dueño a mano).
+  const needsHuman =
+    (await db.first<{ n: number }>(
+      "SELECT COUNT(*) as n FROM conversation_labels WHERE conversation_id = ? AND label = 'atencion_humana'",
+      [convId],
+    ))?.n ?? 0;
+  const humanChip = `<form method="POST" action="/admin/conversations/${encodeURIComponent(convId)}/label" style="display:inline-flex" title="${
+    needsHuman ? "Quitar la etiqueta de atención humana" : "Marcar: este chat necesita atención de una persona"
+  }">
+    <input type="hidden" name="label" value="atencion_humana">
+    <input type="hidden" name="action" value="${needsHuman ? "remove" : "add"}">
+    <button type="submit" class="chip" style="font-size:11px;padding:6px 11px;cursor:pointer;${
+      needsHuman
+        ? "color:var(--bad);border:1px solid var(--bad);background:var(--bad-soft)"
+        : "color:var(--muted);border:1px solid var(--linelit);background:var(--panel2)"
+    }">${needsHuman ? "⚑ Atención humana ✓" : "⚑ Atención humana"}</button>
+  </form>`;
 
   // Header: identity + live state + takeover controls.
   const statusColor = paused ? "var(--accent-2)" : "var(--ok)";
@@ -437,6 +456,7 @@ export async function renderThreadLive(env: Env, convId: string): Promise<string
     ${statusPill}
     ${sentBadge}
     ${openTicket > 0 ? `<span style="${statusBadge("var(--accent-2)")}">🔔 ticket abierto</span>` : ""}
+    ${humanChip}
     ${controls}
   </div>`;
 

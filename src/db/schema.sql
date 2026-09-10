@@ -217,6 +217,18 @@ CREATE TABLE IF NOT EXISTS conv_labels (
 );
 CREATE INDEX IF NOT EXISTS idx_conv_labels_interest ON conv_labels(interest);
 
+-- Etiquetas de conversación del CRM (multi-etiqueta). Caso principal:
+-- `atencion_humana` — el bot escaló a un humano (handoff) o el dueño lo marcó.
+-- Se usa para el chip en Conversaciones, el badge en el kanban y los tickets.
+CREATE TABLE IF NOT EXISTS conversation_labels (
+  conversation_id TEXT NOT NULL,
+  label TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  created_by TEXT,
+  PRIMARY KEY (conversation_id, label)
+);
+CREATE INDEX IF NOT EXISTS idx_conversation_labels_label ON conversation_labels(label);
+
 -- Envíos de campañas (free-form dentro de ventana / plantilla HSM fuera)
 -- El UNIQUE es el candado anti-doble-envío por campaña
 CREATE TABLE IF NOT EXISTS template_sends (

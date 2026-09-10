@@ -101,6 +101,15 @@ export async function runVigilanteCheck(
       console.warn("[vigilante] no se pudo registrar el aviso:", e);
     }
 
+    // Etiqueta visible de "necesita atención humana" (chip en Conversaciones,
+    // badge en el kanban/tickets). El vigilante detectó riesgo real.
+    try {
+      const { ConversationLabelsRepo, NEEDS_HUMAN_LABEL } = await import("./db/conversationLabels");
+      await new ConversationLabelsRepo(new Db(env.DB)).add(convId, NEEDS_HUMAN_LABEL, "vigilante");
+    } catch (e) {
+      console.warn("[vigilante] no se pudo etiquetar:", e);
+    }
+
     const { notifyOwner } = await import("./tools/handoffHuman");
     await notifyOwner(env, {
       reason: "vigilante",

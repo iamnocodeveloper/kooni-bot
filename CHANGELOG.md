@@ -5,6 +5,25 @@ Cambios notables de Kooni. Formato aproximado de
 
 El CLI `kooni-bot` se versiona aparte (npm) — ver la nota de cada versión.
 
+## [1.38.0] — 2026-09-10
+
+### Agregado — “Atención humana”: etiqueta + tickets + kanban (general)
+
+- Nueva tabla `conversation_labels` + `ConversationLabelsRepo`. Etiqueta de
+  sistema `atencion_humana` (“Atención humana”).
+- **Marcado automático**: la tool `handoffHuman` (el bot escala a un humano) y
+  el **vigilante** (riesgo detectado) etiquetan la conversación.
+- **Conversaciones**: chip/badge `⚑ atención humana` en la lista y un botón en
+  el header del hilo para marcarla/quitarla a mano
+  (`POST /admin/conversations/:id/label`). Al **resolver el ticket** se quita.
+- **Tickets**: la sección ahora muestra el nombre del contacto, canal, el
+  **resumen completo**, un extracto del hilo desplegable y un botón
+  **“Abrir conversación →”**.
+- **Kanban de leads**: badge `⚑ atención humana` en la tarjeta (y marca en la
+  tabla).
+- Aplica a **todas las instalaciones**: la tabla se crea con `schema.sql` en el
+  update.
+
 ## [1.37.3] — 2026-09-10
 
 ### Arreglado — nombre del lead en WhatsApp (pushName, no el `@lid`)

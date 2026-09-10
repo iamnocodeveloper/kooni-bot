@@ -5,6 +5,7 @@ import type { Env } from "../env";
 import { Db } from "../db/client";
 import { TicketsRepo } from "../db/tickets";
 import { ConversationsRepo } from "../db/conversations";
+import { ConversationLabelsRepo, NEEDS_HUMAN_LABEL } from "../db/conversationLabels";
 
 export function handoffHumanTool(env: Env, getConversationId: () => string | null) {
   return tool({
@@ -28,6 +29,11 @@ export function handoffHumanTool(env: Env, getConversationId: () => string | nul
       if (convId) {
         const convs = new ConversationsRepo(db);
         await convs.setOpenTicket(convId, ticketId);
+        // Etiqueta visible: chip en Conversaciones, badge en el kanban y en
+        // Tickets. Se quita al resolver el ticket.
+        await new ConversationLabelsRepo(db)
+          .add(convId, NEEDS_HUMAN_LABEL, "bot")
+          .catch((e) => console.warn("[handoffHuman] no se pudo etiquetar:", e));
       }
 
       // Send email if Resend configured

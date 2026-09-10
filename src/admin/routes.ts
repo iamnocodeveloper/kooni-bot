@@ -1801,6 +1801,15 @@ adminApp.post("/tickets/:id/resolve", async (c) => {
   const id = c.req.param("id");
   const t = await tickets.getById(id).catch(() => null);
   await tickets.resolve(id, resolvedBy);
+  // Resolver el ticket = ya no necesita atención humana → se quita la etiqueta.
+  if (t?.conversation_id) {
+    try {
+      const { ConversationLabelsRepo, NEEDS_HUMAN_LABEL } = await import("../db/conversationLabels");
+      await new ConversationLabelsRepo(new Db(c.env.DB)).remove(t.conversation_id, NEEDS_HUMAN_LABEL);
+    } catch (e) {
+      console.warn("[tickets] no se pudo quitar la etiqueta:", e);
+    }
+  }
   await audit(c, {
     action: "ticket.resolve",
     target: `ticket:${id}`,
@@ -1873,6 +1882,26 @@ adminApp.post("/conversations/:id/pause", async (c) => {
   const convs = new ConversationsRepo(new Db(c.env.DB));
   await convs.setPausedUntil(id, Date.now() + TAKEOVER_MS);
   await audit(c, { action: "conversation.pause", target: `conv:${id}`, targetLabel: `Conversación ${id}` });
+  return c.html(await renderThreadLive(c.env, id));
+});
+
+// Etiqueta de "atención humana" en una conversación: la pone/quita el dueño a
+// mano (además de la marca automática del bot al escalar). Refresca el hilo.
+adminApp.post("/conversations/:id/label", async (c) => {
+  const id = c.req.param("id");
+  const { ConversationLabelsRepo, NEEDS_HUMAN_LABEL } = await import("../db/conversationLabels");
+  const form = await c.req.formData().catch(() => null);
+  const label = String(form?.get("label") ?? NEEDS_HUMAN_LABEL).trim() || NEEDS_HUMAN_LABEL;
+  const action = String(form?.get("action") ?? "add");
+  const repo = new ConversationLabelsRepo(new Db(c.env.DB));
+  if (action === "remove") await repo.remove(id, label);
+  else await repo.add(id, label, "panel");
+  await audit(c, {
+    action: "conversation.label",
+    target: `conv:${id}`,
+    targetLabel: `Conversación ${id}`,
+    afterVal: `${action === "remove" ? "quita" : "pone"} etiqueta ${label}`,
+  });
   return c.html(await renderThreadLive(c.env, id));
 });
 

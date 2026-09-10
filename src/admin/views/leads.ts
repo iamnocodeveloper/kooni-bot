@@ -1,6 +1,7 @@
 import type { Env } from "../../env";
 import { Db } from "../../db/client";
 import { LeadsRepo, leadMetadata, LEAD_STATUSES, type Lead, type LeadStatus } from "../../db/leads";
+import { ConversationLabelsRepo, NEEDS_HUMAN_LABEL } from "../../db/conversationLabels";
 import { getNiche } from "../../niches";
 import { layout } from "./layout";
 import { fmtDate, fmtDateTime } from "../format";
@@ -20,7 +21,7 @@ const STATUS_COLOR: Record<LeadStatus, string> = {
 
 // ── Kanban (vista por defecto) ──────────────────────────────────────────────
 
-function kanbanCard(l: Lead, meta: Record<string, string>, niche: ReturnType<typeof getNiche>): string {
+function kanbanCard(l: Lead, meta: Record<string, string>, niche: ReturnType<typeof getNiche>, needsHuman = false): string {
   const cols = niche.columns.length
     ? niche.columns.map((c) => meta[c.key]).filter(Boolean).slice(0, 3).join(" · ")
     : "";
@@ -35,6 +36,7 @@ function kanbanCard(l: Lead, meta: Record<string, string>, niche: ReturnType<typ
       <span class="text-dim" style="font-size:10px">${fmtDate(l.created_at)}</span>
     </div>
     ${l.contact ? `<div class="text-muted" style="font-size:11px">${esc(l.contact)}</div>` : ""}
+    ${needsHuman ? `<div><span style="font-size:9px;color:var(--bad);border:1px solid var(--bad);background:var(--bad-soft);padding:1px 6px;white-space:nowrap">⚑ atención humana</span></div>` : ""}
     ${cols ? `<div class="text-muted" style="font-size:11px">${esc(cols)}</div>` : ""}
     ${resumen ? `<div class="text-dim" style="font-size:11px;line-height:1.4;max-height:3.2em;overflow:hidden">${esc(resumen)}</div>` : ""}
     <div style="display:flex;gap:6px;align-items:center;margin-top:2px">
@@ -87,11 +89,13 @@ const KANBAN_JS = `
 })();
 `;
 
-function renderKanban(env: Env, list: Lead[], niche: ReturnType<typeof getNiche>): string {
+function renderKanban(env: Env, list: Lead[], niche: ReturnType<typeof getNiche>, humanSet: Set<string> = new Set()): string {
   const labels = JSON.stringify(Object.fromEntries(LEAD_STATUSES.map((v) => [v, niche.statusLabels[v]])));
   const columns = LEAD_STATUSES.map((s) => {
     const items = list.filter((l) => l.status === s);
-    const cards = items.map((l) => kanbanCard(l, leadMetadata(l), niche)).join("");
+    const cards = items
+      .map((l) => kanbanCard(l, leadMetadata(l), niche, !!l.conversation_id && humanSet.has(l.conversation_id)))
+      .join("");
     return `<div class="kb-col" data-status="${s}" style="flex:1;min-width:220px;display:flex;flex-direction:column;gap:8px;border:1px solid var(--line);background:var(--panel);padding:10px">
       <div style="display:flex;align-items:center;gap:7px">
         <span style="width:8px;height:8px;background:${STATUS_COLOR[s]};flex:none"></span>
@@ -108,17 +112,18 @@ function renderKanban(env: Env, list: Lead[], niche: ReturnType<typeof getNiche>
 
 // ── Tabla (?vista=tabla) ────────────────────────────────────────────────────
 
-function renderTabla(env: Env, list: Lead[], niche: ReturnType<typeof getNiche>): string {
+function renderTabla(env: Env, list: Lead[], niche: ReturnType<typeof getNiche>, humanSet: Set<string> = new Set()): string {
   const statusLabel = (s: LeadStatus) => niche.statusLabels[s];
   const rows = list
     .map((l) => {
       const meta = leadMetadata(l);
+      const human = !!l.conversation_id && humanSet.has(l.conversation_id);
       const nicheCells = niche.columns.length
         ? niche.columns.map((c) => `<td class="text-muted" style="padding:8px 10px">${esc(meta[c.key]) || "—"}</td>`).join("")
         : `<td class="text-muted" style="padding:8px 10px">${esc(l.status === "entrada" ? "—" : l.intent)}</td>`;
       return `<tr style="border-top:1px solid var(--line)">
         <td class="text-dim" style="padding:8px 10px;font-size:11px">${fmtDate(l.created_at)}</td>
-        <td class="text-cream" style="padding:8px 10px">${esc(l.name) || "(sin nombre)"}</td>
+        <td class="text-cream" style="padding:8px 10px">${esc(l.name) || "(sin nombre)"}${human ? ` <span style="font-size:9px;color:var(--bad);border:1px solid var(--bad);padding:0 5px">⚑</span>` : ""}</td>
         <td class="text-muted" style="padding:8px 10px">${esc(l.contact) || "—"}</td>
         ${nicheCells}
         <td style="padding:8px 10px">
@@ -147,7 +152,18 @@ function renderTabla(env: Env, list: Lead[], niche: ReturnType<typeof getNiche>)
 
 export async function renderLeads(env: Env, vista: "kanban" | "tabla" = "kanban"): Promise<string> {
   const niche = getNiche(env);
-  const list = await new LeadsRepo(new Db(env.DB)).list(300);
+  const db = new Db(env.DB);
+  const list = await new LeadsRepo(db).list(300);
+
+  // Conversaciones que necesitan atención humana (etiqueta) → badge en el kanban.
+  const labelMap = await new ConversationLabelsRepo(db)
+    .byConversationIds(list.map((l) => l.conversation_id ?? "").filter(Boolean))
+    .catch(() => ({}) as Record<string, string[]>);
+  const humanSet = new Set(
+    Object.entries(labelMap)
+      .filter(([, ls]) => ls.includes(NEEDS_HUMAN_LABEL))
+      .map(([id]) => id),
+  );
 
   const tab = (v: "kanban" | "tabla", label: string) =>
     `<a href="/admin/leads${v === "tabla" ? "?vista=tabla" : ""}" style="font-size:12px;padding:6px 12px;border:1px solid ${vista === v ? "var(--accent)" : "var(--line)"};color:${vista === v ? "var(--accent)" : "var(--muted)"};text-decoration:none">${label}</a>`;
@@ -163,7 +179,7 @@ export async function renderLeads(env: Env, vista: "kanban" | "tabla" = "kanban"
         <a href="/admin/leads/export.csv" style="font-size:12px;padding:6px 12px;border:1px solid var(--line);color:var(--muted);text-decoration:none">⬇ CSV</a>
       </div>
     </div>
-    ${vista === "kanban" ? renderKanban(env, list, niche) : renderTabla(env, list, niche)}`;
+    ${vista === "kanban" ? renderKanban(env, list, niche, humanSet) : renderTabla(env, list, niche, humanSet)}`;
 
   return layout({ title: niche.recordPlural, activeTab: "leads", body, env });
 }
