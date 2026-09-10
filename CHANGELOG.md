@@ -5,6 +5,26 @@ Cambios notables de Kooni. Formato aproximado de
 
 El CLI `kooni-bot` se versiona aparte (npm) — ver la nota de cada versión.
 
+## [1.32.0] — 2026-09-10
+
+### Agregado — detalle completo de cada auto (precio/millas/foto) + link
+
+- **`fetchVehicleDetails`**: al scrapear la ficha de un auto ahora extrae
+  **precio, millas y foto**. Precio/millas salen del **JSON-LD** de la ficha
+  (`extractDetailsFromHtml`); fallback a texto etiquetado ("Sale Price $…",
+  "45,210 miles") y a `og:image`/`<img>`.
+- `refreshVehicleImages` y `ensureVehicleDetails` guardan precio/millas además
+  de la foto, y `imageCandidates` vuelve a considerar autos **sin precio**
+  (el sitemap de origen no lo trae).
+- **`fichaAuto`** entrega la ficha completa (VIN, condición, precio, millas,
+  link y foto) y ahora se usa SIEMPRE que el cliente pide un auto puntual
+  (por nombre/modelo/año/VIN). `inventarioQuery` devuelve también `url` por
+  auto y su nota pide incluir el link.
+- Prompt: bloque `<inventario>` endurecido — auto puntual → `fichaAuto`;
+  siempre incluir el link; nunca inventar precio.
+- **`POST /kb/enrich`** (mismo token que `/kb/reindex`): precarga detalles en
+  lote sin re-scrapear el sitemap, para llenar el store rápido.
+
 ## [1.31.0] — 2026-09-10
 
 ### Arreglado — Web Sync del bot de autos (feed muerto → sitemap)

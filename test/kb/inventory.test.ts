@@ -12,6 +12,9 @@ import {
   renderVehicleBlock,
   extractImageFromMarkdown,
   extractImageFromHtml,
+  extractDetailsFromHtml,
+  extractPriceFromText,
+  extractMilesFromText,
   mergeVehicleStore,
   loadVehicleStore,
   saveVehicleStore,
@@ -175,6 +178,34 @@ describe("sitemap DealerInspire (fuente cuando /llm/inventory/ murió)", () => {
   });
 });
 
+describe("detalle de la ficha (JSON-LD): precio/millas/foto", () => {
+  const HTML = `<html><head>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"Car","name":"2021 Toyota RAV4 Hybrid XSE AWD",
+ "vehicleIdentificationNumber":"JTMRWRFV0MD123456",
+ "mileageFromOdometer":{"@type":"QuantitativeValue","value":45210},
+ "offers":{"@type":"Offer","price":34990,"priceCurrency":"USD"},
+ "image":["https://vehicle-images.carscommerce.inc/4ca7-110012956/JTMRWRFV0MD123456/abc.jpg"]}
+</script></head><body><meta property="og:image" content="https://vehicle-images.carscommerce.inc/og.jpg"></body></html>`;
+
+  it("extractDetailsFromHtml saca precio, millas e imagen del JSON-LD", () => {
+    const d = extractDetailsFromHtml(HTML);
+    expect(d.price).toBe(34990);
+    expect(d.miles).toBe(45210);
+    expect(d.image).toBe("https://vehicle-images.carscommerce.inc/4ca7-110012956/JTMRWRFV0MD123456/abc.jpg");
+  });
+
+  it("extractPriceFromText prefiere el precio etiquetado", () => {
+    expect(extractPriceFromText("MSRP $38,000\nSale Price $34,990\n")).toBe(34990);
+    expect(extractPriceFromText("$")).toBeNull();
+  });
+
+  it("extractMilesFromText parsea millas", () => {
+    expect(extractMilesFromText("45,210 miles")).toBe(45210);
+    expect(extractMilesFromText("sin datos")).toBeNull();
+  });
+});
+
 describe("renderInventory*", () => {
   const vs = parseInventory(FEED, "https://x.com/llm/inventory/");
 
@@ -320,7 +351,14 @@ describe("ensureVehicleImage (bajo demanda, con Decodo)", () => {
 
     const fetchMock = vi.fn(async () =>
       new Response(
-        JSON.stringify({ results: [{ content: "![auto](https://cdn.greenway.com/sorento.jpg)", status_code: 200 }] }),
+        JSON.stringify({
+          results: [
+            {
+              content: "![auto](https://cdn.greenway.com/sorento.jpg)\nSale Price $17,593\n45,210 miles",
+              status_code: 200,
+            },
+          ],
+        }),
         { status: 200 },
       ),
     );
@@ -329,10 +367,12 @@ describe("ensureVehicleImage (bajo demanda, con Decodo)", () => {
     const env = { DB: d1, DECODO_AUTH: "user:pass" } as unknown as Env;
     const img = await ensureVehicleImage(env, db, key, { timeoutMs: 5000 });
     expect(img).toBe("https://cdn.greenway.com/sorento.jpg");
-    expect(fetchMock).toHaveBeenCalledTimes(1); // markdown encontró foto → no pide HTML
+    expect(fetchMock).toHaveBeenCalledTimes(1); // markdown trajo foto + precio → no pide HTML
 
     const after = await loadVehicleStore(db);
     expect(after.vehicles[key].imgStatus).toBe("ok");
+    expect(after.vehicles[key].price).toBe(17593);
+    expect(after.vehicles[key].miles).toBe(45210);
 
     // Segundo llamado: cacheado, sin fetch nuevo.
     await ensureVehicleImage(env, db, key, { timeoutMs: 5000 });

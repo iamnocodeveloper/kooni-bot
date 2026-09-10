@@ -22,7 +22,7 @@ import {
   listStoredVehicles,
   queryInventory,
   findVehicleByVin,
-  ensureVehicleImage,
+  ensureVehicleDetails,
   type StoredVehicle,
 } from "../kb/inventory";
 
@@ -105,9 +105,13 @@ export function inventarioQueryTool(env: Env) {
           condicion: m.condition,
           precio: m.price,
           millas: m.miles,
+          url: m.listingUrl,
         })),
         marcasDisponibles: marcasTxt,
-        nota: "Ofrecé hasta 3 opciones de los matches con nombre, precio y condición, SIN enlaces. Si pidieron más, decí cuántos hay en total.",
+        nota:
+          "Ofrecé hasta 3 opciones con nombre, condición, precio, millas y el link (url) de la ficha. " +
+          "Si un precio viene null, decí que se consulta — no lo inventes. " +
+          "Si el cliente elige un auto puntual o da un VIN, llamá a fichaAuto para mandarle la ficha completa con foto y link.",
       };
     },
   });
@@ -119,10 +123,9 @@ export function fichaAutoTool(
 ) {
   return tool({
     description:
-      "Envía la ficha de UN auto del inventario (foto real desde su página + link de la ficha). " +
-      "Usala SOLO cuando el cliente pidió ese auto puntual o dio su VIN (ej. 'mandame info de este', " +
-      "'¿tenés la foto?', un VIN). Si no encuentra el auto exacto, no inventes: pedí el VIN o que elija " +
-      "una de las opciones. Para listar o preguntar disponibilidad usá inventarioQuery, no esta tool.",
+      "Envía la ficha COMPLETA de UN auto del inventario (foto real desde su página + link de la ficha + precio, millas, condición y VIN). " +
+      "Usala SIEMPRE que el cliente pida ver/consultar/mandar UN auto concreto — por nombre, modelo, año o VIN (ej. 'muestrame la RAV4', 'info del Telluride', 'cuánto cuesta la Sorento', 'mandame la foto', un VIN). " +
+      "Para listar disponibilidad general o preguntar por una marca usá inventarioQuery, no esta tool. Si no encuentra el auto exacto, no inventes: pedí el VIN o que elija una de las opciones.",
     inputSchema: z.object({
       vin: z.string().optional().describe("VIN del auto (17 caracteres)"),
       auto: z.string().optional().describe("Título exacto del auto tal como apareció en la lista (si no hay VIN)"),
@@ -165,23 +168,25 @@ export function fichaAutoTool(
         }
       }
 
-      // Foto: guardada, o bajo demanda con timeout corto (se cachea en el store).
-      const img = await ensureVehicleImage(env, db, found.key, { timeoutMs: 20_000 });
+      // Ficha completa: si falta foto o precio, scrapea la ficha ahora (timeout
+      // corto) y cachea foto + precio + millas en el store.
+      const enriched = (await ensureVehicleDetails(env, db, found.key, { timeoutMs: 25_000 })) ?? found;
+      const img = enriched.imageUrl && enriched.imgStatus === "ok" ? enriched.imageUrl : null;
 
       const ficha = {
-        vin: found.vin,
-        titulo: found.title,
-        condicion: found.condition,
-        precio: found.price,
-        millas: found.miles,
-        url: found.listingUrl,
+        vin: enriched.vin,
+        titulo: enriched.title,
+        condicion: enriched.condition,
+        precio: enriched.price,
+        millas: enriched.miles,
+        url: enriched.listingUrl,
       };
 
       const ctx = getCtx();
       let fotoEnviada = false;
       let descartes: string[] = [];
       if (img && ctx) {
-        const caption = `${found.title}${found.condition ? ` · ${found.condition}` : ""}${found.miles !== null ? ` · ${found.miles.toLocaleString("en-US")} millas` : ""}${found.price !== null ? ` · $${found.price.toLocaleString("en-US")}` : ""}${found.listingUrl ? `\n${found.listingUrl}` : ""}`;
+        const caption = `${enriched.title}${enriched.condition ? ` · ${enriched.condition}` : ""}${enriched.miles !== null ? ` · ${enriched.miles.toLocaleString("en-US")} millas` : ""}${enriched.price !== null ? ` · $${enriched.price.toLocaleString("en-US")}` : ""}${enriched.listingUrl ? `\n${enriched.listingUrl}` : ""}`;
         const { dropped } = await sendReplyCapped(
           ctx.channel,
           ctx.channelUserId,
@@ -203,8 +208,8 @@ export function fichaAutoTool(
           ? { enviada: fotoEnviada, descartes }
           : { enviada: false, nota: "Sin foto disponible todavía (se intenta de noche)." },
         instruccion:
-          "Dale la ficha al cliente en texto: nombre exacto, condición, millas y precio. " +
-          "Incluí el link de la ficha (url) solo si el cliente la pidió. No inventes datos.",
+          "Pasale al cliente la ficha COMPLETA en texto: nombre exacto, condición, millas, precio y VIN. " +
+          "Incluí SIEMPRE el link de la ficha (url). Si algún dato viene null, decí que se consulta — no lo inventes.",
       };
     },
   });

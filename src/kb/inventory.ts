@@ -554,14 +554,18 @@ export function mergeVehicleStore(prev: VehicleStore, current: Vehicle[]): Vehic
 const IMG_ERROR_COOLDOWN_MS = 3 * 86_400_000; // reintento nocturno cada 3 días si falló
 const IMG_ONDEMAND_COOLDOWN_MS = 3_600_000; // bajo demanda: no repetir el intento dentro de 1 h
 
-/** Autos que necesitan foto (imgStatus != ok) y tienen ficha para scrapear. */
+/**
+ * Autos que necesitan scrapear su ficha: les falta foto (imgStatus != ok) o
+ * precio (el sitemap de origen no lo trae). Cooldown de 3 días tras un intento
+ * para no martillar fichas que no dan datos.
+ */
 export function imageCandidates(store: VehicleStore): StoredVehicle[] {
   const now = Date.now();
   return listStoredVehicles(store).filter(
     (v) =>
-      v.imgStatus !== "ok" &&
       !!v.listingUrl &&
-      !(v.imgStatus === "error" && v.imgAt !== null && now - v.imgAt < IMG_ERROR_COOLDOWN_MS),
+      (v.imgStatus !== "ok" || v.price === null) &&
+      !(v.imgAt !== null && now - v.imgAt < IMG_ERROR_COOLDOWN_MS),
   );
 }
 
@@ -608,44 +612,159 @@ export function extractImageFromHtml(html: string): string | null {
   return null;
 }
 
+const PRICE_SELL_RE =
+  /(?:sale price|internet price|our price|dealer price|selling price|price|precio)[^\d$]{0,30}\$\s?([\d][\d,]{2,})/i;
+const PRICE_MSRP_RE = /(?:msrp|sticker)[^\d$]{0,30}\$\s?([\d][\d,]{2,})/i;
+const PRICE_TEXT_RE = /\$\s?([\d][\d,]{2,})/g;
+const MILES_TEXT_RE = /([\d][\d,]{1,})\s*(?:miles|mi\.?)\b/i;
+
+function toNum(v: unknown): number | null {
+  if (typeof v === "number" && Number.isFinite(v) && v > 0) return v;
+  if (typeof v === "string") {
+    const n = Number(v.replace(/[^\d.]/g, ""));
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }
+  return null;
+}
+
+/** Precio en USD desde texto libre (markdown de la ficha). Etiqueta primero. */
+export function extractPriceFromText(text: string): number | null {
+  // Precio de venta primero; MSRP/sticker solo como último recurso etiquetado.
+  for (const re of [PRICE_SELL_RE, PRICE_MSRP_RE]) {
+    const labeled = re.exec(text);
+    if (labeled) {
+      const n = toNum(labeled[1]);
+      if (n !== null && n >= 500 && n <= 500_000) return n;
+    }
+  }
+  PRICE_TEXT_RE.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = PRICE_TEXT_RE.exec(text))) {
+    const n = toNum(m[1]);
+    if (n !== null && n >= 1_000 && n <= 500_000) return n;
+  }
+  return null;
+}
+
+/** Millas desde texto libre. */
+export function extractMilesFromText(text: string): number | null {
+  const m = MILES_TEXT_RE.exec(text);
+  return m ? toNum(m[1]) : null;
+}
+
+function findVehicleLd(obj: unknown): Record<string, any> | null {
+  if (!obj || typeof obj !== "object") return null;
+  if (Array.isArray(obj)) {
+    for (const o of obj) {
+      const r = findVehicleLd(o);
+      if (r) return r;
+    }
+    return null;
+  }
+  const rec = obj as Record<string, any>;
+  const t = rec["@type"];
+  const types = Array.isArray(t) ? t : [t];
+  if (types.some((x) => typeof x === "string" && /vehicle|car|product/i.test(x))) return rec;
+  if (rec["@graph"]) return findVehicleLd(rec["@graph"]);
+  return null;
+}
+
 /**
- * Scrapea la ficha del auto con Decodo y devuelve la URL de su foto, o null.
- * 1) Markdown: primera imagen inline. 2) HTML (markdown:false): og:image / img.
- * Fail-soft: nunca lanza.
+ * JSON-LD de la ficha (DealerInspire lo trae para SEO): precio, millas e
+ * imagen. Fallback a og:image / <img> para la foto. Fail-soft: campos null.
  */
+export function extractDetailsFromHtml(html: string): {
+  price: number | null;
+  miles: number | null;
+  image: string | null;
+} {
+  const re = /<script[^>]+application\/ld\+json[^>]*>([\s\S]*?)<\/script>/gi;
+  let price: number | null = null;
+  let miles: number | null = null;
+  let image: string | null = null;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html))) {
+    try {
+      const v = findVehicleLd(JSON.parse(m[1].trim()));
+      if (!v) continue;
+      const offers = (Array.isArray(v.offers) ? v.offers[0] : v.offers) as Record<string, any> | undefined;
+      price = price ?? toNum(offers?.price) ?? toNum(offers?.lowPrice) ?? toNum(v.price);
+      const mo = v.mileageFromOdometer;
+      miles = miles ?? toNum(typeof mo === "object" && mo ? mo.value : mo);
+      const img = v.image;
+      const imgUrl =
+        typeof img === "string"
+          ? img
+          : Array.isArray(img)
+            ? typeof img[0] === "string"
+              ? img[0]
+              : img[0]?.url
+            : img?.url;
+      if (typeof imgUrl === "string") image = image ?? imgUrl;
+    } catch {
+      /* JSON-LD inválido — seguimos */
+    }
+  }
+  if (!image) image = extractImageFromHtml(html);
+  return { price, miles, image };
+}
+
+export interface VehicleDetails {
+  imageUrl: string | null;
+  price: number | null;
+  miles: number | null;
+}
+
+/**
+ * Scrapea la ficha del auto con Decodo y extrae foto, precio y millas.
+ * 1) Markdown (chico): imagen inline + precio/millas por texto.
+ * 2) Si falta algo, HTML: JSON-LD (precio/millas/imagen) + og:image.
+ * Fail-soft: nunca lanza; los campos que no se encuentren vuelven null.
+ */
+export async function fetchVehicleDetails(
+  env: Env,
+  vehicle: Vehicle,
+  opts: { timeoutMs?: number } = {},
+): Promise<VehicleDetails> {
+  const out: VehicleDetails = { imageUrl: null, price: null, miles: null };
+  if (!vehicle.listingUrl) return out;
+  const timeoutMs = opts.timeoutMs ?? 60_000;
+  try {
+    const md = await scrapeUrl(env, vehicle.listingUrl, { markdown: true, timeoutMs });
+    if (md.ok) {
+      const img = extractImageFromMarkdown(md.content);
+      if (img) out.imageUrl = absUrl(vehicle.listingUrl, img);
+      out.price = extractPriceFromText(md.content);
+      out.miles = extractMilesFromText(md.content);
+    }
+    if (!out.imageUrl || out.price === null) {
+      const html = await scrapeUrl(env, vehicle.listingUrl, { markdown: false, timeoutMs });
+      if (html.ok) {
+        const d = extractDetailsFromHtml(html.content);
+        out.imageUrl = out.imageUrl ?? (d.image ? absUrl(vehicle.listingUrl, d.image) : null);
+        out.price = out.price ?? d.price;
+        out.miles = out.miles ?? d.miles;
+      }
+    }
+  } catch {
+    /* fail-soft */
+  }
+  return out;
+}
+
+/** Compat: solo la foto (tests). */
 export async function fetchVehicleImage(
   env: Env,
   vehicle: Vehicle,
   opts: { timeoutMs?: number } = {},
 ): Promise<string | null> {
-  if (!vehicle.listingUrl) return null;
-  try {
-    const md = await scrapeUrl(env, vehicle.listingUrl, {
-      markdown: true,
-      timeoutMs: opts.timeoutMs ?? 60_000,
-    });
-    if (md.ok) {
-      const img = extractImageFromMarkdown(md.content);
-      if (img) return absUrl(vehicle.listingUrl, img);
-    }
-    const html = await scrapeUrl(env, vehicle.listingUrl, {
-      markdown: false,
-      timeoutMs: opts.timeoutMs ?? 60_000,
-    });
-    if (html.ok) {
-      const img = extractImageFromHtml(html.content);
-      if (img) return absUrl(vehicle.listingUrl, img);
-    }
-  } catch {
-    /* fail-soft */
-  }
-  return null;
+  return (await fetchVehicleDetails(env, vehicle, opts)).imageUrl;
 }
 
 /**
- * Corrida nocturna/delta: trae fotos de hasta `max` autos pendientes,
- * con un pequeño pool de concurrencia. Guarda el store tras cada auto para no
- * perder progreso si el worker se corta. Fail-soft por auto.
+ * Corrida nocturna/delta: trae foto + precio + millas de hasta `max` autos
+ * pendientes, con un pequeño pool de concurrencia. Guarda el store tras cada
+ * auto para no perder progreso si el worker se corta. Fail-soft por auto.
  */
 export async function refreshVehicleImages(
   env: Env,
@@ -662,13 +781,15 @@ export async function refreshVehicleImages(
   const runOne = async () => {
     while (i < candidates.length) {
       const v = candidates[i++];
-      const img = await fetchVehicleImage(env, v, { timeoutMs: opts.timeoutMs });
+      const d = await fetchVehicleDetails(env, v, { timeoutMs: opts.timeoutMs });
       const cur = store.vehicles[v.key];
       if (cur) {
-        cur.imageUrl = img;
-        cur.imgStatus = img ? "ok" : "error";
+        if (d.price !== null) cur.price = d.price;
+        if (d.miles !== null) cur.miles = d.miles;
+        if (d.imageUrl) cur.imageUrl = d.imageUrl;
+        cur.imgStatus = cur.imageUrl ? "ok" : "error";
         cur.imgAt = Date.now();
-        if (img) fetched++;
+        if (d.imageUrl || d.price !== null || d.miles !== null) fetched++;
         else failed++;
         await saveVehicleStore(db, store).catch(() => {});
       } else {
@@ -685,27 +806,46 @@ export async function refreshVehicleImages(
  * Foto bajo demanda (tool fichaAuto): si el auto no tiene foto guardada, scrapea
  * su ficha en el momento (timeout corto) y cachea el resultado en el store.
  */
+/**
+ * Detalle bajo demanda (tool fichaAuto): si al auto le falta foto o precio,
+ * scrapea su ficha en el momento (timeout corto) y cachea foto + precio +
+ * millas en el store. Devuelve el vehículo actualizado (o null si no existe).
+ * Fail-soft: si la ficha no responde, devuelve lo que ya había.
+ */
+export async function ensureVehicleDetails(
+  env: Env,
+  db: Db,
+  key: string,
+  opts: { timeoutMs?: number } = {},
+): Promise<StoredVehicle | null> {
+  const store = await loadVehicleStore(db);
+  const v = store.vehicles[key];
+  if (!v) return null;
+  const needs = !(v.imageUrl && v.imgStatus === "ok") || v.price === null;
+  if (!needs) return v;
+  // Si ya intentamos scrapear hace <1 h, no hacemos esperar al cliente otra vez
+  // (el nightly lo reintenta con su cooldown largo).
+  if (v.imgAt !== null && Date.now() - v.imgAt < IMG_ONDEMAND_COOLDOWN_MS) {
+    return v;
+  }
+  const d = await fetchVehicleDetails(env, v, { timeoutMs: opts.timeoutMs ?? 20_000 });
+  if (d.price !== null) v.price = d.price;
+  if (d.miles !== null) v.miles = d.miles;
+  if (d.imageUrl) v.imageUrl = d.imageUrl;
+  v.imgStatus = v.imageUrl ? "ok" : "error";
+  v.imgAt = Date.now();
+  await saveVehicleStore(db, store).catch(() => {});
+  return v;
+}
+
+/** Compat: solo la foto guardada/recién traída. */
 export async function ensureVehicleImage(
   env: Env,
   db: Db,
   key: string,
   opts: { timeoutMs?: number } = {},
 ): Promise<string | null> {
-  const store = await loadVehicleStore(db);
-  const v = store.vehicles[key];
-  if (!v) return null;
-  if (v.imageUrl && v.imgStatus === "ok") return v.imageUrl;
-  // Si el último intento falló hace menos de 1 h, no hacemos esperar al cliente
-  // de nuevo: devuelve sin foto (el nightly lo reintenta con su cooldown).
-  if (v.imgStatus === "error" && v.imgAt !== null && Date.now() - v.imgAt < IMG_ONDEMAND_COOLDOWN_MS) {
-    return null;
-  }
-  const img = await fetchVehicleImage(env, v, { timeoutMs: opts.timeoutMs ?? 20_000 });
-  v.imageUrl = img;
-  v.imgStatus = img ? "ok" : "error";
-  v.imgAt = Date.now();
-  await saveVehicleStore(db, store).catch(() => {});
-  return img;
+  return (await ensureVehicleDetails(env, db, key, opts))?.imageUrl ?? null;
 }
 
 // ---------------------------------------------------------------------------

@@ -525,13 +525,13 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
         const vehicles = listStoredVehicles(store);
         if (vehicles.length > 0) {
           const marcas = [...new Set(vehicles.map((v) => v.make).filter(Boolean))] as string[];
-          const conPrecio = vehicles.filter((v) => v.price !== null).length;
           system.push({
             role: "system",
             content:
               `<inventario>\nTenés inventario sincronizado: ${vehicles.length} autos. Marcas: ${marcas.join(", ") || "—"}.\n` +
               `REGLA: para CUALQUIER pregunta sobre autos, disponibilidad, marcas, modelos, precios, condición (nuevo/usado) o VIN usá SIEMPRE la tool inventarioQuery. Nunca contestes con conocimiento general ni cites la KB para inventario.\n` +
-              `Si el cliente pide la ficha de UN auto puntual o da un VIN, usá fichaAuto (manda el link real${conPrecio > 0 ? " y los datos" : ""}).\n` +
+              `Cuando el cliente pida ver, consultar o mandar UN auto concreto (por nombre, modelo, año o VIN) usá SIEMPRE fichaAuto — no inventarioQuery (ej. "muestrame la RAV4", "cuánto cuesta la Sorento", "mandame la foto"). fichaAuto trae el link real de la ficha, la foto, precio, millas y VIN.\n` +
+              `En cualquier respuesta con autos incluí el link (url) de la ficha. Si un dato viene null, decí que se consulta — no lo inventes.\n` +
               `Si inventarioQuery devuelve 0 resultados, decí claramente que ese auto/marca no está y ofrecé las marcas disponibles.\n</inventario>`,
           });
         } else {

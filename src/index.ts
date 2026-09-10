@@ -411,6 +411,22 @@ app.post("/kb/web-sync", async (c) => {
   return c.json({ ok: true, ...r }, 200);
 });
 
+// Precarga de detalles del inventario (foto + precio + millas) en lote: corre el
+// refresh SIN re-scrapear el sitemap, para llenar el store rápido. Mismo token
+// que /kb/reindex y /kb/web-sync.
+app.post("/kb/enrich", async (c) => {
+  const expected = c.env.KB_REINDEX_TOKEN ?? "";
+  if (!expected || !tokensMatch(c.req.header("X-Reindex-Token") ?? "", expected)) {
+    return c.json({ ok: false, error: "unauthorized" }, 401);
+  }
+  const raw = Number(c.req.query("max") ?? 12);
+  const max = Number.isFinite(raw) ? Math.min(Math.max(Math.trunc(raw), 1), 40) : 12;
+  const { refreshVehicleImages } = await import("./kb/inventory");
+  const { Db } = await import("./db/client");
+  const r = await refreshVehicleImages(c.env, new Db(c.env.DB), { max, timeoutMs: 25_000 });
+  return c.json({ ok: true, ...r }, 200);
+});
+
 app.notFound((c) => c.text("not found", 404));
 
 // La raíz del worker redirige al panel: en cualquier dispositivo, entrar a la
