@@ -67,18 +67,30 @@ export const wahaAdapter: ChannelAdapter = {
     if (event !== "message" || payload.fromMe === true) {
       throw new Error("not an incoming waha message");
     }
-    const chatId = String(payload.chatId ?? "").trim();
+    const chatId = String(payload.chatId ?? payload.from ?? "").trim();
     if (!chatId) throw new Error("waha message without chatId");
 
-    let text = typeof payload.text === "string" ? payload.text : undefined;
+    // WAHA (WAMessage) usa `body` para el texto y `from` para el chat; algunos
+    // builds/versiones viejas traen `text`/`chatId`. Aceptamos ambos.
+    const text =
+      typeof payload.body === "string"
+        ? payload.body
+        : typeof payload.text === "string"
+          ? payload.text
+          : typeof payload._data?.body === "string"
+            ? payload._data.body
+            : undefined;
     let imageUrl: string | undefined;
     let audioUrl: string | undefined;
     const media = payload.media;
-    if (media && typeof media.url === "string" && media.url) {
-      const mime = String(media.mimetype ?? "").toLowerCase();
-      if (/^image\//.test(mime)) imageUrl = media.url;
-      else if (/^(audio|video)\//.test(mime) || /\.(ogg|mp3|m4a|amr|opus)(\?|#|$)/i.test(media.url)) {
-        audioUrl = media.url;
+    const mediaUrl =
+      (media && typeof media.url === "string" && media.url) ||
+      (typeof payload.mediaUrl === "string" ? payload.mediaUrl : "");
+    if (mediaUrl) {
+      const mime = String(media?.mimetype ?? "").toLowerCase();
+      if (/^image\//.test(mime)) imageUrl = mediaUrl;
+      else if (/^(audio|video)\//.test(mime) || /\.(ogg|mp3|m4a|amr|opus)(\?|#|$)/i.test(mediaUrl)) {
+        audioUrl = mediaUrl;
       }
     }
 

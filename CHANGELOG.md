@@ -5,6 +5,18 @@ Cambios notables de Kooni. Formato aproximado de
 
 El CLI `kooni-bot` se versiona aparte (npm) — ver la nota de cada versión.
 
+## [1.37.2] — 2026-09-10
+
+### Arreglado — los mensajes de WAHA no entraban (shape del webhook)
+
+- `wahaAdapter.parseIncoming` esperaba `payload.text` + `payload.chatId`, pero
+  WAHA (WAMessage, verificado contra su OpenAPI) manda **`payload.body`** y
+  **`payload.from`**. Resultado: el webhook llegaba, el worker lo descartaba en
+  silencio y **no se creaba ninguna conversación**.
+- Ahora acepta ambos shapes (`body`/`text`, `from`/`chatId`) y también
+  `payload.mediaUrl` como fuente del media. Tests que fijan el shape real de
+  WAHA (texto y media).
+
 ## [1.37.1] — 2026-09-10
 
 ### Arreglado — links clickeables en TODOS los canales

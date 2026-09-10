@@ -64,6 +64,47 @@ describe("wahaAdapter.parseIncoming", () => {
     await expect(wahaAdapter.parseIncoming(makeReq({ event: "ack", payload: {} }), envWaha)).rejects.toThrow();
   });
 
+  it("acepta el shape REAL de WAHA (body + from, sin text/chatId)", async () => {
+    const msg = await wahaAdapter.parseIncoming(
+      makeReq({
+        event: "message",
+        session: "Cars",
+        payload: {
+          id: "false_15613519220@c.us_ABC",
+          timestamp: 1789064400,
+          from: "593983859723@c.us",
+          fromMe: false,
+          to: "15613519220@c.us",
+          body: "hola, ¿qué autos tienen?",
+          hasMedia: false,
+          media: null,
+        },
+      }),
+      envWaha,
+    );
+    expect(msg.channelUserId).toBe("593983859723@c.us");
+    expect(msg.text).toBe("hola, ¿qué autos tienen?");
+  });
+
+  it("shape real con media: body + media.url", async () => {
+    const msg = await wahaAdapter.parseIncoming(
+      makeReq({
+        event: "message",
+        payload: {
+          id: "x",
+          from: "x@c.us",
+          fromMe: false,
+          body: "mirá esto",
+          hasMedia: true,
+          media: { mimetype: "image/jpeg", url: "https://cdn.example/img.jpg" },
+        },
+      }),
+      envWaha,
+    );
+    expect(msg.text).toBe("mirá esto");
+    expect(msg.imageUrl).toBe("https://cdn.example/img.jpg");
+  });
+
   it("extrae imagen del media", async () => {
     const msg = await wahaAdapter.parseIncoming(
       makeReq({
