@@ -258,6 +258,145 @@ export function looksLikeInventory(vehicles: Vehicle[]): boolean {
 }
 
 // ---------------------------------------------------------------------------
+// Fuente DealerInspire: sitemap de inventario
+// ---------------------------------------------------------------------------
+//
+// El feed `/llm/inventory/` de DealerInspire dejó de existir (hoy sirve la
+// homepage), así que el "modo inventario" se alimenta del sitemap de inventario
+// del propio sitio: `/dealer-inspire-inventory/inventory_sitemap`.
+//
+// Ese sitemap lista TODAS las fichas y cada URL trae la ficha codificada:
+//   /inventory/<condición>-<año>-<marca>-<modelo>-<trim>-<carrocería>-<VIN>/
+// Ej.: /inventory/certified-used-2023-kia-sorento-sx-awd-4d-sport-utility-5xyrkdlf7pg242135/
+// De ahí salen condición, año, marca, modelo, VIN y el LINK real de la ficha.
+// Precio/millas/foto no vienen en el sitemap: se completan scrapeando la ficha
+// con Decodo (ver refreshVehicleImages / fetchVehicleImage).
+
+const VIN_TOKEN_RE = /^[a-hj-npr-z0-9]{17}$/i;
+const YEAR_TOKEN_RE = /^(19|20)\d{2}$/;
+
+/** Tokens de carrocería que se recortan del final del slug (no son modelo/trim). */
+const BODY_TOKENS = new Set([
+  "4d", "2d", "4dr", "2dr", "sport", "utility", "sedan", "supercrew", "crew",
+  "cab", "hatchback", "coupe", "convertible", "wagon", "minivan", "van",
+  "pickup", "truck", "suv", "mpv", "cuv", "passenger", "cargo",
+]);
+
+/** Siglas/trims que van en mayúsculas al reconstruir el título. */
+const UPPER_TOKENS = new Set([
+  "awd", "fwd", "rwd", "2wd", "4wd", "4x4", "sx", "ex", "lx", "gt", "le",
+  "se", "sel", "xle", "xse", "srt", "trd", "ltz", "lt", "ls", "exl", "dct",
+  "cvt", "phev", "ev", "gdi", "x", "s", "l",
+]);
+
+function prettyToken(t: string): string {
+  if (!t) return t;
+  if (UPPER_TOKENS.has(t) || /\d/.test(t) || t.length <= 2) return t.toUpperCase();
+  return t[0].toUpperCase() + t.slice(1);
+}
+
+function prettyWords(tokens: string[]): string {
+  return tokens.filter(Boolean).map(prettyToken).join(" ");
+}
+
+/** Construye un Vehicle desde un slug de ficha DealerInspire. null si no parsea. */
+export function vehicleFromSlug(slug: string, listingUrl: string, feedUrl: string): Vehicle | null {
+  const tokens = slug.toLowerCase().split("-").filter(Boolean);
+  if (tokens.length < 3) return null;
+
+  // VIN: último token (17 chars, sin I/O/Q).
+  let vin: string | null = null;
+  const last = tokens[tokens.length - 1] ?? "";
+  if (VIN_TOKEN_RE.test(last)) vin = tokens.pop()!.toUpperCase();
+
+  // Condición al frente.
+  let condition: string | null = null;
+  if (tokens[0] === "certified" && (tokens[1] === "used" || tokens[1] === "pre-owned")) {
+    condition = "Certificado";
+    tokens.splice(0, 2);
+  } else if (tokens[0] === "certified") {
+    condition = "Certificado";
+    tokens.shift();
+  } else if (tokens[0] === "used" || tokens[0] === "pre-owned") {
+    condition = "Usado";
+    tokens.shift();
+  } else if (tokens[0] === "new") {
+    condition = "Nuevo";
+    tokens.shift();
+  }
+
+  // Año.
+  let year: number | null = null;
+  if (YEAR_TOKEN_RE.test(tokens[0] ?? "")) year = Number(tokens.shift());
+
+  // Identidad mínima: VIN o año. Sin ninguna de las dos no es una ficha real.
+  if (!vin && year === null) return null;
+
+  const makeRaw = tokens.shift() ?? "";
+  // Recorta carrocería del final (queda modelo + trim + tracción).
+  while (tokens.length > 0 && BODY_TOKENS.has(tokens[tokens.length - 1])) tokens.pop();
+
+  const make = makeRaw ? prettyToken(makeRaw) : null;
+  const modelTokens = tokens.filter((t) => !BODY_TOKENS.has(t));
+  const model = modelTokens.length ? prettyWords(modelTokens) : null;
+  const title = [year ?? undefined, make, model].filter(Boolean).join(" ").trim();
+  if (!title) return null;
+
+  return {
+    key: vehicleKey(vin, listingUrl),
+    vin,
+    title,
+    year,
+    make,
+    model,
+    condition,
+    price: null,
+    miles: null,
+    listingUrl,
+    feedUrl,
+  };
+}
+
+/**
+ * Parsea un sitemap de inventario DealerInspire (XML crudo o su render en
+ * Markdown): saca todas las URLs `/inventory/<slug>/` y arma un Vehicle por
+ * ficha. Dedup por URL y orden estable.
+ */
+export function parseDealerInventorySitemap(content: string, feedUrl: string): Vehicle[] {
+  const re = /(https?:\/\/[^\s)\]"'<>]*?)\/inventory\/([a-z0-9][a-z0-9-]*)\/?/gi;
+  const seen = new Set<string>();
+  const out: Vehicle[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(content))) {
+    const base = m[1];
+    const slug = m[2];
+    const url = `${base}/inventory/${slug}/`;
+    if (seen.has(url)) continue;
+    seen.add(url);
+    const v = vehicleFromSlug(slug, url, feedUrl);
+    if (v) out.push(v);
+    if (out.length >= 1000) break;
+  }
+  out.sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+  return out;
+}
+
+/**
+ * Parser universal del pipeline: si el contenido parece un sitemap de fichas
+ * (muchas URLs `/inventory/`), usa el parser de sitemap; si no, el parser del
+ * feed (markdown con título/precio/millas/VIN).
+ */
+export function parseInventoryFromAny(content: string, feedUrl: string): Vehicle[] {
+  const invHits = content.match(/\/inventory\//g)?.length ?? 0;
+  const sitemapish = invHits >= 8 || /<urlset|<loc>/i.test(content);
+  if (sitemapish) {
+    const vs = parseDealerInventorySitemap(content, feedUrl);
+    if (looksLikeInventory(vs)) return vs;
+  }
+  return parseInventory(content, feedUrl);
+}
+
+// ---------------------------------------------------------------------------
 // Render a docs de KB (sin links — regla v1.25) + doc resumen
 // ---------------------------------------------------------------------------
 
@@ -383,16 +522,26 @@ export function mergeVehicleStore(prev: VehicleStore, current: Vehicle[]): Vehic
     if (seen.has(v.key)) continue;
     seen.add(v.key);
     const old = prev.vehicles[v.key];
+    // Preservar datos enriquecidos (precio/millas/condición de una ficha ya
+    // scrapeada) cuando la fuente liviana no los trae — el sitemap DealerInspire
+    // solo da condición/año/marca/modelo/VIN/link, y sin esto cada sync pisaría
+    // el precio/millas con null.
+    const price = v.price ?? old?.price ?? null;
+    const miles = v.miles ?? old?.miles ?? null;
+    const condition = v.condition ?? old?.condition ?? null;
     const changed =
       !old ||
       old.listingUrl !== v.listingUrl ||
       old.title !== v.title ||
-      old.price !== v.price ||
-      old.miles !== v.miles;
+      old.price !== price ||
+      old.miles !== miles;
     const photoInvalid =
       !old || old.listingUrl !== v.listingUrl || old.title !== v.title;
     vehicles[v.key] = {
       ...v,
+      price,
+      miles,
+      condition,
       imageUrl: photoInvalid ? null : old.imageUrl,
       imgStatus: old && !photoInvalid ? old.imgStatus : "pendiente",
       imgAt: old && !photoInvalid ? old.imgAt : null,

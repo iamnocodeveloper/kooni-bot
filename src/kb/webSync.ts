@@ -25,7 +25,7 @@ import { SettingsRepo, SETTING_KEYS } from "../db/settings";
 import { KbDocsRepo, indexDoc, removeDocVectors, MAX_DOC_CHARS } from "./docs";
 import { scrapeUrl, decodoConfigured } from "../integrations/decodo";
 import {
-  parseInventory,
+  parseInventoryFromAny,
   looksLikeInventory,
   renderInventoryParts,
   renderVehicleBlock,
@@ -225,7 +225,7 @@ export async function runWebSync(env: Env, opts: WebSyncRunOptions = {}): Promis
     summary.scraped++;
 
     const trimmed = trimBoilerplate(r.content);
-    const parsed = parseInventory(trimmed, url);
+    const parsed = parseInventoryFromAny(trimmed, url);
     // Modo inventario: entra si parsea bien, o si la URL YA estaba en modo
     // inventario y el feed sigue trayendo autos (aunque sean pocos).
     const prevMode = state[url]?.mode;

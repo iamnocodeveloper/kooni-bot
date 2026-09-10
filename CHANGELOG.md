@@ -5,6 +5,29 @@ Cambios notables de Kooni. Formato aproximado de
 
 El CLI `kooni-bot` se versiona aparte (npm) — ver la nota de cada versión.
 
+## [1.31.0] — 2026-09-10
+
+### Arreglado — Web Sync del bot de autos (feed muerto → sitemap)
+
+- **El feed `/llm/inventory/` de DealerInspire dejó de existir**: hoy sirve la
+  homepage a cualquier user-agent (verificado con GPTBot/ClaudeBot/PerplexityBot/
+  Googlebot/Chrome, vía Decodo y vía reader). Por eso el "modo inventario" caía a
+  modo texto, `web_sync_vehicles` nunca se creaba y el bot improvisaba (recitaba
+  marcas de la home o decía "no tengo acceso").
+- **Nueva fuente: el sitemap de inventario de DealerInspire**
+  (`/dealer-inspire-inventory/inventory_sitemap`). `parseDealerInventorySitemap`
+  parsea cada URL `/inventory/<cond>-<año>-<marca>-<modelo>-<trim>-<VIN>/` y arma
+  el vehículo completo (condición, año, marca, modelo, VIN y **el link real de la
+  ficha**). `parseInventoryFromAny` elige sitemap o feed según el contenido.
+- **`mergeVehicleStore` preserva lo enriquecido**: un sync liviano (sitemap, sin
+  precio/millas/foto) ya no pisa el precio/millas/foto que se hayan completado
+  scrapeando la ficha.
+- **Prompt del agente**: cuando la instalación tiene inventario sincronizado se
+  inyecta un bloque `<inventario>` que obliga a usar `inventarioQuery` (y
+  `fichaAuto` para la ficha de un auto puntual) — nunca conocimiento general ni
+  la KB. Si está configurada pero el store está vacío, un `<inventario_vacio>`
+  prohíbe recitar marcas/autos.
+
 ## [1.30.0] — 2026-09-10
 
 ### Agregado — Web Sync "modo inventario" (bot de autos)

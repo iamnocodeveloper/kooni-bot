@@ -57,8 +57,9 @@ export function inventarioQueryTool(env: Env) {
   return tool({
     description:
       "Consulta EXACTA del inventario de autos sincronizado desde el sitio del negocio. " +
-      "Usala cuando el cliente pregunte por disponibilidad, marcas, modelos, precios, " +
-      "rango de precio, condición (nuevo/usado) o un VIN. Devuelve SOLO lo que hay en " +
+      "Usala SIEMPRE que el cliente pregunte por autos, disponibilidad, marcas, modelos, precios, " +
+      "rango de precio, condición (nuevo/usado) o un VIN — nunca contestes inventario de memoria ni con la KB. " +
+      "Devuelve SOLO lo que hay en " +
       "el listado: si una marca o modelo no aparece en los resultados, NO existe en el " +
       "inventario — decilo y ofrecé las marcas disponibles que devuelve la tool. " +
       "Nunca menciones autos, precios ni marcas que no devuelva esta tool.",

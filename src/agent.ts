@@ -512,6 +512,41 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
       console.warn("[SupportAgent] lead stage lookup failed:", e);
     }
 
+    // Inventario web sincronizado (Web Sync "modo inventario"): si la
+    // instalación tiene inventario, el bot DEBE contestar con él — nunca de
+    // memoria ni con el texto de la KB. Si está configurada para sincronizar
+    // pero el store está vacío, se le prohíbe inventar marcas/autos.
+    try {
+      const { SettingsRepo, SETTING_KEYS } = await import("./db/settings");
+      const { loadVehicleStore, listStoredVehicles } = await import("./kb/inventory");
+      const wsUrls = (await new SettingsRepo(db).get(SETTING_KEYS.webSyncUrls)) ?? "";
+      if (wsUrls.trim()) {
+        const store = await loadVehicleStore(db);
+        const vehicles = listStoredVehicles(store);
+        if (vehicles.length > 0) {
+          const marcas = [...new Set(vehicles.map((v) => v.make).filter(Boolean))] as string[];
+          const conPrecio = vehicles.filter((v) => v.price !== null).length;
+          system.push({
+            role: "system",
+            content:
+              `<inventario>\nTenés inventario sincronizado: ${vehicles.length} autos. Marcas: ${marcas.join(", ") || "—"}.\n` +
+              `REGLA: para CUALQUIER pregunta sobre autos, disponibilidad, marcas, modelos, precios, condición (nuevo/usado) o VIN usá SIEMPRE la tool inventarioQuery. Nunca contestes con conocimiento general ni cites la KB para inventario.\n` +
+              `Si el cliente pide la ficha de UN auto puntual o da un VIN, usá fichaAuto (manda el link real${conPrecio > 0 ? " y los datos" : ""}).\n` +
+              `Si inventarioQuery devuelve 0 resultados, decí claramente que ese auto/marca no está y ofrecé las marcas disponibles.\n</inventario>`,
+          });
+        } else {
+          system.push({
+            role: "system",
+            content:
+              `<inventario_vacio>\nLa instalación está configurada para sincronizar inventario pero el listado está vacío ahora mismo. ` +
+              `Si preguntan por autos, NO recites marcas ni modelos ni afirmes que tenés algo: decí que el listado todavía no está disponible y ofrecé tomar sus datos.\n</inventario_vacio>`,
+          });
+        }
+      }
+    } catch (e) {
+      console.warn("[SupportAgent] inventory hint lookup failed:", e);
+    }
+
     let assistantText = "";
     let inputTokens = 0;
     let outputTokens = 0;

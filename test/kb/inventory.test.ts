@@ -3,6 +3,9 @@ import { createTestMiniflare } from "../helpers/miniflareSetup";
 import { Db } from "../../src/db/client";
 import {
   parseInventory,
+  parseInventoryFromAny,
+  parseDealerInventorySitemap,
+  vehicleFromSlug,
   splitBlocks,
   renderInventoryParts,
   renderInventorySummary,
@@ -93,6 +96,82 @@ describe("parseInventory", () => {
     const blocks = splitBlocks(FEED);
     expect(blocks.length).toBe(5);
     expect(blocks[1]).toContain("VIN: 5XYPG4A38LG625285");
+  });
+});
+
+describe("sitemap DealerInspire (fuente cuando /llm/inventory/ murió)", () => {
+  const SITEMAP = `[https://www.greenwaykiawestpalmbeach.com/inventory/new-2025-kia-telluride-sx-x-line-awd-4d-sport-utility-5xyp5dgc5sg712394/](https://www.greenwaykiawestpalmbeach.com/inventory/new-2025-kia-telluride-sx-x-line-awd-4d-sport-utility-5xyp5dgc5sg712394/)0 2026-09-08 23:13 -05:00
+[https://www.greenwaykiawestpalmbeach.com/inventory/used-2019-hyundai-santa-fe-sel-fwd-4d-sport-utility-5nms33ad3kh127914/](https://www.greenwaykiawestpalmbeach.com/inventory/used-2019-hyundai-santa-fe-sel-fwd-4d-sport-utility-5nms33ad3kh127914/)0 2026-09-08 23:13 -05:00
+[https://www.greenwaykiawestpalmbeach.com/inventory/certified-used-2023-kia-sorento-sx-awd-4d-sport-utility-5xyrkdlf7pg242135/](https://www.greenwaykiawestpalmbeach.com/inventory/certified-used-2023-kia-sorento-sx-awd-4d-sport-utility-5xyrkdlf7pg242135/)0 2026-09-08 23:13 -05:00
+<urlset><url><loc>https://www.greenwaykiawestpalmbeach.com/inventory/used-2016-ford-f-150-xlt-4wd-4d-supercrew-1ftfw1ef9gfc91150/</loc></url></urlset>`;
+
+  it("parsea condición, año, marca, modelo, VIN y el link real de cada ficha", () => {
+    const vs = parseDealerInventorySitemap(SITEMAP, "https://www.greenwaykiawestpalmbeach.com/dealer-inspire-inventory/inventory_sitemap");
+    expect(vs).toHaveLength(4);
+
+    const telluride = vs.find((v) => v.vin === "5XYP5DGC5SG712394")!;
+    expect(telluride).toMatchObject({
+      condition: "Nuevo",
+      year: 2025,
+      make: "Kia",
+      price: null,
+      listingUrl:
+        "https://www.greenwaykiawestpalmbeach.com/inventory/new-2025-kia-telluride-sx-x-line-awd-4d-sport-utility-5xyp5dgc5sg712394/",
+    });
+    expect(telluride.title).toBe("2025 Kia Telluride SX X Line AWD");
+
+    expect(vs.find((v) => v.vin === "5NMS33AD3KH127914")?.condition).toBe("Usado");
+    expect(vs.find((v) => v.vin === "5XYRKDLF7PG242135")?.condition).toBe("Certificado");
+    expect(vs.find((v) => v.vin === "1FTFW1EF9GFC91150")?.make).toBe("Ford");
+  });
+
+  it("dedupe por URL (markdown trae text link + href) y no exige precio/millas", () => {
+    const vs = parseDealerInventorySitemap(SITEMAP, "https://x/sitemap");
+    expect(new Set(vs.map((v) => v.listingUrl)).size).toBe(4);
+    expect(vs.every((v) => v.price === null && v.miles === null)).toBe(true);
+  });
+
+  it("parseInventoryFromAny elige el sitemap cuando hay muchas URLs /inventory/", () => {
+    const vs = parseInventoryFromAny(SITEMAP, "https://x/sitemap");
+    expect(vs).toHaveLength(4);
+    expect(vs[0].vin).toBeTruthy();
+  });
+
+  it("vehicleFromSlug devuelve null sin VIN ni año", () => {
+    expect(vehicleFromSlug("kia-telluride", "https://x/inventory/kia-telluride/", "https://x/sitemap")).toBeNull();
+  });
+
+  it("mergeVehicleStore preserva precio/millas/foto ya enriquecidos cuando el sitemap no los trae", () => {
+    const prev = {
+      updatedAt: 0,
+      vehicles: {
+        "vin:5XYP5DGC5SG712394": {
+          key: "vin:5XYP5DGC5SG712394",
+          vin: "5XYP5DGC5SG712394",
+          title: "2025 Kia Telluride SX X Line AWD",
+          year: 2025,
+          make: "Kia",
+          model: "Telluride SX X Line AWD",
+          condition: "Nuevo",
+          price: 49990,
+          miles: 12,
+          listingUrl:
+            "https://www.greenwaykiawestpalmbeach.com/inventory/new-2025-kia-telluride-sx-x-line-awd-4d-sport-utility-5xyp5dgc5sg712394/",
+          feedUrl: "https://x/sitemap",
+          imageUrl: "https://cdn/a.jpg",
+          imgStatus: "ok" as const,
+          imgAt: 123,
+          changedAt: 1,
+        },
+      },
+    };
+    const current = parseDealerInventorySitemap(SITEMAP, "https://x/sitemap");
+    const merged = mergeVehicleStore(prev, current);
+    const v = merged.vehicles["vin:5XYP5DGC5SG712394"];
+    expect(v.price).toBe(49990);
+    expect(v.miles).toBe(12);
+    expect(v.imageUrl).toBe("https://cdn/a.jpg");
+    expect(v.imgStatus).toBe("ok");
   });
 });
 
