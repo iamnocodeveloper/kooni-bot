@@ -5,6 +5,23 @@ Cambios notables de Kooni. Formato aproximado de
 
 El CLI `kooni-bot` se versiona aparte (npm) — ver la nota de cada versión.
 
+## [1.40.0] — 2026-09-10
+
+### Agregado — Cobranza: motor, reglas, voz y promesas (nicho `cartera`)
+
+- **Motor de cobranza** (`src/collections/engine.ts`): recorre las reglas de mora
+  activas y manda recordatorios por el canal del deudor, con **cooldown 20 h**,
+  **intentos máximos** y **tope por corrida**. Guarda el mensaje en el hilo del
+  CRM y registra interacción + intento. Corre en el cron (solo BOT_NICHE=cartera).
+- **Reglas de cobranza** en `/admin/cartera`: tramo de mora (días), canal,
+  plantilla con variables `{nombre} {negocio} {saldo} {vence} {dias}` e intentos.
+- **“Correr cobranza ahora”** y **export CSV** desde el panel; filtros y KPIs.
+- **Voz (Vapi/Retell)**: tool `llamarDeudor` + botón en la ficha del deudor. Los
+  webhooks `/webhooks/vapi` y `/webhooks/retell` registran el resultado
+  (promesa / pago / disputa / sin respuesta) en la cartera y mueven la etapa.
+- **Promesas de pago**: recordatorio en las 24 h previas y marcado automático de
+  las incumplidas.
+
 ## [1.39.0] — 2026-09-10
 
 ### Agregado — Nicho “Cartera de cobros” (se elige al instalar)

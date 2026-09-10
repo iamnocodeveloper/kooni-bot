@@ -107,6 +107,100 @@ export class CollectionsRepo {
     );
   }
 
+  // ── Reglas de cobranza (tramos de mora × canal × plantilla) ───────────────
+  async listRules(): Promise<any[]> {
+    return this.db.all("SELECT * FROM collection_rules ORDER BY min_days_overdue ASC, created_at ASC");
+  }
+
+  async upsertRule(input: {
+    id?: string;
+    name: string;
+    minDaysOverdue?: number;
+    maxDaysOverdue?: number | null;
+    channel?: string;
+    template?: string;
+    maxAttempts?: number;
+    active?: boolean;
+  }): Promise<string> {
+    const id = input.id || crypto.randomUUID();
+    const existing = input.id
+      ? await this.db.first<{ id: string }>("SELECT id FROM collection_rules WHERE id = ?", [input.id])
+      : null;
+    const vals = [
+      input.name ?? "Regla",
+      Math.max(0, Number(input.minDaysOverdue ?? 0)),
+      input.maxDaysOverdue ?? null,
+      input.channel ?? "whatsapp",
+      input.template ?? null,
+      Math.max(1, Number(input.maxAttempts ?? 3)),
+      input.active === false ? 0 : 1,
+    ];
+    if (existing) {
+      await this.db.run(
+        `UPDATE collection_rules SET name=?, min_days_overdue=?, max_days_overdue=?, channel=?, template=?, max_attempts=?, active=? WHERE id=?`,
+        [...vals, id],
+      );
+    } else {
+      await this.db.run(
+        `INSERT INTO collection_rules (id, name, min_days_overdue, max_days_overdue, channel, template, max_attempts, active, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [id, ...vals, Date.now()],
+      );
+    }
+    return id;
+  }
+
+  async deleteRule(id: string): Promise<void> {
+    await this.db.run("DELETE FROM collection_rules WHERE id = ?", [id]);
+  }
+
+  /**
+   * Cuentas en mora que caen en el tramo de una regla (para el motor).
+   * `overdueFrom`/`overdueTo` son días de mora (mín/máx, null = sin tope).
+   */
+  async accountsInOverdueRange(overdueFrom: number, overdueTo: number | null, limit = 50): Promise<
+    { account_id: string; debtor_id: string; amount: number; paid: number; due_date: number | null; currency: string }[]
+  > {
+    const now = Date.now();
+    const fromMs = now - overdueFrom * 86_400_000;
+    const conds = ["a.status = 'open'", "a.due_date IS NOT NULL", "a.due_date <= ?"];
+    const params: unknown[] = [fromMs];
+    if (overdueTo !== null && overdueTo !== undefined) {
+      conds.push("a.due_date > ?");
+      params.push(now - overdueTo * 86_400_000);
+    }
+    return this.db.all(
+      `SELECT a.id AS account_id, a.debtor_id, a.amount, a.paid, a.due_date, a.currency
+       FROM debt_accounts a
+       WHERE ${conds.join(" AND ")}
+       ORDER BY a.due_date ASC LIMIT ?`,
+      [...params, Math.min(Math.max(limit, 1), 200)],
+    );
+  }
+
+  /** Promesas pendientes que vencen en los próximos `withinHours` (o ya vencieron). */
+  async promisesDue(withinHours = 24): Promise<any[]> {
+    const until = Date.now() + withinHours * 3_600_000;
+    return this.db.all(
+      `SELECT p.*, d.name AS debtor_name, d.phone AS debtor_phone
+       FROM payment_promises p LEFT JOIN debtors d ON d.id = p.debtor_id
+       WHERE p.status = 'pending' AND p.promised_date IS NOT NULL AND p.promised_date <= ?
+       ORDER BY p.promised_date ASC LIMIT 100`,
+      [until],
+    );
+  }
+
+  /** Marca promesas vencidas (fecha pasada) como incumplidas. */
+  async markBrokenPromises(graceHours = 24): Promise<number> {
+    const cutoff = Date.now() - graceHours * 3_600_000;
+    const rows = await this.db.all<{ id: string }>(
+      "SELECT id FROM payment_promises WHERE status = 'pending' AND promised_date IS NOT NULL AND promised_date < ?",
+      [cutoff],
+    );
+    for (const r of rows) await this.setPromiseStatus(r.id, "broken").catch(() => {});
+    return rows.length;
+  }
+
   // ── Deudores ──────────────────────────────────────────────────────────────
   /** Alta idempotente por `external_ref` (si viene). Devuelve id + si era nuevo. */
   async upsertDebtor(input: DebtorInput): Promise<{ id: string; created: boolean }> {

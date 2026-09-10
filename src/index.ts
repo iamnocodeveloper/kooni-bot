@@ -170,10 +170,12 @@ app.post("/webhooks/vapi", async (c) => {
     return c.text("unauthorized", 401);
   }
   try {
-    const body = JSON.parse(raw || "{}") as { message?: { type?: string }; type?: string };
-    console.log("[vapi] webhook:", String(body?.message?.type ?? body?.type ?? "evento"));
-  } catch {
-    /* body no-JSON: ack igual */
+    const body = JSON.parse(raw || "{}");
+    const { handleVoiceWebhook } = await import("./collections/voice");
+    const r = await handleVoiceWebhook(c.env, "vapi", body);
+    console.log("[vapi] webhook:", String(body?.message?.type ?? "evento"), r.handled ? `→ ${r.outcome}` : "(ignorado)");
+  } catch (e) {
+    console.warn("[vapi] webhook error:", e);
   }
   return c.json({ ok: true }, 200);
 });
@@ -190,10 +192,12 @@ app.post("/webhooks/retell", async (c) => {
     return c.text("unauthorized", 401);
   }
   try {
-    const body = JSON.parse(raw || "{}") as { event?: string };
-    console.log("[retell] webhook:", String(body?.event ?? "evento"));
-  } catch {
-    /* ack igual */
+    const body = JSON.parse(raw || "{}");
+    const { handleVoiceWebhook } = await import("./collections/voice");
+    const r = await handleVoiceWebhook(c.env, "retell", body);
+    console.log("[retell] webhook:", String(body?.event ?? "evento"), r.handled ? `→ ${r.outcome}` : "(ignorado)");
+  } catch (e) {
+    console.warn("[retell] webhook error:", e);
   }
   return c.json({ ok: true }, 200);
 });
@@ -531,6 +535,23 @@ export default {
     if (await isFeatureActive(env, "reenganche", settings)) {
       const { runReengagements } = await import("./followup/reengage");
       await runReengagements(env).catch((e) => console.error("reenganche:", e));
+    }
+
+    // Cobranza (nicho `cartera`): recordatorios por mora + promesas de pago.
+    // El motor aplica cooldown, intentos máximos y tope por corrida.
+    if ((env.BOT_NICHE ?? "").trim().toLowerCase() === "cartera") {
+      try {
+        const { runCollections } = await import("./collections/engine");
+        const r = await runCollections(env);
+        if (r.sent || r.promiseReminders || r.promisesBroken) {
+          console.log(
+            `[cobranza] reglas ${r.rules} · enviados ${r.sent} · omitidos ${r.skipped} · fallos ${r.failed}` +
+              ` · promesas vencidas ${r.promisesBroken} · recordatorios de promesa ${r.promiseReminders}`,
+          );
+        }
+      } catch (e) {
+        console.error("collections:", e);
+      }
     }
 
     // Watchdog: si el bot está fallando en cadena (3+ "Algo falló" en 30 min),

@@ -94,6 +94,31 @@ export function consultarDeudaTool(env: Env, getConversationId: () => string | n
   });
 }
 
+export function llamarDeudorTool(env: Env, getConversationId: () => string | null) {
+  return tool({
+    description:
+      "Inicia una LLAMADA de cobranza con voz IA (Vapi/Retell) al deudor de este chat. " +
+      "Usala solo si el cliente pide que lo llamen o si el negocio lo indicó; no la uses para " +
+      "insistir a quien pidió no ser contactado. Requiere Vapi/Retell configurado.",
+    inputSchema: z.object({
+      referencia: z.string().optional().describe("Referencia/código del cliente en la cartera"),
+      telefono: z.string().optional().describe("Teléfono (si no es el del chat actual)"),
+    }),
+    execute: async ({ referencia, telefono }) => {
+      const debtor = await resolveDebtor(env, getConversationId, { referencia, telefono });
+      if (!debtor) return { ok: false, mensaje: "No encontré al deudor. Pedí la referencia o el documento." };
+      const { startDebtorCall } = await import("../collections/voice");
+      const r = await startDebtorCall(env, debtor.id);
+      if (!r.ok) return { ok: false, mensaje: r.error ?? "No se pudo iniciar la llamada." };
+      return {
+        ok: true,
+        proveedor: r.provider,
+        mensaje: "Llamada iniciada. Avisale al cliente que recibirá la llamada en breve.",
+      };
+    },
+  });
+}
+
 export function registrarPromesaTool(env: Env, getConversationId: () => string | null) {
   return tool({
     description:

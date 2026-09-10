@@ -1963,6 +1963,94 @@ adminApp.post("/cartera/debtor/:id/stage", async (c) => {
   return c.redirect(`/admin/cartera?d=${encodeURIComponent(id)}`);
 });
 
+// Crear/actualizar una regla de cobranza (tramo de mora × canal × plantilla).
+adminApp.post("/cartera/reglas", async (c) => {
+  const form = await c.req.formData();
+  const { CollectionsRepo } = await import("../db/collections");
+  const repo = new CollectionsRepo(new Db(c.env.DB));
+  const maxRaw = String(form.get("max_days") ?? "").trim();
+  const id = String(form.get("id") ?? "").trim() || undefined;
+  await repo.upsertRule({
+    id,
+    name: String(form.get("name") ?? "").trim() || "Regla",
+    minDaysOverdue: Number(form.get("min_days") ?? 0),
+    maxDaysOverdue: maxRaw ? Number(maxRaw) : null,
+    channel: String(form.get("channel") ?? "whatsapp"),
+    template: String(form.get("template") ?? "").trim() || undefined,
+    maxAttempts: Number(form.get("max_attempts") ?? 3),
+    active: String(form.get("active") ?? "1") !== "0",
+  });
+  await audit(c, { action: "cartera.rule.save", target: `cartera_rule:${id ?? "new"}`, targetLabel: "Regla de cobranza" });
+  return c.redirect("/admin/cartera");
+});
+
+adminApp.post("/cartera/reglas/:id/delete", async (c) => {
+  const { CollectionsRepo } = await import("../db/collections");
+  await new CollectionsRepo(new Db(c.env.DB)).deleteRule(c.req.param("id"));
+  await audit(c, { action: "cartera.rule.delete", target: `cartera_rule:${c.req.param("id")}` });
+  return c.redirect("/admin/cartera");
+});
+
+// Correr el motor de cobranza a mano (útil para probar reglas sin esperar el cron).
+adminApp.post("/cartera/run", async (c) => {
+  const { runCollections } = await import("../collections/engine");
+  const r = await runCollections(c.env).catch((e) => {
+    console.error("collections (manual):", e);
+    return null;
+  });
+  await audit(c, {
+    action: "cartera.run",
+    target: "cartera",
+    targetLabel: "Motor de cobranza",
+    afterVal: r ? `enviados ${r.sent}, omitidos ${r.skipped}, fallos ${r.failed}` : "error",
+  });
+  return c.redirect(`/admin/cartera?run=${encodeURIComponent(r ? `enviados:${r.sent} omitidos:${r.skipped} fallos:${r.failed}` : "error")}`);
+});
+
+// Disparar una llamada de cobranza con voz IA (Vapi/Retell) desde la ficha.
+adminApp.post("/cartera/debtor/:id/call", async (c) => {
+  const id = c.req.param("id");
+  const { startDebtorCall } = await import("../collections/voice");
+  const r = await startDebtorCall(c.env, id);
+  await audit(c, {
+    action: "cartera.call",
+    target: `debtor:${id}`,
+    targetLabel: "Llamada de cobranza",
+    afterVal: r.ok ? `iniciada (${r.provider})` : `error: ${r.error ?? "?"}`,
+    result: r.ok ? "ok" : "error",
+  });
+  return c.redirect(`/admin/cartera?d=${encodeURIComponent(id)}&call=${encodeURIComponent(r.ok ? "ok" : r.error ?? "error")}`);
+});
+
+// Exportar la cartera a CSV.
+adminApp.get("/cartera/export.csv", async (c) => {
+  const { CollectionsRepo } = await import("../db/collections");
+  const rows = await new CollectionsRepo(new Db(c.env.DB)).listDebtors({ limit: 500 });
+  const head = "nombre,telefono,documento,referencia,saldo,cuentas,vence,etapa\n";
+  const csv = rows
+    .map((d) =>
+      [
+        d.name ?? "",
+        d.phone ?? "",
+        d.document_id ?? "",
+        d.external_ref ?? "",
+        d.balance,
+        d.accounts,
+        d.next_due ? new Date(d.next_due).toISOString().slice(0, 10) : "",
+        d.stage ?? "",
+      ]
+        .map((v) => `"${String(v).replace(/"/g, '""')}"`)
+        .join(","),
+    )
+    .join("\n");
+  return new Response(head + csv, {
+    headers: {
+      "Content-Type": "text/csv; charset=utf-8",
+      "Content-Disposition": `attachment; filename="cartera-${Date.now()}.csv"`,
+    },
+  });
+});
+
 // --- Inbox actions (F1) -------------------------------------------------------
 
 /** Owner takes over for this long after replying/pausing from the dashboard. */

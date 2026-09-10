@@ -43,7 +43,7 @@ export const cartera: NichePack = {
     "Preguntas frecuentes de deudores (no reconozco la deuda, ya pagué, etc.)",
   ],
   hooks: {
-    extraTools: ["consultarDeuda", "registrarPromesa"],
+    extraTools: ["consultarDeuda", "registrarPromesa", "llamarDeudor"],
     navExtra: [
       { id: "cartera", label: "Cartera", icon: "hand-coins", href: "/admin/cartera", section: "Inbox" },
     ],

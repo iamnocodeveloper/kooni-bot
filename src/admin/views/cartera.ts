@@ -129,6 +129,10 @@ async function renderDetail(repo: CollectionsRepo, id: string): Promise<string> 
         <button class="text-[11px] cursor-pointer" style="border:1px solid var(--accent);color:var(--accent);background:none;padding:6px 12px">Guardar</button>
         <input name="note" placeholder="nota (opcional)" style="flex:1;background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:6px 9px;font-size:11.5px">
       </form>
+      <form method="POST" action="/admin/cartera/debtor/${encodeURIComponent(id)}/call" style="margin-top:10px;display:flex;gap:8px;align-items:center">
+        <button class="text-[11.5px] cursor-pointer" style="border:1px solid var(--accent);color:var(--accent);background:none;padding:7px 13px">📞 Llamar con IA (Vapi/Retell)</button>
+        <span class="text-dim text-[10.5px]">Requiere Vapi o Retell configurado en Conexiones.</span>
+      </form>
     </div>
 
     <div class="bg-panel border border-line" style="padding:16px 18px">
@@ -187,6 +191,41 @@ export async function renderCartera(env: Env, q: URLSearchParams): Promise<strin
 
   const rows = list.map(debtorRow).join("");
   const listOpts = lists.map((l) => `<option value="${esc(l.id)}">${esc(l.name)} (${l.n})</option>`).join("");
+  const rules = await repo.listRules();
+  const ruleRows = rules
+    .map(
+      (r) => `<tr style="border-top:1px solid var(--line)">
+        <td class="text-cream" style="padding:7px 10px">${esc(r.name)}</td>
+        <td class="text-muted" style="padding:7px 10px;font-size:11.5px">${r.min_days_overdue}${r.max_days_overdue != null ? `–${r.max_days_overdue}` : "+"} d</td>
+        <td class="text-muted" style="padding:7px 10px;font-size:11.5px">${esc(r.channel)}</td>
+        <td class="text-muted" style="padding:7px 10px;font-size:11.5px">${r.max_attempts}</td>
+        <td class="text-muted" style="padding:7px 10px;font-size:11.5px">${Number(r.active) === 1 ? "activa" : "apagada"}</td>
+        <td style="padding:7px 10px">
+          <form method="POST" action="/admin/cartera/reglas/${encodeURIComponent(r.id)}/delete" onsubmit="return confirm('¿Borrar regla?')">
+            <button class="text-[10.5px] cursor-pointer" style="border:1px solid var(--line);color:var(--muted);background:none;padding:4px 9px">Borrar</button>
+          </form>
+        </td>
+      </tr>`,
+    )
+    .join("");
+
+  const rulesBlock = `<details class="bg-panel border border-line" style="padding:14px 16px">
+    <summary class="text-dim text-[10px] font-mono" style="letter-spacing:.12em;cursor:pointer">REGLAS DE COBRANZA — recordatorios por mora (${rules.length})</summary>
+    <p class="text-dim text-[11px]" style="margin:8px 0">Una regla = un tramo de mora (días) + canal + plantilla + intentos máximos. Variables: <span class="font-mono">{nombre} {negocio} {saldo} {vence} {dias}</span></p>
+    <table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:10px">
+      <thead><tr class="text-dim text-[10px]" style="text-align:left;letter-spacing:.1em;text-transform:uppercase"><th style="padding:6px 10px">Nombre</th><th style="padding:6px 10px">Mora</th><th style="padding:6px 10px">Canal</th><th style="padding:6px 10px">Intentos</th><th style="padding:6px 10px">Estado</th><th></th></tr></thead>
+      <tbody>${ruleRows || `<tr><td colspan="6" class="text-dim" style="padding:14px">Sin reglas todavía — creá la primera abajo.</td></tr>`}</tbody>
+    </table>
+    <form method="POST" action="/admin/cartera/reglas" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+      <label style="display:flex;flex-direction:column;gap:3px"><span class="text-dim text-[10.5px]">Nombre</span><input name="name" placeholder="Recordatorio 1-7 días" required style="background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:7px 9px;font-size:11.5px"></label>
+      <label style="display:flex;flex-direction:column;gap:3px"><span class="text-dim text-[10.5px]">Mora desde (días)</span><input name="min_days" type="number" min="0" value="1" style="width:110px;background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:7px 9px;font-size:11.5px"></label>
+      <label style="display:flex;flex-direction:column;gap:3px"><span class="text-dim text-[10.5px]">Mora hasta (opcional)</span><input name="max_days" type="number" min="0" placeholder="7" style="width:110px;background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:7px 9px;font-size:11.5px"></label>
+      <label style="display:flex;flex-direction:column;gap:3px"><span class="text-dim text-[10.5px]">Intentos</span><input name="max_attempts" type="number" min="1" value="3" style="width:80px;background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:7px 9px;font-size:11.5px"></label>
+      <label style="display:flex;flex-direction:column;gap:3px"><span class="text-dim text-[10.5px]">Canal</span><select name="channel" style="background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:7px 9px;font-size:11.5px"><option value="whatsapp">WhatsApp</option><option value="voz">Voz (IA)</option></select></label>
+      <label style="display:flex;flex-direction:column;gap:3px;flex:1;min-width:240px"><span class="text-dim text-[10.5px]">Plantilla (opcional)</span><input name="template" placeholder="Hola {nombre}, tenés un saldo de {saldo}…" style="background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:7px 9px;font-size:11.5px"></label>
+      <button class="font-display font-semibold text-[11.5px] cursor-pointer" style="background:var(--accent);color:var(--on-accent);border:none;padding:9px 15px">Crear regla</button>
+    </form>
+  </details>`;
 
   const body = `
     <div style="display:flex;flex-direction:column;gap:14px">
@@ -200,6 +239,13 @@ export async function renderCartera(env: Env, q: URLSearchParams): Promise<strin
       </div>
 
       ${importForm}
+
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+        <form method="POST" action="/admin/cartera/run"><button class="font-display font-semibold text-[11.5px] cursor-pointer" style="background:var(--accent);color:var(--on-accent);border:none;padding:9px 15px">▶ Correr cobranza ahora</button></form>
+        <a href="/admin/cartera/export.csv" class="text-[11.5px]" style="border:1px solid var(--line);color:var(--muted);padding:9px 13px;text-decoration:none">⬇ Exportar CSV</a>
+      </div>
+
+      ${rulesBlock}
 
       <div class="bg-panel border border-line" style="padding:14px 16px">
         <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
