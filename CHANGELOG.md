@@ -5,6 +5,21 @@ Cambios notables de Kooni. Formato aproximado de
 
 El CLI `kooni-bot` se versiona aparte (npm) — ver la nota de cada versión.
 
+## [1.37.1] — 2026-09-10
+
+### Arreglado — links clickeables en TODOS los canales
+
+- `pickAdapter` ahora envuelve cada adaptador y normaliza los chunks salientes
+  con `toPlainLinks` (Markdown → URL plana). Es el punto único por el que pasan
+  **todos** los envíos: agente, tools (`sendReplyCapped`), campañas, follow-ups
+  y la respuesta manual del CRM. Antes solo el texto del agente y
+  `chunkReply`/`stripMarkdown` lo hacían, así que otros caminos podían mandar
+  `[texto](url)` literal (no clickeable en WhatsApp/Instagram/Messenger).
+- Zernio: los mensajes de **automatización** (auto-DM, respuesta pública al
+  comentario, follow prompt) también se normalizan.
+- Test nuevo `test/replies/plainlinks.test.ts` que fija WhatsApp (WAHA),
+  Instagram/ Messenger (Meta) y Zernio.
+
 ## [1.37.0] — 2026-09-10
 
 ### Agregado — Cobros por voz: configuración de Vapi y Retell

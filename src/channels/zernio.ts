@@ -24,6 +24,7 @@ import type { DmLogsRepo } from "../db/dmLogs";
 import { matchKeywords, renderUsername } from "../utils/keyword-matcher";
 import { commentFingerprint } from "../db/fingerprints";
 import { resolveZernioCredentials } from "./zernioCredentials";
+import { toPlainLinks } from "../replies/format";
 
 const DEFAULT_BASE = "https://zernio.com/api";
 
@@ -249,17 +250,17 @@ async function sendCommentActions(
     });
   }
 
-  const dmMessage = renderUsername(matched.message, commenterName);
+  const dmMessage = toPlainLinks(renderUsername(matched.message, commenterName));
   const kind = matched.kind ?? "comment_dm";
   const publicOnly = kind === "comment_reply";
   // Respuesta pública: para comment_reply el texto ES el campo message (público
   // sin DM); para comment_dm / comment_dm_public viene de replyToComment.
   let publicReply = publicOnly
     ? (matched.message ?? "").trim()
-      ? renderUsername(matched.message, commenterName)
+      ? toPlainLinks(renderUsername(matched.message, commenterName))
       : undefined
     : matched.replyToComment?.trim()
-      ? renderUsername(matched.replyToComment.trim(), commenterName)
+      ? toPlainLinks(renderUsername(matched.replyToComment.trim(), commenterName))
       : undefined;
   if (!publicReply && matched.aiReplyPrompt?.trim()) {
     try {
@@ -271,7 +272,7 @@ async function sendCommentActions(
         businessName: env.BUSINESS_NAME,
         keyword: matched.keywords?.[0],
       });
-      if (generated) publicReply = renderUsername(generated, commenterName);
+      if (generated) publicReply = toPlainLinks(renderUsername(generated, commenterName));
     } catch (e) {
       console.warn("[zernio] generación IA de respuesta pública falló:", e);
     }
@@ -383,12 +384,13 @@ async function sendCommentActions(
   } else if (followGated) {
     // DM de follow gate: NO entrega el link; botón postback "Ya te sigo" con
     // payload followcheck:<ruleId>:<commentId>. Al tocarlo, llega por webhook.
-    const prompt =
+    const prompt = toPlainLinks(
       renderUsername(
         matched.followPromptMessage ||
           "Hola {username}! Sígueme y toca el botón para recibir el link 👇",
         commenterName,
-      );
+      ),
+    );
     const followBtn = [
       {
         type: "postback",
@@ -971,9 +973,11 @@ async function autoReplyOnDm(body: ZernioWebhookBody, env: Env): Promise<boolean
 
       if (!isFollower) {
         // Aún no sigue → re-pedir con el mismo botón, sin saludar de nuevo.
-        const prompt = renderUsername(
-          rule.followPromptMessage || "Oh, {username}, aún no me sigues 🙏 Sígueme y vuelve a tocar el botón para recibir el link 👇",
-          m.sender?.name ?? m.sender?.username,
+        const prompt = toPlainLinks(
+          renderUsername(
+            rule.followPromptMessage || "Oh, {username}, aún no me sigues 🙏 Sígueme y vuelve a tocar el botón para recibir el link 👇",
+            m.sender?.name ?? m.sender?.username,
+          ),
         );
         const followBtn = [
           { type: "postback", title: (rule.followButtonLabel || "Ya te sigo").slice(0, 20), payload: `followcheck:${ruleId}:${fgCommentId}` },
@@ -1002,7 +1006,7 @@ async function autoReplyOnDm(body: ZernioWebhookBody, env: Env): Promise<boolean
       if (buttonUrl) {
         buttons.push({ type: "url", title: (rule.buttonLabel || "Abrir").slice(0, 20), url: buttonUrl });
       }
-      const dm = renderUsername(rule.message, m.sender?.name ?? m.sender?.username);
+      const dm = toPlainLinks(renderUsername(rule.message, m.sender?.name ?? m.sender?.username));
       await fetch(`${base}/v1/inbox/conversations/${encodeURIComponent(conv.id)}/messages`, {
         method: "POST",
         headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
@@ -1065,7 +1069,7 @@ async function autoReplyOnDm(body: ZernioWebhookBody, env: Env): Promise<boolean
   if (buttonUrl) {
     buttons.push({ type: "url", title: matched.buttonLabel?.trim() || "Abrir", url: buttonUrl });
   }
-  const dmMessage = renderUsername(matched.message, m.sender?.name ?? m.sender?.username);
+  const dmMessage = toPlainLinks(renderUsername(matched.message, m.sender?.name ?? m.sender?.username));
 
   // Rate limit por cuenta antes de enviar (misma lógica que en comentarios).
   try {

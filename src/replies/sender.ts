@@ -9,6 +9,7 @@ import { whatsappAdapter } from "../channels/whatsapp";
 import { zernioAdapter } from "../channels/zernio";
 import { wahaAdapter } from "../channels/waha";
 import { mercadolibreAdapter } from "../channels/mercadolibre";
+import { toPlainLinks } from "./format";
 
 const MIN_DELAY_MS = 800;
 const MAX_DELAY_MS = 1500;
@@ -40,6 +41,11 @@ export async function sendChunkedReply(
 }
 
 export function pickAdapter(channel: ChannelId): ChannelAdapter {
+  return withPlainLinks(rawAdapter(channel));
+}
+
+/** Adaptador sin envolver (el registro real por canal). */
+function rawAdapter(channel: ChannelId): ChannelAdapter {
   if (channel === "telegram") return telegramAdapter;
   if (channel === "manychat") return manychatAdapter;
   if (channel === "twilio") return twilioAdapter;
@@ -49,6 +55,22 @@ export function pickAdapter(channel: ChannelId): ChannelAdapter {
   if (channel === "waha") return wahaAdapter;
   if (channel === "mercadolibre") return mercadolibreAdapter;
   throw new Error(`unknown channel: ${channel}`);
+}
+
+/**
+ * Normaliza los links salientes en TODOS los canales: los de mensajería
+ * (WhatsApp, Instagram, Messenger, Telegram) NO renderizan Markdown, así que
+ * `[texto](url)` llegaba literal y sin ser clickeable. `toPlainLinks` lo vuelve
+ * `texto (url)` → la app detecta la URL y la hace clickeable sola. Es el punto
+ * único por el que pasan todos los envíos (agente, tools, campañas, CRM),
+ * incluido `sendReplyCapped`.
+ */
+function withPlainLinks(a: ChannelAdapter): ChannelAdapter {
+  return {
+    ...a,
+    sendReply: (reply, env) =>
+      a.sendReply({ ...reply, chunks: reply.chunks.map(toPlainLinks) }, env),
+  };
 }
 
 /**
