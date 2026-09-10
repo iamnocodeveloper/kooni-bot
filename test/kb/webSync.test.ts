@@ -129,6 +129,36 @@ describe("runWebSync", () => {
     expect(r.updated).toBe(0);
   });
 
+  it("un fallo de scrape NO vacía el store de inventario existente", async () => {
+    const url = "https://www.greenwaykiawestpalmbeach.com/dealer-inspire-inventory/inventory_sitemap";
+    await new SettingsRepo(db).set(SETTING_KEYS.webSyncUrls, url);
+    const feed = [
+      "<urlset>",
+      "https://www.greenwaykiawestpalmbeach.com/inventory/used-2019-ford-f-150-xlt-4wd-4d-supercrew-1ftfw1ef9gfc91150/",
+      "https://www.greenwaykiawestpalmbeach.com/inventory/used-2020-kia-sorento-lx-fwd-4d-sport-utility-5xypg4a38lg625285/",
+      "https://www.greenwaykiawestpalmbeach.com/inventory/used-2021-toyota-rav4-xle-awd-4d-sport-utility-2t3p1rfv0mw123456/",
+      "</urlset>",
+    ].join("\n");
+    const envInv = {
+      ...env,
+      AI: {
+        run: vi.fn(async (_m: string, input: { text: unknown }) => ({
+          data: (Array.isArray(input.text) ? input.text : [input.text]).map(() => [0.1, 0.2, 0.3]),
+        })),
+      },
+    } as unknown as Env;
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ results: [{ content: feed, status_code: 200 }] }), { status: 200 })));
+    const r1 = await runWebSync(envInv);
+    expect(r1.vehicles).toBe(3);
+
+    // Decodo falla (scrape vacío/500): el store NO debe borrarse.
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("boom", { status: 500 })));
+    const r2 = await runWebSync(envInv);
+    expect(r2.errors).toHaveLength(1);
+    const store = await loadVehicleStore(db);
+    expect(Object.keys(store.vehicles)).toHaveLength(3);
+  });
+
   it("modo inventario: docs compactos sin links + doc resumen + store; 2ª corrida sin cambios no re-embebe", async () => {
     const url = "https://www.greenwaykiawestpalmbeach.com/llm/inventory/";
     await new SettingsRepo(db).set(SETTING_KEYS.webSyncUrls, url);

@@ -5,6 +5,16 @@ Cambios notables de Kooni. Formato aproximado de
 
 El CLI `kooni-bot` se versiona aparte (npm) — ver la nota de cada versión.
 
+## [1.35.1] — 2026-09-10
+
+### Arreglado (crítico)
+
+- **Un fallo de scrape ya no vacía el store del inventario.** La rama que
+  limpiaba el store cuando la corrida "no veía inventario" también se disparaba
+  ante un error transitorio de Decodo (scrape vacío) — borró los 449 autos.
+  Ahora solo se quitan los autos cuyo `feedUrl` ya no está configurado, y nunca
+  se toca el store si hubo errores en la corrida.
+
 ## [1.35.0] — 2026-09-10
 
 ### Agregado

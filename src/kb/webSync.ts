@@ -360,10 +360,19 @@ export async function runWebSync(env: Env, opts: WebSyncRunOptions = {}): Promis
     } catch (e) {
       console.error(`[webSync] inventario: fallo al guardar el store: ${String((e as Error)?.message ?? e)}`);
     }
-  } else if (listStoredVehicles(await loadVehicleStore(db).catch(() => ({ updatedAt: 0, vehicles: {} }))).length > 0) {
-    // Había inventario de corridas previas pero esta corrida no vio ninguno
-    // (p. ej. la URL salió de la config): el store se limpia igual.
-    await saveVehicleStore(db, { updatedAt: Date.now(), vehicles: {} }).catch(() => {});
+  } else if (summary.errors.length === 0) {
+    // No se vio inventario y NO hubo errores de scrape: se quitan SOLO los autos
+    // cuyo feed ya no está configurado (p. ej. la URL salió de la config). NUNCA
+    // vaciar el store por un fallo transitorio de Decodo (bug real: un scrape
+    // vacío borró los 449 autos).
+    const store = await loadVehicleStore(db).catch(() => ({ updatedAt: 0, vehicles: {} }));
+    const all = listStoredVehicles(store);
+    const keep = all.filter((v) => urls.includes(v.feedUrl));
+    if (keep.length !== all.length) {
+      const vehicles: Record<string, (typeof all)[number]> = {};
+      for (const v of keep) vehicles[v.key] = v;
+      await saveVehicleStore(db, { updatedAt: Date.now(), vehicles }).catch(() => {});
+    }
   }
 
   await repo.set(SETTING_KEYS.webSyncState, JSON.stringify(state));
