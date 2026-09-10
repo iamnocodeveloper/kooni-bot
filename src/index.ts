@@ -560,6 +560,17 @@ export default {
               : ""),
         );
       }
+      // Si el feed no trajo inventario (p. ej. el sitemap está bloqueado), el
+      // batch de fotos/precios NO corrió dentro del sync: lo avanzamos igual
+      // con lo que ya está en el store.
+      if (r.vehicles === undefined) {
+        const { refreshVehicleImages } = await import("./kb/inventory");
+        const { Db } = await import("./db/client");
+        const img = await refreshVehicleImages(env, new Db(env.DB)).catch(() => ({ fetched: 0, failed: 0, pending: 0 }));
+        if (img.fetched > 0 || img.pending > 0) {
+          console.log(`[webSync] noche (sin feed): fotos ${img.fetched} ok / ${img.failed} err / ${img.pending} pend`);
+        }
+      }
     } catch (e) {
       console.error("webSync:", e);
     }
