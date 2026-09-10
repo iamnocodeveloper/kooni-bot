@@ -5,6 +5,14 @@ Cambios notables de Kooni. Formato aproximado de
 
 El CLI `kooni-bot` se versiona aparte (npm) — ver la nota de cada versión.
 
+## [1.34.1] — 2026-09-10
+
+### Arreglado
+
+- El refetch forzado por `key` ya no borra precio/millas/desglose si el scrape
+  falla (Turnstile intermitente): solo sobrescribe si Decodo respondió con
+  contenido.
+
 ## [1.34.0] — 2026-09-10
 
 ### Agregado — desglose de precio de la ficha (Price/Discount/Fees/Transparent)

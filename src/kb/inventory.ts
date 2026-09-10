@@ -764,6 +764,8 @@ export interface VehicleDetails {
   price: number | null;
   miles: number | null;
   pricing: VehiclePricing;
+  /** true si Decodo respondió con contenido (aunque no traiga todos los campos). */
+  scraped: boolean;
 }
 
 /**
@@ -782,6 +784,7 @@ export async function fetchVehicleDetails(
     price: null,
     miles: null,
     pricing: { listPrice: null, discount: null, dealerFee: null, adminFee: null, tagFee: null, transparentPrice: null },
+    scraped: false,
   };
   if (!vehicle.listingUrl) return out;
   const timeoutMs = opts.timeoutMs ?? 60_000;
@@ -791,6 +794,7 @@ export async function fetchVehicleDetails(
     // "similares" u otros montos). De paso trae og:image y el widget de precio.
     const html = await scrapeUrl(env, vehicle.listingUrl, { markdown: false, timeoutMs });
     if (html.ok) {
+      out.scraped = true;
       const d = extractDetailsFromHtml(html.content);
       out.price = d.price;
       out.miles = d.miles;
@@ -801,6 +805,7 @@ export async function fetchVehicleDetails(
     if (!out.imageUrl) {
       const md = await scrapeUrl(env, vehicle.listingUrl, { markdown: true, timeoutMs });
       if (md.ok) {
+        out.scraped = true;
         const img = extractImageFromMarkdown(md.content);
         if (img) out.imageUrl = absUrl(vehicle.listingUrl, img);
       }
@@ -848,10 +853,13 @@ export async function refreshVehicleImages(
       const cur = store.vehicles[v.key];
       if (cur) {
         if (opts.keys && opts.keys.length) {
-          // Refetch forzado (reparación): sobrescribe aunque venga null.
-          cur.price = d.price;
-          cur.miles = d.miles;
-          cur.pricing = d.pricing;
+          // Refetch forzado (reparación): sobrescribe, pero SOLO si el scrape
+          // respondió con contenido (si no, conserva lo que ya había).
+          if (d.scraped) {
+            cur.price = d.price;
+            cur.miles = d.miles;
+            cur.pricing = d.pricing;
+          }
         } else {
           if (d.price !== null) cur.price = d.price;
           if (d.miles !== null) cur.miles = d.miles;
