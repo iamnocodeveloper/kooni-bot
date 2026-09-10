@@ -5,6 +5,17 @@ Cambios notables de Kooni. Formato aproximado de
 
 El CLI `kooni-bot` se versiona aparte (npm) — ver la nota de cada versión.
 
+## [1.36.0] — 2026-09-10
+
+### Agregado
+
+- **`rebuildInventoryKb` + `POST /kb/rebuild`** (mismo token): reconstruye los
+  docs de KB del inventario a partir del **store ya poblado** (con precios,
+  millas y condición enriquecidos), **sin scrapear el feed**. Sirve cuando el
+  sitemap está bloqueado/caído (hoy Cloudflare lo devuelve 403) y deja la KB
+  completa y actualizada igual. Idempotente: re-embebe cada parte y borra las
+  sobrantes.
+
 ## [1.35.1] — 2026-09-10
 
 ### Arreglado (crítico)

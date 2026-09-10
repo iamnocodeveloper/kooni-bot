@@ -432,6 +432,19 @@ app.post("/kb/enrich", async (c) => {
   return c.json({ ok: true, ...r }, 200);
 });
 
+// Reconstruye los docs de KB del inventario desde el store (sin scrapear el
+// feed): útil cuando el sitemap está bloqueado/caído. Mismo token.
+app.post("/kb/rebuild", async (c) => {
+  const expected = c.env.KB_REINDEX_TOKEN ?? "";
+  if (!expected || !tokensMatch(c.req.header("X-Reindex-Token") ?? "", expected)) {
+    return c.json({ ok: false, error: "unauthorized" }, 401);
+  }
+  const { rebuildInventoryKb } = await import("./kb/webSync");
+  const { Db } = await import("./db/client");
+  const r = await rebuildInventoryKb(c.env, new Db(c.env.DB));
+  return c.json({ ok: true, ...r }, 200);
+});
+
 app.notFound((c) => c.text("not found", 404));
 
 // La raíz del worker redirige al panel: en cualquier dispositivo, entrar a la

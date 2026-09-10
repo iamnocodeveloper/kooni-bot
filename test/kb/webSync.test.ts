@@ -3,8 +3,8 @@ import { createTestMiniflare } from "../helpers/miniflareSetup";
 import { Db } from "../../src/db/client";
 import { SettingsRepo, SETTING_KEYS } from "../../src/db/settings";
 import { KbDocsRepo } from "../../src/kb/docs";
-import { parseWebSyncUrls, webDocId, runWebSync, trimBoilerplate, splitParts, stripMarkdownLinks } from "../../src/kb/webSync";
-import { loadVehicleStore } from "../../src/kb/inventory";
+import { parseWebSyncUrls, webDocId, runWebSync, trimBoilerplate, splitParts, stripMarkdownLinks, rebuildInventoryKb } from "../../src/kb/webSync";
+import { loadVehicleStore, saveVehicleStore, mergeVehicleStore, parseDealerInventorySitemap } from "../../src/kb/inventory";
 import type { Env } from "../../src/env";
 
 describe("parseWebSyncUrls / webDocId", () => {
@@ -157,6 +157,30 @@ describe("runWebSync", () => {
     expect(r2.errors).toHaveLength(1);
     const store = await loadVehicleStore(db);
     expect(Object.keys(store.vehicles)).toHaveLength(3);
+  });
+
+  it("rebuildInventoryKb regenera la KB desde el store (con precio) sin scrapear", async () => {
+    const feedUrl = "https://www.greenwaykiawestpalmbeach.com/dealer-inspire-inventory/inventory_sitemap";
+    const parsed = parseDealerInventorySitemap(
+      "<urlset>https://www.greenwaykiawestpalmbeach.com/inventory/used-2020-kia-sorento-lx-fwd-4d-sport-utility-5xypg4a38lg625285/</urlset>",
+      feedUrl,
+    );
+    const store = mergeVehicleStore({ updatedAt: 0, vehicles: {} }, parsed);
+    store.vehicles[parsed[0].key].price = 17593;
+    await saveVehicleStore(db, store);
+    const envInv = {
+      ...env,
+      AI: {
+        run: vi.fn(async (_m: string, input: { text: unknown }) => ({
+          data: (Array.isArray(input.text) ? input.text : [input.text]).map(() => [0.1, 0.2, 0.3]),
+        })),
+      },
+    } as unknown as Env;
+    const r = await rebuildInventoryKb(envInv, db);
+    expect(r.vehicles).toBe(1);
+    const doc = await new KbDocsRepo(db).getById(webDocId(feedUrl));
+    expect(doc?.content).toContain("2020 Kia Sorento LX");
+    expect(doc?.content).toContain("$17,593");
   });
 
   it("modo inventario: docs compactos sin links + doc resumen + store; 2ª corrida sin cambios no re-embebe", async () => {

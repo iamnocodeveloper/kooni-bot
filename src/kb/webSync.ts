@@ -38,6 +38,7 @@ import {
   refreshVehicleImages,
   type Vehicle,
   type VehicleStore,
+  type StoredVehicle,
 } from "./inventory";
 
 const MAX_URLS = 10;
@@ -378,4 +379,83 @@ export async function runWebSync(env: Env, opts: WebSyncRunOptions = {}): Promis
   await repo.set(SETTING_KEYS.webSyncState, JSON.stringify(state));
   await repo.set(SETTING_KEYS.webSyncLastRun, String(Date.now()));
   return summary;
+}
+
+/**
+ * Reconstruye los docs de KB del inventario a partir del STORE ya poblado,
+ * SIN scrapear el feed. Sirve cuando el sitemap está bloqueado/caído pero ya
+ * tenemos los autos (y sus precios/fotos enriquecidos) en settings. Idempotente:
+ * re-embebe cada parte y borra las sobrantes; actualiza el state para no
+ * re-embebar de más en el próximo sync.
+ */
+export async function rebuildInventoryKb(
+  env: Env,
+  db: Db,
+): Promise<{ vehicles: number; updated: number; errors: number }> {
+  const store = await loadVehicleStore(db);
+  const all = listStoredVehicles(store);
+  if (all.length === 0) return { vehicles: 0, updated: 0, errors: 0 };
+
+  const kb = new KbDocsRepo(db);
+  const repo = new SettingsRepo(db);
+  let state: Record<string, UrlState> = {};
+  try {
+    state = JSON.parse((await repo.get(SETTING_KEYS.webSyncState)) ?? "{}");
+  } catch {
+    state = {};
+  }
+
+  const byFeed = new Map<string, StoredVehicle[]>();
+  for (const v of all) {
+    const f = v.feedUrl || "";
+    if (!f) continue;
+    const list = byFeed.get(f) ?? [];
+    list.push(v);
+    byFeed.set(f, list);
+  }
+
+  let updated = 0;
+  let errors = 0;
+  for (const [feedUrl, vehicles] of byFeed) {
+    const baseId = webDocId(feedUrl);
+    const base = baseId.startsWith("web:") ? baseId.slice(4) : baseId;
+    const parts = renderInventoryParts(vehicles, MAX_DOC_CHARS, MAX_PARTS);
+    const full = vehicles.map(renderVehicleBlock).join("\n\n");
+    const hash = quickHash(full);
+    const prevParts = state[feedUrl]?.parts ?? 1;
+    try {
+      for (let i = 0; i < parts.length; i++) {
+        const id = i === 0 ? baseId : partId(baseId, i + 1);
+        await kb.upsert({
+          id,
+          title: `Inventario web — ${base}${i ? ` (${i + 1})` : ""}`,
+          content: parts[i],
+        });
+        const doc = await kb.getById(id);
+        if (doc) await indexDoc(env, doc);
+      }
+      // Partes que ya no existen (el listado se achicó).
+      for (let i = parts.length + 1; i <= prevParts; i++) {
+        const id = partId(baseId, i);
+        await removeDocVectors(env, id).catch(() => {});
+        await kb.delete(id).catch(() => {});
+      }
+      const sumId = inventorySummaryDocId(feedUrl);
+      await kb.upsert({
+        id: sumId,
+        title: `Inventario web — ${base} — resumen`,
+        content: renderInventorySummary(vehicles, base, feedUrl),
+      });
+      const sumDoc = await kb.getById(sumId);
+      if (sumDoc) await indexDoc(env, sumDoc);
+      state[feedUrl] = { hash, at: Date.now(), chars: full.length, parts: parts.length, mode: "inv" };
+      updated++;
+    } catch (e) {
+      console.error(`[rebuildInventoryKb] ${feedUrl}:`, e);
+      errors++;
+    }
+  }
+
+  await repo.set(SETTING_KEYS.webSyncState, JSON.stringify(state));
+  return { vehicles: all.length, updated, errors };
 }
