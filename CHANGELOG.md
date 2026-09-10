@@ -5,6 +5,27 @@ Cambios notables de Kooni. Formato aproximado de
 
 El CLI `kooni-bot` se versiona aparte (npm) — ver la nota de cada versión.
 
+## [1.39.0] — 2026-09-10
+
+### Agregado — Nicho “Cartera de cobros” (se elige al instalar)
+
+- **Nuevo pack de nicho `cartera`** (`BOT_NICHE=cartera`): re-etiqueta el panel
+  (Gestiones, estados de cobranza), aporta playbook de cobranza (tono firme y
+  respetuoso, anti-acoso, escalado obligatorio) y tools propias.
+- **Tools del agente**: `consultarDeuda` (saldo real, nunca inventar) y
+  `registrarPromesa` (promesa de pago fecha+monto, mueve la gestión a
+  `promesa`).
+- **Panel `/admin/cartera`** (se suma al nav por `hooks.navExtra`): KPIs (deuda
+  total, en mora, en promesa, recuperado), importación de cartera por CSV
+  (`nombre, teléfono, monto, vence, referencia`), búsqueda, ficha del deudor con
+  deuda, pagos, promesas, historial y etapas.
+- **Esquema**: tablas `debtor_lists`, `debtors`, `debt_accounts`,
+  `collection_cases`, `collection_interactions`, `collection_contact_attempts`,
+  `collection_rules`, `payment_promises` (se crean en toda instalación).
+- **CLI `kooni-bot` 0.4.0**: `init` ahora **pregunta el giro** y estampa
+  `BOT_NICHE` en `wrangler.toml` (opciones: generico, agencia-ia, restaurante,
+  inmobiliaria, clinica, barberia, **cartera**).
+
 ## [1.38.0] — 2026-09-10
 
 ### Agregado — “Atención humana”: etiqueta + tickets + kanban (general)

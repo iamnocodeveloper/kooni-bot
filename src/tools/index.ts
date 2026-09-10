@@ -76,6 +76,12 @@ export async function buildTools(ctx: ToolContext) {
     const { tomarPedidoTool } = await import("./tomarPedido");
     tools.tomarPedido = tomarPedidoTool(ctx.env, ctx.getConversationId, getRecursoCtx);
   }
+  // Nicho cartera de cobros: saldo real + promesas de pago.
+  if (extraTools.includes("consultarDeuda") || extraTools.includes("registrarPromesa")) {
+    const { consultarDeudaTool, registrarPromesaTool } = await import("./collections");
+    if (extraTools.includes("consultarDeuda")) tools.consultarDeuda = consultarDeudaTool(ctx.env, ctx.getConversationId);
+    if (extraTools.includes("registrarPromesa")) tools.registrarPromesa = registrarPromesaTool(ctx.env, ctx.getConversationId);
+  }
 
   return tools;
 }

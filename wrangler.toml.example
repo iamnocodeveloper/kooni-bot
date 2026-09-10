@@ -45,6 +45,9 @@ BOT_NAME = "{{BOT_NAME}}"
 BUSINESS_NAME = "{{BUSINESS_NAME}}"
 BOT_LANGUAGE = "es"
 BOT_TIER = "free"                     # 'free' | 'pro' — pro se activa con licencia en el panel
+# BOT_NICHE — pack del giro. Lo setea `kooni-bot init` (o editalo aquí).
+# Valores: generico | agencia-ia | restaurante | inmobiliaria | clinica | barberia | cartera
+BOT_NICHE = "generico"
 BUFFER_SECONDS = "15"
 DASHBOARD_BASE_URL = "https://{{BOT_SLUG}}.workers.dev"
 # Reporte de uso al panel de licencias del dueño (kooni-licencias): el cron

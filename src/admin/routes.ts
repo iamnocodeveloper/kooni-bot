@@ -1819,6 +1819,150 @@ adminApp.post("/tickets/:id/resolve", async (c) => {
   return c.redirect("/admin/tickets");
 });
 
+// ── Cartera de cobros (nicho `cartera`) ────────────────────────────────────
+// El panel vive en /admin/cartera (ver niches/cartera.ts → hooks.navExtra).
+adminApp.get("/cartera", async (c) => {
+  const { renderCartera } = await import("./views/cartera");
+  return c.html(await renderCartera(c.env, c.req.query() as unknown as URLSearchParams));
+});
+
+/** "YYYY-MM-DD" → epoch ms (mediodía UTC, para evitar saltos por zona). */
+function parseDay(s: string | null | undefined): number | null {
+  const v = (s ?? "").trim();
+  if (!v) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
+  if (!m) return null;
+  const t = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12);
+  return Number.isFinite(t) ? t : null;
+}
+
+// Importar cartera: una línea por deudor, separada por coma o punto y coma.
+// Formato: nombre, telefono, monto, vence(YYYY-MM-DD), referencia
+adminApp.post("/cartera/import", async (c) => {
+  const form = await c.req.formData();
+  const csv = String(form.get("csv") ?? "").trim();
+  const listName = String(form.get("list_name") ?? "").trim() || `Cartera ${new Date().toISOString().slice(0, 10)}`;
+  if (!csv) return c.redirect("/admin/cartera");
+  const { CollectionsRepo } = await import("../db/collections");
+  const repo = new CollectionsRepo(new Db(c.env.DB));
+  const listId = await repo.createList(listName);
+  let imported = 0;
+  let skipped = 0;
+  for (const rawLine of csv.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    const cols = line.split(/[;,\t]/).map((x) => x.trim());
+    const [name, phone, amountRaw, dueRaw, ref, doc] = cols;
+    const amount = Number((amountRaw ?? "").replace(/[^\d.]/g, ""));
+    if (!name && !phone) {
+      skipped++;
+      continue;
+    }
+    const { id } = await repo.upsertDebtor({
+      name: name || undefined,
+      phone: phone || undefined,
+      documentId: doc || undefined,
+      externalRef: ref || undefined,
+      listId,
+    });
+    if (Number.isFinite(amount) && amount > 0) {
+      await repo.addAccount({ debtorId: id, amount, dueDate: parseDay(dueRaw), concept: "Deuda importada" });
+    } else {
+      skipped++;
+    }
+    await repo.ensureCase(id).catch(() => {});
+    imported++;
+  }
+  await audit(c, {
+    action: "cartera.import",
+    target: `cartera:${listId}`,
+    targetLabel: `Cartera · ${listName}`,
+    afterVal: `${imported} deudores importados, ${skipped} sin monto/omitidos`,
+  });
+  return c.redirect(`/admin/cartera?import=${imported}`);
+});
+
+adminApp.post("/cartera/debtor/:id/account", async (c) => {
+  const id = c.req.param("id");
+  const form = await c.req.formData();
+  const amount = Number(String(form.get("amount") ?? "").replace(/[^\d.]/g, ""));
+  if (!Number.isFinite(amount) || amount <= 0) return c.redirect(`/admin/cartera?d=${encodeURIComponent(id)}`);
+  const { CollectionsRepo } = await import("../db/collections");
+  const repo = new CollectionsRepo(new Db(c.env.DB));
+  const accountId = await repo.addAccount({
+    debtorId: id,
+    amount,
+    dueDate: parseDay(String(form.get("due_date") ?? "")),
+    concept: String(form.get("concept") ?? "").trim() || "Deuda",
+  });
+  await repo.ensureCase(id, accountId).catch(() => {});
+  return c.redirect(`/admin/cartera?d=${encodeURIComponent(id)}`);
+});
+
+adminApp.post("/cartera/debtor/:id/payment", async (c) => {
+  const id = c.req.param("id");
+  const form = await c.req.formData();
+  const accountId = String(form.get("account_id") ?? "").trim();
+  const amount = Number(String(form.get("amount") ?? "").replace(/[^\d.]/g, ""));
+  if (!accountId || !Number.isFinite(amount) || amount <= 0) return c.redirect(`/admin/cartera?d=${encodeURIComponent(id)}`);
+  const { CollectionsRepo } = await import("../db/collections");
+  const repo = new CollectionsRepo(new Db(c.env.DB));
+  await repo.registerPayment(accountId, amount);
+  const caseId = await repo.ensureCase(id, accountId).catch(() => null);
+  await repo.logInteraction({
+    caseId,
+    debtorId: id,
+    accountId,
+    channel: "manual",
+    direction: "in",
+    kind: "pago",
+    summary: `Pago registrado: ${amount}`,
+    outcome: "pago",
+  });
+  return c.redirect(`/admin/cartera?d=${encodeURIComponent(id)}`);
+});
+
+adminApp.post("/cartera/debtor/:id/promise", async (c) => {
+  const id = c.req.param("id");
+  const form = await c.req.formData();
+  const amount = Number(String(form.get("amount") ?? "").replace(/[^\d.]/g, ""));
+  const { CollectionsRepo } = await import("../db/collections");
+  const repo = new CollectionsRepo(new Db(c.env.DB));
+  await repo.createPromise({
+    debtorId: id,
+    amount: Number.isFinite(amount) && amount > 0 ? amount : null,
+    promisedDate: parseDay(String(form.get("promised_date") ?? "")),
+    notes: String(form.get("notes") ?? "").trim() || undefined,
+  });
+  const caseId = await repo.ensureCase(id).catch(() => null);
+  if (caseId) await repo.setCaseStage(caseId, "promesa").catch(() => {});
+  await repo.logInteraction({
+    caseId,
+    debtorId: id,
+    channel: "manual",
+    direction: "in",
+    kind: "nota",
+    summary: `Promesa de pago registrada: ${amount || "?"}`,
+    outcome: "promesa",
+  });
+  return c.redirect(`/admin/cartera?d=${encodeURIComponent(id)}`);
+});
+
+adminApp.post("/cartera/debtor/:id/stage", async (c) => {
+  const id = c.req.param("id");
+  const form = await c.req.formData();
+  const stage = String(form.get("stage") ?? "").trim() || "nuevo";
+  const note = String(form.get("note") ?? "").trim();
+  const { CollectionsRepo } = await import("../db/collections");
+  const repo = new CollectionsRepo(new Db(c.env.DB));
+  const caseId = await repo.ensureCase(id);
+  await repo.setCaseStage(caseId, stage);
+  if (note) {
+    await repo.logInteraction({ caseId, debtorId: id, channel: "manual", direction: "out", kind: "nota", summary: note, outcome: "otro" });
+  }
+  return c.redirect(`/admin/cartera?d=${encodeURIComponent(id)}`);
+});
+
 // --- Inbox actions (F1) -------------------------------------------------------
 
 /** Owner takes over for this long after replying/pausing from the dashboard. */

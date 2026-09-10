@@ -544,3 +544,125 @@ CREATE TABLE IF NOT EXISTS push_events (
   shown INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_push_events_created ON push_events(created_at);
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- CARTERA DE COBROS (nicho `cartera` — BOT_NICHE=cartera)
+-- La cartera NO vive en lead.metadata: estas tablas guardan deudores, deuda,
+-- gestiones (casos), interacciones, intentos, reglas y promesas de pago.
+-- Se crean en TODAS las instalaciones (idempotente) — solo se usan cuando el
+-- nicho está activo.
+-- ─────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS debtor_lists (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  notes TEXT,
+  created_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS debtors (
+  id TEXT PRIMARY KEY,
+  list_id TEXT,
+  name TEXT,
+  phone TEXT,
+  email TEXT,
+  document_id TEXT,
+  external_ref TEXT,
+  metadata TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_debtors_phone ON debtors(phone);
+CREATE INDEX IF NOT EXISTS idx_debtors_list ON debtors(list_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_debtors_ref ON debtors(external_ref) WHERE external_ref IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS debt_accounts (
+  id TEXT PRIMARY KEY,
+  debtor_id TEXT NOT NULL,
+  amount REAL NOT NULL,
+  paid REAL NOT NULL DEFAULT 0,
+  currency TEXT NOT NULL DEFAULT 'USD',
+  due_date INTEGER,
+  -- open | promise | paid | written_off | disputed
+  status TEXT NOT NULL DEFAULT 'open',
+  concept TEXT,
+  notes TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_debt_accounts_debtor ON debt_accounts(debtor_id);
+CREATE INDEX IF NOT EXISTS idx_debt_accounts_status ON debt_accounts(status);
+
+CREATE TABLE IF NOT EXISTS collection_cases (
+  id TEXT PRIMARY KEY,
+  debtor_id TEXT NOT NULL,
+  account_id TEXT,
+  -- nuevo | recordatorio | negociacion | promesa | escalado | pagado | incobrable
+  stage TEXT NOT NULL DEFAULT 'nuevo',
+  assigned_to TEXT,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  last_contact_at INTEGER,
+  next_contact_at INTEGER,
+  notes TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_collection_cases_debtor ON collection_cases(debtor_id);
+CREATE INDEX IF NOT EXISTS idx_collection_cases_stage ON collection_cases(stage);
+
+CREATE TABLE IF NOT EXISTS collection_interactions (
+  id TEXT PRIMARY KEY,
+  case_id TEXT,
+  debtor_id TEXT,
+  account_id TEXT,
+  -- whatsapp | voz | email | sms | manual
+  channel TEXT,
+  -- out | in
+  direction TEXT,
+  -- mensaje | llamada | nota | pago
+  kind TEXT,
+  summary TEXT,
+  -- contactado | sin_respuesta | promesa | pago | disputa | numero_invalido | otro
+  outcome TEXT,
+  payload TEXT,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_collection_interactions_debtor ON collection_interactions(debtor_id);
+CREATE INDEX IF NOT EXISTS idx_collection_interactions_case ON collection_interactions(case_id);
+
+CREATE TABLE IF NOT EXISTS collection_contact_attempts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  case_id TEXT,
+  debtor_id TEXT,
+  channel TEXT,
+  at INTEGER NOT NULL,
+  outcome TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_collection_attempts_debtor ON collection_contact_attempts(debtor_id);
+
+CREATE TABLE IF NOT EXISTS collection_rules (
+  id TEXT PRIMARY KEY,
+  name TEXT,
+  min_days_overdue INTEGER NOT NULL DEFAULT 0,
+  max_days_overdue INTEGER,
+  -- whatsapp | voz | email | sms
+  channel TEXT NOT NULL DEFAULT 'whatsapp',
+  template TEXT,
+  max_attempts INTEGER NOT NULL DEFAULT 3,
+  active INTEGER NOT NULL DEFAULT 1,
+  created_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS payment_promises (
+  id TEXT PRIMARY KEY,
+  debtor_id TEXT NOT NULL,
+  account_id TEXT,
+  amount REAL,
+  promised_date INTEGER,
+  -- pending | kept | broken | cancelled
+  status TEXT NOT NULL DEFAULT 'pending',
+  notes TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_payment_promises_debtor ON payment_promises(debtor_id);
+CREATE INDEX IF NOT EXISTS idx_payment_promises_status ON payment_promises(status);
