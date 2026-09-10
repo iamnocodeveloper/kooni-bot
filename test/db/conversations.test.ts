@@ -20,6 +20,16 @@ describe("ConversationsRepo", () => {
     expect(conv1.display_name).toBe("María");
   });
 
+  it("backfill: completa el display_name si antes venía vacío (ej. WhatsApp @lid)", async () => {
+    const first = await repo.getOrCreate("waha", "73452614598810@lid");
+    expect(first.display_name ?? null).toBeNull();
+    const second = await repo.getOrCreate("waha", "73452614598810@lid", "Daniels Mezzadri");
+    expect(second.display_name).toBe("Daniels Mezzadri");
+    // No pisa un nombre ya guardado.
+    const third = await repo.getOrCreate("waha", "73452614598810@lid", "Otro Nombre");
+    expect(third.display_name).toBe("Daniels Mezzadri");
+  });
+
   it("setPausedUntil updates the column", async () => {
     const conv = await repo.getOrCreate("telegram", "user_456");
     const until = Date.now() + 3_600_000;

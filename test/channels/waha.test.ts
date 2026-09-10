@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { wahaAdapter, verifyWahaWebhook, wahaConfig } from "../../src/channels/waha";
+import { wahaAdapter, verifyWahaWebhook, wahaConfig, pushNameFromPayload } from "../../src/channels/waha";
 import type { Env } from "../../src/env";
 
 afterEach(() => vi.restoreAllMocks());
@@ -103,6 +103,39 @@ describe("wahaAdapter.parseIncoming", () => {
     );
     expect(msg.text).toBe("mirá esto");
     expect(msg.imageUrl).toBe("https://cdn.example/img.jpg");
+  });
+
+  it("toma el pushName del payload como displayName (no el @lid)", async () => {
+    const msg = await wahaAdapter.parseIncoming(
+      makeReq({
+        event: "message",
+        payload: {
+          id: "x",
+          from: "73452614598810@lid",
+          fromMe: false,
+          body: "hola",
+          _data: { notifyName: "Daniels Mezzadri" },
+        },
+      }),
+      envWaha,
+    );
+    expect(msg.channelUserId).toBe("73452614598810@lid");
+    expect(msg.displayName).toBe("Daniels Mezzadri");
+    expect(pushNameFromPayload({ _data: { pushName: "Ana" } })).toBe("Ana");
+    expect(pushNameFromPayload({})).toBeUndefined();
+  });
+
+  it("si el payload no trae nombre, lo pide a WAHA (/api/contacts → pushname)", async () => {
+    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) =>
+      new Response(JSON.stringify({ name: "D M", pushname: "Daniels Mezzadri" }), { status: 200 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const msg = await wahaAdapter.parseIncoming(
+      makeReq({ event: "message", payload: { id: "x", from: "73452614598810@lid", fromMe: false, body: "hola" } }),
+      envWaha,
+    );
+    expect(msg.displayName).toBe("Daniels Mezzadri");
+    expect(String(fetchMock.mock.calls[0][0])).toContain("/api/contacts?");
   });
 
   it("extrae imagen del media", async () => {

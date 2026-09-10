@@ -29,7 +29,16 @@ export class ConversationsRepo {
       "SELECT * FROM conversations WHERE id = ?",
       [id],
     );
-    if (existing) return existing;
+    if (existing) {
+      // Backfill del nombre si lo tenemos y antes no: así un lead viejo creado
+      // sin nombre (ej. WhatsApp `@lid`) se corrige con el pushName al volver a
+      // escribir. No pisa un nombre ya guardado.
+      if (displayName && displayName.trim() && !(existing.display_name ?? "").trim()) {
+        await this.db.run("UPDATE conversations SET display_name = ? WHERE id = ?", [displayName.trim(), id]);
+        return { ...existing, display_name: displayName.trim() };
+      }
+      return existing;
+    }
 
     const now = Date.now();
     await this.db.run(

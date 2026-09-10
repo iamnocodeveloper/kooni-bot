@@ -5,6 +5,19 @@ Cambios notables de Kooni. Formato aproximado de
 
 El CLI `kooni-bot` se versiona aparte (npm) — ver la nota de cada versión.
 
+## [1.37.3] — 2026-09-10
+
+### Arreglado — nombre del lead en WhatsApp (pushName, no el `@lid`)
+
+- `wahaAdapter.parseIncoming` ahora devuelve `displayName` con el **pushName**
+  del remitente: lo saca del payload (`_data.notifyName`, `pushName`, `name` de
+  `contact`/`sender`) y, si no viene, se lo pide a WAHA
+  (`GET /api/contacts?contactId=…&session=…` → `pushname` > `name` > ...). Antes
+  no devolvía nombre, así que la conversación/lead quedaba sin nombre y el CRM
+  mostraba el id (`7345…@lid`).
+- `ConversationsRepo.getOrCreate` hace **backfill** del `display_name` cuando
+  existía vacío (no pisa un nombre ya guardado).
+
 ## [1.37.2] — 2026-09-10
 
 ### Arreglado — los mensajes de WAHA no entraban (shape del webhook)

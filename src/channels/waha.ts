@@ -23,6 +23,56 @@ import { resolveWahaConfig, type WahaConfig } from "./wahaCredentials";
 const DEFAULT_SESSION = "default";
 
 /**
+ * Nombre visible (push name) del remitente, si el webhook lo trae. WAHA expone
+ * `_data.notifyName` (y algunos builds `pushName`/`pushname`); tambien puede
+ * venir bajo `contact`/`sender`. Se usa como nombre del lead/conversación
+ * (si no, el CRM mostraría el id, ej. `7345…@lid`).
+ */
+export function pushNameFromPayload(payload: any): string | undefined {
+  const d = payload?._data ?? {};
+  const cands = [
+    d.notifyName,
+    d.pushName,
+    d.pushname,
+    payload?.notifyName,
+    payload?.pushName,
+    payload?.pushname,
+    payload?.contact?.pushname,
+    payload?.contact?.pushName,
+    payload?.contact?.name,
+    payload?.sender?.pushname,
+    payload?.sender?.pushName,
+    payload?.sender?.name,
+  ];
+  for (const c of cands) if (typeof c === "string" && c.trim()) return c.trim();
+  return undefined;
+}
+
+/**
+ * Fallback: pide el contacto a WAHA (`GET /api/contacts`) y usa el pushname.
+ * Para chats `@lid` WAHA resuelve igual el contacto. Fail-soft.
+ */
+async function fetchWahaContactName(env: Env, chatId: string): Promise<string | undefined> {
+  try {
+    const cfg = await resolveWahaConfig(env);
+    if (!cfg.base) return undefined;
+    const qs = new URLSearchParams({ contactId: chatId, session: cfg.session }).toString();
+    const res = await fetch(`${cfg.base}/api/contacts?${qs}`, {
+      headers: cfg.apiKey ? { "X-Api-Key": cfg.apiKey } : {},
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) return undefined;
+    const j = (await res.json().catch(() => null)) as any;
+    if (!j) return undefined;
+    const cands = [j.pushname, j.pushName, j.name, j.shortName, j.fullName, j.organization];
+    for (const c of cands) if (typeof c === "string" && c.trim()) return c.trim();
+    return undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Config SOLO de env (vars/secrets, sin mirar settings/D1). La usan los
  * lugares que no pueden ser async (tests, utilidades sync). El canal en vivo
  * (webhook + envío) usa `resolveWahaConfig` (async), que además mira lo que
@@ -94,9 +144,13 @@ export const wahaAdapter: ChannelAdapter = {
       }
     }
 
+    // Nombre visible: del payload si viene; si no, se lo pedimos a WAHA.
+    const displayName = pushNameFromPayload(payload) ?? (await fetchWahaContactName(env, chatId));
+
     return {
       channel: "waha",
       channelUserId: chatId,
+      displayName,
       text,
       imageUrl,
       audioUrl,
