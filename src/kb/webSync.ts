@@ -44,8 +44,6 @@ import {
 const MAX_URLS = 10;
 /** Si una página pasa MAX_DOC_CHARS, se parte en hasta N docs `web:<slug>`, `-2`, `-3`… */
 const MAX_PARTS = 8;
-/** Fotos por corrida nocturna (delta). El resto se completa en corridas siguientes o bajo demanda. */
-export const MAX_IMG_BATCH = 20;
 
 /** Parte el texto en trozos de <= max chars, cortando en salto de línea. */
 export function splitParts(text: string, max: number, maxParts: number): string[] {

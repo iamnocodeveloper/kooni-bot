@@ -35,10 +35,6 @@ const DEFAULT_BASE = "https://zernio.com/api";
  */
 const MAX_PUBLIC_REPLIES_PER_DAY = 200;
 
-export function zernioChannel(): ChannelId {
-  return "zernio";
-}
-
 // ─── Firma del webhook ───────────────────────────────────────────────────────
 // Zernio firma el body crudo con HMAC-SHA256 y manda el digest hex en
 // X-Zernio-Signature (legacy: X-Late-Signature). Comparación en tiempo

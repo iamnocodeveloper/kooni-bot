@@ -16,9 +16,6 @@ import { SettingsRepo, SETTING_KEYS } from "../db/settings";
 
 const DAY_MS = 24 * 3600_000;
 
-/** Módulo de pago que desbloquea el reporte (ver src/modules.ts). */
-export const REPORT_MODULE_ID = "nightly_report";
-
 export interface NightlyReportData {
   clientesAtendidos: number;
   leadsNuevos: number;
@@ -217,20 +214,6 @@ async function sendEmail(env: Env, text: string): Promise<boolean> {
 export interface ReportSendResult {
   sentTo: string[];
   reason?: string;
-}
-
-/** Canales efectivos según la config del panel (para la sección de Config). */
-export async function reportChannelStatus(env: Env): Promise<{ telegram: boolean; email: boolean }> {
-  const { resolveTelegramToken, resolveOwnerTelegramChatId } = await import("../channels/telegramCredentials");
-  const [tgToken, tgChat, settings] = await Promise.all([
-    resolveTelegramToken(env).catch(() => undefined),
-    resolveOwnerTelegramChatId(env).catch(() => undefined),
-    new SettingsRepo(new Db(env.DB)).all().catch(() => ({})),
-  ]);
-  return {
-    telegram: Boolean(tgToken && tgChat),
-    email: Boolean(env.RESEND_API_KEY && env.OWNER_EMAIL),
-  };
 }
 
 async function doSend(env: Env, now: number): Promise<ReportSendResult> {

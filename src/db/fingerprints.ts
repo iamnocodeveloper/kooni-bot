@@ -13,12 +13,6 @@ import { stripSpecialCharacters } from "../utils/keyword-matcher";
  * atómico (INSERT OR IGNORE sobre la PK dedup_key): solo UNA ejecución gana,
  * así que un comentario recibe UN único mensaje de respuesta, siempre.
  */
-export interface FingerprintRow {
-  dedupKey: string;
-  ruleId: string;
-  commentId: string;
-  createdAt: number;
-}
 
 /**
  * Huella estable de un comentario: post + autor (id o username) + texto

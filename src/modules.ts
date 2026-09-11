@@ -153,19 +153,7 @@ export const PAID_MODULES: PaidModule[] = [
   },
 ];
 
-/**
- * Setting (D1) legado — override del dueño para activar módulos sueltos.
- * Ya no hace falta (todo viene desbloqueado); se conserva la constante para no
- * romper imports y por si se quiere volver a un modelo con paywall.
- */
-export const MODULE_UNLOCKS_SETTING = "module_unlocks";
-
-const MODULE_BY_ID = new Map(PAID_MODULES.map((m) => [m.id, m]));
 const ALL_MODULE_IDS: readonly string[] = PAID_MODULES.map((m) => m.id);
-
-export function moduleById(id: string): PaidModule | undefined {
-  return MODULE_BY_ID.get(id);
-}
 
 /**
  * Módulos desbloqueados en esta instalación. MODELO ACTUAL: **todos, siempre**
