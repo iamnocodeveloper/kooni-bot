@@ -34,6 +34,8 @@ export interface DebtorRow {
   next_due: number | null;
   /** Etapa de la gestión más reciente. */
   stage: string | null;
+  /** 1 si el deudor pidió no ser contactado (opt-out). */
+  dnc?: number;
 }
 
 export interface AccountInput {
@@ -76,7 +78,8 @@ const DEBTOR_SELECT = `
     (SELECT MIN(a.due_date) FROM debt_accounts a
       WHERE a.debtor_id = d.id AND a.status IN ${OPEN_STATUSES} AND a.due_date IS NOT NULL) AS next_due,
     (SELECT c.stage FROM collection_cases c
-      WHERE c.debtor_id = d.id ORDER BY c.updated_at DESC LIMIT 1) AS stage
+      WHERE c.debtor_id = d.id ORDER BY c.updated_at DESC LIMIT 1) AS stage,
+    (SELECT COUNT(*) FROM collection_dnc x WHERE x.debtor_id = d.id) AS dnc
   FROM debtors d
 `;
 
@@ -262,7 +265,7 @@ export class CollectionsRepo {
     return this.db.first<DebtorRow>(`${DEBTOR_SELECT} WHERE d.external_ref = ? LIMIT 1`, [v]);
   }
 
-  async listDebtors(opts: { q?: string; listId?: string; stage?: string; limit?: number } = {}): Promise<DebtorRow[]> {
+  async listDebtors(opts: { q?: string; listId?: string; stage?: string; limit?: number; offset?: number } = {}): Promise<DebtorRow[]> {
     const conds: string[] = [];
     const params: unknown[] = [];
     if (opts.q) {
@@ -276,10 +279,45 @@ export class CollectionsRepo {
     }
     const where = conds.length ? `WHERE ${conds.join(" AND ")}` : "";
     const rows = await this.db.all<DebtorRow>(
-      `${DEBTOR_SELECT} ${where} ORDER BY (next_due IS NULL), next_due ASC, d.updated_at DESC LIMIT ?`,
-      [...params, Math.min(Math.max(opts.limit ?? 100, 1), 500)],
+      `${DEBTOR_SELECT} ${where} ORDER BY (next_due IS NULL), next_due ASC, d.updated_at DESC LIMIT ? OFFSET ?`,
+      [...params, Math.min(Math.max(opts.limit ?? 100, 1), 500), Math.max(0, opts.offset ?? 0)],
     );
     return opts.stage ? rows.filter((r) => r.stage === opts.stage) : rows;
+  }
+
+  /** Reportes de cobranza: recuperación, por canal y embudo por etapa. */
+  async report(): Promise<{
+    totalDebt: number;
+    totalPaid: number;
+    recoveryRate: number;
+    byChannel: { channel: string; intentos: number; contactados: number; promesas: number; pagos: number }[];
+    byOutcome: { outcome: string; n: number }[];
+    byStage: { stage: string; n: number }[];
+  }> {
+    const stats = await this.stats();
+    const channels = await this.db.all<{ channel: string; intentos: number; contactados: number; promesas: number; pagos: number }>(
+      `SELECT channel,
+         COUNT(*) AS intentos,
+         SUM(CASE WHEN outcome IN ('contactado','promesa','pago') THEN 1 ELSE 0 END) AS contactados,
+         SUM(CASE WHEN outcome = 'promesa' THEN 1 ELSE 0 END) AS promesas,
+         SUM(CASE WHEN outcome = 'pago' THEN 1 ELSE 0 END) AS pagos
+       FROM collection_contact_attempts GROUP BY channel ORDER BY intentos DESC`,
+    );
+    const byOutcome = await this.db.all<{ outcome: string; n: number }>(
+      `SELECT COALESCE(outcome,'(sin)') AS outcome, COUNT(*) AS n FROM collection_interactions GROUP BY outcome ORDER BY n DESC LIMIT 12`,
+    );
+    const byStage = await this.db.all<{ stage: string; n: number }>(
+      "SELECT stage, COUNT(*) AS n FROM collection_cases GROUP BY stage ORDER BY n DESC",
+    );
+    const total = stats.totalPaid + stats.totalDebt;
+    return {
+      totalDebt: stats.totalDebt,
+      totalPaid: stats.totalPaid,
+      recoveryRate: total > 0 ? stats.totalPaid / total : 0,
+      byChannel: channels,
+      byOutcome,
+      byStage,
+    };
   }
 
   async updateDebtor(id: string, patch: Partial<DebtorInput>): Promise<void> {
@@ -308,16 +346,62 @@ export class CollectionsRepo {
 
   /** Registra un pago contra una cuenta (deja `paid` topeado al `amount`). */
   async registerPayment(accountId: string, amount: number): Promise<void> {
-    const acc = await this.db.first<{ amount: number; paid: number }>(
-      "SELECT amount, paid FROM debt_accounts WHERE id = ?",
+    const acc = await this.db.first<{ amount: number; paid: number; debtor_id: string }>(
+      "SELECT amount, paid, debtor_id FROM debt_accounts WHERE id = ?",
       [accountId],
     );
     if (!acc) return;
     const paid = Math.min(acc.amount, (acc.paid ?? 0) + Math.max(0, amount));
-    await this.db.run(
-      "UPDATE debt_accounts SET paid = ?, status = ?, updated_at = ? WHERE id = ?",
-      [paid, paid >= acc.amount ? "paid" : "open", Date.now(), accountId],
+    const done = paid >= acc.amount;
+    await this.db.run("UPDATE debt_accounts SET paid = ?, status = ?, updated_at = ? WHERE id = ?", [
+      paid,
+      done ? "paid" : "open",
+      Date.now(),
+      accountId,
+    ]);
+    // Si quedó saldada, las promesas de esa cuenta se marcan cumplidas.
+    if (done) {
+      try {
+        await this.db.run(
+          "UPDATE payment_promises SET status = 'kept', updated_at = ? WHERE account_id = ? AND status = 'pending'",
+          [Date.now(), accountId],
+        );
+      } catch {
+        /* tabla opcional */
+      }
+      await this.setCaseStageForDebtor(acc.debtor_id, "pagado").catch(() => {});
+    }
+  }
+
+  /** Mueve a `stage` el caso más reciente del deudor (si tiene). */
+  async setCaseStageForDebtor(debtorId: string, stage: string): Promise<void> {
+    const c = await this.db.first<{ id: string }>(
+      "SELECT id FROM collection_cases WHERE debtor_id = ? ORDER BY updated_at DESC LIMIT 1",
+      [debtorId],
     );
+    if (c) await this.setCaseStage(c.id, stage);
+  }
+
+  // ── Opt-out / no contactar (DNC) ────────────────────────────────────────
+  async setDnc(debtorId: string, on: boolean, reason?: string, phone?: string | null): Promise<void> {
+    if (!on) {
+      await this.db.run("DELETE FROM collection_dnc WHERE debtor_id = ?", [debtorId]);
+      return;
+    }
+    await this.db.run(
+      `INSERT INTO collection_dnc (debtor_id, phone, reason, created_at) VALUES (?, ?, ?, ?)
+       ON CONFLICT(debtor_id) DO UPDATE SET reason = excluded.reason, created_at = excluded.created_at`,
+      [debtorId, phone ?? null, reason ?? null, Date.now()],
+    );
+  }
+
+  async isDnc(debtorId: string): Promise<boolean> {
+    const r = await this.db.first<{ n: number }>("SELECT COUNT(*) AS n FROM collection_dnc WHERE debtor_id = ?", [debtorId]);
+    return (r?.n ?? 0) > 0;
+  }
+
+  async listDnc(): Promise<{ debtor_id: string; phone: string | null; reason: string | null; created_at: number }[]> {
+    return this.db.all("SELECT * FROM collection_dnc ORDER BY created_at DESC LIMIT 500");
   }
 
   async setAccountStatus(accountId: string, status: string): Promise<void> {

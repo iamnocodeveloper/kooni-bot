@@ -1994,7 +1994,7 @@ adminApp.post("/cartera/reglas/:id/delete", async (c) => {
 // Correr el motor de cobranza a mano (útil para probar reglas sin esperar el cron).
 adminApp.post("/cartera/run", async (c) => {
   const { runCollections } = await import("../collections/engine");
-  const r = await runCollections(c.env).catch((e) => {
+  const r = await runCollections(c.env, { force: true }).catch((e) => {
     console.error("collections (manual):", e);
     return null;
   });
@@ -2020,6 +2020,53 @@ adminApp.post("/cartera/debtor/:id/call", async (c) => {
     result: r.ok ? "ok" : "error",
   });
   return c.redirect(`/admin/cartera?d=${encodeURIComponent(id)}&call=${encodeURIComponent(r.ok ? "ok" : r.error ?? "error")}`);
+});
+
+// Opt-out / no contactar (DNC) de un deudor.
+adminApp.post("/cartera/debtor/:id/dnc", async (c) => {
+  const id = c.req.param("id");
+  const form = await c.req.formData();
+  const on = String(form.get("on") ?? "1") === "1";
+  const reason = String(form.get("reason") ?? "").trim() || undefined;
+  const { CollectionsRepo } = await import("../db/collections");
+  const repo = new CollectionsRepo(new Db(c.env.DB));
+  const debtor = await repo.getDebtor(id).catch(() => null);
+  await repo.setDnc(id, on, reason, debtor?.phone ?? null);
+  const caseId = await repo.ensureCase(id).catch(() => null);
+  if (caseId) {
+    await repo
+      .logInteraction({
+        caseId,
+        debtorId: id,
+        channel: "manual",
+        direction: "in",
+        kind: "nota",
+        summary: on ? `Opt-out: no contactar${reason ? ` — ${reason}` : ""}` : "Reactivado (vuelve a cobranza)",
+        outcome: on ? "opt_out" : "reactivado",
+      })
+      .catch(() => {});
+  }
+  await audit(c, {
+    action: "cartera.dnc",
+    target: `debtor:${id}`,
+    targetLabel: on ? "No contactar (DNC)" : "Reactivar",
+    afterVal: reason ?? "",
+  });
+  return c.redirect(`/admin/cartera?d=${encodeURIComponent(id)}`);
+});
+
+// Ventana horaria de envío del motor de cobranza.
+adminApp.post("/cartera/settings", async (c) => {
+  const form = await c.req.formData();
+  const repo = new SettingsRepo(new Db(c.env.DB));
+  const from = Math.min(23, Math.max(0, Number(form.get("from_hour") ?? 8) || 0));
+  const to = Math.min(24, Math.max(0, Number(form.get("to_hour") ?? 19) || 0));
+  const tz = Number(form.get("tz_offset") ?? -360);
+  await repo.set(SETTING_KEYS.collectionSendFromHour, String(from));
+  await repo.set(SETTING_KEYS.collectionSendToHour, String(to));
+  await repo.set(SETTING_KEYS.collectionTzOffsetMinutes, String(Number.isFinite(tz) ? tz : -360));
+  await audit(c, { action: "cartera.settings", target: "cartera", afterVal: `${from}-${to} UTC${tz >= 0 ? "+" : ""}${tz / 60}` });
+  return c.redirect("/admin/cartera");
 });
 
 // Exportar la cartera a CSV.

@@ -666,3 +666,12 @@ CREATE TABLE IF NOT EXISTS payment_promises (
 );
 CREATE INDEX IF NOT EXISTS idx_payment_promises_debtor ON payment_promises(debtor_id);
 CREATE INDEX IF NOT EXISTS idx_payment_promises_status ON payment_promises(status);
+
+-- Opt-out / "no contactar" (DNC). Si un deudor pide no ser contactado, el motor
+-- de cobranza lo saltea SIEMPRE (una fila por deudor).
+CREATE TABLE IF NOT EXISTS collection_dnc (
+  debtor_id TEXT PRIMARY KEY,
+  phone TEXT,
+  reason TEXT,
+  created_at INTEGER NOT NULL
+);

@@ -5,6 +5,23 @@ Cambios notables de Kooni. Formato aproximado de
 
 El CLI `kooni-bot` se versiona aparte (npm) — ver la nota de cada versión.
 
+## [1.41.0] — 2026-09-10
+
+### Agregado — Cobranza: opt-out, ventana horaria, reglas con voz, reportes
+
+- **Opt-out (DNC)**: tabla `collection_dnc` + botón en la ficha. Un deudor que
+  pide no ser contactado **nunca** recibe mensajes ni llamadas del motor.
+- **Ventana horaria** del motor: hora local desde/hasta + offset UTC (settings y
+  panel). El botón “correr ahora” la ignora a propósito.
+- **Reglas**: editar desde el panel (además de crear/borrar) y **canal “Voz”**
+  que dispara la llamada con IA (Vapi/Retell) en vez de un mensaje.
+- **Promesa cumplida**: al registrar el pago total de una deuda, la promesa pasa
+  a `kept` y el caso a `pagado`.
+- **Reportes** en `/admin/cartera`: tasa de recuperación, efectividad por canal
+  (intentos/contactados/promesas/pagos) y embudo por etapa.
+- **Filtros** por lista/etapa + paginación y export CSV.
+- Docs: `docs/COBRANZA.md` (guía completa del nicho).
+
 ## [1.40.0] — 2026-09-10
 
 ### Agregado — Cobranza: motor, reglas, voz y promesas (nicho `cartera`)

@@ -133,6 +133,11 @@ async function renderDetail(repo: CollectionsRepo, id: string): Promise<string> 
         <button class="text-[11.5px] cursor-pointer" style="border:1px solid var(--accent);color:var(--accent);background:none;padding:7px 13px">📞 Llamar con IA (Vapi/Retell)</button>
         <span class="text-dim text-[10.5px]">Requiere Vapi o Retell configurado en Conexiones.</span>
       </form>
+      <form method="POST" action="/admin/cartera/debtor/${encodeURIComponent(id)}/dnc" style="margin-top:8px;display:flex;gap:8px;align-items:center">
+        <input type="hidden" name="on" value="${d.dnc && Number(d.dnc) > 0 ? "0" : "1"}">
+        <button class="text-[11.5px] cursor-pointer" style="border:1px solid ${d.dnc && Number(d.dnc) > 0 ? "var(--ok)" : "var(--bad)"};color:${d.dnc && Number(d.dnc) > 0 ? "var(--ok)" : "var(--bad)"};background:none;padding:7px 13px">${d.dnc && Number(d.dnc) > 0 ? "✔ No contactar (activo) — reactivar" : "🚫 Marcar: no contactar"}</button>
+        ${d.dnc && Number(d.dnc) > 0 ? `<span class="text-[10.5px]" style="color:var(--bad)">Opt-out: el motor no le escribirá.</span>` : ""}
+      </form>
     </div>
 
     <div class="bg-panel border border-line" style="padding:16px 18px">
@@ -175,11 +180,21 @@ export async function renderCartera(env: Env, q: URLSearchParams): Promise<strin
   }
 
   const search = q.get("q") ?? undefined;
-  const [stats, list, lists] = await Promise.all([
+  const listFilter = q.get("lista") ?? undefined;
+  const stageFilter = q.get("etapa") ?? undefined;
+  const page = Math.max(1, Number(q.get("pagina") ?? 1) || 1);
+  const PAGE = 50;
+  const { SettingsRepo, SETTING_KEYS } = await import("../../db/settings");
+  const [stats, list, lists, report, cfg] = await Promise.all([
     repo.stats(),
-    repo.listDebtors({ q: search, limit: 200 }),
+    repo.listDebtors({ q: search, listId: listFilter, stage: stageFilter, limit: PAGE, offset: (page - 1) * PAGE }),
     repo.listLists(),
+    repo.report(),
+    new SettingsRepo(new Db(env.DB)).all().catch(() => ({}) as Record<string, string>),
   ]);
+  const fromHour = cfg[SETTING_KEYS.collectionSendFromHour] ?? "8";
+  const toHour = cfg[SETTING_KEYS.collectionSendToHour] ?? "19";
+  const tzMin = cfg[SETTING_KEYS.collectionTzOffsetMinutes] ?? "-360";
 
   const importForm = `<form method="POST" action="/admin/cartera/import" class="bg-panel border border-line" style="padding:14px 16px;display:flex;flex-direction:column;gap:8px">
     <div class="text-dim text-[10px] font-mono" style="letter-spacing:.12em">IMPORTAR CARTERA (una línea por deudor)</div>
@@ -192,6 +207,20 @@ export async function renderCartera(env: Env, q: URLSearchParams): Promise<strin
   const rows = list.map(debtorRow).join("");
   const listOpts = lists.map((l) => `<option value="${esc(l.id)}">${esc(l.name)} (${l.n})</option>`).join("");
   const rules = await repo.listRules();
+  const chosenRule = q.get("rule") ? rules.find((r) => r.id === q.get("rule")) : null;
+  const ruleForm = `<form method="POST" action="/admin/cartera/reglas" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+      ${chosenRule ? `<input type="hidden" name="id" value="${esc(chosenRule.id)}">` : ""}
+      <label style="display:flex;flex-direction:column;gap:3px"><span class="text-dim text-[10.5px]">Nombre</span><input name="name" value="${esc(chosenRule?.name ?? "")}" placeholder="Recordatorio 1-7 días" required style="background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:7px 9px;font-size:11.5px"></label>
+      <label style="display:flex;flex-direction:column;gap:3px"><span class="text-dim text-[10.5px]">Mora desde (días)</span><input name="min_days" type="number" min="0" value="${chosenRule?.min_days_overdue ?? 1}" style="width:110px;background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:7px 9px;font-size:11.5px"></label>
+      <label style="display:flex;flex-direction:column;gap:3px"><span class="text-dim text-[10.5px]">Mora hasta (opcional)</span><input name="max_days" type="number" min="0" value="${chosenRule?.max_days_overdue ?? ""}" placeholder="7" style="width:110px;background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:7px 9px;font-size:11.5px"></label>
+      <label style="display:flex;flex-direction:column;gap:3px"><span class="text-dim text-[10.5px]">Intentos</span><input name="max_attempts" type="number" min="1" value="${chosenRule?.max_attempts ?? 3}" style="width:80px;background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:7px 9px;font-size:11.5px"></label>
+      <label style="display:flex;flex-direction:column;gap:3px"><span class="text-dim text-[10.5px]">Canal</span><select name="channel" style="background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:7px 9px;font-size:11.5px"><option value="whatsapp" ${chosenRule?.channel === "whatsapp" ? "selected" : ""}>WhatsApp (mensaje)</option><option value="voz" ${chosenRule?.channel === "voz" ? "selected" : ""}>Voz (llamada IA)</option></select></label>
+      <label style="display:flex;flex-direction:column;gap:3px"><span class="text-dim text-[10.5px]">Estado</span><select name="active" style="background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:7px 9px;font-size:11.5px"><option value="1" ${!chosenRule || Number(chosenRule.active) === 1 ? "selected" : ""}>Activa</option><option value="0" ${chosenRule && Number(chosenRule.active) === 0 ? "selected" : ""}>Apagada</option></select></label>
+      <label style="display:flex;flex-direction:column;gap:3px;flex:1;min-width:240px"><span class="text-dim text-[10.5px]">Plantilla (opcional)</span><input name="template" value="${esc(chosenRule?.template ?? "")}" placeholder="Hola {nombre}, tenés un saldo de {saldo}…" style="background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:7px 9px;font-size:11.5px"></label>
+      <button class="font-display font-semibold text-[11.5px] cursor-pointer" style="background:var(--accent);color:var(--on-accent);border:none;padding:9px 15px">${chosenRule ? "Guardar cambios" : "Crear regla"}</button>
+      ${chosenRule ? `<a href="/admin/cartera" class="text-dim text-[11px]" style="text-decoration:none;padding:9px 6px">cancelar</a>` : ""}
+    </form>`;
+
   const ruleRows = rules
     .map(
       (r) => `<tr style="border-top:1px solid var(--line)">
@@ -200,7 +229,8 @@ export async function renderCartera(env: Env, q: URLSearchParams): Promise<strin
         <td class="text-muted" style="padding:7px 10px;font-size:11.5px">${esc(r.channel)}</td>
         <td class="text-muted" style="padding:7px 10px;font-size:11.5px">${r.max_attempts}</td>
         <td class="text-muted" style="padding:7px 10px;font-size:11.5px">${Number(r.active) === 1 ? "activa" : "apagada"}</td>
-        <td style="padding:7px 10px">
+        <td style="padding:7px 10px;display:flex;gap:6px">
+          <a href="/admin/cartera?rule=${encodeURIComponent(r.id)}" class="text-accent text-[10.5px]" style="text-decoration:none;border:1px solid var(--line);padding:4px 9px">Editar</a>
           <form method="POST" action="/admin/cartera/reglas/${encodeURIComponent(r.id)}/delete" onsubmit="return confirm('¿Borrar regla?')">
             <button class="text-[10.5px] cursor-pointer" style="border:1px solid var(--line);color:var(--muted);background:none;padding:4px 9px">Borrar</button>
           </form>
@@ -216,15 +246,7 @@ export async function renderCartera(env: Env, q: URLSearchParams): Promise<strin
       <thead><tr class="text-dim text-[10px]" style="text-align:left;letter-spacing:.1em;text-transform:uppercase"><th style="padding:6px 10px">Nombre</th><th style="padding:6px 10px">Mora</th><th style="padding:6px 10px">Canal</th><th style="padding:6px 10px">Intentos</th><th style="padding:6px 10px">Estado</th><th></th></tr></thead>
       <tbody>${ruleRows || `<tr><td colspan="6" class="text-dim" style="padding:14px">Sin reglas todavía — creá la primera abajo.</td></tr>`}</tbody>
     </table>
-    <form method="POST" action="/admin/cartera/reglas" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
-      <label style="display:flex;flex-direction:column;gap:3px"><span class="text-dim text-[10.5px]">Nombre</span><input name="name" placeholder="Recordatorio 1-7 días" required style="background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:7px 9px;font-size:11.5px"></label>
-      <label style="display:flex;flex-direction:column;gap:3px"><span class="text-dim text-[10.5px]">Mora desde (días)</span><input name="min_days" type="number" min="0" value="1" style="width:110px;background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:7px 9px;font-size:11.5px"></label>
-      <label style="display:flex;flex-direction:column;gap:3px"><span class="text-dim text-[10.5px]">Mora hasta (opcional)</span><input name="max_days" type="number" min="0" placeholder="7" style="width:110px;background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:7px 9px;font-size:11.5px"></label>
-      <label style="display:flex;flex-direction:column;gap:3px"><span class="text-dim text-[10.5px]">Intentos</span><input name="max_attempts" type="number" min="1" value="3" style="width:80px;background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:7px 9px;font-size:11.5px"></label>
-      <label style="display:flex;flex-direction:column;gap:3px"><span class="text-dim text-[10.5px]">Canal</span><select name="channel" style="background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:7px 9px;font-size:11.5px"><option value="whatsapp">WhatsApp</option><option value="voz">Voz (IA)</option></select></label>
-      <label style="display:flex;flex-direction:column;gap:3px;flex:1;min-width:240px"><span class="text-dim text-[10.5px]">Plantilla (opcional)</span><input name="template" placeholder="Hola {nombre}, tenés un saldo de {saldo}…" style="background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:7px 9px;font-size:11.5px"></label>
-      <button class="font-display font-semibold text-[11.5px] cursor-pointer" style="background:var(--accent);color:var(--on-accent);border:none;padding:9px 15px">Crear regla</button>
-    </form>
+    ${ruleForm}
   </details>`;
 
   const body = `
@@ -249,11 +271,19 @@ export async function renderCartera(env: Env, q: URLSearchParams): Promise<strin
 
       <div class="bg-panel border border-line" style="padding:14px 16px">
         <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
-          <form method="GET" action="/admin/cartera" style="display:flex;gap:8px;flex:1;min-width:220px">
-            <input name="q" value="${esc(search ?? "")}" placeholder="Buscar por nombre, teléfono, doc o ref…" style="flex:1;background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:8px 11px;font-size:12px">
-            <button class="text-[11.5px] cursor-pointer" style="border:1px solid var(--line);color:var(--cream);background:none;padding:8px 13px">Buscar</button>
+          <form method="GET" action="/admin/cartera" style="display:flex;gap:8px;flex:1;min-width:240px;flex-wrap:wrap;align-items:center">
+            <input name="q" value="${esc(search ?? "")}" placeholder="Buscar por nombre, teléfono, doc o ref…" style="flex:1;min-width:180px;background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:8px 11px;font-size:12px">
+            <select name="lista" style="background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:8px 10px;font-size:11.5px">
+              <option value="">Todas las listas</option>
+              ${lists.map((l) => `<option value="${esc(l.id)}" ${listFilter === l.id ? "selected" : ""}>${esc(l.name)} (${l.n})</option>`).join("")}
+            </select>
+            <select name="etapa" style="background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:8px 10px;font-size:11.5px">
+              <option value="">Todas las etapas</option>
+              ${Object.keys(STAGE_LABEL).map((s) => `<option value="${s}" ${stageFilter === s ? "selected" : ""}>${STAGE_LABEL[s]}</option>`).join("")}
+            </select>
+            <button class="text-[11.5px] cursor-pointer" style="border:1px solid var(--line);color:var(--cream);background:none;padding:8px 13px">Filtrar</button>
+            ${search || listFilter || stageFilter ? `<a href="/admin/cartera" class="text-dim text-[11px]" style="text-decoration:none">limpiar</a>` : ""}
           </form>
-          ${lists.length ? `<span class="text-dim text-[11px]">${lists.length} lista(s) importada(s)</span>` : ""}
         </div>
         <div style="overflow-x:auto">
           <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:680px">
@@ -264,7 +294,37 @@ export async function renderCartera(env: Env, q: URLSearchParams): Promise<strin
           </table>
         </div>
         ${listOpts ? `<div class="text-dim text-[10.5px] font-mono" style="margin-top:8px">listas: ${esc(lists.map((l) => l.name).join(" · "))}</div>` : ""}
+        <div style="display:flex;gap:10px;align-items:center;margin-top:10px;justify-content:flex-end">
+          ${page > 1 ? `<a href="/admin/cartera?${new URLSearchParams({ q: search ?? "", lista: listFilter ?? "", etapa: stageFilter ?? "", pagina: String(page - 1) }).toString()}" class="text-[11px] text-accent" style="text-decoration:none">← anterior</a>` : ""}
+          <span class="text-dim text-[10.5px]">página ${page}</span>
+          ${list.length >= PAGE ? `<a href="/admin/cartera?${new URLSearchParams({ q: search ?? "", lista: listFilter ?? "", etapa: stageFilter ?? "", pagina: String(page + 1) }).toString()}" class="text-[11px] text-accent" style="text-decoration:none">siguiente →</a>` : ""}
+        </div>
       </div>
+
+      <div class="bg-panel border border-line" style="padding:14px 16px">
+        <div class="text-dim text-[10px] font-mono" style="letter-spacing:.12em;margin-bottom:8px">REPORTES DE COBRANZA</div>
+        <div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:10px">
+          <span class="text-muted text-[12px]">Recuperación: <b class="text-cream">${(report.recoveryRate * 100).toFixed(1)}%</b></span>
+          <span class="text-muted text-[12px]">Recuperado: <b class="text-cream">${money(report.totalPaid)}</b></span>
+          <span class="text-muted text-[12px]">Pendiente: <b class="text-cream">${money(report.totalDebt)}</b></span>
+        </div>
+        <table style="width:100%;border-collapse:collapse;font-size:12px">
+          <thead><tr class="text-dim text-[10px]" style="text-align:left;letter-spacing:.1em;text-transform:uppercase"><th style="padding:6px 10px">Canal</th><th style="padding:6px 10px">Intentos</th><th style="padding:6px 10px">Contactados</th><th style="padding:6px 10px">Promesas</th><th style="padding:6px 10px">Pagos</th></tr></thead>
+          <tbody>${report.byChannel.map((c) => `<tr style="border-top:1px solid var(--line)"><td class="text-cream" style="padding:6px 10px">${esc(c.channel)}</td><td class="text-muted" style="padding:6px 10px">${c.intentos}</td><td class="text-muted" style="padding:6px 10px">${c.contactados ?? 0}</td><td class="text-muted" style="padding:6px 10px">${c.promesas ?? 0}</td><td class="text-muted" style="padding:6px 10px">${c.pagos ?? 0}</td></tr>`).join("") || `<tr><td colspan="5" class="text-dim" style="padding:14px">Sin gestiones registradas.</td></tr>`}</tbody>
+        </table>
+        ${report.byStage.length ? `<div class="text-dim text-[10.5px] font-mono" style="margin-top:8px">embudo: ${esc(report.byStage.map((s) => `${s.stage} ${s.n}`).join(" · "))}</div>` : ""}
+      </div>
+
+      <details class="bg-panel border border-line" style="padding:14px 16px">
+        <summary class="text-dim text-[10px] font-mono" style="letter-spacing:.12em;cursor:pointer">VENTANA DE ENVÍO (horario del negocio)</summary>
+        <p class="text-dim text-[11px]" style="margin:8px 0">El motor no escribe fuera de esta franja (hora local). El botón “correr ahora” la ignora.</p>
+        <form method="POST" action="/admin/cartera/settings" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+          <label style="display:flex;flex-direction:column;gap:3px"><span class="text-dim text-[10.5px]">Desde (hora)</span><input name="from_hour" type="number" min="0" max="23" value="${esc(fromHour)}" style="width:90px;background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:7px 9px;font-size:11.5px"></label>
+          <label style="display:flex;flex-direction:column;gap:3px"><span class="text-dim text-[10.5px]">Hasta (hora)</span><input name="to_hour" type="number" min="0" max="24" value="${esc(toHour)}" style="width:90px;background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:7px 9px;font-size:11.5px"></label>
+          <label style="display:flex;flex-direction:column;gap:3px"><span class="text-dim text-[10.5px]">Offset UTC (min)</span><input name="tz_offset" type="number" value="${esc(tzMin)}" style="width:110px;background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:7px 9px;font-size:11.5px"></label>
+          <button class="font-display font-semibold text-[11.5px] cursor-pointer" style="background:var(--accent);color:var(--on-accent);border:none;padding:9px 15px">Guardar</button>
+        </form>
+      </details>
     </div>`;
 
   return layout({ title: "Cartera", activeTab: "cartera", body, env });

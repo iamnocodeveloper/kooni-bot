@@ -1980,3 +1980,34 @@ Configuración completa (aún sin cablear el flujo de llamadas):
   del dealer si Cloudflare sigue bloqueando.
 - **Cobros por voz**: cablear el disparo de llamadas + registrar el resultado del
   webhook en la cartera (`collection_cases` / `collection_contact_attempts`).
+
+---
+
+## 🏁 CIERRE DE ETAPA — Nicho “Cartera de cobros” (v1.41.0, 2026-09-10)
+
+> **Estado:** `pnpm test` verde (238+), typecheck verde, desplegado. El nicho se
+> elige al instalar (`npx kooni-bot init` → “Cartera de cobros”, CLI 0.4.0).
+
+### Qué quedó
+- **Nicho `cartera`** (`BOT_NICHE=cartera`): panel re-etiquetado, playbook de
+  cobranza, KB sugerida y tools `consultarDeuda` / `registrarPromesa` /
+  `llamarDeudor`.
+- **Panel `/admin/cartera`**: KPIs, importación por CSV, búsqueda, filtros por
+  lista/etapa, paginación, export CSV, ficha del deudor (deuda, pagos, promesas,
+  historial, etapas, opt-out, llamar con IA), reglas de cobranza y reportes.
+- **Motor de cobranza** (`src/collections/engine.ts`): recordatorios por mora con
+  cooldown 20 h, intentos máximos, tope por corrida y **ventana horaria**;
+  recordatorios de promesa; auto-marcado de promesas incumplidas. Canal “Voz”
+  dispara la llamada con IA.
+- **Voz (Vapi/Retell)**: `startDebtorCall` + webhooks que registran el resultado
+  (promesa/pago/disputa/sin respuesta) y mueven la etapa.
+- **Opt-out (DNC)** respetado en todos los envíos.
+- **Docs**: `docs/COBRANZA.md`.
+
+### Pendiente / siguiente
+- **Publicar el CLI en npm** (`kooni-bot@0.4.0`) — bloqueado por token npm 401.
+- **Verificación end-to-end en una instalación real** con el nicho activo
+  (importar cartera → regla → correr → mensaje/promesa/reporte). Los tests cubren
+  el motor con mocks, pero falta un bot vivo con `BOT_NICHE=cartera`.
+- Mejoras opcionales: firma HMAC completa del webhook de Retell; plantillas
+  aprobadas de WhatsApp para Meta/Twilio fuera de la ventana de 24 h.

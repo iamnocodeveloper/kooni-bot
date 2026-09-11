@@ -26,6 +26,8 @@ export interface CollectionRunResult {
   failed: number;
   promisesBroken: number;
   promiseReminders: number;
+  /** true si la corrida se omitió por estar fuera de la ventana horaria. */
+  windowed?: boolean;
 }
 
 function fmtMoney(n: number, currency = "USD"): string {
@@ -76,7 +78,7 @@ async function resolveDestination(
   return null;
 }
 
-export async function runCollections(env: Env): Promise<CollectionRunResult> {
+export async function runCollections(env: Env, opts: { force?: boolean } = {}): Promise<CollectionRunResult> {
   const out: CollectionRunResult = { rules: 0, sent: 0, skipped: 0, failed: 0, promisesBroken: 0, promiseReminders: 0 };
   const db = new Db(env.DB);
   const repo = new CollectionsRepo(db);
@@ -84,6 +86,27 @@ export async function runCollections(env: Env): Promise<CollectionRunResult> {
   const msgs = new MessagesRepo(db);
   const now = Date.now();
   const cooldownMs = COOLDOWN_HOURS * 3_600_000;
+
+  // Ventana horaria (zona del negocio). El cron corre a una hora fija UTC, así
+  // que sin esto podrías escribirle a un deudor a las 3am. `force` (botón
+  // "correr ahora") la ignora a propósito.
+  if (!opts.force) {
+    try {
+      const { SettingsRepo, SETTING_KEYS } = await import("../db/settings");
+      const settings = await new SettingsRepo(db).all();
+      const from = Number(settings[SETTING_KEYS.collectionSendFromHour] ?? 8);
+      const to = Number(settings[SETTING_KEYS.collectionSendToHour] ?? 19);
+      const tzMin = Number(settings[SETTING_KEYS.collectionTzOffsetMinutes] ?? -360);
+      const localHour = new Date(now + tzMin * 60_000).getUTCHours();
+      const inWindow = from <= to ? localHour >= from && localHour < to : localHour >= from || localHour < to;
+      if (from < to && !inWindow) {
+        out.windowed = true;
+        return out;
+      }
+    } catch {
+      /* sin settings: sin ventana */
+    }
+  }
 
   const rules = (await repo.listRules()).filter((r) => Number(r.active) === 1);
   out.rules = rules.length;
@@ -110,6 +133,11 @@ export async function runCollections(env: Env): Promise<CollectionRunResult> {
           out.skipped++;
           continue;
         }
+        // Opt-out (DNC): si pidió no ser contactado, nunca se le escribe.
+        if (debtor.dnc && Number(debtor.dnc) > 0) {
+          out.skipped++;
+          continue;
+        }
         const caseId = await repo.ensureCase(debtor.id, acc.account_id);
         const c = await db.first<{ attempts: number; last_contact_at: number | null; next_contact_at: number | null }>(
           "SELECT attempts, last_contact_at, next_contact_at FROM collection_cases WHERE id = ?",
@@ -128,6 +156,20 @@ export async function runCollections(env: Env): Promise<CollectionRunResult> {
           out.skipped++;
           continue;
         }
+        // Regla de VOZ: dispara la llamada con IA en vez de un mensaje de texto.
+        if (String(rule.channel) === "voz") {
+          const { startDebtorCall } = await import("./voice");
+          const call = await startDebtorCall(env, debtor.id, caseId);
+          if (!call.ok) {
+            out.skipped++;
+            continue;
+          }
+          await repo.bumpAttempts(caseId);
+          await db.run("UPDATE collection_cases SET next_contact_at = ? WHERE id = ?", [now + cooldownMs, caseId]);
+          out.sent++;
+          continue;
+        }
+
         const dest = await resolveDestination(env, db, debtor.phone);
         if (!dest) {
           out.skipped++;
@@ -184,6 +226,9 @@ export async function runCollections(env: Env): Promise<CollectionRunResult> {
       const dest = await resolveDestination(env, db, p.debtor_phone ?? null);
       if (!dest) continue;
       const caseId = await repo.ensureCase(p.debtor_id).catch(() => null);
+      // Respeta el opt-out también en los recordatorios de promesa.
+      const promDebtor = await repo.getDebtor(p.debtor_id).catch(() => null);
+      if (promDebtor?.dnc && Number(promDebtor.dnc) > 0) continue;
       // Guard anti-duplicado: no recordar la misma promesa dos veces en 20h.
       const recent = await db.first<{ n: number }>(
         "SELECT COUNT(*) AS n FROM collection_interactions WHERE debtor_id = ? AND outcome = 'recordatorio_promesa' AND created_at > ?",

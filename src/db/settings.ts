@@ -126,6 +126,11 @@ export const SETTING_KEYS = {
   // Común a la cartera de cobros por voz
   cobrosVoiceObjective: "cobros_voice_objective", // objetivo/tono del guion de cobranza
   cobrosVoiceMaxAttempts: "cobros_voice_max_attempts", // intentos por deudor (default 3)
+  // Ventana horaria del motor de cobranza (nicho cartera). Horas locales del
+  // negocio (0-23) + offset en minutos respecto de UTC (ej. -360 = UTC-6).
+  collectionSendFromHour: "collection_send_from_hour", // default 8
+  collectionSendToHour: "collection_send_to_hour", // default 19
+  collectionTzOffsetMinutes: "collection_tz_offset_minutes", // default -360
 } as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[keyof typeof SETTING_KEYS];
@@ -201,6 +206,9 @@ export const SETTING_LABELS: Record<string, string> = {
   [SETTING_KEYS.retellApiBaseUrl]: "Retell — API base URL",
   [SETTING_KEYS.cobrosVoiceObjective]: "Cobros por voz — objetivo/tono",
   [SETTING_KEYS.cobrosVoiceMaxAttempts]: "Cobros por voz — intentos por deudor",
+  [SETTING_KEYS.collectionSendFromHour]: "Cobranza — hora local desde",
+  [SETTING_KEYS.collectionSendToHour]: "Cobranza — hora local hasta",
+  [SETTING_KEYS.collectionTzOffsetMinutes]: "Cobranza — offset UTC (min)",
 };
 
 /** Toggles del menú Extras (Kooni+) — etiquetas para el registro de auditoría. */
