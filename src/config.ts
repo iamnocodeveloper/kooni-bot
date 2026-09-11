@@ -22,22 +22,10 @@ export async function isProUnlocked(env: Env): Promise<boolean> {
 
 // MODELO (2026-09-07): NINGUNA tool ni tab está reservada a Pro. Todas las
 // funciones están disponibles en todos los planes; free y Pro se diferencian
-// SOLO por los límites de cantidad (`src/limits.ts`). Estos arrays se dejan
-// vacíos (no `[]` sin más para no romper imports) por si se quiere volver a un
-// modelo con paywall.
-export const PRO_ONLY_TOOLS: readonly string[] = [];
-
+// SOLO por los límites de cantidad (`src/limits.ts`).
 export const PRO_ONLY_TABS: readonly string[] = [];
-
-/** Legado — ya no se usa (ningún tab está gateado). */
-export const TAB_MODULE: Record<string, string> = {};
 
 /** ¿El tab está permitido? Siempre sí — no hay tabs Pro. */
 export async function isTabAllowed(_env: Env, _tab: string): Promise<boolean> {
-  return true;
-}
-
-/** ¿La tool está disponible? Siempre sí — no hay tools Pro. */
-export async function isToolAvailable(_env: Env, _toolName: string): Promise<boolean> {
   return true;
 }
