@@ -563,6 +563,105 @@ export function mergeVehicleStore(prev: VehicleStore, current: Vehicle[]): Vehic
   return { updatedAt: prev.updatedAt, vehicles };
 }
 
+// ── Diff entre dos estados del store (registro de scraping) ──────────────────
+
+/** Un campo que cambió entre dos corridas (valores ya formateados para mostrar). */
+export interface VehicleFieldChange {
+  /** Etiqueta legible del campo: Título, Precio, Millas, Condición, Link, Desglose. */
+  field: string;
+  from: string | null;
+  to: string | null;
+}
+
+/** Un auto que ya existía y cambió en al menos un campo. */
+export interface VehicleChange {
+  key: string;
+  vin: string | null;
+  title: string;
+  url: string | null;
+  fields: VehicleFieldChange[];
+}
+
+/** Qué pasó con el inventario entre dos estados del store. */
+export interface VehicleDiff {
+  added: StoredVehicle[];
+  removed: StoredVehicle[];
+  changed: VehicleChange[];
+}
+
+function fmtPrice(n: number | null | undefined): string | null {
+  return n === null || n === undefined ? null : `$${n.toLocaleString("en-US")}`;
+}
+
+function fmtMiles(n: number | null | undefined): string | null {
+  return n === null || n === undefined ? null : `${n.toLocaleString("en-US")} mi`;
+}
+
+/** Desglose de precio a texto plano (para detectar cambios y mostrarlos). */
+function fmtPricing(p?: VehiclePricing | null): string | null {
+  if (!p) return null;
+  const parts = [
+    p.listPrice !== null ? `Lista ${fmtPrice(p.listPrice)}` : null,
+    p.discount !== null ? `Descuento ${fmtPrice(p.discount)}` : null,
+    p.dealerFee !== null ? `Dealer fee ${fmtPrice(p.dealerFee)}` : null,
+    p.adminFee !== null ? `Admin fee ${fmtPrice(p.adminFee)}` : null,
+    p.tagFee !== null ? `Tag fee ${fmtPrice(p.tagFee)}` : null,
+    p.transparentPrice !== null ? `Precio final ${fmtPrice(p.transparentPrice)}` : null,
+  ].filter(Boolean);
+  return parts.length ? parts.join(" · ") : null;
+}
+
+/**
+ * Compara el store ANTES y DESPUÉS de una corrida de scraping → autos nuevos,
+ * vendidos (o fuera de la URL) y campos que cambiaron (título, condición,
+ * precio, millas, link y desglose de precio). Alimenta el registro de scraping
+ * (`src/db/webSyncLog.ts`), que es solo informativo: NO modifica el store.
+ */
+export function diffVehicleStore(before: VehicleStore, after: VehicleStore): VehicleDiff {
+  const b = loadStore(before).vehicles;
+  const a = loadStore(after).vehicles;
+  const added: StoredVehicle[] = [];
+  const removed: StoredVehicle[] = [];
+  const changed: VehicleChange[] = [];
+
+  const cmp = (
+    fields: VehicleFieldChange[],
+    field: string,
+    from: string | null,
+    to: string | null,
+  ) => {
+    if ((from ?? "") !== (to ?? "")) fields.push({ field, from, to });
+  };
+
+  for (const key of Object.keys(a)) {
+    const cur = a[key];
+    const old = b[key];
+    if (!old) {
+      added.push(cur);
+      continue;
+    }
+    const fields: VehicleFieldChange[] = [];
+    cmp(fields, "Título", old.title ?? null, cur.title ?? null);
+    cmp(fields, "Condición", old.condition ?? null, cur.condition ?? null);
+    cmp(fields, "Precio", fmtPrice(old.price), fmtPrice(cur.price));
+    cmp(fields, "Millas", fmtMiles(old.miles), fmtMiles(cur.miles));
+    cmp(fields, "Link", old.listingUrl ?? null, cur.listingUrl ?? null);
+    cmp(fields, "Desglose", fmtPricing(old.pricing), fmtPricing(cur.pricing));
+    if (fields.length) {
+      changed.push({ key, vin: cur.vin, title: cur.title, url: cur.listingUrl, fields });
+    }
+  }
+  for (const key of Object.keys(b)) {
+    if (!a[key]) removed.push(b[key]);
+  }
+
+  const byTitle = (x: StoredVehicle, y: StoredVehicle) => x.title.localeCompare(y.title);
+  added.sort(byTitle);
+  removed.sort(byTitle);
+  changed.sort((x, y) => x.title.localeCompare(y.title));
+  return { added, removed, changed };
+}
+
 const IMG_ERROR_COOLDOWN_MS = 3 * 86_400_000; // reintento nocturno cada 3 días si falló
 const IMG_ONDEMAND_COOLDOWN_MS = 3_600_000; // bajo demanda: no repetir el intento dentro de 1 h
 

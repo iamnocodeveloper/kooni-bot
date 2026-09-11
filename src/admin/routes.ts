@@ -490,7 +490,7 @@ adminApp.post("/push/test", async (c) => {
 // Web Sync manual (módulo web_sync): scrapea ya las páginas configuradas.
 adminApp.post("/kb/web-sync", async (c) => {
   const { runWebSync } = await import("../kb/webSync");
-  const r = await runWebSync(c.env);
+  const r = await runWebSync(c.env, { trigger: "manual" });
   let msg: string;
   if (r.skipped) {
     msg = `omitido: ${r.skipped}`;
@@ -499,6 +499,9 @@ adminApp.post("/kb/web-sync", async (c) => {
     if (r.vehicles !== undefined) {
       msg += ` · ${r.vehicles} autos`;
       if ((r.imagesPending ?? 0) > 0) msg += ` · ${r.imagesPending} fotos pendientes (se buscan en segundo plano)`;
+    }
+    if ((r.added ?? 0) > 0 || (r.removed ?? 0) > 0 || (r.changed ?? 0) > 0) {
+      msg += ` · ${r.added ?? 0} nuevos / ${r.removed ?? 0} salieron / ${r.changed ?? 0} cambios`;
     }
     if (r.errors.length) {
       // Mostrar el primer error concreto (no solo el conteo).
@@ -521,6 +524,58 @@ adminApp.post("/kb/web-sync", async (c) => {
     );
   }
   return c.redirect(`/admin/kb?websync=${encodeURIComponent(msg)}`);
+});
+
+// ── Registro de scraping (/admin/scraping) ───────────────────────────────────
+// Ventana de solo lectura con lo que pasó en cada corrida de Decodo: autos
+// nuevos, vendidos y campos cambiados. Ver src/db/webSyncLog.ts.
+adminApp.get("/scraping", async (c) => {
+  const { renderScraping } = await import("./views/scraping");
+  const beforeRaw = Number(c.req.query("before"));
+  return c.html(
+    await renderScraping(c.env, {
+      run: c.req.query("run") || undefined,
+      trigger: c.req.query("trigger") || undefined,
+      before: Number.isFinite(beforeRaw) && beforeRaw > 0 ? beforeRaw : undefined,
+      ok: c.req.query("ok") || undefined,
+      err: c.req.query("err") || undefined,
+    }),
+  );
+});
+
+adminApp.get("/scraping/export.csv", async (c) => {
+  const { exportScrapingCsv } = await import("./views/scraping");
+  const beforeRaw = Number(c.req.query("before"));
+  const csv = await exportScrapingCsv(c.env, {
+    trigger: c.req.query("trigger") || undefined,
+    before: Number.isFinite(beforeRaw) && beforeRaw > 0 ? beforeRaw : undefined,
+  });
+  return new Response(csv, {
+    headers: {
+      "Content-Type": "text/csv; charset=utf-8",
+      "Content-Disposition": `attachment; filename="scraping-${Date.now()}.csv"`,
+    },
+  });
+});
+
+// Scrapeo manual desde el registro (mismo pipeline que /kb/web-sync).
+adminApp.post("/scraping/run", async (c) => {
+  const { runWebSync } = await import("../kb/webSync");
+  const r = await runWebSync(c.env, { trigger: "manual" });
+  if (r.skipped) return c.redirect(`/admin/scraping?err=${encodeURIComponent(`Omitido: ${r.skipped}`)}`);
+  if (r.vehicles !== undefined && (r.imagesPending ?? 0) > 0) {
+    c.executionCtx.waitUntil(
+      (async () => {
+        const { refreshVehicleImages } = await import("../kb/inventory");
+        const { Db } = await import("../db/client");
+        await refreshVehicleImages(c.env, new Db(c.env.DB)).catch((e) => console.error("scraping fotos (background):", e));
+      })(),
+    );
+  }
+  const msg =
+    `${r.added ?? 0} nuevos · ${r.removed ?? 0} salieron · ${r.changed ?? 0} cambios · ${r.vehicles ?? 0} autos` +
+    (r.errors.length ? ` · ${r.errors.length} error(es)` : "");
+  return c.redirect(`/admin/scraping?ok=${encodeURIComponent(msg)}`);
 });
 
 // --- Handoff: plantilla HSM del aviso al dueño ---------------------------------

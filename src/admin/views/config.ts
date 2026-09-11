@@ -139,6 +139,10 @@ function renderDecodoSection(env: Env, settings: Record<string, string>): string
             : ""
         }
       </div>
+      <div class="text-[11.5px]" style="border-top:1px solid var(--line);padding-top:11px">
+        <a href="/admin/scraping" style="color:var(--accent);text-decoration:none">Ver registro de scraping →</a>
+        <span class="text-dim">qué entró, salió o cambió en cada corrida (nuevos, vendidos, precios).</span>
+      </div>
     </div>`;
 }
 

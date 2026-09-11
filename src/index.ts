@@ -438,7 +438,7 @@ app.post("/kb/web-sync", async (c) => {
     return c.json({ ok: false, error: "unauthorized" }, 401);
   }
   const { runWebSync } = await import("./kb/webSync");
-  const r = await runWebSync(c.env);
+  const r = await runWebSync(c.env, { trigger: "api" });
   // Las fotos de los autos nuevos/cambiados se buscan en segundo plano (delta
   // acotado) para que este disparo no cuelgue al llamador.
   if (r.vehicles !== undefined && (r.imagesPending ?? 0) > 0) {
@@ -597,6 +597,14 @@ export default {
     } catch (e) {
       console.warn("audit_log purge:", e);
     }
+    // Registro de scraping (Web Sync / Decodo): purga por retención (90 días).
+    try {
+      const { WebSyncLogRepo } = await import("./db/webSyncLog");
+      const removed = await new WebSyncLogRepo(new Db(env.DB)).purgeOld(Date.now() - 90 * 86_400_000);
+      if (removed) console.log(`[cron] web_sync_runs: ${removed} corridas viejas purgadas (> 90d)`);
+    } catch (e) {
+      console.warn("web_sync_runs purge:", e);
+    }
     // Corrida nocturna del Analista de insights (F2). No debe tumbar la purga.
     await analyzeConversations(env, { limit: 50 }).catch((e) => console.error("insights:", e));
     // Reporte nocturno (Kooni+): resumen del día al dueño (Telegram/email),
@@ -632,10 +640,13 @@ export default {
     // En el tick nocturno también corre el batch de fotos de fichas (delta).
     try {
       const { runWebSync } = await import("./kb/webSync");
-      const r = await runWebSync(env, { images: true });
+      const r = await runWebSync(env, { images: true, trigger: "cron" });
       if (!r.skipped) {
         console.log(
           `[webSync] noche: ${r.updated} actualizadas, ${r.unchanged} sin cambios, ${r.errors.length} errores` +
+            ((r.added ?? 0) || (r.removed ?? 0) || (r.changed ?? 0)
+              ? ` · +${r.added ?? 0} nuevos / -${r.removed ?? 0} salieron / ~${r.changed ?? 0} cambios`
+              : "") +
             (r.vehicles !== undefined
               ? ` · ${r.vehicles} autos en store, fotos: ${r.imagesFetched ?? 0} ok / ${r.imagesFailed ?? 0} err / ${r.imagesPending ?? 0} pend`
               : ""),

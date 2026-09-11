@@ -22,6 +22,7 @@
 import type { Env } from "../env";
 import { Db } from "../db/client";
 import { SettingsRepo, SETTING_KEYS } from "../db/settings";
+import { WebSyncLogRepo, type WebSyncChangeInput } from "../db/webSyncLog";
 import { KbDocsRepo, indexDoc, removeDocVectors, MAX_DOC_CHARS } from "./docs";
 import { scrapeUrl, decodoConfigured } from "../integrations/decodo";
 import {
@@ -36,9 +37,11 @@ import {
   listStoredVehicles,
   pendingImageCount,
   refreshVehicleImages,
+  diffVehicleStore,
   type Vehicle,
   type VehicleStore,
   type StoredVehicle,
+  type VehicleDiff,
 } from "./inventory";
 
 const MAX_URLS = 10;
@@ -178,14 +181,47 @@ export interface WebSyncSummary {
   imagesFailed?: number;
   /** Fotos pendientes (autos nuevos/cambiados que aún no tienen foto). */
   imagesPending?: number;
+  /** Diff contra el store previo (registro de scraping). */
+  added?: number;
+  removed?: number;
+  changed?: number;
 }
 
 export interface WebSyncRunOptions {
   /** true en el tick nocturno: además del sync del feed, corre el batch de fotos. */
   images?: boolean;
+  /** Quién disparó la corrida (queda en el registro de scraping). */
+  trigger?: "cron" | "manual" | "api" | "rebuild";
+}
+
+/** Convierte el diff del store al detalle que guarda el registro de scraping. */
+function diffToChanges(diff: VehicleDiff): WebSyncChangeInput[] {
+  const out: WebSyncChangeInput[] = [];
+  for (const v of diff.added) {
+    out.push({ kind: "added", vehicleKey: v.key, vin: v.vin, title: v.title, url: v.listingUrl });
+  }
+  for (const v of diff.removed) {
+    out.push({ kind: "removed", vehicleKey: v.key, vin: v.vin, title: v.title, url: v.listingUrl });
+  }
+  for (const c of diff.changed) {
+    for (const f of c.fields) {
+      out.push({
+        kind: "changed",
+        vehicleKey: c.key,
+        vin: c.vin,
+        title: c.title,
+        url: c.url,
+        field: f.field,
+        oldValue: f.from,
+        newValue: f.to,
+      });
+    }
+  }
+  return out;
 }
 
 export async function runWebSync(env: Env, opts: WebSyncRunOptions = {}): Promise<WebSyncSummary> {
+  const runStart = Date.now();
   const empty: WebSyncSummary = { scraped: 0, updated: 0, unchanged: 0, errors: [] };
 
   // MODELO (2026-09-07): web_sync disponible en todos los planes — solo pide el
@@ -374,6 +410,37 @@ export async function runWebSync(env: Env, opts: WebSyncRunOptions = {}): Promis
     }
   }
 
+  // ── Registro de scraping (control interno) ────────────────────────────────
+  // Compara el store ANTES de la corrida con el de DESPUÉS (ya incluye lo que
+  // enriqueció el batch de fotos) → nuevos, vendidos y campos cambiados. Es
+  // solo informativo: nunca altera el inventario.
+  try {
+    const storeAfter = await loadVehicleStore(db).catch(() => storeBefore);
+    const diff = diffVehicleStore(storeBefore, storeAfter);
+    await new WebSyncLogRepo(db).recordRun(
+      {
+        trigger: opts.trigger ?? "manual",
+        url: urls.join(", ").slice(0, 900),
+        mode: inventorySeen ? "inv" : "text",
+        durationMs: Date.now() - runStart,
+        vehiclesTotal: listStoredVehicles(storeAfter).length,
+        added: inventorySeen ? diff.added.length : 0,
+        removed: inventorySeen ? diff.removed.length : 0,
+        changed: inventorySeen ? diff.changed.length : 0,
+        errors: summary.errors.length,
+        errorMsg: summary.errors[0]
+          ? `${summary.errors[0].url} — ${summary.errors[0].error}`.slice(0, 500)
+          : undefined,
+      },
+      inventorySeen ? diffToChanges(diff) : [],
+    );
+    summary.added = inventorySeen ? diff.added.length : 0;
+    summary.removed = inventorySeen ? diff.removed.length : 0;
+    summary.changed = inventorySeen ? diff.changed.length : 0;
+  } catch (e) {
+    console.error("[webSync] no se pudo registrar la corrida:", e);
+  }
+
   await repo.set(SETTING_KEYS.webSyncState, JSON.stringify(state));
   await repo.set(SETTING_KEYS.webSyncLastRun, String(Date.now()));
   return summary;
@@ -455,5 +522,18 @@ export async function rebuildInventoryKb(
   }
 
   await repo.set(SETTING_KEYS.webSyncState, JSON.stringify(state));
+
+  // Queda asentado en el registro de scraping, aunque no scrapea el feed.
+  try {
+    await new WebSyncLogRepo(db).recordRun({
+      trigger: "rebuild",
+      mode: "inv",
+      vehiclesTotal: all.length,
+      note: "KB reconstruida desde el store (sin scrapear el feed)",
+    });
+  } catch (e) {
+    console.warn("[webSync] no se pudo registrar el rebuild:", e);
+  }
+
   return { vehicles: all.length, updated, errors };
 }

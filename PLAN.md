@@ -2096,3 +2096,38 @@ está activo en esa instalación).
 3. **Fase 3 — unificar settings/features** (`FEATURE_KEYS` derivado de `SETTING_KEYS`).
 4. **Fase 4 — decisiones:** learn mode y multiusuario.
 5. **Fase 5 — datos:** `DROP zz_orphan_*` (con la regla de oro), arreglar `installs.json`.
+
+---
+
+## 📊 REGISTRO DE SCRAPING (v1.43.0, 2026-09-11)
+
+> **Pedido de Joel:** saber qué pasa al scrapear los autos (control interno):
+> si había 400 autos y ahora hay 405, ver **cuáles son nuevos**; si un auto
+> cambió de **nombre, precio**, etc., identificarlo y dejarlo en un reporte.
+
+### Qué se hizo
+- **`/admin/scraping`** (nuevo tab en **Análisis**, también linkeado desde
+  **Configuración → Scraping web (Decodo)**): registro de solo lectura de cada
+  corrida de Decodo (cron nocturno, manual del panel o endpoint por token).
+- **Diff por corrida** — `diffVehicleStore(prev, after)` en `src/kb/inventory.ts`:
+  compara el store ANTES y DESPUÉS (incluye el enriquecimiento de fotos/precios
+  del mismo sync, porque el registro se graba al final) → `added`, `removed` y
+  `changed` con **campo a campo** (Título, Condición, Precio, Millas, Link,
+  Desglose), mostrado como `antes → después`.
+- **D1**: `web_sync_runs` (resumen por corrida: trigger, url, modo, duración,
+  autos totales, nuevos, vendidos, cambios, errores) + `web_sync_changes`
+  (detalle por auto/campo). Repo `src/db/webSyncLog.ts`. Retención **90 días**
+  (purga en el cron nocturno, junto a `audit_log`).
+- **Vista** `src/admin/views/scraping.ts`: KPIs (autos actuales, última corrida,
+  nuevos/vendidos/cambios de 7 días), tabla de corridas con detalle desplegable,
+  filtro por disparador, paginación, export CSV y botón **“Scrapear ahora”**.
+- **Disparadores** etiquetados: `cron` (03:00 UTC), `manual` (panel/`/kb/web-sync`),
+  `api` (token `/kb/web-sync`), `rebuild` (`POST /kb/rebuild`, sin scrape).
+- El diff es **informativo**: nunca modifica el inventario (el merge no cambió).
+- Tests: `test/kb/inventoryDiff.test.ts` (diff) + `test/db/webSyncLog.test.ts` (repo).
+
+### Pendiente
+- Desplegar (bump a 1.43.0 + push + `kooni-bot update`) cuando Joel lo pida —
+  al actualizar cardaniel viaja también la limpieza de código ya en `main`.
+- Opcional: registrar también los cambios que hace el batch de **fotos/precios**
+  en background (hoy quedan atribuidos a la corrida siguiente).

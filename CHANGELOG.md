@@ -5,6 +5,24 @@ Cambios notables de Kooni. Formato aproximado de
 
 El CLI `kooni-bot` se versiona aparte (npm) — ver la nota de cada versión.
 
+## [1.43.0] — 2026-09-11
+
+### Agregado — Registro de scraping (control interno de Decodo)
+
+- **Nueva sección Análisis → “Scraping”** (`/admin/scraping`, solo lectura): qué
+  pasó en cada corrida de Decodo (Web Sync / inventario), sea del **cron
+  nocturno**, del botón **manual** del panel o del endpoint por token.
+- Por corrida guarda el **resumen** (autos totales, nuevos, vendidos/salieron,
+  cambios, errores, duración) y el **detalle**: autos **nuevos** (con link),
+  **vendidos** y **cambios campo a campo** (título, condición, precio, millas,
+  link y desglose de precio) mostrados como `antes → después`.
+- KPIs (autos actuales, última corrida, nuevos/vendidos/cambios de 7 días),
+  filtro por disparador, paginación, **export CSV** y botón **“Scrapear ahora”**.
+- Persistencia en D1: tablas `web_sync_runs` + `web_sync_changes` (se crean en
+  toda instalación) y retención de **90 días** (purga en el cron nocturno).
+- El diff es **informativo**: nunca altera el inventario.
+- Acceso directo desde **Configuración → Scraping web (Decodo)**.
+
 ## [1.42.0] — 2026-09-10
 
 ### Agregado — API key de Decodo configurable desde el panel

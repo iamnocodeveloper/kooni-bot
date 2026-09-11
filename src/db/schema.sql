@@ -675,3 +675,42 @@ CREATE TABLE IF NOT EXISTS collection_dnc (
   reason TEXT,
   created_at INTEGER NOT NULL
 );
+
+-- ── Registro de scraping (Web Sync / Decodo) ─────────────────────────────────
+-- Control interno: una fila por corrida de scraping (cron, manual o API) y una
+-- fila por cada auto que entró, salió o cambió de campo. Se muestra en
+-- /admin/scraping (solo lectura). Se conserva 90 días.
+CREATE TABLE IF NOT EXISTS web_sync_runs (
+  id TEXT PRIMARY KEY,
+  at INTEGER NOT NULL,
+  -- cron | manual | api | rebuild
+  trigger TEXT NOT NULL DEFAULT 'manual',
+  url TEXT,
+  mode TEXT,
+  duration_ms INTEGER,
+  vehicles_total INTEGER NOT NULL DEFAULT 0,
+  added INTEGER NOT NULL DEFAULT 0,
+  removed INTEGER NOT NULL DEFAULT 0,
+  changed INTEGER NOT NULL DEFAULT 0,
+  errors INTEGER NOT NULL DEFAULT 0,
+  error_msg TEXT,
+  note TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_wssync_runs_at ON web_sync_runs(at);
+
+CREATE TABLE IF NOT EXISTS web_sync_changes (
+  id TEXT PRIMARY KEY,
+  run_id TEXT NOT NULL,
+  at INTEGER NOT NULL,
+  -- added | removed | changed
+  kind TEXT NOT NULL,
+  vehicle_key TEXT,
+  vin TEXT,
+  title TEXT,
+  url TEXT,
+  field TEXT,
+  old_value TEXT,
+  new_value TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_wssync_changes_run ON web_sync_changes(run_id);
+CREATE INDEX IF NOT EXISTS idx_wssync_changes_at ON web_sync_changes(at);
