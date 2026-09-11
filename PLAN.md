@@ -2011,3 +2011,88 @@ Configuración completa (aún sin cablear el flujo de llamadas):
   el motor con mocks, pero falta un bot vivo con `BOT_NICHE=cartera`.
 - Mejoras opcionales: firma HMAC completa del webhook de Retell; plantillas
   aprobadas de WhatsApp para Meta/Twilio fuera de la ventana de 24 h.
+
+---
+
+## 🧹 AUDITORÍA DE CÓDIGO Y PLAN DE LIMPIEZA (2026-09-10)
+
+> Auditoría estática de `src/` (156 archivos / 28.433 líneas): importadores,
+> exports sin uso, tablas vs código, settings vs uso, env vs uso, comentarios y
+> TODOs. **Objetivo: quitar código muerto/superfluo, NUNCA funciones.**
+
+### ⚠️ REGLA DE ORO — tablas de datos
+
+**Antes de borrar (o renombrar) CUALQUIER tabla de datos hay que verificar que
+no pertenezca a un nicho.** Cada nicho puede tener tablas y/o campos propios, y
+borrar una rompe esa función (aunque hoy parezca “sin uso” porque el nicho no
+está activo en esa instalación).
+
+**Mapa nicho → tablas / campos (verificado en el código):**
+
+| Nicho (`BOT_NICHE`) | Tablas propias | Campos de `lead.metadata` |
+|---|---|---|
+| `generico` | — | — |
+| `agencia-ia` | — | servicio, plan, canal |
+| `inmobiliaria` | — | operación, zona, presupuesto, recámaras |
+| `clinica` | — | especialidad, fecha, hora, motivo |
+| `barberia` | — | servicio, barbero, fecha, hora |
+| `restaurante` (`orderEngine: true`) | `products`, `orders`, `order_items`, `order_events` | tipo, fecha, personas |
+| `cartera` | `debtor_lists`, `debtors`, `debt_accounts`, `collection_cases`, `collection_interactions`, `collection_contact_attempts`, `collection_rules`, `payment_promises`, `collection_dnc` | deuda, mora, vence |
+
+**Procedimiento antes de un `DROP`/`ALTER`:**
+1. Buscar la tabla en el mapa de arriba — si aparece, **NO se toca**.
+2. Buscar el nombre en `src/` (incluidos `src/niches/*`, `src/tools/*`, `src/orders/*`,
+   `src/collections/*`) — si algún nicho la usa, **NO se toca**.
+3. Buscar en `src/db/schema.sql` y `migrations/`.
+4. Recién entonces, si es de un experimento previo y está **vacía**, renombrar
+   (`zz_orphan_<nombre>`) en vez de borrar, y documentarlo acá.
+
+> **Caso real:** cardealer tenía 8 tablas de un experimento previo (`debtors`,
+> `debt_accounts`, `collection_*`, `payment_promises`) con OTRO esquema y 0 filas.
+> Chocaban con las del nicho `cartera`. Se **renombraron** a `zz_orphan_*` (no se
+> borraron). Antes de eliminarlas: confirmar que no son de ningún nicho (no lo
+> son — el nicho `cartera` usa las tablas nuevas) y que siguen vacías.
+
+### Hallazgos
+
+**Seguro de quitar (no toca funciones):**
+- **Archivos sin importadores:** `src/channels/learned.ts` (207), `src/db/adminEmails.ts` (31),
+  `src/db/magicLinks.ts` (50). ⚠️ Los dos últimos son **roadmap** (multiusuario) — decisión aparte.
+- **27 exports sin uso** — destacan: `config.ts` (`PRO_ONLY_TOOLS`, `isToolAvailable`, `TAB_MODULE`,
+  gating free/pro legacy), `license.ts: generateLicenseV2` (generación = panel del dueño),
+  `replies/sender.ts: sendChunkedReply`, `kb/webSync.ts: MAX_IMG_BATCH`,
+  `kb/inventory.ts: extractPriceFromText/extractMilesFromText/ensureVehicleImage/findVehicleByTitle`
+  (hoy solo tests), `reports/nightly.ts: REPORT_MODULE_ID/reportChannelStatus`,
+  `templates/campaigns.ts: getTemplate`, `modules.ts: MODULE_UNLOCKS_SETTING/moduleById`.
+- **Settings duplicadas/muertas:** `SETTING_KEYS.feature*` (13) repite `FEATURE_KEYS` de
+  `features.ts` → unificar; `moduleUnlocks` y `featureBlindaje` solo viven en `settings.ts`.
+- **Env muertas:** `GOOGLE_SERVICE_ACCOUNT_JSON`, `CONTROL_PLANE_URL`.
+- **Tipo mal planteado:** `CATALOG: R2Bucket` es **requerido** pero R2 es opcional
+  (comentado en `wrangler.toml.example`) y **ningún código lo usa** → `CATALOG?: R2Bucket` o borrar.
+- **Dep sin uso:** `@anthropic-ai/sdk`.
+- **Scripts legacy:** `scripts/kooni-init.sh|ps1`, `scripts/test-local.sh|ps1` (los reemplazó
+  `cli-kooni`), `scripts/gen-license.ts` (herramienta del dueño, no del cliente).
+- **Docs desactualizadas:** `docs/DESPLIEGUE.md` y `docs/PRUEBA-LOCAL.md` siguen documentando
+  los instaladores legacy.
+- **0 bloques de código comentado** y **0 `@ts-ignore`** (limpio en ese frente).
+
+**Decisiones (features a medio construir — NO borrar sin decidir):**
+- **Learn mode**: el endpoint está cableado, pero `channels/learned.ts` y
+  `inferPath`/`loadCapture`/`saveLearnedMapping`/`startLearnMode`/`stopLearnMode` nunca se usan
+  (~360 líneas). → terminar o borrar.
+- **Multiusuario**: `adminEmails.ts` + `magicLinks.ts` (Fase C del roadmap, sin cablear).
+
+**Datos / infra:**
+- `zz_orphan_*` (8 tablas vacías en cardealer) → `DROP` tras la verificación de arriba.
+- `~/.kooni/installs.json` con la ruta vieja de joel-nocode → corregir con el próximo `update`.
+- `schema.sql`: el cargador parte por `;` **ignorando comentarios** → un `;` dentro de un
+  comentario rompe la migración (nos pasó). Regla: sin `;` en comentarios SQL.
+
+### Plan de limpieza por fases
+1. **Fase 1 — basura segura:** exports/constantes muertos, dep, env, tipo `CATALOG`, docs.
+   → `pnpm typecheck && pnpm test`.
+2. **Fase 2 — instaladores legacy:** borrar `scripts/kooni-init.*`/`test-local.*`, mover
+   `gen-license.ts` a `admin-pagos/`, actualizar los 2 docs.
+3. **Fase 3 — unificar settings/features** (`FEATURE_KEYS` derivado de `SETTING_KEYS`).
+4. **Fase 4 — decisiones:** learn mode y multiusuario.
+5. **Fase 5 — datos:** `DROP zz_orphan_*` (con la regla de oro), arreglar `installs.json`.
