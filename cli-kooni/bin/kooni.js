@@ -108,6 +108,7 @@ const DICT = {
     qFaq: "¿Qué es lo que MÁS te pregunta la gente? (separa con |)",
     qReglas: "¿Algo que el bot NO deba hacer o decir? ¿Y cuándo debe pasarte la conversación?",
     qTone: "¿Cómo quieres que suene?",
+    qNiche: "¿Para qué giro es el bot? (elige el que más se parezca)",
     toneFriendly: "Cercano", toneFormal: "Formal", tonePlayful: "Divertido",
     tone1: "cercano y amigable, como hablarle a un conocido",
     tone2: "formal y profesional, claro y respetuoso",
@@ -184,6 +185,7 @@ const DICT = {
     qFaq: "What do people ask you the MOST? (separate with |)",
     qReglas: "Anything the bot should NOT do or say? And when should it hand the chat to you?",
     qTone: "How should it sound?",
+    qNiche: "What's the bot for? (pick the closest)",
     toneFriendly: "Friendly", toneFormal: "Formal", tonePlayful: "Playful",
     tone1: "friendly and warm, like talking to someone you know",
     tone2: "formal and professional, clear and respectful",
@@ -677,6 +679,12 @@ function stampWrangler(dir, answers, botUid) {
   set(/BOT_LANGUAGE\s*=\s*"[^"]*"/g, `BOT_LANGUAGE = "${answers.lang}"`);
   set(/BOT_TIER\s*=\s*"[^"]*"/g, `BOT_TIER = "${answers.tier}"`);
   set(/BUFFER_SECONDS\s*=\s*"[^"]*"/g, `BUFFER_SECONDS = "${answers.bufferSeconds || "15"}"`);
+  // BOT_NICHE: pack del giro. Se inyecta en [vars] si el template no lo trae.
+  {
+    const niche = String(answers.niche || "generico");
+    if (/BOT_NICHE\s*=/.test(s)) set(/BOT_NICHE\s*=\s*"[^"]*"/, `BOT_NICHE = "${niche}"`);
+    else s = s.replace(/^(\s*\[vars\][^\n]*\n)/m, `$1BOT_NICHE = "${niche}"\n`);
+  }
   set(/DASHBOARD_BASE_URL\s*=\s*"[^"]*"/g, `DASHBOARD_BASE_URL = ""`);
   set(/database_name\s*=\s*"[^"]*"/, `database_name = "${dbName}"`);
   set(/index_name\s*=\s*"[^"]*"/, `index_name = "${kbName}"`);
@@ -902,6 +910,22 @@ async function onboarding(rl, answers, defaultDir, flags = {}) {
   answers.pagos = answers.pagos ?? (await ask(rl, t().qPagos, undefined) || "");
   answers.faq = answers.faq ?? (await ask(rl, t().qFaq, undefined) || "");
   answers.reglas = answers.reglas ?? (await ask(rl, t().qReglas, undefined) || "");
+
+  // Giro → BOT_NICHE: decide el pack del panel (re-etiquetado), el playbook del
+  // prompt y las tools extra (ej. cartera de cobros → consultarDeuda/registrarPromesa).
+  const NICHE_CHOICES = [
+    { key: "generico", label: m("Genérico / otro", "Generic / other") },
+    { key: "agencia-ia", label: m("Agencia de IA / servicios", "AI agency / services") },
+    { key: "restaurante", label: m("Restaurante / comida", "Restaurant / food") },
+    { key: "inmobiliaria", label: m("Inmobiliaria", "Real estate") },
+    { key: "clinica", label: m("Clínica / consultorio", "Clinic") },
+    { key: "barberia", label: m("Barbería / estética", "Barber / beauty") },
+    { key: "cartera", label: m("Cartera de cobros", "Debt collection") },
+  ];
+  if (!answers.niche) {
+    const nicheIdx = await select(rl, t().qNiche, NICHE_CHOICES, { default: 0 });
+    answers.niche = NICHE_CHOICES[nicheIdx]?.key || "generico";
+  }
 
   const toneIdx = await select(rl, t().qTone, [
     { key: "cercano", label: t().toneFriendly, desc: t().tone1 },
