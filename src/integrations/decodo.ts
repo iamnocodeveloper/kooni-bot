@@ -1,4 +1,6 @@
 import type { Env } from "../env";
+import { Db } from "../db/client";
+import { SettingsRepo, SETTING_KEYS } from "../db/settings";
 
 // Cliente de Decodo Scraper API v2 (scraper-api.decodo.com/v2/scrape).
 // Se usa SOLO desde src/kb/webSync.ts, y solo si:
@@ -15,17 +17,34 @@ import type { Env } from "../env";
 
 const DECODO_API = "https://scraper-api.decodo.com/v2/scrape";
 
-/** Header Authorization a partir de DECODO_AUTH ("user:pass" o el base64 ya hecho). */
-function authHeader(env: Env): string | null {
-  const raw = (env.DECODO_AUTH ?? "").trim();
-  if (!raw) return null;
-  if (raw.toLowerCase().startsWith("basic ")) return raw;
-  const token = raw.includes(":") ? btoa(raw) : raw;
+/** Convierte la credencial ("user:pass" o base64 ya hecho) en header Basic. */
+function toAuthHeader(raw: string): string | null {
+  const v = raw.trim();
+  if (!v) return null;
+  if (v.toLowerCase().startsWith("basic ")) return v;
+  const token = v.includes(":") ? btoa(v) : v;
   return `Basic ${token}`;
 }
 
-export function decodoConfigured(env: Env): boolean {
-  return authHeader(env) !== null;
+/**
+ * Credencial efectiva de Decodo: **settings del panel** (editable desde
+ * Configuración → Scraping) y, si está vacía, el secret `DECODO_AUTH` del
+ * worker. Así una instalación limpia puede no tener nada (y el scraping queda
+ * apagado) y el dueño puede pegar su propia API key sin redeploy.
+ */
+export async function resolveDecodoAuth(env: Env): Promise<string | null> {
+  try {
+    const v = await new SettingsRepo(new Db(env.DB)).get(SETTING_KEYS.decodoAuth);
+    if (v && v.trim()) return v.trim();
+  } catch {
+    /* sin DB: cae al env */
+  }
+  const raw = (env.DECODO_AUTH ?? "").trim();
+  return raw || null;
+}
+
+export async function decodoConfigured(env: Env): Promise<boolean> {
+  return (await resolveDecodoAuth(env)) !== null;
 }
 
 export type ScrapeResult =
@@ -47,7 +66,8 @@ export interface ScrapeOptions {
  * `og:image` de una ficha de auto cuando el Markdown no trae imágenes.
  */
 export async function scrapeUrl(env: Env, url: string, opts: ScrapeOptions = {}): Promise<ScrapeResult> {
-  const auth = authHeader(env);
+  const raw = await resolveDecodoAuth(env);
+  const auth = raw ? toAuthHeader(raw) : null;
   if (!auth) return { ok: false, error: "DECODO_AUTH no configurado" };
 
   try {

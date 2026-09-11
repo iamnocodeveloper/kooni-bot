@@ -100,6 +100,9 @@ export const SETTING_KEYS = {
   // parseados (VIN, precio, ficha URL, foto) para las tools inventarioQuery y
   // fichaAuto. Sin esto, el bot contestaría solo con el blob de texto de la KB.
   webSyncVehicles: "web_sync_vehicles", // JSON { updatedAt, vehicles: { [key]: VehicleStored } }
+  // API key de Decodo (scraping para Web Sync / inventario). Editable desde el
+  // panel (Configuración → Scraping); si está vacía, cae al secret DECODO_AUTH.
+  decodoAuth: "decodo_auth",
   // WAHA (WhatsApp self-hosted, Docker): datos editables desde el panel
   // (Conexiones → WAHA), mismo patrón que Telegram/Zernio — sin
   // `wrangler secret put` ni redeploy. Fallback a las vars/secrets de env.
@@ -189,6 +192,7 @@ export const SETTING_LABELS: Record<string, string> = {
   [SETTING_KEYS.webSyncEnabled]: "Web Sync activado",
   [SETTING_KEYS.webSyncUrls]: "URLs de Web Sync",
   [SETTING_KEYS.webSyncVehicles]: "Inventario Web Sync (autos parseados)",
+  [SETTING_KEYS.decodoAuth]: "Decodo — API key (scraping)",
   [SETTING_KEYS.wahaApiUrl]: "URL del servidor WAHA",
   [SETTING_KEYS.wahaSession]: "Sesión de WAHA",
   [SETTING_KEYS.wahaApiKey]: "API key de WAHA",

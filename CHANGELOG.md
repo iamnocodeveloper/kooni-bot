@@ -5,6 +5,19 @@ Cambios notables de Kooni. Formato aproximado de
 
 El CLI `kooni-bot` se versiona aparte (npm) — ver la nota de cada versión.
 
+## [1.42.0] — 2026-09-10
+
+### Agregado — API key de Decodo configurable desde el panel
+
+- Nueva sección **Configuración → Scraping web — API key de Decodo**: el dueño
+  pega su credencial (`usuario:contraseña` o base64) **sin `wrangler secret`**.
+- Resolución: **settings del panel** primero; si está vacía, cae al secret
+  `DECODO_AUTH` del worker. **Instalación limpia → vacío** (el scraping queda
+  apagado hasta que la pongan).
+- Botón **“Usar la del worker”** + `POST /admin/config/decodo-import` y
+  `POST /kb/decodo-import` (token) para persistir la key actual del worker.
+- El valor se **redacta en el registro de auditoría** (`decodo_auth`).
+
 ## [1.41.0] — 2026-09-10
 
 ### Agregado — Cobranza: opt-out, ventana horaria, reglas con voz, reportes

@@ -225,7 +225,7 @@ export const EXTRA_FEATURES: ExtraFeature[] = [
         key: SETTING_KEYS.webSyncUrls,
         label: "Páginas a sincronizar",
         placeholder: "https://tusitio.com/inventario/?limit=100&type=used\nhttps://tusitio.com/inventario/?limit=100&type=new",
-        help: "Una URL por línea (máx 10). Se leen cada noche; si algo cambió, el bot lo aprende. Necesita el secret DECODO_AUTH en el worker.",
+        help: "Una URL por línea (máx 10). Se leen cada noche; si algo cambió, el bot lo aprende. Necesita la API key de Decodo (Configuración → Scraping web).",
       },
     ],
   },

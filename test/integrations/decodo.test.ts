@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { decodoConfigured, scrapeUrl } from "../../src/integrations/decodo";
+import { decodoConfigured, scrapeUrl, resolveDecodoAuth } from "../../src/integrations/decodo";
+import { createTestMiniflare } from "../helpers/miniflareSetup";
+import { Db } from "../../src/db/client";
+import { SettingsRepo, SETTING_KEYS } from "../../src/db/settings";
 import type { Env } from "../../src/env";
 
 const env = (over: Partial<Env> = {}) => ({ ...over }) as unknown as Env;
@@ -7,12 +10,30 @@ const env = (over: Partial<Env> = {}) => ({ ...over }) as unknown as Env;
 afterEach(() => vi.restoreAllMocks());
 
 describe("decodoConfigured", () => {
-  it("false sin DECODO_AUTH", () => {
-    expect(decodoConfigured(env())).toBe(false);
+  it("false sin DECODO_AUTH", async () => {
+    expect(await decodoConfigured(env())).toBe(false);
   });
-  it("true con user:pass o con base64", () => {
-    expect(decodoConfigured(env({ DECODO_AUTH: "user:pass" }))).toBe(true);
-    expect(decodoConfigured(env({ DECODO_AUTH: "dXNlcjpwYXNz" }))).toBe(true);
+  it("true con user:pass o con base64", async () => {
+    expect(await decodoConfigured(env({ DECODO_AUTH: "user:pass" }))).toBe(true);
+    expect(await decodoConfigured(env({ DECODO_AUTH: "dXNlcjpwYXNz" }))).toBe(true);
+  });
+});
+
+describe("resolveDecodoAuth (panel sobre secret)", () => {
+  it("la key del panel gana; vacía → cae al secret del worker", async () => {
+    const mf = await createTestMiniflare();
+    const d1 = await mf.getD1Database("DB");
+    const db = new Db(d1 as any);
+    const e = { DB: d1, DECODO_AUTH: "worker:secret" } as unknown as Env;
+    expect(await resolveDecodoAuth(e)).toBe("worker:secret");
+
+    await new SettingsRepo(db).set(SETTING_KEYS.decodoAuth, "panel:key");
+    expect(await resolveDecodoAuth(e)).toBe("panel:key");
+
+    await new SettingsRepo(db).set(SETTING_KEYS.decodoAuth, "");
+    expect(await resolveDecodoAuth(e)).toBe("worker:secret");
+    // Instalación limpia (sin secret ni setting) → null (scraping apagado).
+    expect(await resolveDecodoAuth({ DB: d1 } as unknown as Env)).toBeNull();
   });
 });
 

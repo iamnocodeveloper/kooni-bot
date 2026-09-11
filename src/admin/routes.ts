@@ -1636,10 +1636,32 @@ adminApp.post("/config", async (c) => {
     }
   }
 
+  // Decodo (scraping): misma regla que la API key del LLM — solo se sobreescribe
+  // si escribieron algo; el checkbox la borra. Vacía → cae al secret del worker.
+  if (form.get("decodo_clear") === "1") {
+    await repo.set(SETTING_KEYS.decodoAuth, "");
+  } else {
+    const decodoRaw = form.get(SETTING_KEYS.decodoAuth);
+    if (decodoRaw !== null && String(decodoRaw).trim() !== "") {
+      await repo.set(SETTING_KEYS.decodoAuth, String(decodoRaw).trim());
+    }
+  }
+
   return c.redirect("/admin/config?saved=1");
 });
 
-// --- CSV export -------------------------------------------------------------
+// Copia la API key de Decodo del secret del worker (`env.DECODO_AUTH`) a los
+// settings, para que el dueño la vea/edite desde el panel sin `wrangler secret`.
+adminApp.post("/config/decodo-import", async (c) => {
+  const raw = (c.env.DECODO_AUTH ?? "").trim();
+  if (raw) await new SettingsRepo(new Db(c.env.DB)).set(SETTING_KEYS.decodoAuth, raw);
+  await audit(c, {
+    action: "config.decodo_import",
+    target: `settings:${SETTING_KEYS.decodoAuth}`,
+    afterVal: raw ? "importada del secret del worker" : "(el worker no tiene secret)",
+  });
+  return c.redirect("/admin/config?saved=1");
+});
 
 adminApp.get("/leads/export.csv", async (c) => {
   const csv = await exportLeadsCsv(c.env);

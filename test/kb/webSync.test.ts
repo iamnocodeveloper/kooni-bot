@@ -92,9 +92,9 @@ describe("runWebSync", () => {
     } as unknown as Env;
   });
 
-  it("omite si falta DECODO_AUTH", async () => {
+  it("omite si falta la API key de Decodo", async () => {
     const r = await runWebSync({ ...env, DECODO_AUTH: undefined } as Env);
-    expect(r.skipped).toContain("DECODO_AUTH");
+    expect(r.skipped).toContain("Decodo");
   });
 
   it("omite sin URLs configuradas", async () => {

@@ -493,6 +493,22 @@ app.post("/kb/rebuild", async (c) => {
   return c.json({ ok: true, ...r }, 200);
 });
 
+// Copia la API key de Decodo del secret del worker a settings (mismo token que
+// /kb/reindex). Sirve para dejar la key "colocada" en el panel sin `wrangler
+// secret` y sin entrar al panel. Idempotente.
+app.post("/kb/decodo-import", async (c) => {
+  const expected = c.env.KB_REINDEX_TOKEN ?? "";
+  if (!expected || !tokensMatch(c.req.header("X-Reindex-Token") ?? "", expected)) {
+    return c.json({ ok: false, error: "unauthorized" }, 401);
+  }
+  const raw = (c.env.DECODO_AUTH ?? "").trim();
+  if (!raw) return c.json({ ok: false, error: "el worker no tiene DECODO_AUTH" }, 200);
+  const { SettingsRepo, SETTING_KEYS } = await import("./db/settings");
+  const { Db } = await import("./db/client");
+  await new SettingsRepo(new Db(c.env.DB)).set(SETTING_KEYS.decodoAuth, raw);
+  return c.json({ ok: true, imported: true, tail: raw.slice(-4) }, 200);
+});
+
 app.notFound((c) => c.text("not found", 404));
 
 // La raíz del worker redirige al panel: en cualquier dispositivo, entrar a la

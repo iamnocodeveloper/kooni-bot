@@ -100,6 +100,48 @@ function renderTextArea(opts: {
 const SELECT_STYLE =
   "background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:10px 12px;font-size:12.5px;outline:none;width:100%";
 
+/**
+ * Sección "Scraping (Decodo)": la API key que usa Web Sync / inventario. Se
+ * guarda en settings (D1) y, si está vacía, cae al secret del worker. Nunca se
+ * muestra el valor: solo el origen y los últimos 4 caracteres.
+ */
+function renderDecodoSection(env: Env, settings: Record<string, string>): string {
+  const settingVal = (settings[SETTING_KEYS.decodoAuth] ?? "").trim();
+  const envVal = (env.DECODO_AUTH ?? "").trim();
+  const source = settingVal ? "panel" : envVal ? "worker (secret)" : "";
+  const configured = Boolean(source);
+  const tail = (settingVal || envVal).slice(-4);
+  return `
+    <div class="bg-panel border border-line" style="padding:20px;display:flex;flex-direction:column;gap:14px">
+      <div style="display:flex;flex-direction:column;gap:2px">
+        <h3 class="font-display font-semibold text-[13.5px] text-cream">Scraping web — API key de Decodo</h3>
+        <p class="text-dim text-[11.5px]" style="margin:0">Con esto el bot lee tu sitio (Web Sync / inventario). Se saca en <span class="font-mono">decodo.com</span> → Scraper API: usuario y contraseña (o el Basic ya en base64). Decodo cobra por uso.</p>
+      </div>
+      <div class="text-[11.5px]">${
+        configured
+          ? `<span style="color:var(--ok)">● Configurada</span> <span class="text-dim">· origen: ${esc(source)} · termina en …${esc(tail)}</span>`
+          : `<span class="text-dim">○ Sin configurar — el scraping queda apagado hasta que la pongas</span>`
+      }</div>
+      <div style="display:flex;flex-direction:column;gap:6px;max-width:520px">
+        <label class="text-dim text-[11px]" for="decodo_auth">API key (usuario:contraseña o base64)</label>
+        <input type="password" id="${SETTING_KEYS.decodoAuth}" name="${SETTING_KEYS.decodoAuth}" value="" autocomplete="off"
+               placeholder="${configured ? "vacío = conservar la actual" : "usuario:contraseña"}" style="${INPUT_STYLE}">
+      </div>
+      <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+        ${
+          !settingVal && envVal
+            ? `<button type="submit" formaction="/admin/config/decodo-import" class="text-[11.5px] cursor-pointer" style="border:1px solid var(--accent);color:var(--accent);background:none;padding:8px 13px">Usar la del worker</button>`
+            : ""
+        }
+        ${
+          settingVal
+            ? `<label class="text-dim text-[11.5px]" style="display:flex;gap:7px;align-items:center;cursor:pointer"><input type="checkbox" name="decodo_clear" value="1"> Quitar la guardada</label>`
+            : ""
+        }
+      </div>
+    </div>`;
+}
+
 /** Sección "Modelo de IA": proveedor + API key propia + modelo concreto. */
 function renderLlmSection(settings: Record<string, string>, llmTest?: string): string {
   const provider = settings[SETTING_KEYS.llmProvider] ?? "";
@@ -218,6 +260,9 @@ export async function renderConfig(
 
       <!-- Modelo de IA (BYO provider/key/model) -->
       ${renderLlmSection(settings, llmTest)}
+
+      <!-- Scraping web (Decodo) -->
+      ${renderDecodoSection(env, settings)}
 
       <!-- Free-text settings -->
       <div class="bg-panel border border-line" style="padding:20px;display:flex;flex-direction:column;gap:18px">

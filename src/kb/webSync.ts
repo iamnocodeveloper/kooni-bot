@@ -192,8 +192,8 @@ export async function runWebSync(env: Env, opts: WebSyncRunOptions = {}): Promis
 
   // MODELO (2026-09-07): web_sync disponible en todos los planes — solo pide el
   // secret DECODO_AUTH (cuenta de scraping del dueño).
-  if (!decodoConfigured(env)) {
-    return { ...empty, skipped: "falta el secret DECODO_AUTH" };
+  if (!(await decodoConfigured(env))) {
+    return { ...empty, skipped: "falta la API key de Decodo (Configuración → Scraping web)" };
   }
 
   const db = new Db(env.DB);
