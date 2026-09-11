@@ -7,7 +7,6 @@ export interface Env {
   AGENT: DurableObjectNamespace<SupportAgent>;
   DB: D1Database;
   KB: VectorizeIndex;
-  CATALOG: R2Bucket;
   AI: Ai;
 
   // Vars (member-set)
@@ -139,7 +138,6 @@ export interface Env {
   CALCOM_EVENT_TYPE_ID?: string;           // event type por defecto (numérico, como string)
   CALCOM_EVENT_TYPES?: string;             // opcional: JSON {"corte":123,"barba":456} servicio→eventTypeId
   CALCOM_TIMEZONE?: string;                // zona horaria (default America/Mexico_City)
-  GOOGLE_SERVICE_ACCOUNT_JSON?: string;  // base64-encoded JSON
 
   // ── Web Sync (módulo web_sync — SOLO en la instalación que lo pidió) ──────
   // Credencial de Decodo Scraper API: "user:pass" o el base64 ya hecho. Ausente
@@ -178,5 +176,4 @@ export interface Env {
   // bot self-hosted vía los endpoints /api/*. Ambos opcionales; sin el token,
   // /api/* queda cerrado (fail-closed).
   CONTROL_PLANE_TOKEN?: string;  // secret; Bearer que el control plane presenta para llamar /api/*
-  CONTROL_PLANE_URL?: string;    // base URL del control plane (para reportes / license check futuros)
 }
