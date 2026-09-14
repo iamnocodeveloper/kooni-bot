@@ -274,9 +274,16 @@ adminApp.get("/icon.svg", (c) =>
 
 // Guard every admin route with cookie session OR Basic Auth. The middleware factory needs the
 // request-scoped Env to read DASHBOARD_PASSWORD, so build it per request here.
-// DASHBOARD_PUBLIC="1" (wrangler.toml de esta instancia) apaga el guard —
-// el panel es público a propósito (decisión de diseño de la instancia).
-// Para volver a protegerlo: quitar esa var y redeploy.
+//
+// ESCOTILLA `DASHBOARD_PUBLIC="1"`: apaga el guard por completo y deja el panel
+// PÚBLICO (cualquiera lee conversaciones, leads y deudores, y puede cambiar la
+// API key, mandar campañas o responder como el dueño). Pensada solo para
+// demos/instalaciones descartables.
+//
+// La instalación cardaniel NO la tiene puesta (verificado: `/admin` responde 401
+// y la var no está en los bindings del Worker). Comentario anterior decía que sí
+// — era falso y llevaba a creer que el panel estaba abierto.
+// Para desactivarla en cualquier instalación: quitar la var y redeploy.
 adminApp.use("*", (c, next) => {
   if (c.env.DASHBOARD_PUBLIC === "1") return next();
   return adminAuth(c.env)(c, next);

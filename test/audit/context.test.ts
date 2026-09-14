@@ -3,7 +3,7 @@ import { createTestMiniflare } from "../helpers/miniflareSetup";
 import { Db } from "../../src/db/client";
 import { SettingsRepo, SETTING_KEYS } from "../../src/db/settings";
 import { AuditRepo } from "../../src/db/auditLog";
-import { runWithActor, currentActor, redactValue, recordAudit } from "../../src/audit/context";
+import { runWithActor, currentActor, redactValue, recordAudit, AUDIT_SENSITIVE_KEYS } from "../../src/audit/context";
 
 let db: Db;
 
@@ -89,5 +89,19 @@ describe("SettingsRepo.set — captura de auditoría", () => {
     const [row] = await new AuditRepo(db).list();
     expect(row.afterVal).toBe("[secreto · termina en …9999]");
     expect(JSON.stringify(row)).not.toContain("SUPERSECRET");
+  });
+});
+
+describe("cobertura de redacción de credenciales", () => {
+  // Guarda contra el error más fácil de cometer al agregar una función: guardar
+  // una credencial nueva en `settings` y olvidarla en la lista de redacción —
+  // el valor en claro acabaría en /admin/auditoria y en su export CSV.
+  // (Pasó de verdad con `analysis_llm_api_key`.)
+  it("toda clave de settings con pinta de credencial está en AUDIT_SENSITIVE_KEYS", () => {
+    const SECRET_SUFFIXES = ["_api_key", "_secret", "_token", "_password", "_auth"];
+    const missing = Object.values(SETTING_KEYS).filter(
+      (k) => SECRET_SUFFIXES.some((s) => k.endsWith(s)) && !AUDIT_SENSITIVE_KEYS.has(k),
+    );
+    expect(missing).toEqual([]);
   });
 });

@@ -38,9 +38,15 @@ export function currentActor(): AuditActor | undefined {
 /**
  * Claves de `settings` cuyo valor NUNCA se guarda en claro en el registro
  * (el registro se ve en el panel). Se guardan redactadas.
+ *
+ * IMPORTANTE: al agregar una clave nueva a `SETTING_KEYS` que guarde una
+ * credencial, hay que sumarla acá. Si no, el valor en claro termina en
+ * `audit_log` y se ve en /admin/auditoria y en su export CSV.
+ * Hay un test que lo vigila: test/audit/context.test.ts
  */
 export const AUDIT_SENSITIVE_KEYS = new Set<string>([
   "llm_api_key",
+  "analysis_llm_api_key",
   "zernio_api_key",
   "zernio_webhook_secret",
   "telegram_bot_token",
