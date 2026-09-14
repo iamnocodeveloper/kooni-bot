@@ -43,6 +43,7 @@ import {
   type StoredVehicle,
   type VehicleDiff,
 } from "./inventory";
+import { analyzeInventory } from "./analysis";
 
 const MAX_URLS = 10;
 /** Si una página pasa MAX_DOC_CHARS, se parte en hasta N docs `web:<slug>`, `-2`, `-3`… */
@@ -185,6 +186,8 @@ export interface WebSyncSummary {
   added?: number;
   removed?: number;
   changed?: number;
+  /** Análisis IA del inventario (solo si el toggle está encendido). */
+  analysis?: { analyzed: number; applied: number; skipped?: string; error?: string };
 }
 
 export interface WebSyncRunOptions {
@@ -233,6 +236,15 @@ export async function runWebSync(env: Env, opts: WebSyncRunOptions = {}): Promis
   const db = new Db(env.DB);
   const repo = new SettingsRepo(db);
   const settings = await repo.all();
+
+  // Toggle del panel (Menú Extras → Web Sync). Lectura COMPATIBLE HACIA ATRÁS:
+  // el flag se escribía pero NADIE lo leía, así que una instalación donde nunca
+  // se tocó (setting ausente) debe seguir sincronizando igual que antes. Solo un
+  // "0" explícito —lo que escribe el panel al apagarlo— detiene la corrida.
+  if (settings[SETTING_KEYS.webSyncEnabled] === "0") {
+    return { ...empty, skipped: "Web Sync apagado en el panel (Extras)" };
+  }
+
   const urls = parseWebSyncUrls(settings[SETTING_KEYS.webSyncUrls]);
   if (urls.length === 0) return { ...empty, skipped: "sin URLs configuradas" };
 
@@ -386,6 +398,23 @@ export async function runWebSync(env: Env, opts: WebSyncRunOptions = {}): Promis
       summary.vehicles = listStoredVehicles(merged).length;
       summary.imagesPending = pendingImageCount(merged);
 
+      // Análisis IA del inventario (OPCIONAL, apagado por defecto): corrige
+      // campos mal parseados ANTES de que el bot los repita al cliente. Corre
+      // DESPUÉS de guardar el merge determinista, así un fallo del modelo deja
+      // el inventario ya consistente. Ver src/kb/analysis.ts.
+      const analysis = await analyzeInventory(env);
+      summary.analysis = {
+        analyzed: analysis.analyzed,
+        applied: analysis.applied,
+        ...(analysis.skipped ? { skipped: analysis.skipped } : {}),
+        ...(analysis.error ? { error: analysis.error } : {}),
+      };
+      if (analysis.applied > 0) {
+        console.log(
+          `[webSync] análisis IA: ${analysis.applied} auto(s) corregido(s) de ${analysis.analyzed} revisado(s)`,
+        );
+      }
+
       if (opts.images) {
         const img = await refreshVehicleImages(env, db);
         summary.imagesFetched = img.fetched;
@@ -430,6 +459,13 @@ export async function runWebSync(env: Env, opts: WebSyncRunOptions = {}): Promis
         errors: summary.errors.length,
         errorMsg: summary.errors[0]
           ? `${summary.errors[0].url} — ${summary.errors[0].error}`.slice(0, 500)
+          : undefined,
+        note: summary.analysis
+          ? (
+              `análisis IA: ${summary.analysis.applied} corregido(s) de ${summary.analysis.analyzed}` +
+              (summary.analysis.skipped ? ` (${summary.analysis.skipped})` : "") +
+              (summary.analysis.error ? ` — error: ${summary.analysis.error}` : "")
+            ).slice(0, 500)
           : undefined,
       },
       inventorySeen ? diffToChanges(diff) : [],

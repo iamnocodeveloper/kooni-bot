@@ -31,6 +31,14 @@ export interface AgentConfig {
   menuButtons: ReplyButton[];
   /** BYO-LLM del dashboard (proveedor / API key / modelo). */
   llm: LlmOverrides;
+  /**
+   * Menú Extras: Multiidioma. Gobierna la directiva de idioma que el agente
+   * inyecta por turno, como bloque de sistema APARTE del system prompt — así
+   * sigue funcionando aunque haya un `system_prompt_override` activo (antes el
+   * override desactivaba el multi-idioma sin que nadie lo notara).
+   * Apagado ⇒ el bot responde SIEMPRE en el idioma base (BOT_LANGUAGE).
+   */
+  multiIdiomaEnabled: boolean;
   /** Menú Extras: Vigilante con IA activo (alerta al dueño sin pasar el chat). */
   vigilanteEnabled: boolean;
   /** Menú Extras: Oído y vista activo (transcribe audio / ve fotos). */
@@ -59,6 +67,72 @@ export async function loadLlmOverrides(env: Env): Promise<LlmOverrides> {
   try {
     const settings = await new SettingsRepo(new Db(env.DB)).all();
     return llmOverridesFrom(settings);
+  } catch {
+    return {};
+  }
+}
+
+const PROVIDER_IDS = new Set(["anthropic", "openai", "xai", "minimax"]);
+
+/** Normaliza el id de proveedor que escribe el panel ("aisa" es OpenAI). */
+function normProviderId(value: string | undefined): string | undefined {
+  const v = (value ?? "").trim().toLowerCase();
+  if (!v) return undefined;
+  if (v === "aisa") return "openai";
+  return PROVIDER_IDS.has(v) ? v : undefined;
+}
+
+/** Proveedor implícito en un id de modelo (misma regla que createModel). */
+function providerFromModelId(modelId: string | undefined): string | undefined {
+  if (!modelId) return undefined;
+  if (/^grok/i.test(modelId)) return "xai";
+  if (/minimax|abab/i.test(modelId)) return "minimax";
+  if (/^(gpt|o\d)/i.test(modelId)) return "openai";
+  return "anthropic";
+}
+
+/**
+ * Overrides del modelo de ANÁLISIS (scraping/inventario), separados de los del
+ * chat. Las reglas están pensadas para que "usar la misma API" sea lo natural:
+ *
+ * - Sin nada configurado ⇒ hereda EXACTAMENTE la config del chat.
+ * - Con proveedor y/o modelo propios ⇒ esos mandan (si solo hay modelo, se
+ *   deduce su proveedor en vez de arrastrar el del chat).
+ * - La API key y la URL base SÍ se heredan, pero solo si el proveedor efectivo
+ *   del análisis coincide con el del chat: heredar una llave de OpenAI para
+ *   llamar a Anthropic daría 401.
+ */
+export function analysisLlmOverridesFrom(settings: Record<string, string>): LlmOverrides {
+  const pick = (key: string): string | undefined => {
+    const v = settings[key];
+    return v !== undefined && v.trim() !== "" ? v.trim() : undefined;
+  };
+  const chat = llmOverridesFrom(settings);
+  const ownProvider = pick(SETTING_KEYS.analysisLlmProvider);
+  const ownModel = pick(SETTING_KEYS.analysisLlmModel);
+  const ownKey = pick(SETTING_KEYS.analysisLlmApiKey);
+  const ownBaseUrl = pick(SETTING_KEYS.analysisLlmApiBaseUrl);
+
+  if (!ownProvider && !ownModel && !ownKey && !ownBaseUrl) return chat;
+
+  const analysisProvider =
+    normProviderId(ownProvider) ?? providerFromModelId(ownModel) ?? normProviderId(chat.provider);
+  const sameProviderAsChat =
+    analysisProvider !== undefined && analysisProvider === normProviderId(chat.provider);
+
+  return {
+    provider: ownProvider ?? (ownModel ? undefined : chat.provider),
+    model: ownModel ?? (ownProvider ? undefined : chat.model),
+    apiKey: ownKey ?? (sameProviderAsChat ? chat.apiKey : undefined),
+    baseUrl: ownBaseUrl ?? (sameProviderAsChat ? chat.baseUrl : undefined),
+  };
+}
+
+/** Carga los overrides del modelo de análisis (nunca truena). */
+export async function loadAnalysisLlmOverrides(env: Env): Promise<LlmOverrides> {
+  try {
+    const settings = await new SettingsRepo(new Db(env.DB)).all();
+    return analysisLlmOverridesFrom(settings);
   } catch {
     return {};
   }
@@ -233,6 +307,7 @@ export async function resolveAgentConfig(env: Env, toolNames: string[]): Promise
     allowMultimedia,
     menuButtons,
     llm: llmOverridesFrom(settings),
+    multiIdiomaEnabled: extras.multiIdiomaEnabled,
     vigilanteEnabled: extras.vigilanteEnabled,
     oidoVistaEnabled: extras.oidoVistaEnabled,
     galeriaEnabled: extras.galeriaEnabled,

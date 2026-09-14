@@ -35,6 +35,14 @@ export const SETTING_KEYS = {
   llmApiKey: "llm_api_key", // owner's API key; empty = use the env key
   llmModel: "llm_model", // concrete model id; empty = auto tiers (fast⇄smart)
   llmApiBaseUrl: "llm_api_base_url", // gateway URL (AIsa/OpenRouter); empty = env
+  // Modelo de ANÁLISIS (scraping/inventario): configuración SEPARADA del chat.
+  // Todo vacío = hereda la del chat (llm_*). Sirve para pagar un modelo caro y
+  // bueno SOLO en el análisis (ej. Claude Opus) y uno barato en el chat
+  // (ej. gpt-4o-mini), incluso contra una API distinta.
+  analysisLlmProvider: "analysis_llm_provider", // "" (hereda) | anthropic | openai | xai | minimax | aisa
+  analysisLlmApiKey: "analysis_llm_api_key", // API key propia; vacío = hereda la del chat
+  analysisLlmModel: "analysis_llm_model", // modelo concreto; vacío = hereda
+  analysisLlmApiBaseUrl: "analysis_llm_api_base_url", // gateway propio; vacío = hereda
   proLicense: "pro_license", // código KOONI-PRO-... pegado en el panel (quita límites)
   // Botones y multimedia (Fase A): activable desde Configuración.
   menuButtons: "menu_buttons", // JSON: botones del menú que se envían al saludo
@@ -92,7 +100,11 @@ export const SETTING_KEYS = {
   commentFallbackEnabled: "comment_fallback_enabled", // "0" | "1"
   commentFallbackMessage: "comment_fallback_message", // texto de la respuesta pública
   // Web Sync (módulo web_sync): páginas que se scrapean a la KB del bot.
-  webSyncEnabled: "feature_web_sync_enabled", // "0" | "1"
+  webSyncEnabled: "feature_web_sync_enabled", // "0" | "1" — apagado ⇒ no corre (cron, API ni panel)
+  // Análisis IA del inventario scrapeado: normaliza/valida los autos con el
+  // modelo de análisis (analysis_llm_*). Apagado ⇒ el parseo determinista manda
+  // y el pipeline queda byte a byte como antes.
+  webSyncAnalysisEnabled: "feature_web_sync_analysis_enabled", // "0" | "1"
   webSyncUrls: "web_sync_urls", // URLs (una por línea o coma)
   webSyncState: "web_sync_state", // JSON { [url]: { hash, at, chars } } — anti re-embebido
   webSyncLastRun: "web_sync_last_run", // epoch ms de la última corrida
@@ -166,6 +178,10 @@ export const SETTING_LABELS: Record<string, string> = {
   [SETTING_KEYS.llmApiKey]: "API key del proveedor de IA",
   [SETTING_KEYS.llmModel]: "Modelo de IA",
   [SETTING_KEYS.llmApiBaseUrl]: "URL base del proveedor de IA",
+  [SETTING_KEYS.analysisLlmProvider]: "Proveedor del modelo de análisis",
+  [SETTING_KEYS.analysisLlmApiKey]: "API key del modelo de análisis",
+  [SETTING_KEYS.analysisLlmModel]: "Modelo de análisis",
+  [SETTING_KEYS.analysisLlmApiBaseUrl]: "URL base del modelo de análisis",
   [SETTING_KEYS.proLicense]: "Código de licencia Pro",
   [SETTING_KEYS.menuButtons]: "Botones del menú",
   [SETTING_KEYS.resourceLibrary]: "Biblioteca de recursos",
@@ -190,6 +206,7 @@ export const SETTING_LABELS: Record<string, string> = {
   [SETTING_KEYS.commentFallbackEnabled]: "Respuesta pública a comentarios sin regla",
   [SETTING_KEYS.commentFallbackMessage]: "Texto de la respuesta pública a comentarios",
   [SETTING_KEYS.webSyncEnabled]: "Web Sync activado",
+  [SETTING_KEYS.webSyncAnalysisEnabled]: "Análisis IA del inventario (scraping)",
   [SETTING_KEYS.webSyncUrls]: "URLs de Web Sync",
   [SETTING_KEYS.webSyncVehicles]: "Inventario Web Sync (autos parseados)",
   [SETTING_KEYS.decodoAuth]: "Decodo — API key (scraping)",

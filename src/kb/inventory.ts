@@ -1057,7 +1057,18 @@ function matchesFilter(v: Vehicle, f: InventoryFilter): boolean {
     const vin = norm(f.vin);
     if (!v.vin || !norm(v.vin).includes(vin)) return false;
   }
-  if (f.marca && norm(f.marca) !== norm(v.make ?? "")) return false;
+  // Marca TOLERANTE. Antes era un match exacto (`norm(marca) !== norm(make)`),
+  // así que el modelo mandando "kia sorento" o "KIA" con espacios devolvía 0
+  // resultados y el bot concluía "no tengo ese auto". Ahora acepta el match
+  // exacto de la marca, o que el término aparezca en marca/modelo/título.
+  if (f.marca) {
+    const want = norm(f.marca);
+    const have = norm(v.make ?? "");
+    if (have !== want) {
+      const hay = norm(`${v.make ?? ""} ${v.model ?? ""} ${v.title}`);
+      if (!hay.includes(want)) return false;
+    }
+  }
   if (f.modelo) {
     const m = norm(f.modelo);
     const hay = norm(`${v.make ?? ""} ${v.model ?? ""} ${v.title}`);
@@ -1097,17 +1108,42 @@ export interface InventoryMatch {
   hasImage: boolean;
 }
 
+/** Panorama de lo que cumple el filtro, útil cuando hay más autos que el límite. */
+export interface InventorySummary {
+  /** Rango de años, ej. "2019-2024" (o un solo año si todos coinciden). */
+  anios: string | null;
+  precioMin: number | null;
+  precioMax: number | null;
+}
+
 export function queryInventory(
   store: VehicleStore,
   f: InventoryFilter,
-  limit = 8,
-): { matches: InventoryMatch[]; total: number; marcas: { marca: string; total: number }[] } {
+  limit = 12,
+): {
+  matches: InventoryMatch[];
+  total: number;
+  marcas: { marca: string; total: number }[];
+  resumen: InventorySummary;
+} {
   const all = listStoredVehicles(store);
   const filtered = all.filter((v) => matchesFilter(v, f));
   const marcas = new Map<string, number>();
   for (const v of all) {
     if (v.make) marcas.set(v.make, (marcas.get(v.make) ?? 0) + 1);
   }
+  // Resumen agregado: con inventarios grandes el modelo solo ve `limit` autos,
+  // así que le damos el rango de años y precios para que pueda orientar al
+  // cliente ("tenemos desde $X a $Y, entre 2019 y 2024") sin inventar nada.
+  const years = filtered.map((v) => v.year).filter((y): y is number => typeof y === "number");
+  const prices = filtered.map((v) => v.price).filter((p): p is number => typeof p === "number");
+  const minYear = years.length > 0 ? Math.min(...years) : null;
+  const maxYear = years.length > 0 ? Math.max(...years) : null;
+  const resumen: InventorySummary = {
+    anios: minYear === null ? null : minYear === maxYear ? String(minYear) : `${minYear}-${maxYear}`,
+    precioMin: prices.length > 0 ? Math.min(...prices) : null,
+    precioMax: prices.length > 0 ? Math.max(...prices) : null,
+  };
   return {
     matches: filtered.slice(0, limit).map((v) => ({
       key: v.key,
@@ -1123,6 +1159,7 @@ export function queryInventory(
     marcas: [...marcas.entries()]
       .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))
       .map(([marca, total]) => ({ marca, total })),
+    resumen,
   };
 }
 

@@ -28,6 +28,7 @@ export const FEATURE_KEYS = {
   cobros: "feature_cobros_enabled",
   galeria: "feature_galeria_enabled",
   webSync: "feature_web_sync_enabled",
+  webSyncAnalysis: "feature_web_sync_analysis_enabled",
 } as const;
 
 export interface ExtraFeature {
@@ -228,6 +229,17 @@ export const EXTRA_FEATURES: ExtraFeature[] = [
         help: "Una URL por línea (máx 10). Se leen cada noche; si algo cambió, el bot lo aprende. Necesita la API key de Decodo (Configuración → Scraping web).",
       },
     ],
+  },
+  {
+    id: "web_sync_analysis",
+    module: "web_sync",
+    toggleKey: FEATURE_KEYS.webSyncAnalysis,
+    nombre: "Análisis IA del inventario",
+    emoji: "🧪",
+    descripcion:
+      "Después de cada sincronización, un modelo revisa los autos scrapeados y corrige títulos, precios y millas mal leídos, y detecta duplicados. Usa el modelo de análisis (Configuración → Modelo de análisis). Apagado, el inventario queda tal cual lo leyó el sitio.",
+    actuaEn: "bot+panel",
+    tipo: "membresia",
   },
 ];
 

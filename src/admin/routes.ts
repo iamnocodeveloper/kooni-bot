@@ -1691,6 +1691,33 @@ adminApp.post("/config", async (c) => {
     }
   }
 
+  // Modelo de ANÁLISIS (scraping): misma forma que el del bot, pero SEPARADO.
+  // Todo vacío = hereda la config del chat (ver analysisLlmOverridesFrom).
+  const aProvRaw = form.get(SETTING_KEYS.analysisLlmProvider);
+  if (aProvRaw !== null) {
+    const v = String(aProvRaw).trim().toLowerCase();
+    await repo.set(
+      SETTING_KEYS.analysisLlmProvider,
+      v === "anthropic" || v === "openai" || v === "xai" || v === "minimax" || v === "aisa" ? v : "",
+    );
+  }
+  const aBaseRaw = form.get(SETTING_KEYS.analysisLlmApiBaseUrl);
+  if (aBaseRaw !== null) {
+    await repo.set(SETTING_KEYS.analysisLlmApiBaseUrl, String(aBaseRaw).trim().slice(0, 200));
+  }
+  const aModelRaw = form.get(SETTING_KEYS.analysisLlmModel);
+  if (aModelRaw !== null) {
+    await repo.set(SETTING_KEYS.analysisLlmModel, String(aModelRaw).trim().slice(0, 100));
+  }
+  if (form.get("analysis_llm_api_key_clear") === "1") {
+    await repo.set(SETTING_KEYS.analysisLlmApiKey, "");
+  } else {
+    const aKeyRaw = form.get(SETTING_KEYS.analysisLlmApiKey);
+    if (aKeyRaw !== null && String(aKeyRaw).trim() !== "") {
+      await repo.set(SETTING_KEYS.analysisLlmApiKey, String(aKeyRaw).trim());
+    }
+  }
+
   // Decodo (scraping): misma regla que la API key del LLM — solo se sobreescribe
   // si escribieron algo; el checkbox la borra. Vacía → cae al secret del worker.
   if (form.get("decodo_clear") === "1") {

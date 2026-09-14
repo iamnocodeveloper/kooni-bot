@@ -226,6 +226,74 @@ function renderLlmSection(settings: Record<string, string>, llmTest?: string): s
 }
 
 /**
+ * Sección "Modelo de análisis (scraping)": permite que el análisis del
+ * inventario scrapeado use un modelo DISTINTO al del chat — típicamente uno
+ * bueno y caro (Claude Opus) mientras el chat sigue barato (gpt-4o-mini).
+ *
+ * Todo vacío = hereda la configuración del bot (misma API, mismo modelo). Para
+ * usar OTRO proveedor hay que dar su API key: heredar la del chat daría 401.
+ */
+function renderAnalysisLlmSection(settings: Record<string, string>): string {
+  const provider = settings[SETTING_KEYS.analysisLlmProvider] ?? "";
+  const model = settings[SETTING_KEYS.analysisLlmModel] ?? "";
+  const hasKey = (settings[SETTING_KEYS.analysisLlmApiKey] ?? "").trim() !== "";
+  const keyTail = hasKey ? (settings[SETTING_KEYS.analysisLlmApiKey] ?? "").trim().slice(-4) : "";
+
+  const providerOpts = [
+    { v: "", l: "Igual que el bot (recomendado)" },
+    { v: "anthropic", l: "Claude (Anthropic)" },
+    { v: "openai", l: "ChatGPT (OpenAI)" },
+    { v: "aisa", l: "AIsa (gateway)" },
+    { v: "xai", l: "Grok (xAI)" },
+    { v: "minimax", l: "MiniMax" },
+  ]
+    .map((o) => `<option value="${o.v}" ${provider === o.v ? "selected" : ""}>${o.l}</option>`)
+    .join("");
+
+  const groupOpts = (prov: string) =>
+    CURATED_MODELS.filter((m) => m.provider === prov)
+      .map((m) => `<option value="${esc(m.id)}" ${model === m.id ? "selected" : ""}>${esc(m.label)}</option>`)
+      .join("");
+
+  return `
+    <div class="bg-panel border border-line" style="padding:20px;display:flex;flex-direction:column;gap:18px">
+      <div style="display:flex;flex-direction:column;gap:2px">
+        <h3 class="font-display font-semibold text-[13.5px] text-cream">🧪 Modelo de análisis (scraping)</h3>
+        <p class="text-dim text-[12px]">El inventario que se scrapea del sitio se revisa con un modelo para corregir títulos, precios y millas mal parseados. Deja todo vacío para usar la misma configuración del bot, o elige aquí un modelo distinto — por ejemplo Claude Opus para el análisis y un modelo barato para chatear.</p>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <label class="font-display font-semibold text-[12.5px] text-cream">Proveedor</label>
+          <select name="${SETTING_KEYS.analysisLlmProvider}" style="${SELECT_STYLE}">${providerOpts}</select>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <label class="font-display font-semibold text-[12.5px] text-cream">Modelo</label>
+          <select name="${SETTING_KEYS.analysisLlmModel}" style="${SELECT_STYLE}">
+            <option value="" ${model === "" ? "selected" : ""}>Igual que el bot</option>
+            <optgroup label="Claude (Anthropic)">${groupOpts("anthropic")}</optgroup>
+            <optgroup label="ChatGPT (OpenAI)">${groupOpts("openai")}</optgroup>
+            <optgroup label="Grok (xAI)">${groupOpts("xai")}</optgroup>
+            <optgroup label="MiniMax">${groupOpts("minimax")}</optgroup>
+          </select>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <label class="font-display font-semibold text-[12.5px] text-cream">URL base del gateway (opcional)</label>
+        <p class="text-dim text-[11px]">Vacío = la misma del bot. Para AIsa: https://api.aisa.one/v1</p>
+        <input type="text" name="${SETTING_KEYS.analysisLlmApiBaseUrl}" value="${esc(settings[SETTING_KEYS.analysisLlmApiBaseUrl] ?? "")}"
+               placeholder="https://api.aisa.one/v1" style="${INPUT_STYLE}">
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <label class="font-display font-semibold text-[12.5px] text-cream">API key del análisis (opcional)</label>
+        <p class="text-dim text-[11px]">${hasKey ? `Hay una key guardada (termina en …${esc(keyTail)}). Escribe una nueva para reemplazarla.` : "Vacío = usa la misma API del bot. Si eliges OTRO proveedor arriba, pega aquí su key: la del bot no sirve para otro proveedor."}</p>
+        <input type="password" name="${SETTING_KEYS.analysisLlmApiKey}" value="" autocomplete="off"
+               placeholder="${hasKey ? "••••••••••••" : "sk-ant-… o sk-…"}" style="${INPUT_STYLE}">
+        ${hasKey ? `<label class="text-dim text-[11.5px]" style="display:flex;align-items:center;gap:7px;cursor:pointer"><input type="checkbox" name="analysis_llm_api_key_clear" value="1"> Quitar esta API key y volver a la del bot</label>` : ""}
+      </div>
+    </div>`;
+}
+
+/**
  * Render the Config tab. Receives the current settings overlay (Record from
  * SettingsRepo.all()). `saved` shows the "Guardado ✓" confirmation banner after
  * a redirect from POST /admin/config?saved=1.
@@ -264,6 +332,9 @@ export async function renderConfig(
 
       <!-- Modelo de IA (BYO provider/key/model) -->
       ${renderLlmSection(settings, llmTest)}
+
+      <!-- Modelo de análisis (scraping) — separado del chat -->
+      ${renderAnalysisLlmSection(settings)}
 
       <!-- Scraping web (Decodo) -->
       ${renderDecodoSection(env, settings)}

@@ -306,12 +306,17 @@ describe("SupportAgent.alarm — multimodal last message (Task 6.3)", () => {
 
     const arg = streamTextMock.mock.calls[0][0];
     expect(Array.isArray(arg.system)).toBe(true);
-    expect(arg.system).toHaveLength(1);
+    // El bloque 0 es el system prompt (el único con cache breakpoint). Después se
+    // SUMAN bloques propios del runtime — en particular la directiva de idioma,
+    // que va aparte a propósito para seguir vigente aunque la instalación tenga
+    // un system_prompt_override que reemplace el prompt generado.
     expect(arg.system[0].role).toBe("system");
     expect(typeof arg.system[0].content).toBe("string");
     expect(arg.system[0].providerOptions).toEqual({
       anthropic: { cacheControl: { type: "ephemeral" } },
     });
+    const idioma = arg.system.find((m: any) => String(m?.content).includes("<idioma>"));
+    expect(idioma).toBeDefined();
   });
 
   it("honors model_override=sonnet from settings", async () => {

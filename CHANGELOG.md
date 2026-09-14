@@ -5,6 +5,83 @@ Cambios notables de Kooni. Formato aproximado de
 
 El CLI `kooni-bot` se versiona aparte (npm) — ver la nota de cada versión.
 
+## [1.44.0] — 2026-09-14
+
+### Agregado — Modelo de análisis separado del del chat
+
+- Nueva sección **Configuración → Modelo de análisis (scraping)**: proveedor,
+  modelo, URL base y API key **propios**, independientes del chat. Permite pagar
+  un modelo bueno para el análisis (ej. Claude Opus) y uno barato para chatear
+  (ej. gpt-4o-mini), incluso contra **otra API**.
+- Todo vacío = **hereda la configuración del bot** (misma API, mismo modelo).
+  La API key y la URL base se heredan solo si el proveedor coincide: heredar una
+  llave de OpenAI para llamar a Anthropic daría 401.
+- Claves nuevas: `analysis_llm_provider`, `analysis_llm_api_key`,
+  `analysis_llm_model`, `analysis_llm_api_base_url`.
+- `createAnalysisModel()` en `src/llm/provider.ts` (tier `smart` por defecto:
+  el análisis corre pocas veces al día y conviene el modelo bueno).
+
+### Agregado — Análisis IA del inventario scrapeado (opcional)
+
+- Nuevo toggle **Extras → Análisis IA del inventario**
+  (`feature_web_sync_analysis_enabled`), **apagado por defecto**.
+- Tras cada sincronización, el modelo revisa los autos ya parseados y devuelve
+  **correcciones** de título, marca, modelo, año, precio, millaje y condición.
+- **Garantías**: el modelo solo puede tocar autos que ya existen (por `key`) —
+  nunca agrega ni borra —, cada corrección se valida por rango antes de
+  aplicarse, y un fallo del modelo **nunca** bloquea ni vacía el inventario.
+  Cota de 40 autos por corrida, priorizando los sospechosos (sin VIN, sin
+  precio, sin año o con título basura).
+- El resultado queda registrado en el scraping (`web_sync_runs.note`).
+
+### Arreglado — Multi-idioma: no funcionaba en la práctica
+
+- **Causa raíz**: las reglas de idioma vivían SOLO en el texto del prompt, así
+  que un `system_prompt_override` las desactivaba por completo — el toggle de
+  Extras se podía encender y apagar sin que cambiara nada.
+- Nuevo detector de idioma determinista **es/en/pt** (`src/lang/detect.ts`):
+  stopwords + señales diacríticas (`ñ/¿/¡` vs `ã/õ/ç`), sin API externa. Ante
+  duda devuelve `null` en vez de adivinar.
+- El idioma del cliente se detecta **una vez por conversación** y se inyecta
+  como **bloque de sistema aparte** del prompt → gobierna haya o no override.
+- **Contrato del toggle**: con Multi-idioma apagado el bot responde SIEMPRE en
+  el idioma base (`BOT_LANGUAGE`); encendido, sigue el idioma del cliente.
+- Las respuestas **públicas a comentarios** (`src/aiReply.ts`) ahora también
+  respetan el idioma del comentario (antes estaban fijas en español).
+- **Bug**: se pasaba `lastUserLang = "es-MX"` pero la tabla de palabras de
+  frustración está indexada por `es|en|pt`, así que la detección de frustración
+  nunca escalaba al modelo "smart".
+
+### Arreglado — El bot no encontraba la información del inventario
+
+- **Marca tolerante**: el filtro por marca exigía coincidencia EXACTA
+  (`make === filtro`), así que mandar "kia sorento" o "KIA " devolvía 0
+  resultados y el bot concluía que ese auto no existía.
+- El límite de resultados por consulta pasó de **8 a 12** y, cuando hay más
+  coincidencias que el límite, la tool devuelve un **panorama agregado** (rango
+  de años y de precio) e instruye a acotar con el cliente en vez de listar todo
+  o hacer creer que solo hay 12.
+
+### Arreglado — Toggles del menú Extras que no gobernaban nada
+
+- `feature_web_sync_enabled` se escribía desde el panel pero **nadie lo leía**:
+  el sync corría igual. Ahora apagarlo detiene de verdad la corrida (cron, API y
+  panel). Lectura compatible hacia atrás: solo un `"0"` explícito apaga; una
+  instalación donde nunca se tocó sigue sincronizando como antes.
+- `AgentConfig.oidoVistaEnabled` era un campo muerto (el gate releía los
+  settings): ahora es la **única fuente de verdad** del toggle "Oído y vista".
+
+### Arreglado — Respuestas públicas detrás de un gateway
+
+- `aiReply` construía sus overrides a mano y **omitía `llm_api_base_url`**, así
+  que con un gateway (AIsa/OpenRouter) esa llamada fallaba mientras el chat sí
+  funcionaba.
+
+### Notas
+
+- El paquete npm `kooni-bot` (CLI) **no cambia**: todo esto vive en la app del
+  Worker, no en el instalador.
+
 ## [1.43.0] — 2026-09-11
 
 ### Agregado — Registro de scraping (control interno de Decodo)

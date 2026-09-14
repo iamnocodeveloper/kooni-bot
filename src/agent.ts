@@ -16,6 +16,8 @@ import type { Tier } from "./upgrade/modelSelector";
 import { monthIaCostUsd, applyBudgetGuard } from "./budget";
 import { CustomerFactsRepo } from "./db/facts";
 import { createModel } from "./llm/provider";
+import { detectLanguage, baseLangCode, LANG_LABEL } from "./lang/detect";
+import type { LangCode } from "./lang/detect";
 import { costOfUsage } from "./pricing";
 import type { ChannelId, ReplyButton } from "./channels/shared";
 import { maskTelegramToken, unmaskTelegramToken } from "./telegramFiles";
@@ -44,6 +46,13 @@ export interface SupportAgentState {
   pendingMessages: { text: string; receivedAt: number }[];
   lastAlarmAt: number;
   lastUserLang: string;
+  /**
+   * Idioma del CLIENTE detectado en esta conversación (es|en|pt). Se fija una
+   * sola vez, con su primer mensaje, y se mantiene: es exactamente lo que pide
+   * la regla de multi-idioma ("reconoce el cambio una sola vez y luego síguelo").
+   * null = no se pudo determinar con certeza.
+   */
+  detectedLang?: LangCode | null;
   toolCallsInLast2Turns: number;
   lastSearchKbScore: number;
   imageRetryCount: number;
@@ -73,6 +82,7 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
     pendingMessages: [],
     lastAlarmAt: 0,
     lastUserLang: "es",
+    detectedLang: null,
     toolCallsInLast2Turns: 0,
     lastSearchKbScore: 1,
     imageRetryCount: 0,
@@ -188,15 +198,19 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
       }
     }
 
+    // Config efectiva (D1 settings sobre los defaults del env). Se resuelve ACÁ
+    // —y no más abajo— porque el gate de 'Oído y vista' la necesita; antes se
+    // releían los settings aparte (isFeatureActive) para lo mismo.
+    const cfg = await resolveAgentConfig(this.env, []);
+
     // Process media (audio → transcription, image → Pro-gated multimodal marker)
     // Menú Extras (Kooni+): 'Oído y vista' enciende el entendimiento de audio y
     // fotos. Si está apagado (o el módulo no está desbloqueado), se le pide al
     // cliente que escriba — no se procesa el medio.
+    // `cfg.oidoVistaEnabled` es la ÚNICA fuente de verdad de este toggle.
     let processedText = payload.text ?? "";
     let hasImage = false;
-    const { isFeatureActive } = await import("./features");
-    const oidoVistaOn =
-      (payload.audioUrl || payload.imageUrl) && (await isFeatureActive(this.env, "oido_vista"));
+    const oidoVistaOn = Boolean(payload.audioUrl || payload.imageUrl) && cfg.oidoVistaEnabled;
 
     if (payload.audioUrl) {
       if (oidoVistaOn) {
@@ -246,10 +260,6 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
       pendingMessages: pending,
       imageRetryCount: hasImage ? 0 : this.state.imageRetryCount,
     });
-
-    // Resolve effective config (D1 settings overlaid on env defaults).
-    // We need at least bot_paused (to decide whether to reply) and the buffer.
-    const cfg = await resolveAgentConfig(this.env, []);
 
     // Owner paused the bot via the dashboard → keep the message buffered but
     // stay silent: do NOT arm the alarm, so alarm() never runs.
@@ -405,6 +415,22 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
     // Resolve effective config (D1 settings overlaid on env defaults).
     const cfg = await resolveAgentConfig(this.env, toolNames);
 
+    // ── Idioma del cliente (multi-idioma REAL) ──────────────────────────────
+    // Antes esto vivía SOLO en el texto del prompt, así que un
+    // `system_prompt_override` lo desactivaba en silencio y no había ninguna
+    // verificación en código: el cliente escribía en portugués y el bot
+    // contestaba en español. Ahora se detecta una vez por conversación y se
+    // inyecta como bloque de sistema aparte (ver más abajo).
+    const baseLang = baseLangCode(this.env.BOT_LANGUAGE);
+    let clienteLang = (this.state.detectedLang ?? null) as LangCode | null;
+    if (!clienteLang) clienteLang = detectLanguage(combined);
+    // Multiidioma apagado ⇒ manda el idioma base aunque el cliente escriba en
+    // otro idioma (contrato del toggle: apagado significa apagado).
+    const effectiveLang: LangCode = cfg.multiIdiomaEnabled ? clienteLang ?? baseLang : baseLang;
+    if (this.state.detectedLang !== clienteLang || this.state.lastUserLang !== effectiveLang) {
+      this.setState({ ...this.state, detectedLang: clienteLang, lastUserLang: effectiveLang });
+    }
+
     // Fase A: inyectar el canal real para enviarRecurso y respetar el toggle
     // allow_multimedia (si está off, la tool se quita del registro).
     if (this.state.channel) {
@@ -433,7 +459,7 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
           : selectModel({
               toolCallsInLast2Turns: this.state.toolCallsInLast2Turns,
               lastUserText: combined,
-              lastUserLang: this.env.BOT_LANGUAGE,
+              lastUserLang: effectiveLang,
               hasImage: false,
               imageRetryCount: this.state.imageRetryCount,
               lastSearchKbScore: this.state.lastSearchKbScore,
@@ -467,6 +493,19 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
           : {}),
       },
     ];
+
+    // Directiva de idioma: bloque de sistema PROPIO, deliberadamente fuera del
+    // system prompt, para que gobierne aunque haya un `system_prompt_override`
+    // activo (que reemplaza el prompt entero y con él las reglas de idioma).
+    // Es lo que hace que el toggle de Multi-idioma signifique algo de verdad.
+    system.push({
+      role: "system",
+      content: cfg.multiIdiomaEnabled
+        ? clienteLang
+          ? `<idioma>\nEl cliente escribe en ${LANG_LABEL[clienteLang]}. Respondé TODA la respuesta en ${LANG_LABEL[clienteLang]} — cada token, incluidos precios, horarios, nombres de autos y confirmaciones. No mezcles idiomas.\n</idioma>`
+          : `<idioma>\nNo se pudo determinar con certeza el idioma del cliente. Usá el idioma base (${LANG_LABEL[baseLang]}); si el cliente escribe claramente en otro idioma, respondé en ESE idioma.\n</idioma>`
+        : `<idioma>\nEl multi-idioma está APAGADO en esta instalación. Respondé SIEMPRE en ${LANG_LABEL[baseLang]}, aunque el cliente escriba en otro idioma.\n</idioma>`,
+    });
 
     // Customer memory (flywheel): facts extracted by the insights analyzer are
     // injected as a small UNCACHED system block, so a returning customer is

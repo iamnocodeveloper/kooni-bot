@@ -83,7 +83,7 @@ export function inventarioQueryTool(env: Env) {
       const store = await loadVehicleStore(db);
       if (listStoredVehicles(store).length === 0) return noInventoryGuide();
 
-      const res = queryInventory(store, { marca, modelo, condicion, precioMin, precioMax, vin, consulta }, 8);
+      const res = queryInventory(store, { marca, modelo, condicion, precioMin, precioMax, vin, consulta }, 12);
       const marcasTxt = res.marcas.length
         ? res.marcas.map((m) => `${m.marca} (${m.total})`).join(", ")
         : "";
@@ -99,6 +99,20 @@ export function inventarioQueryTool(env: Env) {
       }
       return {
         encontrados: res.total,
+        mostrados: res.matches.length,
+        // Inventarios grandes: el modelo solo ve `limit` autos. En vez de
+        // dejarlo listar todo (o creer que solo hay 12), se le da el panorama
+        // y se le pide acotar con el cliente.
+        ...(res.total > res.matches.length
+          ? {
+              hayMas: true,
+              panorama: res.resumen,
+              notaTruncado:
+                `Hay ${res.total} autos que cumplen el filtro y se muestran ${res.matches.length}. ` +
+                "NO los listes todos: ofrecé 2 o 3 que encajen, usá el panorama (años y rango de precio) " +
+                "y pedile al cliente que acote por modelo, año o presupuesto.",
+            }
+          : {}),
         matches: res.matches.map((m) => ({
           vin: m.vin,
           titulo: m.title,

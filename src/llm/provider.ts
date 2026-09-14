@@ -184,6 +184,19 @@ export function createModel(env: Env, tier: Tier, ov?: LlmOverrides): ResolvedMo
 }
 
 /**
+ * Modelo del ANÁLISIS (scraping/inventario). Mismo constructor que el chat pero
+ * con su PROPIA configuración (`loadAnalysisLlmOverrides`) y tier "smart" por
+ * defecto: el análisis corre pocas veces al día y conviene el modelo bueno
+ * (ej. Claude Opus), mientras el chat puede seguir en el barato (gpt-4o-mini).
+ *
+ * Si el dueño no configuró nada propio, las overrides heredan las del chat y
+ * esto equivale exactamente a `createModel`.
+ */
+export function createAnalysisModel(env: Env, ov?: LlmOverrides): ResolvedModel {
+  return createModel(env, "smart", ov);
+}
+
+/**
  * Plan B ante fallo del proveedor primario (rate limit, 5xx, red): el primer
  * proveedor DISTINTO al que falló que tenga API key en el env, con sus modelos
  * default del tier. null = no hay respaldo configurado.
