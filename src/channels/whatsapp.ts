@@ -25,6 +25,7 @@ interface WaMessage {
   text?: { body?: string };
   image?: { id?: string; caption?: string; mime_type?: string };
   audio?: { id?: string; voice?: boolean; mime_type?: string };
+  location?: { latitude?: number; longitude?: number; name?: string; address?: string };
 }
 
 interface WaChange {
@@ -104,6 +105,7 @@ export async function parseWhatsAppEvents(
         let text: string | undefined;
         let audioUrl: string | undefined;
         let imageUrl: string | undefined;
+        let location: IncomingMessage["location"];
         if (m.type === "text") {
           text = m.text?.body || undefined;
         } else if (m.type === "image" && m.image?.id) {
@@ -112,12 +114,19 @@ export async function parseWhatsAppEvents(
         } else if (m.type === "audio" && m.audio?.id) {
           // Las notas de voz llegan como type "audio" con voice:true.
           audioUrl = (await signedMediaUrl(m.audio.id, env, origin)) ?? undefined;
+        } else if (m.type === "location" && typeof m.location?.latitude === "number" && typeof m.location?.longitude === "number") {
+          location = {
+            lat: m.location.latitude,
+            lng: m.location.longitude,
+            name: m.location.name || undefined,
+            address: m.location.address || undefined,
+          };
         }
         console.log(
           "whatsapp in:",
-          JSON.stringify({ from, type: m.type, hasText: !!text, hasAudio: !!audioUrl, hasImage: !!imageUrl }),
+          JSON.stringify({ from, type: m.type, hasText: !!text, hasAudio: !!audioUrl, hasImage: !!imageUrl, hasLocation: !!location }),
         );
-        if (!text && !audioUrl && !imageUrl) continue; // tipo no soportado / vacío
+        if (!text && !audioUrl && !imageUrl && !location) continue; // tipo no soportado / vacío
         out.push({
           channel: "whatsapp",
           channelUserId: String(from),
@@ -125,6 +134,7 @@ export async function parseWhatsAppEvents(
           text,
           audioUrl,
           imageUrl,
+          location,
           isOwnerMessage: false,
           receivedAt: Date.now(),
           rawPayload: m,

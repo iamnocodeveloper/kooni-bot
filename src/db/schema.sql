@@ -714,3 +714,94 @@ CREATE TABLE IF NOT EXISTS web_sync_changes (
 );
 CREATE INDEX IF NOT EXISTS idx_wssync_changes_run ON web_sync_changes(run_id);
 CREATE INDEX IF NOT EXISTS idx_wssync_changes_at ON web_sync_changes(at);
+
+-- ── Nicho TAXIS (pack "despacho") ────────────────────────────────────────────
+-- Una cooperativa/central con BASES y CONDUCTORES en cola FIFO. Solo se usan
+-- cuando BOT_NICHE=taxis. El bot pide la ubicación al cliente, elige la base más
+-- cercana con conductores, asigna al siguiente de la fila y avisa a ambos.
+CREATE TABLE IF NOT EXISTS taxi_bases (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  address TEXT,
+  lat REAL,
+  lng REAL,
+  -- JSON [{name, fee}] — zona o barrio que cubre la base + tarifa de esa zona.
+  zones TEXT,
+  base_fare REAL NOT NULL DEFAULT 0,
+  eta_min INTEGER NOT NULL DEFAULT 10,
+  -- 1 = base de caída cuando la zona escrita no matchea ninguna
+  is_default INTEGER NOT NULL DEFAULT 0,
+  active INTEGER NOT NULL DEFAULT 1,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS taxi_drivers (
+  id TEXT PRIMARY KEY,
+  code TEXT,
+  name TEXT,
+  phone TEXT,
+  -- solo dígitos (matchea el remitente del webhook, tolera prefijo de país)
+  phone_norm TEXT,
+  base_id TEXT,
+  vehicle TEXT,
+  plate TEXT,
+  seats INTEGER,
+  active INTEGER NOT NULL DEFAULT 1,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  FOREIGN KEY (base_id) REFERENCES taxi_bases(id) ON DELETE SET NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_taxi_drivers_phone ON taxi_drivers(phone_norm);
+
+CREATE TABLE IF NOT EXISTS taxi_queue (
+  id TEXT PRIMARY KEY,
+  base_id TEXT NOT NULL,
+  driver_id TEXT NOT NULL,
+  position INTEGER NOT NULL,
+  -- waiting | assigned | done | left
+  status TEXT NOT NULL DEFAULT 'waiting',
+  arrived_at INTEGER NOT NULL,
+  assigned_at INTEGER,
+  trip_id TEXT,
+  updated_at INTEGER NOT NULL,
+  FOREIGN KEY (base_id) REFERENCES taxi_bases(id) ON DELETE CASCADE,
+  FOREIGN KEY (driver_id) REFERENCES taxi_drivers(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_taxi_queue_base ON taxi_queue(base_id, status, position);
+
+CREATE TABLE IF NOT EXISTS taxi_trips (
+  id TEXT PRIMARY KEY,
+  conversation_id TEXT,
+  channel TEXT,
+  channel_user_id TEXT,
+  customer_name TEXT,
+  customer_phone TEXT,
+  pickup_address TEXT,
+  pickup_lat REAL,
+  pickup_lng REAL,
+  dest_address TEXT,
+  zone TEXT,
+  base_id TEXT,
+  driver_id TEXT,
+  -- solicitado | asignado | en_camino | completado | cancelado | sin_conductor
+  status TEXT NOT NULL DEFAULT 'solicitado',
+  fare_estimate REAL,
+  notes TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS idx_taxi_trips_status ON taxi_trips(status, created_at);
+CREATE INDEX IF NOT EXISTS idx_taxi_trips_conv ON taxi_trips(conversation_id);
+
+CREATE TABLE IF NOT EXISTS taxi_trip_events (
+  id TEXT PRIMARY KEY,
+  trip_id TEXT NOT NULL,
+  status TEXT NOT NULL,
+  note TEXT,
+  at INTEGER NOT NULL,
+  FOREIGN KEY (trip_id) REFERENCES taxi_trips(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_taxi_trip_events_trip ON taxi_trip_events(trip_id, at);

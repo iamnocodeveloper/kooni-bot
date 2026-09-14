@@ -48,15 +48,22 @@ export function iconSvg(env: Env): string {
 
 export function manifest(env: Env): string {
   const b = brand(env);
-  const esResto = (env.BOT_NICHE ?? "").trim().toLowerCase() === "restaurante";
+  const niche = (env.BOT_NICHE ?? "").trim().toLowerCase();
+  const esResto = niche === "restaurante";
+  const esTaxis = niche === "taxis";
+  const description = esResto
+    ? `Panel de ${b.name}: pedidos, menú y avisos.`
+    : esTaxis
+      ? `Panel de ${b.name}: viajes, cola de conductores y avisos.`
+      : `Panel de ${b.name}: conversaciones, prospectos y avisos.`;
+  // El restaurante abre en Pedidos y la central de taxis en Viajes (pantalla de
+  // despacho). El resto, en el Resumen.
+  const startUrl = esResto ? "/admin/pedidos?tv=1" : esTaxis ? "/admin/viajes?tv=1" : "/admin/overview";
   return JSON.stringify({
     name: `${b.name} · Panel`,
     short_name: b.name,
-    description: esResto
-      ? `Panel de ${b.name}: pedidos, menú y avisos.`
-      : `Panel de ${b.name}: conversaciones, prospectos y avisos.`,
-    // El restaurante abre en Pedidos (es la pantalla de mostrador).
-    start_url: esResto ? "/admin/pedidos?tv=1" : "/admin/overview",
+    description,
+    start_url: startUrl,
     scope: "/admin/",
     display: "standalone",
     orientation: "portrait-primary",
@@ -72,11 +79,18 @@ export function manifest(env: Env): string {
           { name: "Menú", url: "/admin/menu" },
           { name: "Reportes", url: "/admin/reportes" },
         ]
-      : [
-          { name: "Conversaciones", url: "/admin/conversations" },
-          { name: "Prospectos", url: "/admin/leads" },
-          { name: "Tickets", url: "/admin/tickets" },
-        ],
+      : esTaxis
+        ? [
+            { name: "Viajes", url: "/admin/viajes" },
+            { name: "Cola", url: "/admin/cola" },
+            { name: "Bases", url: "/admin/bases" },
+            { name: "Reportes", url: "/admin/reportes" },
+          ]
+        : [
+            { name: "Conversaciones", url: "/admin/conversations" },
+            { name: "Prospectos", url: "/admin/leads" },
+            { name: "Tickets", url: "/admin/tickets" },
+          ],
   });
 }
 

@@ -921,6 +921,7 @@ async function onboarding(rl, answers, defaultDir, flags = {}) {
     { key: "clinica", label: m("Clínica / consultorio", "Clinic") },
     { key: "barberia", label: m("Barbería / estética", "Barber / beauty") },
     { key: "cartera", label: m("Cartera de cobros", "Debt collection") },
+    { key: "taxis", label: m("Taxis / central de despacho", "Taxi / dispatch") },
   ];
   if (!answers.niche) {
     const nicheIdx = await select(rl, t().qNiche, NICHE_CHOICES, { default: 0 });

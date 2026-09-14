@@ -49,6 +49,28 @@ export function pushNameFromPayload(payload: any): string | undefined {
 }
 
 /**
+ * Ubicación del mensaje, si lo que mandaron fue un pin. WAHA expone varias
+ * formas según la versión (`location`, `_data.locationMessageDegrees`,
+ * `_data.lat`/`lng`); aceptamos las conocidas. Fail-soft → undefined.
+ */
+export function locationFromPayload(payload: any): { lat: number; lng: number; name?: string; address?: string } | undefined {
+  const d = payload?._data ?? {};
+  const src =
+    (payload?.location && typeof payload.location === "object" && payload.location) ||
+    (d.locationMessageDegrees && typeof d.locationMessageDegrees === "object" && d.locationMessageDegrees) ||
+    (d.location && typeof d.location === "object" && d.location) ||
+    {};
+  const lat = Number(src.latitude ?? src.lat ?? src.degreesLatitude ?? d.lat);
+  const lng = Number(src.longitude ?? src.lng ?? src.degreesLongitude ?? d.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+    return undefined;
+  }
+  const name = typeof src.name === "string" ? src.name : typeof d.name === "string" ? d.name : undefined;
+  const address = typeof src.address === "string" ? src.address : typeof d.address === "string" ? d.address : undefined;
+  return { lat, lng, ...(name ? { name } : {}), ...(address ? { address } : {}) };
+}
+
+/**
  * Fallback: pide el contacto a WAHA (`GET /api/contacts`) y usa el pushname.
  * Para chats `@lid` WAHA resuelve igual el contacto. Fail-soft.
  */
@@ -154,6 +176,7 @@ export const wahaAdapter: ChannelAdapter = {
       text,
       imageUrl,
       audioUrl,
+      location: locationFromPayload(payload),
       receivedAt: Date.now(),
       rawPayload: body,
     };

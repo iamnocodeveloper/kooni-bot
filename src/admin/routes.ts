@@ -1819,6 +1819,10 @@ function isRestaurante(c: { env: Env }): boolean {
   return (c.env.BOT_NICHE ?? "").trim().toLowerCase() === "restaurante";
 }
 
+function isTaxis(c: { env: Env }): boolean {
+  return (c.env.BOT_NICHE ?? "").trim().toLowerCase() === "taxis";
+}
+
 adminApp.get("/pedidos", async (c) => {
   if (!isRestaurante(c)) return c.redirect("/admin/overview");
   const { renderPedidos } = await import("./views/pedidos");
@@ -1894,23 +1898,315 @@ adminApp.post("/menu/:id/delete", async (c) => {
   return c.redirect("/admin/menu");
 });
 
+// Reportes por nicho (la ruta es la misma; el giro decide qué pantalla se sirve).
 adminApp.get("/reportes", async (c) => {
-  if (!isRestaurante(c)) return c.redirect("/admin/overview");
-  const { renderReportesRestaurante, windowFromQuery } = await import("./views/reportes-restaurante");
-  return c.html(await renderReportesRestaurante(c.env, windowFromQuery(new URL(c.req.url).searchParams)));
+  if (isRestaurante(c)) {
+    const { renderReportesRestaurante, windowFromQuery } = await import("./views/reportes-restaurante");
+    return c.html(await renderReportesRestaurante(c.env, windowFromQuery(new URL(c.req.url).searchParams)));
+  }
+  if (isTaxis(c)) {
+    const { renderReportesTaxis } = await import("./views/reportes-taxis");
+    const { windowFromQuery } = await import("./views/reportes-restaurante");
+    return c.html(await renderReportesTaxis(c.env, windowFromQuery(new URL(c.req.url).searchParams)));
+  }
+  return c.redirect("/admin/overview");
 });
 
 adminApp.get("/reportes/export.csv", async (c) => {
-  if (!isRestaurante(c)) return c.redirect("/admin/overview");
-  const { windowFromQuery } = await import("./views/reportes-restaurante");
-  const { buildRestaurantReports, reportsToCsv } = await import("../reports/restaurante");
-  const r = await buildRestaurantReports(c.env, windowFromQuery(new URL(c.req.url).searchParams));
-  return new Response(reportsToCsv(r), {
-    headers: {
-      "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="reportes-restaurante.csv"`,
-    },
+  const win = new URL(c.req.url).searchParams;
+  if (isRestaurante(c)) {
+    const { windowFromQuery } = await import("./views/reportes-restaurante");
+    const { buildRestaurantReports, reportsToCsv } = await import("../reports/restaurante");
+    const r = await buildRestaurantReports(c.env, windowFromQuery(win));
+    return new Response(reportsToCsv(r), {
+      headers: {
+        "Content-Type": "text/csv; charset=utf-8",
+        "Content-Disposition": `attachment; filename="reportes-restaurante.csv"`,
+      },
+    });
+  }
+  if (isTaxis(c)) {
+    const { windowFromQuery } = await import("./views/reportes-restaurante");
+    const { buildTaxiReports, reportsToCsv } = await import("../reports/taxis");
+    const r = await buildTaxiReports(c.env, windowFromQuery(win));
+    return new Response(reportsToCsv(r), {
+      headers: {
+        "Content-Type": "text/csv; charset=utf-8",
+        "Content-Disposition": `attachment; filename="reportes-taxis.csv"`,
+      },
+    });
+  }
+  return c.redirect("/admin/overview");
+});
+
+// ── Nicho TAXIS: Viajes / Cola / Bases / Conductores ─────────────────────────
+// El nav solo las muestra si BOT_NICHE=taxis (hooks.navExtra); igual redirigimos
+// si no es el giro, para no servir una vista vacía por URL directa.
+
+// Cambiar el estado de un viaje: avisa al cliente por su canal.
+adminApp.post("/viajes/:id/status", async (c) => {
+  if (!isTaxis(c)) return c.redirect("/admin/overview");
+  const { TaxiTripsRepo, TaxiDriversRepo } = await import("../db/taxi");
+  const { notifyCustomerTripStatus } = await import("../taxi/notify");
+  const form = await c.req.formData();
+  const to = String(form.get("status") ?? "").trim();
+  const note = String(form.get("note") ?? "").trim() || undefined;
+  const id = c.req.param("id");
+  const db = new Db(c.env.DB);
+  const repo = new TaxiTripsRepo(db);
+  const before = await repo.get(id);
+  const updated = await repo.setStatus(id, to as never, note);
+  if (!updated) {
+    await audit(c, { action: "trip.status", target: `trip:${id}`, beforeVal: before?.status, afterVal: `${to} (rechazado)`, result: "error" });
+    return c.redirect("/admin/viajes?err=transicion");
+  }
+  const driver = updated.driver_id ? await new TaxiDriversRepo(db).get(updated.driver_id) : null;
+  await notifyCustomerTripStatus(c.env, updated, driver);
+  await audit(c, { action: "trip.status", target: `trip:${id}`, targetLabel: `Viaje ${id}`, beforeVal: before?.status, afterVal: to });
+  return c.redirect("/admin/viajes");
+});
+
+// Asignar un conductor a mano (cuando no había ninguno, o para corregir).
+adminApp.post("/viajes/:id/assign", async (c) => {
+  if (!isTaxis(c)) return c.redirect("/admin/overview");
+  const { TaxiTripsRepo, TaxiDriversRepo, TaxiQueueRepo, TaxiBasesRepo } = await import("../db/taxi");
+  const { notifyCustomerAssigned, notifyDriverAssigned } = await import("../taxi/notify");
+  const form = await c.req.formData();
+  const driverId = String(form.get("driver_id") ?? "").trim();
+  if (!driverId) return c.redirect("/admin/viajes?err=sinconductor");
+  const db = new Db(c.env.DB);
+  const id = c.req.param("id");
+  const driver = await new TaxiDriversRepo(db).get(driverId);
+  if (!driver) return c.redirect("/admin/viajes?err=sinconductor");
+  const updated = await new TaxiTripsRepo(db).assignDriver(id, driver.id, driver.base_id, "asignado por el operador");
+  if (!updated) return c.redirect("/admin/viajes?err=transicion");
+  // Si el conductor estaba esperando en su base, sale de la cola con este viaje.
+  const queue = new TaxiQueueRepo(db);
+  const entry = await queue.activeEntryForDriver(driver.id);
+  if (entry?.status === "waiting") await queue.assign(entry.id, id);
+  const base = driver.base_id ? await new TaxiBasesRepo(db).get(driver.base_id) : null;
+  await notifyCustomerAssigned(c.env, updated, driver, base);
+  await notifyDriverAssigned(c.env, updated, driver, base);
+  await audit(c, { action: "trip.assign", target: `trip:${id}`, targetLabel: `Viaje ${id}`, afterVal: `${driver.name ?? driver.id}` });
+  return c.redirect("/admin/viajes");
+});
+
+adminApp.get("/viajes", async (c) => {
+  if (!isTaxis(c)) return c.redirect("/admin/overview");
+  const { renderViajes } = await import("./views/viajes");
+  return c.html(await renderViajes(c.env, { filter: c.req.query("status"), err: c.req.query("err"), tv: c.req.query("tv") === "1" }));
+});
+
+// Feed liviano para el sonido/badge de la pantalla de Viajes.
+adminApp.get("/viajes/feed", async (c) => {
+  if (!isTaxis(c)) return c.json({ ids: [], latestAt: 0 });
+  const { TaxiTripsRepo } = await import("../db/taxi");
+  const active = await new TaxiTripsRepo(new Db(c.env.DB)).active();
+  return c.json({
+    ids: active.map((t) => t.id),
+    latestAt: active.reduce((m, t) => Math.max(m, t.created_at), 0),
+    count: active.length,
   });
+});
+
+adminApp.get("/cola", async (c) => {
+  if (!isTaxis(c)) return c.redirect("/admin/overview");
+  if (c.req.header("x-partial") === "1") {
+    const { renderColaFragment } = await import("./views/cola");
+    return c.html(await renderColaFragment(c.env));
+  }
+  const { renderCola } = await import("./views/cola");
+  return c.html(await renderCola(c.env));
+});
+
+adminApp.post("/cola/:id/leave", async (c) => {
+  if (!isTaxis(c)) return c.redirect("/admin/overview");
+  const { TaxiQueueRepo } = await import("../db/taxi");
+  const repo = new TaxiQueueRepo(new Db(c.env.DB));
+  const entry = await repo.get(c.req.param("id"));
+  if (entry) await repo.leave(entry.driver_id);
+  await audit(c, { action: "taxi.queue.leave", target: `queue:${c.req.param("id")}` });
+  return c.redirect("/admin/cola");
+});
+
+adminApp.post("/cola/:id/up", async (c) => {
+  if (!isTaxis(c)) return c.redirect("/admin/overview");
+  const { TaxiQueueRepo } = await import("../db/taxi");
+  await new TaxiQueueRepo(new Db(c.env.DB)).moveUp(c.req.param("id"));
+  await audit(c, { action: "taxi.queue.moveUp", target: `queue:${c.req.param("id")}` });
+  return c.redirect("/admin/cola");
+});
+
+adminApp.get("/bases", async (c) => {
+  if (!isTaxis(c)) return c.redirect("/admin/overview");
+  const { renderBases } = await import("./views/bases-editor");
+  return c.html(await renderBases(c.env, c.req.query("saved") === "1"));
+});
+
+/** Lee los campos de una base desde el form (zonas incluidas). */
+async function readBaseForm(c: any): Promise<import("../db/taxi").TaxiBaseInput> {
+  const { parseZonesInput } = await import("./views/bases-editor");
+  const f = await c.req.formData();
+  const num = (k: string): number | null => {
+    const v = String(f.get(k) ?? "").trim();
+    if (!v) return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
+  return {
+    name: String(f.get("name") ?? "").trim(),
+    address: String(f.get("address") ?? "").trim() || null,
+    lat: num("lat"),
+    lng: num("lng"),
+    zones: parseZonesInput(String(f.get("zones") ?? "")),
+    baseFare: num("base_fare") ?? 0,
+    etaMin: num("eta_min") ?? 10,
+    isDefault: f.get("is_default") === "1",
+  };
+}
+
+adminApp.post("/bases", async (c) => {
+  if (!isTaxis(c)) return c.redirect("/admin/overview");
+  const { TaxiBasesRepo } = await import("../db/taxi");
+  const input = await readBaseForm(c);
+  if (!input.name) return c.redirect("/admin/bases");
+  const id = await new TaxiBasesRepo(new Db(c.env.DB)).create(input);
+  await audit(c, { action: "taxi.base.create", target: `base:${id}`, targetLabel: input.name });
+  return c.redirect("/admin/bases?saved=1");
+});
+
+adminApp.post("/bases/:id", async (c) => {
+  if (!isTaxis(c)) return c.redirect("/admin/overview");
+  const { TaxiBasesRepo } = await import("../db/taxi");
+  const input = await readBaseForm(c);
+  const id = c.req.param("id");
+  await new TaxiBasesRepo(new Db(c.env.DB)).update(id, input);
+  await audit(c, { action: "taxi.base.update", target: `base:${id}` });
+  return c.redirect("/admin/bases?saved=1");
+});
+
+adminApp.post("/bases/:id/toggle", async (c) => {
+  if (!isTaxis(c)) return c.redirect("/admin/overview");
+  const { TaxiBasesRepo } = await import("../db/taxi");
+  const repo = new TaxiBasesRepo(new Db(c.env.DB));
+  const id = c.req.param("id");
+  const b = await repo.get(id);
+  if (b) await repo.update(id, { active: b.active === 0 });
+  await audit(c, { action: "taxi.base.toggle", target: `base:${id}`, afterVal: b && b.active === 0 ? "activa" : "inactiva" });
+  return c.redirect("/admin/bases");
+});
+
+adminApp.post("/bases/:id/delete", async (c) => {
+  if (!isTaxis(c)) return c.redirect("/admin/overview");
+  const { TaxiBasesRepo } = await import("../db/taxi");
+  const id = c.req.param("id");
+  await new TaxiBasesRepo(new Db(c.env.DB)).delete(id);
+  await audit(c, { action: "taxi.base.delete", target: `base:${id}` });
+  return c.redirect("/admin/bases");
+});
+
+adminApp.get("/conductores", async (c) => {
+  if (!isTaxis(c)) return c.redirect("/admin/overview");
+  const { renderConductores } = await import("./views/conductores-editor");
+  return c.html(await renderConductores(c.env, c.req.query("saved") === "1"));
+});
+
+/** Lee los campos de un conductor desde el form. */
+async function readDriverForm(c: any): Promise<Partial<import("../db/taxi").TaxiDriverInput>> {
+  const f = await c.req.formData();
+  const str = (k: string) => String(f.get(k) ?? "").trim() || null;
+  const seatsRaw = String(f.get("seats") ?? "").trim();
+  const seats = seatsRaw ? Number(seatsRaw) : null;
+  return {
+    code: str("code"),
+    name: str("name"),
+    phone: str("phone"),
+    baseId: str("base_id"),
+    vehicle: str("vehicle"),
+    plate: str("plate"),
+    seats: seats !== null && Number.isFinite(seats) ? seats : null,
+  };
+}
+
+adminApp.post("/conductores", async (c) => {
+  if (!isTaxis(c)) return c.redirect("/admin/overview");
+  const { TaxiDriversRepo } = await import("../db/taxi");
+  const input = await readDriverForm(c);
+  if (!input.name) return c.redirect("/admin/conductores");
+  const id = await new TaxiDriversRepo(new Db(c.env.DB)).create(input);
+  await audit(c, { action: "taxi.driver.create", target: `driver:${id}`, targetLabel: input.name ?? "" });
+  return c.redirect("/admin/conductores?saved=1");
+});
+
+adminApp.post("/conductores/:id", async (c) => {
+  if (!isTaxis(c)) return c.redirect("/admin/overview");
+  const { TaxiDriversRepo } = await import("../db/taxi");
+  const input = await readDriverForm(c);
+  const id = c.req.param("id");
+  await new TaxiDriversRepo(new Db(c.env.DB)).update(id, input);
+  await audit(c, { action: "taxi.driver.update", target: `driver:${id}` });
+  return c.redirect("/admin/conductores?saved=1");
+});
+
+adminApp.post("/conductores/:id/toggle", async (c) => {
+  if (!isTaxis(c)) return c.redirect("/admin/overview");
+  const { TaxiDriversRepo } = await import("../db/taxi");
+  const repo = new TaxiDriversRepo(new Db(c.env.DB));
+  const id = c.req.param("id");
+  const d = await repo.get(id);
+  if (d) await repo.setActive(id, d.active === 0);
+  await audit(c, { action: "taxi.driver.toggle", target: `driver:${id}`, afterVal: d && d.active === 0 ? "activo" : "inactivo" });
+  return c.redirect("/admin/conductores");
+});
+
+adminApp.post("/conductores/:id/delete", async (c) => {
+  if (!isTaxis(c)) return c.redirect("/admin/overview");
+  const { TaxiDriversRepo } = await import("../db/taxi");
+  const id = c.req.param("id");
+  await new TaxiDriversRepo(new Db(c.env.DB)).delete(id);
+  await audit(c, { action: "taxi.driver.delete", target: `driver:${id}` });
+  return c.redirect("/admin/conductores");
+});
+
+// "Elegir conductor" DESDE EL CHAT: asigna (o crea) el viaje de esa conversación
+// y le manda al cliente el conductor asignado. Refresca el hilo.
+adminApp.post("/conversations/:id/assign-driver", async (c) => {
+  if (!isTaxis(c)) return c.body(null, 404);
+  const id = c.req.param("id");
+  const form = await c.req.formData().catch(() => null);
+  const driverId = String(form?.get("driver_id") ?? "").trim();
+  if (!driverId) return c.html(`<span class="text-red-600">Elegí un conductor.</span>`);
+  const { TaxiTripsRepo, TaxiDriversRepo, TaxiQueueRepo, TaxiBasesRepo } = await import("../db/taxi");
+  const { notifyCustomerAssigned, notifyDriverAssigned } = await import("../taxi/notify");
+  const db = new Db(c.env.DB);
+  const conv = await new ConversationsRepo(db).getById(id);
+  if (!conv) return c.html(`<span class="text-red-600">✗ Conversación no encontrada.</span>`);
+  const driver = await new TaxiDriversRepo(db).get(driverId);
+  if (!driver) return c.html(`<span class="text-red-600">✗ Conductor no encontrado.</span>`);
+
+  const trips = new TaxiTripsRepo(db);
+  let tripId = (await trips.activeForConversation(id))?.id;
+  if (!tripId) {
+    tripId = await trips.create({
+      conversationId: id,
+      channel: conv.channel,
+      channelUserId: conv.channel_user_id,
+      customerName: conv.display_name ?? null,
+      status: "solicitado",
+    });
+  }
+  const updated = await trips.assignDriver(tripId, driver.id, driver.base_id, "asignado por el operador desde el chat");
+  if (!updated) return c.html(`<span class="text-red-600">✗ El viaje no acepta la asignación.</span>`);
+
+  const queue = new TaxiQueueRepo(db);
+  const entry = await queue.activeEntryForDriver(driver.id);
+  if (entry?.status === "waiting") await queue.assign(entry.id, tripId);
+  const base = driver.base_id ? await new TaxiBasesRepo(db).get(driver.base_id) : null;
+  await notifyCustomerAssigned(c.env, updated, driver, base);
+  await notifyDriverAssigned(c.env, updated, driver, base);
+  await new ConversationsRepo(db).setPausedUntil(id, Date.now() + TAKEOVER_MS);
+  await audit(c, { action: "conversation.assign_driver", target: `conv:${id}`, afterVal: driver.name ?? driver.id });
+  return c.html(await renderThreadLive(c.env, id));
 });
 
 // Resolve a support ticket.

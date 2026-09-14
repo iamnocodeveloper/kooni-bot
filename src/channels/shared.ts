@@ -7,6 +7,12 @@ export interface IncomingMessage {
   text?: string;
   audioUrl?: string;
   imageUrl?: string;
+  /**
+   * Ubicación compartida por el cliente (pin de WhatsApp). Lo usa el nicho de
+   * taxis para calcular la base más cercana. Best-effort: no todos los canales
+   * ni todos los builds la traen.
+   */
+  location?: { lat: number; lng: number; name?: string; address?: string };
   isOwnerMessage?: boolean;
   /**
    * El negocio respondió al cliente DESDE FUERA del panel (app nativa de

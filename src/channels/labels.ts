@@ -7,11 +7,14 @@ import type { Env } from "../env";
 import { resolveZernioCredentials } from "./zernioCredentials";
 import { resolveTelegramToken } from "./telegramCredentials";
 import { loadMlCredentials, mlConnected } from "./mercadolibreCredentials";
+import { resolveWahaConfig } from "./wahaCredentials";
+import { getNiche } from "../niches";
 
 /** channel id (as stored in conversations.channel) → label the owner reads. */
 export const CHANNEL_LABELS: Record<string, string> = {
   twilio: "WhatsApp",
-  whatsapp: "WhatsApp", // legacy rows
+  whatsapp: "WhatsApp",
+  waha: "WhatsApp (WAHA)",
   telegram: "Telegram",
   instagram: "Instagram",
   messenger: "Messenger",
@@ -59,6 +62,17 @@ export async function configuredChannels(env: Env): Promise<ConfiguredChannel[]>
   const ml = await loadMlCredentials(env);
   if (mlConnected(ml)) {
     out.push({ id: "mercadolibre", label: "MercadoLibre", detail: "preguntas + post-venta" });
+  }
+  if (env.WHATSAPP_ACCESS_TOKEN && env.WHATSAPP_PHONE_NUMBER_ID) {
+    out.push({ id: "whatsapp", label: "WhatsApp", detail: "Cloud API oficial" });
+  }
+  const waha = await resolveWahaConfig(env);
+  if (waha.base) {
+    out.push({ id: "waha", label: "WhatsApp (WAHA)", detail: "self-hosted" });
+  }
+  // Nicho taxis: solo WhatsApp (oficial + WAHA) — igual que en Conexiones.
+  if (getNiche(env).hooks?.taxiEngine) {
+    return out.filter((ch) => ch.id === "whatsapp" || ch.id === "waha");
   }
   return out;
 }

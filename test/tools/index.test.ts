@@ -64,4 +64,13 @@ describe("buildTools", () => {
     // Las tools base siguen todas ahí.
     for (const t of ALL_TOOLS) expect(tools[t]).toBeDefined();
   });
+
+  it("BOT_NICHE=taxis agrega la tool solicitarTaxi (hooks.extraTools)", async () => {
+    const ctx = makeCtx("free");
+    (ctx.env as any).BOT_NICHE = "taxis";
+    const tools = await buildTools(ctx);
+    expect(tools.solicitarTaxi).toBeDefined();
+    expect(tools.tomarPedido).toBeUndefined();
+    for (const t of ALL_TOOLS) expect(tools[t]).toBeDefined();
+  });
 });

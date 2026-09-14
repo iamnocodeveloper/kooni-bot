@@ -5,6 +5,52 @@ Cambios notables de Kooni. Formato aproximado de
 
 El CLI `kooni-bot` se versiona aparte (npm) — ver la nota de cada versión.
 
+## [1.47.0] — 2026-09-14
+
+### Agregado — Nicho TAXIS (central de despacho con bases y cola de conductores)
+
+Nuevo pack opt-in (`BOT_NICHE=taxis`) para cooperativas/centrales de taxis. El
+bot atiende al cliente que pide un taxi y despacha solo; si no hay conductores,
+escala al operador.
+
+- **Bases y conductores** en el panel (`/admin/bases`, `/admin/conductores`):
+  cada base tiene zonas (con tarifa), coordenadas, tarifa base y ETA; cada
+  conductor tiene código, WhatsApp, base, vehículo y placa.
+- **Cola FIFO por base** (`/admin/cola`): el conductor entra al final de la fila
+  escribiendo desde su WhatsApp registrado; el bot lo reconoce e intercepta el
+  mensaje ANTES del agente (`src/taxi/driverInbound.ts`), así no pasa por el
+  modelo ni aparece como conversación de cliente. Comandos: `salir`, `fin`,
+  `estado`; cualquier otro texto = “llegué”.
+- **Despacho automático**: el bot pide la ubicación (pin de WhatsApp o zona) y
+  elige la base más cercana con conductores — por GPS (Haversine) o por match de
+  zona — y asigna al siguiente de la fila. Tool `solicitarTaxi`.
+- **Sin conductores → urgente**: el viaje queda `sin_conductor` y el chat se
+  marca con ticket + etiqueta de atención humana + aviso al dueño, para que el
+  operador asigne a mano.
+- **Elegir conductor desde el chat**: selector en la cabecera del hilo
+  (`POST /admin/conversations/:id/assign-driver`) que asigna (o crea) el viaje y
+  le manda al cliente el conductor asignado.
+- **Panel de viajes** (`/admin/viajes`) con avance de estado, asignación manual y
+  alerta sonora de viaje nuevo; PWA abre en Viajes (`/admin/viajes?tv=1`).
+- **Reportes** (`/admin/reportes`): viajes, por base, ranking de conductores,
+  demanda por zona, ingreso estimado y salud del bot — con export CSV.
+- **Canales del nicho**: solo WhatsApp (Cloud API oficial + WAHA). En Conexiones
+  y en el flujo del agente se ocultan los demás canales.
+- **Cron**: `runTaxiMaintenance()` expira conductores que llevan demasiado en la
+  cola y cierra viajes colgados.
+- **Tablas nuevas** (idempotentes, `src/db/schema.sql`): `taxi_bases`,
+  `taxi_drivers`, `taxi_queue`, `taxi_trips`, `taxi_trip_events`.
+- **KB**: plantillas `docs/kb-plantillas/taxis-{faq,tarifas,casos-limite}.md`.
+- **Ubicación entrante**: los adaptadores de WhatsApp Cloud y WAHA ahora leen el
+  pin de ubicación (`IncomingMessage.location`).
+
+> Instalaciones existentes: `pnpm db:apply:remote` crea las tablas (idempotente,
+> no toca datos) y el `BOT_NICHE=taxis` queda inerte hasta que se active.
+
+### CLI
+
+- `kooni-bot@0.4.1`: `taxis` agregado a la lista de giros del instalador.
+
 ## [1.46.0] — 2026-09-14
 
 ### Agregado — Zona horaria del negocio configurable (una sola fuente de verdad)

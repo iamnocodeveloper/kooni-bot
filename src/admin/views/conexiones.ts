@@ -12,6 +12,7 @@ import { mlConnected, ML_SITES, type MlCredentials } from "../../channels/mercad
 import type { WahaConfig } from "../../channels/wahaCredentials";
 import type { WahaSessionInfo } from "../../channels/wahaApi";
 import { vapiConfigured, retellConfigured, type VoiceConfig } from "../../integrations/voiceProviders";
+import { getNiche } from "../../niches";
 
 interface ChannelStatus {
   id: string;
@@ -224,7 +225,11 @@ export async function renderConexiones(
       objective: "",
       maxAttempts: 3,
     } as VoiceConfig);
-  const channels = channelStatuses(env, zernioCreds, telegramToken, mlCreds, wahaCfg);
+  // Nicho taxis: solo se ofrecen canales de WhatsApp (oficial + WAHA). El resto
+  // sigue en el código, pero no se muestra en esta instalación.
+  const taxiOnly = getNiche(env).hooks?.taxiEngine === true;
+  const allChannels = channelStatuses(env, zernioCreds, telegramToken, mlCreds, wahaCfg);
+  const channels = taxiOnly ? allChannels.filter((ch) => ch.id === "whatsapp" || ch.id === "waha") : allChannels;
   const connected = channels.filter((ch) => ch.ok).length;
   // Fallback de base: la ruta GET pasa el origin real si DASHBOARD_BASE_URL está
   // vacío, para que las cards SIEMPRE muestren su webhook URL.
@@ -620,7 +625,7 @@ export async function renderConexiones(
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px">
         ${cards}
       </div>
-      <div style="display:flex;flex-direction:column;gap:2px;margin-top:6px">
+      ${taxiOnly ? "" : `<div style="display:flex;flex-direction:column;gap:2px;margin-top:6px">
         <h2 class="font-display font-semibold text-[15px] text-cream">Cobros por voz: Vapi / Retell</h2>
         <p class="text-muted text-[12.5px]">Llamadas con IA para la cartera de cobros. Elegí el proveedor activo y pegá sus datos; el webhook de cada plataforma ya está listo para pegar en su dashboard.</p>
       </div>
@@ -628,7 +633,7 @@ export async function renderConexiones(
         ${vapiCard}
         ${retellCard}
         ${vozComun}
-      </div>
+      </div>`}
     </div>`;
 
   return layout({ title: "Conexiones", activeTab: "conexiones", body, env });

@@ -147,6 +147,10 @@ app.post("/webhooks/waha", async (c) => {
   }
   try {
     const msg = await wahaAdapter.parseIncoming(c.req.raw, c.env);
+    // Nicho taxis: si el remitente es un conductor registrado, lo maneja el
+    // motor de despacho (cola) y NO llega al agente.
+    const { handleDriverMessage } = await import("./taxi/driverInbound");
+    if (await handleDriverMessage(c.env, msg)) return c.text("ok", 200);
     const doId = c.env.AGENT.idFromName(`${msg.channel}:${msg.channelUserId}`);
     await c.env.AGENT.get(doId).ingest(msg).catch((e) => console.error("waha ingest:", e));
     return c.text("ok", 200);
@@ -346,7 +350,10 @@ app.post("/webhooks/whatsapp", async (c) => {
     return c.text("bad json", 400);
   }
   const origin = c.env.DASHBOARD_BASE_URL || new URL(c.req.url).origin;
+  const { handleDriverMessage } = await import("./taxi/driverInbound");
   for (const msg of await parseWhatsAppEvents(body as any, c.env, origin)) {
+    // Nicho taxis: mensajes de conductores registrados van a la cola, no al agente.
+    if (await handleDriverMessage(c.env, msg)) continue;
     const doId = c.env.AGENT.idFromName(`${msg.channel}:${msg.channelUserId}`);
     await c.env.AGENT.get(doId).ingest(msg);
   }
@@ -567,6 +574,20 @@ export default {
         }
       } catch (e) {
         console.error("collections:", e);
+      }
+    }
+
+    // Taxis (nicho `taxis`): expira conductores que llevan demasiado en la cola
+    // y cierra viajes que quedaron colgados. Best-effort.
+    if ((env.BOT_NICHE ?? "").trim().toLowerCase() === "taxis") {
+      try {
+        const { runTaxiMaintenance } = await import("./taxi/maintenance");
+        const r = await runTaxiMaintenance(env);
+        if (r.staleQueue || r.staleTrips) {
+          console.log(`[taxis] cola expirada ${r.staleQueue} · viajes cerrados ${r.staleTrips}`);
+        }
+      } catch (e) {
+        console.error("taxi maintenance:", e);
       }
     }
 

@@ -23,6 +23,9 @@ negocio y pégalo. La KB del panel vive en D1 (tabla `kb_docs`), se edita desde
 | `clinica-faq.md` | Preguntas frecuentes de una clínica (citas, seguros, urgencias…). El bot no diagnostica. |
 | `barberia-servicios-ejemplo.md` | Servicios, barberos y precios de ejemplo (giro `barberia`). |
 | `barberia-faq.md` | Preguntas frecuentes de una barbería (citas, precios, grupos…). |
+| `taxis-faq.md` | Preguntas frecuentes de una central de taxis (zonas, tarifas, seguridad, viajes especiales…). |
+| `taxis-tarifas.md` | Tarifa base, tarifa por zona y zonas cubiertas por base (giro `taxis`). |
+| `taxis-casos-limite.md` | Sin conductor, zona no cubierta, ubicación ambigua, reclamos y viajes especiales. |
 
 > Antes vivían en `member/kb/` (fragmentos precargados del repo). Se movieron
 > aquí porque ese contenido es específico de quien revende Kooni, no del

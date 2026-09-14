@@ -45,6 +45,13 @@ const NICHE_TABLES: Record<string, string[]> = {
     "payment_promises",
     "collection_dnc",
   ],
+  taxis: [
+    "taxi_bases",
+    "taxi_drivers",
+    "taxi_queue",
+    "taxi_trips",
+    "taxi_trip_events",
+  ],
 };
 
 /** Archivos que pertenecen a un nicho (SQL específico del giro). */
@@ -57,6 +64,12 @@ const NICHE_SRC: Record<string, string[]> = {
     join(SRC, "collections"),
     join(SRC, "tools", "collections.ts"),
     join(SRC, "db", "collections.ts"),
+  ],
+  taxis: [
+    join(SRC, "taxi"),
+    join(SRC, "db", "taxi.ts"),
+    join(SRC, "tools", "solicitarTaxi.ts"),
+    join(SRC, "reports", "taxis.ts"),
   ],
 };
 

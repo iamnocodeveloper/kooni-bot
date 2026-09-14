@@ -59,6 +59,11 @@ export interface SupportAgentState {
   imageRetryCount: number;
   /** Para responder en el hilo del último mensaje entrante (Telegram grupos). */
   lastReplyToMessageId?: number;
+  /**
+   * Última ubicación compartida por el cliente (pin de WhatsApp). La usa el
+   * nicho de taxis para calcular la base más cercana (ver src/taxi/dispatch.ts).
+   */
+  lastLocation?: { lat: number; lng: number; name?: string; address?: string } | null;
 }
 
 export interface AgentIncomingPayload {
@@ -73,6 +78,8 @@ export interface AgentIncomingPayload {
   ownerEcho?: boolean;
   /** Para responder en el hilo (Telegram grupos). */
   replyToMessageId?: number;
+  /** Ubicación compartida por el cliente (pin de WhatsApp) — nicho taxis. */
+  location?: { lat: number; lng: number; name?: string; address?: string };
 }
 
 export class SupportAgent extends Agent<Env, SupportAgentState> {
@@ -251,6 +258,18 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
       }
     }
 
+    // Ubicación compartida (pin de WhatsApp). Sin esto, un mensaje que SOLO trae
+    // la ubicación llegaría con texto vacío y se descartaría en processBuffer.
+    // Se deja un marcador legible para el modelo y se guarda la coordenada en el
+    // estado para que la tool del nicho (solicitarTaxi) la use tal cual.
+    if (payload.location && Number.isFinite(payload.location.lat) && Number.isFinite(payload.location.lng)) {
+      const loc = payload.location;
+      processedText =
+        (processedText || "El cliente compartió su ubicación.") +
+        `\n[UBICACION_COMPARTIDA lat=${loc.lat} lng=${loc.lng}` +
+        `${loc.name ? ` lugar=${loc.name}` : ""}${loc.address ? ` direccion=${loc.address}` : ""}]`;
+    }
+
     // Append to buffer (we always persist the client's message)
     const pending = [
       ...this.state.pendingMessages,
@@ -260,6 +279,7 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
       ...this.state,
       pendingMessages: pending,
       imageRetryCount: hasImage ? 0 : this.state.imageRetryCount,
+      lastLocation: payload.location ?? this.state.lastLocation ?? null,
     });
 
     // Owner paused the bot via the dashboard → keep the message buffered but
@@ -435,8 +455,11 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
     // Fase A: inyectar el canal real para enviarRecurso y respetar el toggle
     // allow_multimedia (si está off, la tool se quita del registro).
     if (this.state.channel) {
-      const { setRecursoCtx } = await import("./tools/index");
+      const { setRecursoCtx, setTaxiCtx } = await import("./tools/index");
       setRecursoCtx(this.state.channel as ChannelId, this.state.channelUserId);
+      // Nicho taxis: la última ubicación del cliente, para que solicitarTaxi
+      // elija la base más cercana sin depender de que el modelo copie coordenadas.
+      setTaxiCtx(this.state.lastLocation ?? null);
     }
     // Menú Extras (Kooni+): la Galería (enviarRecurso) solo está disponible si
     // el dueño la encendió Y permitió multimedia. Apagada → la tool se quita.

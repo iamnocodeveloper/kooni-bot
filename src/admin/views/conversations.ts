@@ -18,6 +18,7 @@ import { MessagesRepo, type MessageButton } from "../../db/messages";
 import { SENTIMENT_BADGE } from "./insights";
 import { costOfUsage, type ModelId } from "../../pricing";
 import { channelLabel } from "../../channels/labels";
+import { getNiche } from "../../niches";
 import { layout } from "./layout";
 import { fmtDateTime } from "../format";
 import { TELEGRAM_TOKEN_MASK } from "../../telegramFiles";
@@ -448,6 +449,33 @@ export async function renderThreadLive(env: Env, convId: string): Promise<string
       ⏸ Pausar bot aquí
     </button>`;
 
+  // Nicho taxis: selector "Elegir conductor" en la cabecera del hilo. Al elegir,
+  // se asigna el viaje (o se crea si no existe) y se le avisa al cliente.
+  let taxiControls = "";
+  if (getNiche(env).hooks?.taxiEngine) {
+    try {
+      const { TaxiDriversRepo, TaxiTripsRepo } = await import("../../db/taxi");
+      const drivers = (await new TaxiDriversRepo(db).list()).filter((d) => d.active === 1);
+      const trip = await new TaxiTripsRepo(db).activeForConversation(convId);
+      const options = drivers
+        .map((d) => {
+          const l = [d.name ?? "sin nombre", d.code, d.plate].filter(Boolean).join(" · ");
+          return `<option value="${d.id}"${trip?.driver_id === d.id ? " selected" : ""}>${escapeHtml(l)}</option>`;
+        })
+        .join("");
+      taxiControls = `<form hx-post="/admin/conversations/${encodeURIComponent(convId)}/assign-driver" hx-target="#thread-live" hx-swap="innerHTML" style="display:inline-flex;align-items:center;gap:6px">
+        <select name="driver_id" required title="Asignar un conductor a este viaje"
+                style="background:var(--bg);border:1px solid var(--linelit);color:var(--cream);padding:6px 9px;font-size:11.5px;max-width:190px">
+          <option value="">Elegir conductor…</option>
+          ${options}
+        </select>
+        <button class="chip" type="submit" style="cursor:pointer;font-size:11px;color:var(--accent-2);background:var(--panel2);border:1px solid var(--linelit);padding:6px 11px">🚕 Asignar taxi</button>
+      </form>`;
+    } catch {
+      // Sin repos de taxis (instalación vieja) → sin selector.
+    }
+  }
+
   const header = `
   <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--line);background:var(--panel)">
     <span style="font-family:'Sora';font-weight:600;font-size:14px;color:var(--cream)">${escapeHtml(conv.display_name || "Sin nombre")}</span>
@@ -457,6 +485,7 @@ export async function renderThreadLive(env: Env, convId: string): Promise<string
     ${sentBadge}
     ${openTicket > 0 ? `<span style="${statusBadge("var(--accent-2)")}">🔔 ticket abierto</span>` : ""}
     ${humanChip}
+    ${taxiControls}
     ${controls}
   </div>`;
 

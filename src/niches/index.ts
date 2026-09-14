@@ -7,6 +7,7 @@ import { inmobiliaria } from "./inmobiliaria";
 import { clinica } from "./clinica";
 import { barberia } from "./barberia";
 import { cartera } from "./cartera";
+import { taxis } from "./taxis";
 
 export type { NichePack, NicheColumn, NicheHooks } from "./types";
 
@@ -21,6 +22,7 @@ const PACKS: Record<string, NichePack> = {
   clinica,
   barberia,
   cartera,
+  taxis,
 };
 
 /** Resuelve el pack activo desde BOT_NICHE. Nicho ausente/desconocido → genérico. */

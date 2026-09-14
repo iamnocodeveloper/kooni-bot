@@ -32,6 +32,11 @@ export interface NicheHooks {
    * de schema.sql). Lo consultan los reportes y la página pública de seguimiento.
    */
   orderEngine?: boolean;
+  /**
+   * El pack usa el motor de despacho de taxis (tablas taxi_bases / taxi_drivers /
+   * taxi_queue / taxi_trips / taxi_trip_events de schema.sql).
+   */
+  taxiEngine?: boolean;
 }
 
 export interface NichePack {

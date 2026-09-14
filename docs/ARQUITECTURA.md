@@ -173,7 +173,8 @@ enum), `columns` (leídas de `lead.metadata` JSON), `playbook` (rellena
 `{{NICHO_PLAYBOOK}}` en el system prompt), `defaultTone` y `kbDocs`.
 
 **Packs incluidos:** `generico` (Starter), `agencia-ia` (venta conversacional),
-`restaurante`, `inmobiliaria`, `clinica`, `barberia`.
+`restaurante`, `inmobiliaria`, `clinica`, `barberia`, `cartera` (cobros) y
+`taxis` (central de despacho).
 
 **Pack de referencia: `src/niches/restaurante.ts`** — cópialo tal cual y ajusta
 los campos para tu giro (playbook, columnas, etiquetas).
@@ -206,9 +207,45 @@ secciones nuevas del panel, tablas propias — declara `hooks` (`NicheHooks` en
   `orders`, `order_items`, `order_events` de `schema.sql`, repos
   `src/db/orders.ts` y `src/db/products.ts`). Idempotente: las tablas no afectan
   a instalaciones de otros giros.
+- `taxiEngine: true` — el pack usa el **motor de despacho de taxis** (tablas
+  `taxi_bases`, `taxi_drivers`, `taxi_queue`, `taxi_trips`, `taxi_trip_events`,
+  repo `src/db/taxi.ts`). Ver la sub-sección siguiente.
 
-`restaurante` es el pack de referencia de este tipo (toma pedidos por chat +
-sección `/admin/pedidos` + `/admin/menu` + `/admin/reportes`).
+`restaurante` es el pack de referencia del motor de pedidos (toma pedidos por
+chat + `/admin/pedidos` + `/admin/menu` + `/admin/reportes`).
+
+#### Nicho `taxis` (central de despacho)
+
+Una cooperativa con **bases** y **conductores en cola FIFO**. El bot atiende al
+cliente que pide un taxi: pide su ubicación (pin de WhatsApp o zona/barrio),
+elige la base más cercana que tenga conductores, asigna al siguiente de la fila
+y avisa a ambos. Si no hay conductores, deja el viaje como `sin_conductor` y
+**marca el chat como urgente** (ticket + etiqueta de atención humana + aviso al
+dueño) para que el operador asigne a mano.
+
+- **Conductores por número registrado:** cada conductor se carga en
+  `/admin/conductores` con su WhatsApp. Cuando ese número escribe, el webhook lo
+  intercepta ANTES del agente (`src/taxi/driverInbound.ts`, enganchado en
+  `src/index.ts`) y lo mete al final de la cola de su base. Así no pasa por el
+  modelo ni aparece como conversación de cliente. Comandos: `salir` (fuera de la
+  cola), `fin` (completa el viaje), `estado`; cualquier otro texto = “llegué”.
+- **Base más cercana** (`src/taxi/dispatch.ts`, puro): si el cliente comparte el
+  pin → Haversine contra la lat/lng de las bases; si escribe la zona → match
+  contra las zonas de cada base; si no matchea, la base por defecto (`is_default`).
+- **Estados del viaje:** `solicitado → asignado → en_camino → completado`
+  (+ `cancelado`, + `sin_conductor`), con `canTransitionTrip`.
+- **Panel:** `/admin/viajes` (lista + asignar conductor + feed con sonido),
+  `/admin/cola` (fila por base, reordenar/quitar), `/admin/bases`,
+  `/admin/conductores`, `/admin/reportes`. En el hilo de Conversaciones hay un
+  selector **“Elegir conductor”** que asigna (o crea) el viaje y le manda al
+  cliente el conductor.
+- **Canales:** solo WhatsApp (Cloud API oficial) y WAHA — en `/admin/conexiones`
+  y `configuredChannels()` se ocultan los demás para este giro.
+- **Cron:** `runTaxiMaintenance()` expira conductores que llevan demasiado en la
+  cola y cierra viajes colgados.
+- **KB:** plantillas `docs/kb-plantillas/taxis-{faq,tarifas,casos-limite}.md`.
+
+Activar: `BOT_NICHE = "taxis"` y `pnpm db:apply:remote` (crea las tablas, idempotente).
 
 **Roadmap de giros** (gimnasio, spa, dentista, coach, tienda, panadería,
 cafetería, salón, hotelería, CRM): el CLI ya los reconoce como slugs, pero aún

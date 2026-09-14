@@ -26,6 +26,18 @@ export function getRecursoCtx(): RecursoCtx | null {
   return recursoCtx;
 }
 
+// Nicho taxis: última ubicación del cliente. El agente la inyecta antes del loop
+// (desde el estado del DO), para que `solicitarTaxi` elija la base más cercana.
+let taxiCtx: { lat: number; lng: number; name?: string; address?: string } | null = null;
+
+export function setTaxiCtx(loc: { lat: number; lng: number; name?: string; address?: string } | null): void {
+  taxiCtx = loc;
+}
+
+export function getTaxiCtx(): { lat: number; lng: number; name?: string; address?: string } | null {
+  return taxiCtx;
+}
+
 export interface ToolContext {
   env: Env;
   getConversationId: () => string | null;
@@ -75,6 +87,12 @@ export async function buildTools(ctx: ToolContext) {
   if (extraTools.includes("tomarPedido")) {
     const { tomarPedidoTool } = await import("./tomarPedido");
     tools.tomarPedido = tomarPedidoTool(ctx.env, ctx.getConversationId, getRecursoCtx);
+  }
+  // Nicho taxis: registra el viaje, elige la base más cercana con conductores y
+  // asigna al siguiente de la fila (o marca el chat como urgente).
+  if (extraTools.includes("solicitarTaxi")) {
+    const { solicitarTaxiTool } = await import("./solicitarTaxi");
+    tools.solicitarTaxi = solicitarTaxiTool(ctx.env, ctx.getConversationId, getRecursoCtx, getTaxiCtx);
   }
   // Nicho cartera de cobros: saldo real + promesas de pago.
   if (extraTools.includes("consultarDeuda") || extraTools.includes("registrarPromesa")) {

@@ -22,6 +22,7 @@ const GIROS: {
   { id: "inmobiliaria", navLabel: "Prospectos", recordPlural: "Prospectos", statusNew: "Nuevo", playbookTag: "playbook_inmobiliaria", columns: ["operacion", "zona", "presupuesto", "recamaras"] },
   { id: "clinica", navLabel: "Citas", recordPlural: "Citas", statusNew: "Solicitada", playbookTag: "playbook_clinica", columns: ["especialidad", "fecha", "hora", "motivo"] },
   { id: "barberia", navLabel: "Citas", recordPlural: "Citas", statusNew: "Solicitada", playbookTag: "playbook_barberia", columns: ["servicio", "barbero", "fecha", "hora"] },
+  { id: "taxis", navLabel: "Solicitudes", recordPlural: "Solicitudes", statusNew: "Solicitada", playbookTag: "playbook_taxis", columns: ["base", "zona", "conductor", "destino"] },
 ];
 
 describe("getNiche", () => {
@@ -108,5 +109,13 @@ describe("hooks del pack (restaurante)", () => {
     for (const id of ["generico", "clinica", "barberia"]) {
       expect(getNiche(envWith(id)).hooks).toBeUndefined();
     }
+  });
+
+  it("taxis declara el motor de despacho, la tool solicitarTaxi y sus secciones", () => {
+    const n = getNiche(envWith("taxis"));
+    expect(n.hooks?.taxiEngine).toBe(true);
+    expect(n.hooks?.extraTools).toContain("solicitarTaxi");
+    expect(n.hooks?.navExtra?.map((x) => x.id)).toEqual(["viajes", "cola", "bases", "conductores", "reportes"]);
+    expect(n.interviewQuestions && n.interviewQuestions.length).toBeGreaterThan(3);
   });
 });
