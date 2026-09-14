@@ -5,6 +5,39 @@ Cambios notables de Kooni. Formato aproximado de
 
 El CLI `kooni-bot` se versiona aparte (npm) — ver la nota de cada versión.
 
+## [1.45.0] — 2026-09-14
+
+### Arreglado — El scraping de inventario no traía datos (sitemaps XML)
+
+- **Causa raíz**: los sitemaps de inventario (`.../inventory_sitemap`) son **XML**
+  y se pedían a Decodo con `markdown: true`. El conversor a Markdown no maneja
+  XML, así que Decodo respondía **200 con `content` vacío** → `scrapeUrl`
+  devolvía "sin contenido" y la corrida entera fallaba. En cardaniel estaban
+  fallando **las 3 últimas corridas**, y el sync caía a modo texto sin
+  actualizar el inventario.
+- Ahora, si la respuesta en Markdown viene vacía y no se pidió HTML de forma
+  explícita, `scrapeUrl` **reintenta una vez sin markdown** y devuelve el
+  XML/HTML crudo. El parseo determinista (`parseInventoryFromAny`) ya sabía leer
+  sitemaps: solo faltaba que le llegara el contenido.
+- **Verificado a nivel unitario con mocks.** No pudo confirmarse contra la API
+  real: durante el diagnóstico Decodo devolvía `401` con saldo agotado.
+
+### Arreglado — Un feed caído congelaba precios y fotos para siempre
+
+- El enriquecimiento nocturno (`refreshVehicleImages`: precio, millas y foto de
+  cada ficha) vivía **dentro** del bloque `inventorySeen`, así que bastaba con
+  que el feed fallara para que ni se intentara. En cardaniel eso dejó **280 de
+  449 autos sin precio y 152 sin foto**, acumulándose corrida tras corrida.
+- Ahora corre siempre que la corrida nocturna lo pida, haya o no inventario
+  nuevo. Sigue siendo seguro: solo AGREGA datos (nunca borra) y está acotado a
+  20 autos por corrida con cooldown por ficha.
+
+### Tests
+
+- `test/integrations/decodo.test.ts`: 3 casos nuevos del fallback — recupera el
+  XML, no reintenta si se pidió HTML explícito, y propaga el error si el
+  reintento también falla.
+
 ## [1.44.0] — 2026-09-14
 
 ### Agregado — Modelo de análisis separado del del chat

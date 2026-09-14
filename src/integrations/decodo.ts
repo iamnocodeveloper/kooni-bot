@@ -64,13 +64,22 @@ export interface ScrapeOptions {
  * `markdown: true` (default) trae el contenido en Markdown, listo para la KB.
  * Con `markdown: false` el `content` puede venir en HTML — se usa para leer
  * `og:image` de una ficha de auto cuando el Markdown no trae imágenes.
+ *
+ * FALLBACK (bug real de cardaniel, 2026-09-14): los **sitemaps de inventario son
+ * XML**, y el conversor a Markdown los deja en blanco → Decodo responde 200 con
+ * `content` vacío, `scrapeUrl` devolvía "sin contenido" y la corrida entera
+ * fallaba: el inventario dejaba de actualizarse y los ~280 autos ya guardados se
+ * quedaban sin precio ni foto para siempre. Si la respuesta en Markdown viene
+ * vacía, se reintenta UNA vez sin markdown (XML/HTML crudo) antes de rendirse.
  */
 export async function scrapeUrl(env: Env, url: string, opts: ScrapeOptions = {}): Promise<ScrapeResult> {
   const raw = await resolveDecodoAuth(env);
   const auth = raw ? toAuthHeader(raw) : null;
   if (!auth) return { ok: false, error: "DECODO_AUTH no configurado" };
 
-  try {
+  const wantMarkdown = opts.markdown ?? true;
+
+  const attempt = async (markdown: boolean): Promise<ScrapeResult> => {
     const res = await fetch(DECODO_API, {
       method: "POST",
       headers: {
@@ -82,7 +91,7 @@ export async function scrapeUrl(env: Env, url: string, opts: ScrapeOptions = {})
         url,
         proxy_pool: "premium",
         headless: "html",
-        markdown: opts.markdown ?? true,
+        markdown,
       }),
       signal: AbortSignal.timeout(opts.timeoutMs ?? 60_000),
     });
@@ -103,6 +112,18 @@ export async function scrapeUrl(env: Env, url: string, opts: ScrapeOptions = {})
       return { ok: false, error: `sin contenido (status ${statusCode})` };
     }
     return { ok: true, content, statusCode };
+  };
+
+  try {
+    const first = await attempt(wantMarkdown);
+    if (first.ok || !wantMarkdown) return first;
+
+    // Vino vacío pidiendo Markdown (típico de un sitemap XML) → reintento crudo.
+    const retry = await attempt(false);
+    if (retry.ok) {
+      console.log(`[decodo] ${url}: vacío en Markdown → recuperado sin markdown (${retry.content.length} chars)`);
+    }
+    return retry;
   } catch (e) {
     return { ok: false, error: String((e as Error)?.message ?? e) };
   }

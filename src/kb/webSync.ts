@@ -414,13 +414,6 @@ export async function runWebSync(env: Env, opts: WebSyncRunOptions = {}): Promis
           `[webSync] análisis IA: ${analysis.applied} auto(s) corregido(s) de ${analysis.analyzed} revisado(s)`,
         );
       }
-
-      if (opts.images) {
-        const img = await refreshVehicleImages(env, db);
-        summary.imagesFetched = img.fetched;
-        summary.imagesFailed = img.failed;
-        summary.imagesPending = img.pending;
-      }
     } catch (e) {
       console.error(`[webSync] inventario: fallo al guardar el store: ${String((e as Error)?.message ?? e)}`);
     }
@@ -436,6 +429,25 @@ export async function runWebSync(env: Env, opts: WebSyncRunOptions = {}): Promis
       const vehicles: Record<string, (typeof all)[number]> = {};
       for (const v of keep) vehicles[v.key] = v;
       await saveVehicleStore(db, { updatedAt: Date.now(), vehicles }).catch(() => {});
+    }
+  }
+
+  // ── Enriquecimiento de las fichas (foto · precio · millas) ────────────────
+  // Corre SIEMPRE que la corrida nocturna lo pida y haya autos con datos
+  // pendientes — TAMBIÉN cuando el feed falló y esta corrida no vio inventario.
+  // Antes vivía dentro del bloque `inventorySeen`, así que un feed caído dejaba
+  // a los autos ya guardados sin precio ni foto PARA SIEMPRE (bug real de
+  // cardaniel: 280 de 449 autos sin precio y 152 sin foto, con el sitemap
+  // devolviendo vacío en cada corrida). Es seguro: solo AGREGA datos, nunca
+  // borra, y está acotado a `max` autos por corrida (ver refreshVehicleImages).
+  if (opts.images) {
+    try {
+      const img = await refreshVehicleImages(env, db);
+      summary.imagesFetched = img.fetched;
+      summary.imagesFailed = img.failed;
+      summary.imagesPending = img.pending;
+    } catch (e) {
+      console.error(`[webSync] enriquecimiento: falló: ${String((e as Error)?.message ?? e)}`);
     }
   }
 

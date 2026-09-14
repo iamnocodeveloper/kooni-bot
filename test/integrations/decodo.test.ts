@@ -86,4 +86,59 @@ describe("scrapeUrl", () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ results: [{ content: "" }] }), { status: 200 })));
     expect((await scrapeUrl(env({ DECODO_AUTH: "u:p" }), "https://x.com")).ok).toBe(false);
   });
+
+  it("si el Markdown viene vacío, reintenta SIN markdown (sitemaps XML)", async () => {
+    const bodies: any[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init: RequestInit) => {
+        const body = JSON.parse(String(init.body));
+        bodies.push(body);
+        // markdown=true → vacío (el conversor no maneja XML); false → el XML crudo.
+        const content = body.markdown
+          ? ""
+          : "<urlset><url><loc>https://x.com/inventory/1</loc></url></urlset>";
+        return new Response(JSON.stringify({ results: [{ content, status_code: 200 }] }), { status: 200 });
+      }),
+    );
+
+    const r = await scrapeUrl(env({ DECODO_AUTH: "u:p" }), "https://x.com/inventory_sitemap");
+    expect(bodies).toHaveLength(2);
+    expect(bodies[0].markdown).toBe(true);
+    expect(bodies[1].markdown).toBe(false);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.content).toContain("<urlset>");
+  });
+
+  it("no reintenta si ya se pidió sin markdown; sí reintenta (y falla) si el reintento también viene vacío", async () => {
+    const empty = vi.fn(
+      async (_url: string, _init: RequestInit) =>
+        new Response(JSON.stringify({ results: [{ content: "", status_code: 200 }] }), { status: 200 }),
+    );
+    vi.stubGlobal("fetch", empty);
+
+    // Pedido explícito de HTML vacío → no tiene sentido reintentar.
+    expect((await scrapeUrl(env({ DECODO_AUTH: "u:p" }), "https://x.com", { markdown: false })).ok).toBe(false);
+    expect(empty.mock.calls).toHaveLength(1);
+
+    empty.mockClear();
+    // Markdown vacío → reintenta; ambos vacíos → sigue fallando.
+    expect((await scrapeUrl(env({ DECODO_AUTH: "u:p" }), "https://x.com")).ok).toBe(false);
+    expect(empty.mock.calls).toHaveLength(2);
+  });
+
+  it("si el reintento falla, propaga el error del reintento", async () => {
+    let n = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        n++;
+        if (n === 1) return new Response(JSON.stringify({ results: [{ content: "" }] }), { status: 200 });
+        return new Response("boom", { status: 500 });
+      }),
+    );
+    const r = await scrapeUrl(env({ DECODO_AUTH: "u:p" }), "https://x.com");
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toContain("500");
+  });
 });
