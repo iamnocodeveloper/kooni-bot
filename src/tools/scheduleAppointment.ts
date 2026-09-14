@@ -3,16 +3,18 @@ import { z } from "zod";
 import type { Env } from "../env";
 import {
   calcomConfigured,
-  calcomTimeZone,
   createBooking,
   getAvailableSlots,
   resolveEventTypeId,
   todayInTz,
 } from "../integrations/calcom";
+import { resolveTimezoneFromEnv } from "../timezone";
 
-// El eventTypeId y la zona horaria se resuelven SIEMPRE en el servidor
-// (CALCOM_EVENT_TYPE_ID / CALCOM_EVENT_TYPES / CALCOM_TIMEZONE): el modelo no
-// conoce esos ids y no debe inventarlos.
+// El eventTypeId y la zona horaria se resuelven SIEMPRE en el servidor: el
+// modelo no conoce esos ids y no debe inventarlos. La zona sale del setting
+// `business_timezone` del panel (con fallback a CALCOM_TIMEZONE y al default),
+// la MISMA que usa el reloj del bot — antes podían discrepar y las citas caían
+// con el horario equivocado.
 export function scheduleAppointmentTool(env: Env, _getConversationId: () => string | null) {
   return tool({
     description:
@@ -43,7 +45,7 @@ export function scheduleAppointmentTool(env: Env, _getConversationId: () => stri
       }
       const eventTypeId = resolveEventTypeId(env, service);
       if (eventTypeId == null) return { error: "calcom_not_configured" as const };
-      const timeZone = calcomTimeZone(env);
+      const timeZone = await resolveTimezoneFromEnv(env);
 
       // Guardia anti-fecha-fantasma: los LLM no saben qué día es hoy y suelen
       // proponer fechas de su época de entrenamiento. YYYY-MM-DD compara bien

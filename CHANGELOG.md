@@ -5,6 +5,41 @@ Cambios notables de Kooni. Formato aproximado de
 
 El CLI `kooni-bot` se versiona aparte (npm) — ver la nota de cada versión.
 
+## [1.46.0] — 2026-09-14
+
+### Agregado — Zona horaria del negocio configurable (una sola fuente de verdad)
+
+- Nuevo setting **Configuración → 🕐 Zona horaria del negocio**
+  (`business_timezone`, select de zonas IANA comunes). Se valida del lado del
+  servidor: una zona inválida se ignora y cae al default, así un typo no puede
+  mandar las citas a la hora equivocada.
+- Antes había **tres orígenes** que se podían desincronizar: el reloj del bot y
+  la agenda leían `env.CALCOM_TIMEZONE` (con fallback hardcodeado), y las fechas
+  del panel leían `member/config.local.ts`. En cardaniel eso significaba que el
+  bot pensaba en hora de Ciudad de México mientras el negocio está en Florida:
+  **dos horas de desfase** al interpretar "hoy", "mañana" o al pedir horarios.
+- Ahora manda el setting y todos leen de `src/timezone.ts`:
+  el reloj del bot, la agenda de Cal.com, el guardia de "fecha en el pasado" y
+  el default de Cal.com (antes duplicado). Precedencia:
+  `business_timezone` → `CALCOM_TIMEZONE` (legacy) → default.
+
+### Arreglado — El prompt del bot no se podía cachear nunca
+
+- El prompt generado incluía la **hora con precisión de minuto**, así que su
+  texto cambiaba cada 60 segundos y **OpenAI nunca acertaba el caché de prefijo**:
+  el prompt completo (~2-3k tokens) se re-pagaba en cada turno y en cada paso del
+  loop de tools.
+- El prompt grande ahora lleva **solo la fecha** (estable durante todo el día) y
+  la **hora exacta + offset** se inyecta en un bloque de sistema aparte,
+  recalculado cada turno. El bot sigue sabiendo qué hora es —lo que necesita para
+  agendar y para "hoy"/"mañana"— sin romper el caché.
+
+### Tests
+
+- `test/timezone.test.ts`: validación de zonas, precedencia, e invariancia de la
+  fecha dentro del mismo día (que es lo que habilita el caché) incluyendo el
+  cambio de día según la zona.
+
 ## [1.45.0] — 2026-09-14
 
 ### Arreglado — El scraping de inventario no traía datos (sitemaps XML)

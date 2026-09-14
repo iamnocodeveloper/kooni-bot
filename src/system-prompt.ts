@@ -1,4 +1,5 @@
 import type { Env } from "./env";
+import { nowInTz, DEFAULT_BUSINESS_TZ } from "./timezone";
 
 export interface SystemPromptInput {
   botName: string;
@@ -232,24 +233,25 @@ export interface SystemPromptOverrides {
   customInstructions?: string;
   multiIdioma?: boolean;
   persona?: "dueño" | "asistente";
+  /**
+   * Zona horaria del negocio ya resuelta (setting `business_timezone`). Si no
+   * viene, se cae a `CALCOM_TIMEZONE` y después al default — así los llamadores
+   * sin acceso a D1 (tests, panel de sugerencias) siguen funcionando.
+   */
+  timezone?: string;
 }
 
-/** Fecha/hora actual legible + ISO en la zona del negocio (ancla "hoy"/"mañana"). */
+/**
+ * Fecha actual legible + ISO en la zona del negocio (ancla "hoy"/"mañana").
+ *
+ * SIN hora a propósito: esta línea vive dentro del prompt grande y, con la hora,
+ * el texto cambiaba cada minuto → el prefijo del prompt NUNCA era cacheable por
+ * OpenAI, así que se re-pagaba el prompt entero en cada turno y en cada paso del
+ * loop de tools. La hora exacta se inyecta aparte, por turno, desde
+ * `nowInTz().timeLine` (ver src/timezone.ts).
+ */
 export function currentDateLine(timeZone: string): string {
-  const now = new Date();
-  const legible = new Intl.DateTimeFormat("es-MX", {
-    timeZone,
-    dateStyle: "full",
-    timeStyle: "short",
-  }).format(now);
-  // en-CA formatea YYYY-MM-DD, útil como fecha ISO para las tools.
-  const iso = new Intl.DateTimeFormat("en-CA", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(now);
-  return `${legible} (fecha ISO: ${iso}, zona horaria: ${timeZone})`;
+  return nowInTz(timeZone).dateLine;
 }
 
 export function systemPromptFromEnv(
@@ -272,6 +274,8 @@ export function systemPromptFromEnv(
     customInstructions: overrides?.customInstructions,
     multiIdioma: overrides?.multiIdioma,
     persona: overrides?.persona,
-    today: currentDateLine((env.CALCOM_TIMEZONE || "").trim() || "America/Mexico_City"),
+    today: currentDateLine(
+      overrides?.timezone || (env.CALCOM_TIMEZONE || "").trim() || DEFAULT_BUSINESS_TZ,
+    ),
   });
 }

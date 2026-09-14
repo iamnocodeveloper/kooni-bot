@@ -18,6 +18,7 @@ import { CustomerFactsRepo } from "./db/facts";
 import { createModel } from "./llm/provider";
 import { detectLanguage, baseLangCode, LANG_LABEL } from "./lang/detect";
 import type { LangCode } from "./lang/detect";
+import { nowInTz } from "./timezone";
 import { costOfUsage } from "./pricing";
 import type { ChannelId, ReplyButton } from "./channels/shared";
 import { maskTelegramToken, unmaskTelegramToken } from "./telegramFiles";
@@ -505,6 +506,19 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
           ? `<idioma>\nEl cliente escribe en ${LANG_LABEL[clienteLang]}. Respondé TODA la respuesta en ${LANG_LABEL[clienteLang]} — cada token, incluidos precios, horarios, nombres de autos y confirmaciones. No mezcles idiomas.\n</idioma>`
           : `<idioma>\nNo se pudo determinar con certeza el idioma del cliente. Usá el idioma base (${LANG_LABEL[baseLang]}); si el cliente escribe claramente en otro idioma, respondé en ESE idioma.\n</idioma>`
         : `<idioma>\nEl multi-idioma está APAGADO en esta instalación. Respondé SIEMPRE en ${LANG_LABEL[baseLang]}, aunque el cliente escriba en otro idioma.\n</idioma>`,
+    });
+
+    // Hora EXACTA + offset, en su propio bloque y recalculada cada turno. El
+    // prompt grande solo lleva la FECHA (estable todo el día) para que su prefijo
+    // sea cacheable por OpenAI; la hora precisa vive acá, así el bot sabe qué
+    // hora es —clave para agendar citas y para "hoy"/"mañana"— sin romper el caché.
+    const ahora = nowInTz(cfg.timezone);
+    system.push({
+      role: "system",
+      content:
+        `<hora_actual>\nAhora: ${ahora.timeLine} — ${ahora.dateLine}.\n` +
+        `Usá esta hora REAL (no la de tu entrenamiento) para interpretar "hoy", "mañana", "en 2 horas" ` +
+        `y para toda fecha u hora que pases a las tools (citas, seguimiento).\n</hora_actual>`,
     });
 
     // Customer memory (flywheel): facts extracted by the insights analyzer are

@@ -1,4 +1,5 @@
 import type { Env } from "../env";
+import { DEFAULT_BUSINESS_TZ } from "../timezone";
 
 // Cliente de Cal.com API v2 para los nichos de cita. Dos capacidades:
 //  - getAvailableSlots: horarios reales libres de un event type en un día.
@@ -10,7 +11,13 @@ const CALCOM_API = "https://api.cal.com/v2";
 const SLOTS_VERSION = "2024-09-04";
 const BOOKINGS_VERSION = "2026-02-25";
 
-export const DEFAULT_TZ = "America/Mexico_City";
+/**
+ * Default de la zona horaria — alias del único default del sistema (ver
+ * src/timezone.ts) para que no haya dos valores que se puedan desincronizar.
+ * La zona efectiva sale del setting `business_timezone` (panel); esta función
+ * queda como el camino legacy basado en env.
+ */
+export const DEFAULT_TZ = DEFAULT_BUSINESS_TZ;
 
 /** ¿El dueño ya conectó Cal.com? (API key + al menos un event type). */
 export function calcomConfigured(env: Env): boolean {

@@ -7,6 +7,7 @@ import type { Env } from "../../env";
 import { SETTING_KEYS } from "../../db/settings";
 import { renderBusinessContext } from "../../businessContext";
 import { CURATED_MODELS } from "../../llm/provider";
+import { COMMON_TIMEZONES, DEFAULT_BUSINESS_TZ } from "../../timezone";
 import {
   CONTROL_LIST,
   valueToLevel,
@@ -226,6 +227,34 @@ function renderLlmSection(settings: Record<string, string>, llmTest?: string): s
 }
 
 /**
+ * Zona horaria del NEGOCIO: es la que usan el reloj del bot (para "hoy",
+ * "mañana"), la agenda de citas y el guardia de fechas pasadas. Un select de
+ * zonas comunes evita typos que romperían los horarios; una zona inválida se
+ * ignora y cae al default.
+ */
+function renderTimezoneSection(settings: Record<string, string>): string {
+  const current = settings[SETTING_KEYS.businessTimezone] ?? "";
+  const opts = [
+    { v: "", l: `Por defecto (${DEFAULT_BUSINESS_TZ})` },
+    ...COMMON_TIMEZONES.map((tz) => ({ v: tz, l: tz })),
+  ]
+    .map((o) => `<option value="${esc(o.v)}" ${current === o.v ? "selected" : ""}>${esc(o.l)}</option>`)
+    .join("");
+
+  return `
+    <div class="bg-panel border border-line" style="padding:20px;display:flex;flex-direction:column;gap:14px">
+      <div style="display:flex;flex-direction:column;gap:2px">
+        <h3 class="font-display font-semibold text-[13.5px] text-cream">🕐 Zona horaria del negocio</h3>
+        <p class="text-dim text-[12px]">La hora y la fecha que usa tu bot para entender "hoy", "mañana" o "el viernes", y para agendar citas. Poné la zona donde atiende el negocio, no la tuya: si no coincide, las citas se agendan con la hora equivocada.</p>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <label class="font-display font-semibold text-[12.5px] text-cream">Zona horaria</label>
+        <select name="${SETTING_KEYS.businessTimezone}" style="${SELECT_STYLE}">${opts}</select>
+      </div>
+    </div>`;
+}
+
+/**
  * Sección "Modelo de análisis (scraping)": permite que el análisis del
  * inventario scrapeado use un modelo DISTINTO al del chat — típicamente uno
  * bueno y caro (Claude Opus) mientras el chat sigue barato (gpt-4o-mini).
@@ -329,6 +358,9 @@ export async function renderConfig(
       <div class="bg-panel border border-line" style="padding:20px;display:flex;flex-direction:column;gap:22px">
         ${cardGroups}
       </div>
+
+      <!-- Zona horaria del negocio (reloj del bot + agenda) -->
+      ${renderTimezoneSection(settings)}
 
       <!-- Modelo de IA (BYO provider/key/model) -->
       ${renderLlmSection(settings, llmTest)}

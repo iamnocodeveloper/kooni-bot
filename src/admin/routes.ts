@@ -89,6 +89,7 @@ import { TicketsRepo } from "../db/tickets";
 import { ConversationsRepo } from "../db/conversations";
 import { MessagesRepo } from "../db/messages";
 import { SettingsRepo, SETTING_KEYS, type SettingKey } from "../db/settings";
+import { isValidTimeZone } from "../timezone";
 import { CONTROLS, levelToValue } from "./control-levels";
 import { systemPromptFromEnv } from "../system-prompt";
 import { renderBusinessContext } from "../businessContext";
@@ -1696,6 +1697,14 @@ adminApp.post("/config", async (c) => {
     if (keyRaw !== null && String(keyRaw).trim() !== "") {
       await repo.set(SETTING_KEYS.llmApiKey, String(keyRaw).trim());
     }
+  }
+
+  // Zona horaria del negocio (reloj del bot + agenda). Solo se acepta una zona
+  // IANA válida — un typo mandaría las citas a la hora equivocada; vacío = default.
+  const tzRaw = form.get(SETTING_KEYS.businessTimezone);
+  if (tzRaw !== null) {
+    const v = String(tzRaw).trim();
+    await repo.set(SETTING_KEYS.businessTimezone, v === "" || isValidTimeZone(v) ? v : "");
   }
 
   // Modelo de ANÁLISIS (scraping): misma forma que el del bot, pero SEPARADO.

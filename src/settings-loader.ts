@@ -2,6 +2,7 @@ import type { Env } from "./env";
 import { Db } from "./db/client";
 import { SettingsRepo, SETTING_KEYS } from "./db/settings";
 import { systemPromptFromEnv } from "./system-prompt";
+import { resolveBusinessTimezone } from "./timezone";
 import { renderBusinessContext } from "./businessContext";
 import { getBufferMs } from "./config";
 import { getNiche } from "./niches";
@@ -31,6 +32,12 @@ export interface AgentConfig {
   menuButtons: ReplyButton[];
   /** BYO-LLM del dashboard (proveedor / API key / modelo). */
   llm: LlmOverrides;
+  /**
+   * Zona horaria del negocio ya resuelta (setting `business_timezone` → legacy
+   * `CALCOM_TIMEZONE` → default). El agente la usa para inyectar la hora exacta
+   * en su propio bloque de sistema, fuera del prompt grande.
+   */
+  timezone: string;
   /**
    * Menú Extras: Multiidioma. Gobierna la directiva de idioma que el agente
    * inyecta por turno, como bloque de sistema APARTE del system prompt — así
@@ -207,6 +214,9 @@ export async function resolveAgentConfig(env: Env, toolNames: string[]): Promise
   const botName = get(SETTING_KEYS.botName) ?? env.BOT_NAME;
   // Tono elegido en el panel gana; si no hay, el tono por defecto del nicho.
   const tone = get(SETTING_KEYS.tone) ?? (niche.defaultTone || undefined);
+  // Zona horaria del negocio: manda el setting del panel; si no, la var legacy
+  // CALCOM_TIMEZONE y después el default. La usan el reloj del bot y la agenda.
+  const timezone = resolveBusinessTimezone(settings, env);
   const escalationKeywords = parseCsvList(get(SETTING_KEYS.escalationKeywords));
 
   // Flywheel lessons (JSON array). Only injected into the GENERATED prompt —
@@ -235,6 +245,7 @@ export async function resolveAgentConfig(env: Env, toolNames: string[]): Promise
       customInstructions: finalInstructions,
       multiIdioma: extras.multiIdiomaEnabled,
       persona,
+      timezone,
     });
 
   const bufferSecondsRaw = get(SETTING_KEYS.bufferSeconds);
@@ -307,6 +318,7 @@ export async function resolveAgentConfig(env: Env, toolNames: string[]): Promise
     allowMultimedia,
     menuButtons,
     llm: llmOverridesFrom(settings),
+    timezone,
     multiIdiomaEnabled: extras.multiIdiomaEnabled,
     vigilanteEnabled: extras.vigilanteEnabled,
     oidoVistaEnabled: extras.oidoVistaEnabled,

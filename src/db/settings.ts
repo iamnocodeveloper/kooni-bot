@@ -12,6 +12,12 @@ export const SETTING_KEYS = {
   businessContext: "business_context",
   botName: "bot_name",
   tone: "tone",
+  // Zona horaria del NEGOCIO — fuente única de verdad para el reloj del bot
+  // (fecha/hora que ve el modelo), la agenda (Cal.com) y el guardia de "fecha en
+  // el pasado". Antes salía de la var CALCOM_TIMEZONE con fallback hardcodeado,
+  // así que un negocio de Florida podía estar pensando en hora de México.
+  // Vacío = cae a CALCOM_TIMEZONE (legacy) y después al default.
+  businessTimezone: "business_timezone", // IANA, ej. America/New_York
   // KB: score mínimo (0–1) para que un fragmento de searchKb cuente como match.
   // Default 0.45 (ver KB_MIN_SCORE_DEFAULT en src/kb/query.ts). Súbelo si el bot
   // cita cosas irrelevantes; bájalo si dice "no tengo info" con la KB llena.
@@ -159,6 +165,7 @@ export const SETTING_LABELS: Record<string, string> = {
   [SETTING_KEYS.customInstructions]: "Instrucciones extra del dueño",
   [SETTING_KEYS.businessContext]: "Contexto del negocio",
   [SETTING_KEYS.botName]: "Nombre del bot",
+  [SETTING_KEYS.businessTimezone]: "Zona horaria del negocio",
   [SETTING_KEYS.tone]: "Tono del bot",
   [SETTING_KEYS.kbMinScore]: "Umbral de score de la KB",
   [SETTING_KEYS.bufferSeconds]: "Segundos de buffer",
