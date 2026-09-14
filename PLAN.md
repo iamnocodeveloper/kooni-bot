@@ -5,6 +5,224 @@
 
 ---
 
+## 🔎 AUDITORÍA + ESTADO DE LA INSTALACIÓN CARDANIEL (v1.46.0, 2026-09-14)
+
+Trabajo sobre **cardaniel** (Greenway KIA West Palm Beach), desplegada en la cuenta
+Cloudflare `Info@dmezzadri.com`. Cada item dice **qué pasa, dónde, el impacto y el
+arreglo propuesto**. Los números son para referenciarlos entre sí. Marcar ✅ al cerrar.
+
+### ✅ Entregado en esta etapa (v1.44.0 → v1.46.0)
+
+- **Modelo de análisis separado del chat** — claves `analysis_llm_*`, sección propia
+  en Configuración, `createAnalysisModel()`. Vacío = hereda la config del bot.
+- **Análisis IA del inventario** (opcional, `feature_web_sync_analysis_enabled`):
+  corrige campos mal parseados; solo toca autos que ya existen, nunca agrega ni borra.
+- **Multi-idioma real** — `src/lang/detect.ts` (es/en/pt) + directiva de idioma como
+  bloque de sistema fuera del prompt, para que funcione aunque haya
+  `system_prompt_override`.
+- **Inventario**: filtro de marca tolerante (antes exigía coincidencia exacta) y
+  límite 8 → 12 con panorama agregado (años + rango de precio).
+- **Scraping**: `scrapeUrl` reintenta sin markdown cuando el Markdown viene vacío
+  (los sitemaps son XML); el enriquecimiento nocturno ya no queda atrapado dentro
+  de `inventorySeen`.
+- **Toggles**: `feature_web_sync_enabled` ahora detiene el sync de verdad;
+  `oidoVistaEnabled` dejó de ser un campo muerto.
+- **Zona horaria**: setting `business_timezone` como fuente única (`src/timezone.ts`);
+  la fecha va en el prompt (estable todo el día) y la hora exacta en un bloque aparte.
+- **Seguridad**: `analysis_llm_api_key` agregada a `AUDIT_SENSITIVE_KEYS` + test-guarda
+  que falla si una credencial nueva se olvida de redactar.
+
+### 🔴 SEGURIDAD
+
+1. **`POST /webhooks/telegram` sin autenticación.** Telegram soporta `secret_token`
+   en `setWebhook` y no se usa; `telegramAdapter.parseIncoming` no lee ningún header.
+   Cualquiera que conozca la URL del Worker puede inyectar updates y el bot
+   **responderá al `chat.id` que venga en el payload**, además de escribir en D1 y
+   gastar tokens. El registro del webhook (card de Telegram en `src/admin/routes.ts`)
+   manda solo `{ url, allowed_updates }`.
+   → **Arreglo**: pasar `secret_token` al registrar y rechazar (fail-closed) si
+   `X-Telegram-Bot-Api-Secret-Token` no coincide con un secret.
+2. **Retell acepta cualquier firma.** El handler exige que *exista*
+   `x-retell-signature` pero no verifica el HMAC del body.
+   → **Arreglo**: verificar HMAC-SHA256 igual que `verifyZernioSignature`.
+3. **Webhooks fail-open** (Zernio, WAHA, Vapi): si su secret no está configurado
+   aceptan tráfico sin firma. WAHA ya autogenera `waha_webhook_token` al conectar.
+   → **Arreglo**: hacer lo mismo en Zernio/Vapi + aviso persistente en el panel.
+4. **`POST /webhooks/learn/:channel` sin auth** mientras el modo aprendizaje está
+   encendido: escribe el body crudo en `settings`. → **Arreglo**: exigir
+   `X-Reindex-Token` o sesión de panel.
+5. **Credenciales en claro en D1.** El panel guarda sus credenciales como TEXT en
+   `settings`: `llm_api_key`, `analysis_llm_api_key`, `decodo_auth`,
+   `telegram_bot_token`, `zernio_*`, `waha_*`, `ml_client_secret`, `ml_refresh_token`,
+   `vapi_*`, `retell_*`. Cualquiera con lectura de D1 (un `d1 export`, un backup, la
+   consola del dashboard) las ve en claro. El panel las muestra enmascaradas y la
+   auditoría las redacta (ambas cosas bien), pero el almacenamiento es texto plano.
+   → **Arreglo** (elegir uno): (a) moverlas a `wrangler secret put` y que el panel
+   solo las enmascare; o (b) cifrarlas en reposo con AES-GCM usando un secret del
+   Worker como llave.
+6. **`KOONI_REGISTER_TOKEN` en `[vars]`** de `wrangler.toml` (texto plano, no secret).
+   El archivo es gitignored, pero quien lea la config del Worker puede forjar posts
+   de uso a `USAGE_PUSH_URL`. → **Arreglo**: pasarlo a secret.
+7. **Rate limit del login evadible** (`src/db/loginAttempts.ts`, `src/admin/auth.ts`):
+   ventana por bucket fijo (8 intentos a las 14:59 + 8 a las 15:00), solo por IP, y
+   **el camino de Basic Auth no está contado** — se puede atacar ahí y saltear el
+   contador. Además falla abierto si D1 falla.
+   → **Arreglo**: ventana deslizante, contar también Basic Auth, y **rechazar cuando
+   `DASHBOARD_PASSWORD` esté vacío** (hoy un password vacío entra).
+8. **Inyección de prompt desde la KB scrapeada.** El texto del sitio entra a la KB
+   sin cuarentena y `searchKb` lo devuelve al modelo sin delimitadores de
+   "esto es dato, no instrucción".
+   → **Arreglo**: envolver el resultado en `<kb_untrusted>` + regla explícita.
+9. **PII sin retención definida**: los mensajes se purgan a los 90 días, pero
+   `leads`, `tickets` (con transcript completo), `orders` y `debtors` (con
+   `document_id`) se guardan indefinidamente; y hay exports CSV abiertos
+   (`/admin/leads/export.csv`, `/admin/cartera/export.csv`).
+
+### 🟠 PÉRDIDA DE DATOS / CORRECTITUD
+
+10. **Un scrape parcial puede borrar cientos de autos.** `mergeVehicleStore`
+    (`src/kb/inventory.ts`) borra todo auto que no venga en el crawl; el único
+    guardia es "se vio inventario" (≥3 autos con identidad). Si el sitemap devuelve
+    100 de 449 (fetch parcial, página 1 de N, tope de 1000) se borran los otros
+    ~350. Es el hermano del bug que ya borró 449 autos una vez.
+    → **Arreglo**: piso de sanidad antes de commitear el merge — abortar y conservar
+    el store previo si `nuevos < max(prev * 0.5, prev - 50)`.
+11. **Carrera de escritura sobre el inventario.** El cron, el panel, `/kb/enrich` y
+    `fichaAuto` (chat en vivo) hacen read-modify-write del blob completo sin control
+    de concurrencia: el último gana y descarta los cambios del otro.
+    → **Arreglo**: tabla normalizada, o bloqueo optimista sobre `settings.updated_at`.
+12. **Refetch forzado puede anular un precio bueno.** En el camino `opts.keys` de
+    `refreshVehicleImages`, `if (d.scraped)` sobrescribe con `null` aunque el scrape
+    haya respondido sin precio (el camino normal sí protege con `if (d.price !== null)`).
+
+### 🟡 FIABILIDAD (fallos silenciosos)
+
+13. **Nadie avisa cuando el scraping falla.** Falló todas las noches durante días y se
+    descubrió a mano. `runWebSync` devuelve `errors[]` y solo lo consume un
+    `console.log`; y `nightly_report_enabled` está en `0`.
+    → **Arreglo**: al final de `runWebSync`, contar corridas fallidas seguidas en
+    `settings` y, a las 3, llamar `notifyOwner` con throttle de 24 h. Ya existen
+    `notifyOwner` (`src/tools/handoffHuman.ts`) y el patrón watchdog
+    (`src/watchdog.ts`). **Mejor relación impacto/esfuerzo de toda la lista.**
+14. **`purgeOldMessages` sin try/catch en el cron** (`src/index.ts`, `scheduled`): es
+    el único `await` desnudo de la noche. Si truena, **aborta todo lo que sigue**:
+    insights, reporte, flywheel y el Web Sync entero. Igual `pushUsage` al final.
+15. **El Web Sync corre penúltimo** (paso 15 de 16), después de insights (LLM sobre 50
+    conversaciones), flywheel y el reporte. Si el handler agota su tiempo, el scrape
+    ni arranca y no queda rastro.
+16. **Nada de esto se ve en CI porque la suite está rota**: 338 de 966 tests fallan con
+    `this.d1.prepare is not a function`. Causa: cada `beforeEach` crea un Miniflare y
+    **nunca lo destruye** (`test/helpers/miniflareSetup.ts`; no hay un solo
+    `dispose()` en `test/`), así que cientos de `workerd` se acumulan hasta que D1
+    deja de responder. Es la razón por la que la regresión del scraping pasó.
+    → **Arreglo**: `mf.dispose()` en `afterEach` (o un Miniflare por archivo con
+    `beforeAll`/`afterAll`).
+
+### 🟡 COSTO Y RENDIMIENTO
+
+17. ✅ **Prompt no cacheable** — resuelto en 1.46.0 (la hora salió del prompt grande).
+18. **Compactar el prompt** (~6-12 KB). Lo más gordo y de menor señal:
+    `anti_patterns` + `style_guide` + `identity_and_voice` (`src/system-prompt.ts`), y
+    los bloques de Extras que se **suman sin deduplicar** (`src/features.ts`, hasta 7
+    bloques con reglas que se repiten con `core_principles`).
+19. **Disparadores de "modelo smart" muertos**: `lastSearchKbScore` nunca se asigna y
+    `hasImage` va hardcodeado en `false` (`src/agent.ts`), así que "auto" solo escala
+    por palabras de frustración. `toolCallsInLast2Turns` guarda el conteo de un solo
+    turno, no de los últimos dos.
+20. **"Sugerir" arma el prompt completo** (~2-3k tokens) para devolver una línea
+    (`src/admin/routes.ts`). Y el **playground siempre usa el modelo smart**.
+21. **El guardia de presupuesto escanea `messages`** en cada turno no-fast
+    (`src/budget.ts`) — una query a D1 en el camino crítico.
+22. **`resolveAgentConfig` corre dos veces por mensaje** (`ingest` y `processBuffer`),
+    cada una con su lectura completa de settings.
+23. **Modelos de AIsa no listados en `RATES`** (`src/pricing.ts`) se facturan como
+    Haiku: si algún día se fija un `llm_model` del gateway, el costo que muestra el
+    panel y la decisión de bajar de tier quedan mal calculados.
+24. **Latencia**: `BUFFER_SECONDS = 15` → cada respuesta espera 15 s antes de que el
+    bot empiece a pensar. Para un chat en vivo es lo más visible; 5 s alcanza para
+    agrupar mensajes.
+25. **Hasta 6 pasos de tools** por turno (`stopWhen`), cada uno reenviando el prompt.
+
+### 🟡 INVENTARIO (datos y consulta)
+
+26. **280 de 449 autos sin precio y 152 sin foto.** El precio solo sale de scrapear la
+    ficha una por una (el sitemap no lo trae) a **20 por corrida** → semanas. Además
+    el cooldown de 3 días se marca aunque el auto sí haya traído foto, y
+    `imageCandidates` devuelve siempre los primeros N **por key** (sesgo: se
+    reintentan siempre los mismos).
+    → **Arreglo real**: scrapear la **página de resultados** (un request con el
+    JSON-LD `ItemList` de muchos autos) en vez de 449 fichas. Paliativos: separar el
+    cooldown (6 h para "trajo foto pero sin precio"), subir el tope nocturno y
+    des-sesgar el orden. **Primero**: confirmar saldo de Decodo — si está agotado,
+    esto no es un problema de throughput.
+27. **Todo el inventario vive en UNA fila de D1** (`settings.web_sync_vehicles`,
+    ~250 KB, techo de 2 MB). Cada guardado reescribe los 250 KB y cada consulta del
+    bot parsea el blob 3-4 veces por mensaje (`agent.ts` hint, `inventarioQuery`,
+    `fichaAuto`, `ensureVehicleDetails`).
+    → **Arreglo**: tabla `vehicles` normalizada con índices (make, price, img_status).
+28. **El filtro de texto libre es AND de substrings**: "camioneta" o "económico"
+    devuelven 0 aunque haya autos que encajen. Faltan sinónimos/segmentos.
+29. `inventarioQuery` no devuelve `pricing` (desglose) ni `hasImage`, que
+    `queryInventory` ya calcula — obliga a un segundo salto de tool.
+30. **Caps que truncan en silencio**: feed 120, sitemap 1000, `MAX_URLS` 10,
+    `MAX_PARTS` 8 × `MAX_DOC_CHARS` 24 000 = 192 KB de KB; más allá, `searchKb` pierde
+    la cola del inventario aunque `inventarioQuery` siga completo.
+
+### 🔵 DEUDA DE MANTENIMIENTO
+
+31. **Licencias/módulos son un no-op**: `unlockedModules()` devuelve todo y
+    `isModuleUnlocked()` siempre `true` (`src/modules.ts`), así que el badge
+    🔒 BLOQUEADO y la rama "Requiere licencia" (`src/admin/views/extras.ts`) son
+    inalcanzables; `PRO_ONLY_TABS = []` y `isPro()` → `false` sin llamadores
+    (`src/config.ts`).
+32. **Muertos**: `member/system-prompt.local.ts` no lo importa nadie (y
+    `docs/FLUJOS.md` lo documenta como si funcionara); `web_sync_last_run` se escribe
+    y no se lee; `module_unlocks` no lo consume nadie.
+33. **Migraciones sin versionado**: `schema.sql` se reaplica idempotente, sin tracking
+    (`schema_migrations` está vacía), sin transacción, y quedaron tablas
+    `zz_orphan_*` de un experimento previo. SQLite no tiene
+    `ADD COLUMN IF NOT EXISTS`, así que agregar una columna fuerza tabla nueva (de ahí
+    las huérfanas). → **Arreglo**: migraciones numeradas + registro real +
+    `BEGIN/COMMIT` + reconciliar y dropear los `zz_orphan_*`.
+34. **`pnpm db:apply:remote` apunta a `kooni_db` hardcodeado** (`package.json`), no a
+    la DB real de la instalación → correrlo a mano toca la base equivocada.
+35. **Comentarios que mienten**: la cabecera de `src/kb/webSync.ts` y la de
+    `src/integrations/decodo.ts` dicen que hay un candado por "módulo desbloqueado"
+    que ya no existe.
+36. **PLAN.md desactualizado** en varias secciones (§C5 dice que `BOT_TIER=pro`
+    habilita tabs Pro, cuando `isPro()` devuelve `false`; §N dice "14 módulos" y hay
+    20; la bitácora se contradice con el número de vehículos).
+37. **Node/CI desalineado**: `ci.yml` corre Node 20 mientras `miniflare` pide ≥22.
+
+### ⚙️ Configuración pendiente en la instalación (no es código)
+
+- **Decodo**: saldo/plan. Durante el diagnóstico la API devolvía **401** con cuerpo
+  vacío después de la primera llamada. Sin esto el inventario no se actualiza ni se
+  enriquecen los 280 autos sin precio.
+- **`CLOUDFLARE_API_TOKEN`**: sigue en el entorno del usuario apuntando a
+  `joeldavidar@gmail.com` (la cuenta EQUIVOCADA: cardaniel vive en
+  `Info@dmezzadri.com`) y hace sombra al login por navegador. Borrarla.
+- **Contraseña del panel**: hay que rotarla (es un secret de solo escritura y la
+  original se perdió con la carpeta local):
+  `wrangler secret put DASHBOARD_PASSWORD` con el token limpio.
+- **Análisis IA del inventario**: apagado por defecto. Para encenderlo: Extras →
+  "Análisis IA del inventario" + elegir el modelo en Configuración.
+- **Identificadores de la instalación** (por si hay que reconstruir el proyecto):
+  Worker `kooni-bot-cardealer-daniel2-948b8b` · D1
+  `40ca16cf-502e-40dd-a5c9-1a8697ee9804` · Vectorize `kooni_cardealer_dani_948b8b_kb` ·
+  DO `SupportAgent` · subdominio `cardealerdani.workers.dev`.
+- **`member/config.local.ts`** queda sin commitear a propósito (config del cliente).
+
+### Orden sugerido para la próxima etapa
+
+1. #13 aviso de scraping fallido → #14 try/catch en `purge` → #10 piso de sanidad.
+2. #1 secret de Telegram → #2 HMAC de Retell → #7 rate limit + password vacío.
+3. #16 arreglar la suite de tests (habilita verificar todo lo demás).
+4. #26 bulk de precios (cuando Decodo tenga saldo) → #11/#27 tabla normalizada.
+5. #18-#25 costo y latencia.
+
+---
+
 ## 🗂️ KANBAN DE LEADS + "comunicación de entrada" (v1.29.0, 2026-09-07)
 
 Pedido de Joel: un kanban para ver los leads capturados; las conversaciones sin
