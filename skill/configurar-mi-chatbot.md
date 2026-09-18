@@ -112,12 +112,19 @@ Aquí preparamos la infraestructura en la nube del miembro (es gratis para empez
 
 Pregunta: **"¿Ya tienes cuenta de Cloudflare?"**
 
-- **Sí** → corre:
+- **Sí** → antes de autenticar, haz un **login limpio** (para no quedarte en una
+  cuenta anterior ni en un API token que haya en el entorno):
   ```bash
-  wrangler login
+  # 1) quita tokens/credenciales del entorno (si existen, wrangler los usa y NO abre el navegador)
+  unset CLOUDFLARE_API_TOKEN CLOUDFLARE_API_KEY CLOUDFLARE_EMAIL CLOUDFLARE_ACCOUNT_ID 2>/dev/null
+  #    (PowerShell: Remove-Item Env:CLOUDFLARE_API_TOKEN,Env:CLOUDFLARE_API_KEY,Env:CLOUDFLARE_EMAIL,Env:CLOUDFLARE_ACCOUNT_ID -ErrorAction SilentlyContinue)
+  # 2) cierra cualquier sesión guardada (puede ser de otra cuenta)
+  npx wrangler logout
+  # 3) ahora sí, login en el navegador con la cuenta correcta
+  npx wrangler login
   ```
-  (Abre el navegador para que autorice. Espera a que te confirme que dio "Allow".)
-- **No** → dile que abra `https://dash.cloudflare.com/sign-up`, cree su cuenta gratis, y te avise cuando esté lista. Luego corre `wrangler login`.
+  (Abre el navegador para que autorice con la cuenta correcta. Espera a que te confirme que dio "Allow".)
+- **No** → dile que abra `https://dash.cloudflare.com/sign-up`, cree su cuenta gratis, y te avise cuando esté lista. Luego corre el login limpio de arriba.
 
 ### Paso 1.2 — Crear los recursos en la nube
 
@@ -201,7 +208,11 @@ wrangler deploy
 > Workers & Pages → **Change** junto a "Your subdomain" → guardar, y volver a
 > `wrangler deploy`. (Detalle + opción con API token: `docs/DESPLIEGUE.md §2.1`.)
 > Si en cambio falla con "Invalid access token [code: 9109]", la sesión OAuth se
-> invalidó: corre `wrangler login` otra vez.
+> invalidó: corre `wrangler login` otra vez. Si falla con
+> "You are logged in with an API Token. Unset the CLOUDFLARE_API_TOKEN…", hay un
+> token de Cloudflare en el entorno apuntando a otra cuenta: quítalo
+> (`unset CLOUDFLARE_API_TOKEN` / `Remove-Item Env:CLOUDFLARE_API_TOKEN`), corre
+> `wrangler logout` y vuelve a `wrangler login`.
 
 Captura la **URL del Worker** que imprime el deploy (ej. `https://<bot-slug>.<cuenta>.workers.dev`). La vamos a usar en todo lo que sigue.
 

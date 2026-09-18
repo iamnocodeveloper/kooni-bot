@@ -1134,6 +1134,44 @@ async function ensureWorkersDevSubdomain(dir) {
   }
 }
 
+// ── login limpio de Cloudflare ─────────────────────────────────────────────
+// Cloudflare prefiere OAuth por navegador (`wrangler login`), pero si hay un
+// `CLOUDFLARE_API_TOKEN` (u otras credenciales) en el entorno, wrangler lo usa
+// en su lugar y NUNCA abre el navegador para la cuenta correcta. Antes de
+// autenticar: 1) quitamos esas variables del entorno, 2) cerramos la sesión
+// previa (`wrangler logout`) para que el login sea limpio y NO se quede en otra
+// cuenta, 3) `wrangler login` en el navegador.
+const CF_TOKEN_ENV = ["CLOUDFLARE_API_TOKEN", "CLOUDFLARE_API_KEY", "CLOUDFLARE_EMAIL", "CLOUDFLARE_ACCOUNT_ID"];
+
+function clearCloudflareTokenEnv() {
+  const cleared = [];
+  for (const k of CF_TOKEN_ENV) {
+    if (process.env[k]) { delete process.env[k]; cleared.push(k); }
+  }
+  return cleared;
+}
+
+function cloudflareCleanLogin(dir) {
+  const cleared = clearCloudflareTokenEnv();
+  if (cleared.length) {
+    console.log(C.yellow("  ⚠ ") + m(
+      `detecté ${cleared.join(", ")} en tu entorno. La quito para iniciar sesión por navegador (OAuth) en la cuenta correcta.`,
+      `found ${cleared.join(", ")} in your environment. Unsetting it to sign in via browser (OAuth) on the right account.`,
+    ));
+  }
+  // Cierra cualquier sesión guardada (puede ser de OTRA cuenta) para que el
+  // login sea limpio y te pida autorizar de nuevo.
+  try { wrangler(dir, ["logout"], { capture: true }); } catch { /* sin sesión previa */ }
+  try {
+    wrangler(dir, ["login"]);
+  } catch (e) {
+    throw new Error(m(
+      "no se pudo autenticar en Cloudflare (wrangler login). Revisa la terminal y vuelve a intentar.",
+      "could not authenticate with Cloudflare (wrangler login). Check the terminal and retry.",
+    ));
+  }
+}
+
 async function deployBot(dir, { flags = {}, rl } = {}) {
   const wt = join(dir, "wrangler.toml");
   if (!existsSync(wt)) throw new Error(m("no encuentro wrangler.toml en " + dir, "can't find wrangler.toml in " + dir));
@@ -1141,9 +1179,9 @@ async function deployBot(dir, { flags = {}, rl } = {}) {
   const wantDeploy = await confirm(rl, t().deployAsk);
   if (!wantDeploy) { console.log(C.dim("  " + m("puedes hacerlo luego con: npx kooni-bot deploy", "you can deploy later with: npx kooni-bot deploy"))); return null; }
 
-  // login
+  // login (limpio: quita API tokens del entorno, cierra sesión previa y reautentica)
   process.stdout.write(C.dim("  " + t().login + "\n"));
-  wrangler(dir, ["login"]);
+  cloudflareCleanLogin(dir);
   console.log("  " + C.green("✓") + " " + t().loginOk);
 
   // recursos (nombres ÚNICOS por instalación, ya estampados en wrangler.toml)
@@ -1383,6 +1421,7 @@ Si dudas: **member/ es sagrado, src/ se actualiza.**
 ## Instalación de cero (resumen)
 1. \`npx kooni-bot init\` (o \`init --yes --slug <slug> --negocio "…" --cerebro claude\` para agentes/CI).
 2. \`npx kooni-bot deploy\` (login de Cloudflare, D1/Vectorize/R2, secrets, migraciones, deploy).
+   - El CLI hace el login LIMPIO: quita \`CLOUDFLARE_API_TOKEN\`/\`CLOUDFLARE_API_KEY\` del entorno, cierra la sesión previa (\`wrangler logout\`) y abre el navegador para OAuth con la cuenta correcta. No hay que hacer nada manual.
 3. Abrir el panel en \`https://<worker>.workers.dev/admin\` (usuario \`admin\` + \`DASHBOARD_PASSWORD\`).
 4. Conectar canales DESPUÉS del primer deploy (Telegram primero, ~5 min) desde \`/admin/conexiones\`.
 

@@ -61,6 +61,7 @@ bindings creados. Si falta algo, se detiene y te dice qué.
 | Error | Causa | Cómo arreglarlo |
 |---|---|---|
 | `Authentication error` al desplegar | wrangler perdió la sesión | corre `pnpm wrangler login` otra vez |
+| `You are logged in with an API Token. Unset the CLOUDFLARE_API_TOKEN…` al hacer login | hay un `CLOUDFLARE_API_TOKEN` (u `CLOUDFLARE_API_KEY`) en el entorno, apuntando a una cuenta distinta | quita la variable (`unset CLOUDFLARE_API_TOKEN CLOUDFLARE_API_KEY CLOUDFLARE_EMAIL CLOUDFLARE_ACCOUNT_ID`; en PowerShell `Remove-Item Env:CLOUDFLARE_API_TOKEN,Env:CLOUDFLARE_API_KEY,Env:CLOUDFLARE_EMAIL,Env:CLOUDFLARE_ACCOUNT_ID`), corre `pnpm wrangler logout` y luego `pnpm wrangler login` |
 | deploy-check: `Missing secret ANTHROPIC_API_KEY` | falta la llave de Claude (obligatoria) | `pnpm wrangler secret put ANTHROPIC_API_KEY` |
 | deploy-check: `Missing secret DASHBOARD_PASSWORD` | falta la contraseña del dashboard (obligatoria en Pro) | `pnpm wrangler secret put DASHBOARD_PASSWORD` |
 | deploy-check: `Missing binding DB / KB / CATALOG` | la base de datos, el índice o el bucket no existen | crea el faltante: `wrangler d1 create kooni_db`, `wrangler vectorize create kooni_kb --dimensions=1024 --metric=cosine`, o `wrangler r2 bucket create <nombre>` y verifica el binding en `wrangler.toml` |

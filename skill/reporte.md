@@ -33,6 +33,9 @@ SIGUE ESTAS REGLAS AL PIE DE LA LETRA.
    pero estar vacía en Starter — reporta leads SOLO si el tier es Pro **y** hay filas.
 4. `wrangler` necesita estar conectado a Cloudflare. Si un comando da error de auth, dile:
    *"Necesito conectar Cloudflare una vez. Escribe `! pnpm wrangler login` y sigue los pasos."*
+   (Antes, si el login falla con "You are logged in with an API Token…", quita las
+   variables `CLOUDFLARE_API_TOKEN`/`CLOUDFLARE_API_KEY` del entorno, corre
+   `pnpm wrangler logout` y vuelve a `pnpm wrangler login`.)
    No inventes credenciales ni pegues tokens en el chat.
 5. Pregúntale el **periodo**: por defecto el **último mes (30 días)**. Si quiere "mayo",
    "este mes", o un rango exacto, ajústalo. Cuéntale en 2 líneas qué encontraste (tier,

@@ -60,6 +60,25 @@ function Exec([string]$cmd, [string[]]$ArgsList) {
   return $out
 }
 
+# Login limpio de Cloudflare: quita tokens/credenciales de API del entorno
+# (hacen que wrangler NO abra el navegador y se quede en la cuenta equivocada),
+# cierra cualquier sesión previa y reautentica por OAuth en el navegador.
+function Cf-CleanLogin {
+  $cleared = @()
+  foreach ($v in @("CLOUDFLARE_API_TOKEN","CLOUDFLARE_API_KEY","CLOUDFLARE_EMAIL","CLOUDFLARE_ACCOUNT_ID")) {
+    if ([Environment]::GetEnvironmentVariable($v, "Process")) {
+      $cleared += $v
+      [Environment]::SetEnvironmentVariable($v, $null, "Process")
+    }
+  }
+  if ($cleared.Count -gt 0) {
+    Warn "detecté variables de Cloudflare en tu entorno ($($cleared -join ', ')). Las quito para iniciar sesión limpia por navegador (OAuth) en la cuenta correcta."
+  }
+  Exec $NPX @("wrangler","logout") | Out-Null
+  Exec $NPX @("wrangler","login") | Out-Null
+  OK "Cloudflare autenticado"
+}
+
 # workers.dev subdomain (Cloudflare error 10063): si la cuenta aún no tiene
 # subdominio, lo creamos vía API usando la sesión OAuth que wrangler ya guardó
 # en disco. Devuelve el subdominio (o ya existía / recién creado) o $null.
@@ -261,8 +280,7 @@ if ($Mode -eq "deploy") {
   }
 
   Step 3 6 "Login de Cloudflare (abre el navegador)"
-  Exec $NPX @("wrangler","login") | Out-Null
-  OK "Cloudflare autenticado"
+  Cf-CleanLogin
 
   Step 4 6 "Recursos en TU cuenta (D1 + Vectorize + R2)"
   $d1out = Exec $NPX @("wrangler","d1","create","kooni_db")

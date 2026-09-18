@@ -36,10 +36,23 @@ pnpm install
 ## 2. Login de Cloudflare
 
 ```bash
+# 1) quita tokens/credenciales del entorno (si existen, wrangler los usa y NO abre el navegador)
+unset CLOUDFLARE_API_TOKEN CLOUDFLARE_API_KEY CLOUDFLARE_EMAIL CLOUDFLARE_ACCOUNT_ID
+#    (PowerShell: Remove-Item Env:CLOUDFLARE_API_TOKEN,Env:CLOUDFLARE_API_KEY,Env:CLOUDFLARE_EMAIL,Env:CLOUDFLARE_ACCOUNT_ID -ErrorAction SilentlyContinue)
+# 2) cierra cualquier sesión guardada (puede ser de otra cuenta)
+npx wrangler logout
+# 3) login en el navegador con la cuenta correcta
 npx wrangler login
 ```
 
-(Abre el navegador; autoriza con "Allow".)
+(Abre el navegador; autoriza con "Allow" en la cuenta correcta.)
+
+> ⚠️ **"You are logged in with an API Token. Unset the CLOUDFLARE_API_TOKEN…":**
+> significa que hay un token de Cloudflare en el entorno (normalmente apuntando a
+> otra cuenta) y le gana al login por navegador. Quítalo con el `unset` /
+> `Remove-Item` de arriba, corre `npx wrangler logout` y vuelve a `npx wrangler login`.
+> Los instaladores (`scripts/kooni-init.*`) y el CLI (`npx kooni-bot`) ya hacen este
+> login limpio solos.
 
 ### 2.1 Subdominio workers.dev (error 10063)
 
@@ -442,6 +455,7 @@ y en su `wrangler.toml` (`BOT_INSTANCE_ID`).
 |---|---|
 | `You need a workers.dev subdomain [code: 10063]` | La cuenta no tiene subdominio. Automático en el CLI/instaladores; manual: §2.1 (dashboard o API token) |
 | `Invalid access token [code: 9109]` | Sesión OAuth de wrangler invalidada → `npx wrangler login` |
+| `You are logged in with an API Token. Unset the CLOUDFLARE_API_TOKEN…` | Token de Cloudflare en el entorno apuntando a otra cuenta → quítalo (`unset`/`Remove-Item`), `npx wrangler logout` y `npx wrangler login` |
 | `Missing binding DB / KB / CATALOG` | El recurso no existe: créalo (paso 3) y verifica `wrangler.toml` |
 | `D1 create ... already exists` | Copia el `database_id` real de `npx wrangler d1 list` |
 | Webhook de Telegram responde 404 | Verifica la URL completa `<WORKER_URL>/webhooks/telegram` |

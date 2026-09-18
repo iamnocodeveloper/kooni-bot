@@ -80,6 +80,9 @@ cd mi-bot
 pnpm install
 
 # 1) Crear los recursos en tu cuenta de Cloudflare
+#    login limpio: quita tokens del entorno, cierra sesión previa y reautentica
+unset CLOUDFLARE_API_TOKEN CLOUDFLARE_API_KEY CLOUDFLARE_EMAIL CLOUDFLARE_ACCOUNT_ID 2>/dev/null || true
+npx wrangler logout || true
 npx wrangler login
 npx wrangler d1 create kooni_db                 # → pega el database_id en wrangler.toml
 npx wrangler vectorize create kooni_kb --dimensions=1024 --metric=cosine

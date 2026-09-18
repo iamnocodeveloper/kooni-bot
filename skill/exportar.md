@@ -39,6 +39,9 @@ SIGUE ESTAS REGLAS AL PIE DE LA LETRA.
    pero puede estar **vacía**.
 4. `wrangler` necesita estar conectado a Cloudflare. Si un comando da error de acceso, dile:
    *"Necesito conectar Cloudflare una vez. Escribe `! pnpm wrangler login` y sigue los pasos."*
+   (Antes, si el login falla con "You are logged in with an API Token…", quita las
+   variables `CLOUDFLARE_API_TOKEN`/`CLOUDFLARE_API_KEY` del entorno, corre
+   `pnpm wrangler logout` y vuelve a `pnpm wrangler login`.)
    No inventes credenciales ni pegues tokens en el chat.
 5. Pregúntale **qué quiere exportar** (una pregunta a la vez, en su idioma):
    - **Leads / prospectos** — los contactos que el bot capturó (nombre, contacto, intención…).

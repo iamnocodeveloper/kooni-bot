@@ -53,6 +53,20 @@ info() { echo "── $1"; }
 ok()   { echo "  ✅ $1"; }
 warn() { echo "  ⚠️  $1"; }
 
+# Login limpio de Cloudflare: quita tokens/credenciales de API del entorno (hacen
+# que wrangler NO abra el navegador y se quede en la cuenta equivocada), cierra
+# cualquier sesión previa y reautentica por OAuth en el navegador.
+cf_clean_login() {
+  local cleared="" v
+  for v in CLOUDFLARE_API_TOKEN CLOUDFLARE_API_KEY CLOUDFLARE_EMAIL CLOUDFLARE_ACCOUNT_ID; do
+    if [ -n "${!v:-}" ]; then cleared="$cleared $v"; unset "$v"; fi
+  done
+  [ -n "$cleared" ] && warn "detecté variables de Cloudflare en tu entorno (${cleared# }). Las quito para iniciar sesión limpia por navegador (OAuth) en la cuenta correcta."
+  npx wrangler logout >/dev/null 2>&1 || true
+  npx wrangler login || { warn "no se pudo autenticar (wrangler login)"; return 1; }
+  ok "Cloudflare autenticado"
+}
+
 # workers.dev subdomain (Cloudflare error 10063): si la cuenta aún no tiene
 # subdominio, lo creamos vía API usando la sesión OAuth que wrangler ya guardó
 # en disco (sin pedirle nada al usuario). Imprime el subdominio si lo tiene/crea;
@@ -253,8 +267,7 @@ case "$MODE" in
     confirm "¿Desplegar en TU cuenta de Cloudflare ahora?" || { warn "puedes hacerlo luego con: bash scripts/kooni-init.sh deploy"; exit 0; }
 
     echo "  → Abre el navegador para autorizar Cloudflare (wrangler login)..."
-    npx wrangler login || { warn "no se pudo autenticar (wrangler login)"; exit 1; }
-    ok "Cloudflare autenticado"
+    cf_clean_login || exit 1
 
     # Recursos (ignora si ya existen)
     D1_ID="$(npx wrangler d1 create kooni_db 2>&1 | python -c "
