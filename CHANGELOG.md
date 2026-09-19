@@ -5,6 +5,26 @@ Cambios notables de Kooni. Formato aproximado de
 
 El CLI `kooni-bot` se versiona aparte (npm) — ver la nota de cada versión.
 
+## [Unreleased]
+
+### Corregido — mensajes que se perdían al pausar (conversación "vacía")
+
+Una conversación podía aparecer en la bandeja **sin ningún mensaje** (ni
+recibidos ni enviados) y sin respuesta del bot. Causa: `ingest()` creaba el hilo
+y recién guardaba el mensaje en `processBuffer()`; cualquier salida temprana
+(pausa de canal, bot pausado, takeover, spam, tope diario, límite free) dejaba el
+hilo creado pero vacío.
+
+- **El entrante se guarda siempre** (`SupportAgent.persistInbound()`), antes de
+  cualquier decisión de responder. `processBuffer()` ya no lo duplica.
+- La pausa ahora apaga la **respuesta**, nunca el **registro**: el dueño ve en el
+  panel lo que el cliente escribió aunque el bot esté en pausa o en takeover.
+- **Timeouts de 15s** en los envíos salientes de Zernio, WAHA y Meta: un
+  proveedor colgado ya no bloquea el Durable Object ni la conversación.
+- Nuevo runbook: [`docs/MENSAJERIA.md`](./docs/MENSAJERIA.md) (ciclo de vida,
+  matriz de pausas y diagnóstico).
+- Regresión en `test/agent.media.test.ts`: "el mensaje del cliente NUNCA se pierde".
+
 ## [1.47.0] — 2026-09-14
 
 ### Agregado — Nicho TAXIS (central de despacho con bases y cola de conductores)

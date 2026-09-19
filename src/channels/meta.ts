@@ -180,6 +180,8 @@ export const metaAdapter: ChannelAdapter = {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
+        // Timeout: Graph colgado no debe bloquear el Durable Object.
+        signal: AbortSignal.timeout(15_000),
         body: JSON.stringify(payload),
       });
       // Meta responde 200 con el message_id o un error JSON. No lo tragues: si

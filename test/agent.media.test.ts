@@ -79,7 +79,9 @@ function makeAgent(opts?: { tier?: "free" | "pro"; aiText?: string }) {
   const storage = { setAlarm: vi.fn(), getAlarm: vi.fn() };
 
   const env: any = {
-    DB: opts?.tier === "pro" ? makeDb({ pro_license: proCode() }) : {},
+    // Siempre un D1 en memoria (no `{}`): ingest() ahora persiste el mensaje
+    // entrante con MessagesRepo.append(), así que la DB falsa debe aceptar writes.
+    DB: makeDb(opts?.tier === "pro" ? { pro_license: proCode() } : {}),
     LICENSE_PUBLIC_KEY: testLicense.pub,
     AI: { run: vi.fn(async () => ({ text: opts?.aiText ?? "" })) },
     ANTHROPIC_API_KEY: "sk-test",
@@ -413,15 +415,20 @@ describe("SupportAgent.ingest — bot_paused (settings)", () => {
     const { agent, storage } = makeAgent({ tier: "free" });
     stubConversations();
 
+    const append = vi
+      .spyOn(MessagesRepo.prototype, "append")
+      .mockResolvedValue("m1" as any);
+
     await agent.ingest({
       channel: "telegram",
       channelUserId: "u1",
       text: "hola, estoy pausado?",
     });
 
-    // Message is persisted in the buffer …
+    // Message is persisted in the buffer AND in the thread (el panel lo ve) …
     expect(agent.state.pendingMessages).toHaveLength(1);
     expect(agent.state.pendingMessages[0].text).toBe("hola, estoy pausado?");
+    expect(append).toHaveBeenCalledWith("conv-1", "user", "hola, estoy pausado?");
     // … but the bot stays silent: no alarm scheduled.
     expect(storage.setAlarm).not.toHaveBeenCalled();
   });
@@ -475,5 +482,95 @@ describe("SupportAgent.ingest — bot_paused (settings)", () => {
 
     const alarmAt = storage.setAlarm.mock.calls[0][0];
     expect(alarmAt - before).toBeLessThan(2_000);
+  });
+});
+
+// Regresión del bug "la conversación aparece pero sin mensajes": una pausa (de
+// canal, global, takeover o spam) creaba el hilo en el panel pero lo dejaba
+// vacío. Ahora el entrante se persiste SIEMPRE; la pausa apaga la respuesta,
+// nunca el registro. Contrato: guardar ≠ responder.
+describe("SupportAgent.ingest — el mensaje del cliente NUNCA se pierde", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    stubSettings();
+  });
+  afterEach(() => vi.restoreAllMocks());
+
+  it("persiste el entrante aunque el CANAL esté pausado (el hilo no queda vacío)", async () => {
+    stubSettings({ paused_channels: JSON.stringify(["instagram"]) });
+    const { agent, storage } = makeAgent({ tier: "free" });
+    stubConversations();
+    const append = vi
+      .spyOn(MessagesRepo.prototype, "append")
+      .mockResolvedValue("m1" as any);
+
+    await agent.ingest({
+      channel: "instagram",
+      channelUserId: "ig-9",
+      text: "hola desde IG",
+    });
+
+    expect(append).toHaveBeenCalledWith("conv-1", "user", "hola desde IG");
+    expect(storage.setAlarm).not.toHaveBeenCalled(); // pausado ⇒ sin respuesta
+  });
+
+  it("persiste el entrante aunque la CONVERSACIÓN esté pausada (takeover)", async () => {
+    stubSettings();
+    const { agent, storage } = makeAgent({ tier: "free" });
+    stubConversations({ paused: true });
+    const append = vi
+      .spyOn(MessagesRepo.prototype, "append")
+      .mockResolvedValue("m1" as any);
+
+    await agent.ingest({
+      channel: "zernio",
+      channelUserId: "acct:conv",
+      text: "sigo esperando",
+    });
+
+    expect(append).toHaveBeenCalledWith("conv-1", "user", "sigo esperando");
+    expect(storage.setAlarm).not.toHaveBeenCalled();
+  });
+
+  it("registra un entrante de solo media con una etiqueta legible", async () => {
+    stubSettings();
+    const { agent } = makeAgent({ tier: "free" });
+    stubConversations({ paused: true }); // el camino pausado aún no procesa el medio
+    const append = vi
+      .spyOn(MessagesRepo.prototype, "append")
+      .mockResolvedValue("m1" as any);
+
+    await agent.ingest({
+      channel: "waha",
+      channelUserId: "591@c.us",
+      imageUrl: "https://x/y.png",
+    });
+
+    expect(append).toHaveBeenCalledWith("conv-1", "user", "(imagen)");
+  });
+
+  it("processBuffer NO vuelve a guardar el mensaje del usuario (no duplica)", async () => {
+    const { agent } = makeAgent({ tier: "free" });
+
+    streamTextMock.mockReset();
+    streamTextMock.mockImplementation(() => makeStreamResult("ok"));
+
+    const append = vi
+      .spyOn(MessagesRepo.prototype, "append")
+      .mockResolvedValue("m1" as any);
+    vi.spyOn(MessagesRepo.prototype, "lastN").mockResolvedValue([
+      { role: "user", content: "hola" },
+    ] as any);
+    vi.spyOn(senderMod, "pickAdapter").mockReturnValue({
+      sendReply: vi.fn(async () => {}),
+    } as any);
+
+    agent.state.pendingMessages = [{ text: "hola", receivedAt: Date.now() }];
+    await agent.processBuffer();
+
+    // El entrante ya se guardó en ingest(): acá NO debe repetirse …
+    expect(append.mock.calls.filter((c) => c[1] === "user")).toHaveLength(0);
+    // … pero la respuesta del bot sí se persiste.
+    expect(append.mock.calls.filter((c) => c[1] === "assistant")).toHaveLength(1);
   });
 });

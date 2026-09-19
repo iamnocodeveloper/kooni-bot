@@ -82,6 +82,19 @@ export interface AgentIncomingPayload {
   location?: { lat: number; lng: number; name?: string; address?: string };
 }
 
+/**
+ * Texto mínimo para registrar un entrante en los caminos que todavía no
+ * procesaron el medio (pausas, spam, tope diario, límites). El camino normal usa
+ * el `processedText` completo (transcripción + marcadores [AUDIO_URL]/[IMAGE_URL]).
+ */
+function inboundLabel(p: AgentIncomingPayload): string {
+  const t = (p.text ?? "").trim();
+  if (t) return t;
+  if (p.audioUrl) return "(audio)";
+  if (p.imageUrl) return "(imagen)";
+  return "";
+}
+
 export class SupportAgent extends Agent<Env, SupportAgentState> {
   initialState: SupportAgentState = {
     conversationId: null,
@@ -95,6 +108,23 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
     lastSearchKbScore: 1,
     imageRetryCount: 0,
   };
+
+  /**
+   * Guarda el mensaje del CLIENTE en el hilo apenas lo recibimos, ANTES de
+   * decidir si el bot responde. Es la regla que garantiza que una conversación
+   * nunca quede vacía: sin esto, cualquier pausa (global, por canal, takeover,
+   * spam o tope diario) creaba el hilo en el panel pero lo dejaba SIN ningún
+   * mensaje — el dueño no veía ni lo recibido ni lo enviado.
+   *
+   * Contrato: guardar ≠ responder. La pausa apaga la respuesta, nunca el registro.
+   */
+  private async persistInbound(convId: string, text: string | undefined): Promise<void> {
+    const content = (text ?? "").trim();
+    if (!content) return;
+    const db = new Db(this.env.DB);
+    await new MessagesRepo(db).append(convId, "user", content);
+    await new ConversationsRepo(db).touchLastMessage(convId);
+  }
 
   /**
    * Called by the Worker fetch handler when a webhook arrives for this user.
@@ -147,6 +177,9 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
           const check = await checkLimit(this.env, res);
           if (!check.allowed) {
             const msg = limitMessage(res, check.used, check.limit ?? 0);
+            // El entrante se registra igual: topar el límite frena la respuesta,
+            // no la visibilidad de lo que el cliente escribió.
+            await this.persistInbound(conv.id, inboundLabel(payload));
             await new MessagesRepo(db).append(conv.id, "assistant", msg);
             await pickAdapter(payload.channel as ChannelId).sendReply(
               { channel: payload.channel as ChannelId, channelUserId: payload.channelUserId, chunks: [msg] },
@@ -170,8 +203,11 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
       // solo marca de contexto, sin pausar
     }
 
-    // If paused, ignore (bot stays silent)
+    // Conversación pausada (takeover del dueño, spam o tope diario): el bot
+    // calla, pero el mensaje del cliente se registra igual para que el panel
+    // muestre el hilo completo mientras el humano atiende.
     if (await convs.isPaused(conv.id)) {
+      await this.persistInbound(conv.id, inboundLabel(payload));
       return { acknowledged: true };
     }
 
@@ -182,6 +218,9 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
         const { isRepeatSpam, SPAM_SNOOZE_MS, isOverDailyCap, DAILY_CAP_SNOOZE_MS, DAILY_CAP_MESSAGE } =
           await import("./spam");
         if (await isRepeatSpam(db, conv.id, payload.text)) {
+          // Se registra DESPUÉS del chequeo (para no alterar el conteo de
+          // repeticiones) pero ANTES de salir: el panel muestra el mensaje.
+          await this.persistInbound(conv.id, payload.text);
           await convs.setPausedUntil(conv.id, Date.now() + SPAM_SNOOZE_MS);
           console.warn(`[spam-guard] conv ${conv.id} en cooldown 1h (mensaje repetido)`);
           return { acknowledged: true };
@@ -190,6 +229,7 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
         // pausa garantiza que no se repita (los siguientes mensajes mueren en
         // isPaused antes de llegar aquí).
         if (await isOverDailyCap(db, conv.id)) {
+          await this.persistInbound(conv.id, payload.text);
           await convs.setPausedUntil(conv.id, Date.now() + DAILY_CAP_SNOOZE_MS);
           await new MessagesRepo(db).append(conv.id, "assistant", DAILY_CAP_MESSAGE);
           const channel = payload.channel as ChannelId;
@@ -270,7 +310,13 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
         `${loc.name ? ` lugar=${loc.name}` : ""}${loc.address ? ` direccion=${loc.address}` : ""}]`;
     }
 
-    // Append to buffer (we always persist the client's message)
+    // El mensaje del cliente (ya con transcripción y marcadores de media) se
+    // persiste ACÁ, siempre, antes de armar el buffer. Es lo que hace que el
+    // panel lo muestre al instante aunque después una pausa impida responder.
+    // processBuffer NO vuelve a guardarlo (evita el duplicado).
+    await this.persistInbound(conv.id, processedText);
+
+    // Append to buffer
     const pending = [
       ...this.state.pendingMessages,
       { text: processedText, receivedAt: Date.now() },
@@ -287,7 +333,7 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
     // Global (bot_paused) o por canal (paused_channels: ej. solo telegram).
     if (cfg.botPaused || cfg.pausedChannels.includes(payload.channel)) {
       if (cfg.pausedChannels.includes(payload.channel)) {
-        console.warn(`[ingest] canal pausado: ${payload.channel} — mensaje ignorado`);
+        console.warn(`[ingest] canal pausado: ${payload.channel} — no se responde (el mensaje queda registrado)`);
       }
       return { acknowledged: true };
     }
@@ -383,20 +429,19 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
 
     const db = new Db(this.env.DB);
     const msgs = new MessagesRepo(db);
-    const convs = new ConversationsRepo(db);
     const convId = this.state.conversationId;
     if (!convId) {
       console.warn("[SupportAgent.processBuffer] no conversation_id in state");
       return;
     }
 
-    // Persist user message
-    await msgs.append(convId, "user", combined);
-    await convs.touchLastMessage(convId);
-
-    // Load history (last 20)
+    // El mensaje del cliente YA quedó persistido en ingest() (persistInbound):
+    // acá NO se vuelve a guardar, para no duplicarlo. El hilo sale de la DB tal
+    // cual, así que el turno actual es el último mensaje del usuario.
     const history = await msgs.lastN(convId, 20);
-    const aiMessages: any[] = history.slice(0, -1).map((m) => ({
+    const lastIsUser = history.length > 0 && history[history.length - 1].role === "user";
+    const priors = lastIsUser ? history.slice(0, -1) : history;
+    const aiMessages: any[] = priors.map((m) => ({
       role: (m.role === "tool"
         ? "user"
         : m.role === "owner"
@@ -405,8 +450,8 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
       content: m.content,
     }));
     // Build the LAST user message multimodal-aware: if it carries an
-    // [IMAGE_URL: ...] marker AND we're on the Pro tier, attach the image.
-    const lastUserMsg = history[history.length - 1];
+    // [IMAGE_URL: ...] marker, attach the image.
+    const lastUserMsg = lastIsUser ? history[history.length - 1] : undefined;
     if (lastUserMsg) {
       const imgMatch = lastUserMsg.content.match(/\[IMAGE_URL: (.+?)\]/);
       if (imgMatch) {
@@ -425,6 +470,10 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
       } else {
         aiMessages.push({ role: "user", content: lastUserMsg.content });
       }
+    } else {
+      // Carrera rara (p. ej. un echo del dueño cayó después del entrante): el
+      // texto del buffer se manda igual como turno actual — nunca se pierde.
+      aiMessages.push({ role: "user", content: combined });
     }
 
     // Build tools registry (tier-gated in buildTools)

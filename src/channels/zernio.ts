@@ -1277,6 +1277,9 @@ export const zernioAdapter: ChannelAdapter = {
           Authorization: `Bearer ${apiKey}`,
           "Content-Type": "application/json",
         },
+        // Sin timeout, un Zernio colgado bloquea el Durable Object (y con él la
+        // conversación). 15s es más que suficiente para un POST de mensaje.
+        signal: AbortSignal.timeout(15_000),
         body: JSON.stringify({
           accountId,
           message: reply.chunks[i],

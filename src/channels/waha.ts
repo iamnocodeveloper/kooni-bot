@@ -195,12 +195,15 @@ export const wahaAdapter: ChannelAdapter = {
       await fetch(`${cfg.base}/api/sendFile`, {
         method: "POST",
         headers: h,
+        // Timeout: un WAHA colgado no debe bloquear el Durable Object.
+        signal: AbortSignal.timeout(15_000),
         body: JSON.stringify({ session: cfg.session, chatId, file: { url: reply.imageUrl }, caption: first.slice(0, 1024) || undefined }),
       }).catch((e) => console.error("waha sendFile error:", e));
     } else if (reply.audioUrl) {
       await fetch(`${cfg.base}/api/sendFile`, {
         method: "POST",
         headers: h,
+        signal: AbortSignal.timeout(15_000),
         body: JSON.stringify({ session: cfg.session, chatId, file: { url: reply.audioUrl }, caption: undefined }),
       }).catch((e) => console.error("waha sendFile error:", e));
     }
@@ -210,6 +213,7 @@ export const wahaAdapter: ChannelAdapter = {
       const res = await fetch(`${cfg.base}/api/sendText`, {
         method: "POST",
         headers: h,
+        signal: AbortSignal.timeout(15_000),
         body: JSON.stringify({ session: cfg.session, chatId, text: chunk }),
       });
       if (!res.ok) {
