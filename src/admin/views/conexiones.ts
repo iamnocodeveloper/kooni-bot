@@ -362,7 +362,36 @@ export async function renderConexiones(
     const keyTail = (wahaCfg.apiKey ?? "").trim().slice(-4);
     const status = wahaStatus?.status ?? "";
     const working = status === "WORKING";
-    const needsQr = hasKey && (status === "SCAN_QR_CODE" || status === "STARTING" || (ch.ok && !status));
+    // Tener URL + API key NO significa que el WhatsApp esté emparejado. La
+    // sesión puede estar esperando el QR (SCAN_QR_CODE), arrancando (STARTING),
+    // deslogueada (FAILED/STOPPED) o inalcanzable (no se pudo consultar → "").
+    // Antes solo SCAN_QR_CODE/STARTING pintaban el QR, así que una sesión
+    // FAILED/STOPPED dejaba la card muda: el dueño veía "CONECTADO" y ningún
+    // QR, sin pista de qué hacer. Ahora CUALQUIER estado configurado muestra
+    // algo (el QR, o una explicación + botón para reiniciar la sesión).
+    const configured = ch.ok && hasKey;
+    const showQr = configured && (status === "SCAN_QR_CODE" || status === "STARTING");
+    const needsRelink = configured && (status === "FAILED" || status === "STOPPED");
+    const unreachable = configured && !working && !showQr && !needsRelink;
+    const restartBtn = `<form method="POST" action="/admin/conexiones/waha/restart" style="margin:0">
+        <button type="submit" class="text-[12px] font-display font-semibold"
+                style="border:1px solid var(--line);color:var(--cream);padding:9px 14px;cursor:pointer;background:none">Reiniciar sesión y generar QR</button>
+      </form>`;
+    const statusLine = status
+      ? ` (estado: <span class="font-mono">${esc(status)}</span>)`
+      : " (no pude consultar el estado de WAHA)";
+    const qrBlock = showQr
+      ? `<div style="display:flex;flex-direction:column;gap:8px">
+           <div class="text-[11.5px]" style="color:var(--warn)">⚠ Falta emparejar: escanea este QR con WhatsApp (Dispositivos vinculados → Vincular dispositivo).</div>
+           <img id="waha-qr" src="/admin/conexiones/waha/qr?t=${Date.now()}" width="220" height="220" style="border:1px solid var(--line);background:#fff;padding:6px" alt="QR de WhatsApp (WAHA)"
+                onload="var e=document.getElementById('waha-qr-err');if(e)e.style.display='none'"
+                onerror="var e=document.getElementById('waha-qr-err');if(e)e.style.display='block'">
+           <div id="waha-qr-err" class="text-[11.5px]" style="color:var(--bad);display:none">No pude cargar la imagen del QR. Reinicia la sesión e inténtalo de nuevo.</div>
+           <div class="text-dim text-[10.5px]">El QR se renueva solo cada 20 seg (WhatsApp lo rota): escanéalo apenas aparezca.</div>
+           ${restartBtn}
+         </div>
+         <script>(function(){setInterval(function(){var img=document.getElementById('waha-qr');if(img){img.src='/admin/conexiones/waha/qr?t='+Date.now();}},20000);})();</script>`
+      : "";
     return `
       <form method="POST" action="/admin/conexiones/waha" style="display:flex;flex-direction:column;gap:10px;margin-top:4px">
         <div style="display:flex;flex-direction:column;gap:6px">
@@ -392,12 +421,17 @@ export async function renderConexiones(
       ${
         working
           ? `<div class="text-[11.5px]" style="color:var(--ok)">✓ WhatsApp emparejado y activo${wahaCfg.session ? ` (sesión <span class="font-mono">${esc(wahaCfg.session)}</span>)` : ""}</div>`
-          : needsQr
-            ? `<div style="display:flex;flex-direction:column;gap:6px">
-                 <div class="text-[11.5px]" style="color:var(--warn)">⚠ Falta emparejar: escanea este QR con WhatsApp (Dispositivos vinculados → Vincular dispositivo).</div>
-                 <img src="/admin/conexiones/waha/qr?t=${Date.now()}" width="220" height="220" style="border:1px solid var(--line);background:#fff;padding:6px" alt="QR de WhatsApp (WAHA)">
+          : needsRelink
+            ? `<div style="display:flex;flex-direction:column;gap:8px">
+                 <div class="text-[11.5px]" style="color:var(--warn)">⚠ La sesión de WAHA está cerrada${statusLine}: hay que volver a vincular WhatsApp. Reinicia la sesión y escanea el QR nuevo.</div>
+                 ${restartBtn}
                </div>`
-            : ""
+            : unreachable
+              ? `<div style="display:flex;flex-direction:column;gap:8px">
+                   <div class="text-[11.5px]" style="color:var(--warn)">⚠ No pude leer el estado de la sesión en WAHA${statusLine}. Revisa que el servidor esté encendido y que la URL y la API key sean correctas.</div>
+                   ${restartBtn}
+                 </div>`
+              : qrBlock
       }`;
   };
 

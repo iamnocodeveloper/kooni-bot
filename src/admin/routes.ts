@@ -1171,6 +1171,30 @@ adminApp.post("/conexiones/waha", async (c) => {
   return c.redirect("/admin/conexiones?waha=saved");
 });
 
+// Reinicia la sesión de WAHA con la config ya guardada (crea/actualiza + start,
+// mismo `ensureWahaSession` que al guardar). Sirve cuando la sesión quedó
+// FAILED/STOPPED (WhatsApp deslogueado) y hay que volver a emparejar: el panel
+// no mostraba forma de recuperarla sin re-guardar la card a mano.
+adminApp.post("/conexiones/waha/restart", async (c) => {
+  const { resolveWahaConfig } = await import("../channels/wahaCredentials");
+  const { ensureWahaSession } = await import("../channels/wahaApi");
+  const cfg = await resolveWahaConfig(c.env);
+  if (!cfg.base || !cfg.apiKey) {
+    return c.redirect(
+      `/admin/conexiones?waha=error&msg=${encodeURIComponent("Falta la URL del servidor o la API key de WAHA.")}`,
+    );
+  }
+  const baseUrl = (c.env.DASHBOARD_BASE_URL?.trim() || new URL(c.req.url).origin).replace(/\/$/, "");
+  const webhookUrl = `${baseUrl}/webhooks/waha${cfg.webhookToken ? `?token=${encodeURIComponent(cfg.webhookToken)}` : ""}`;
+  const result = await ensureWahaSession(cfg, webhookUrl);
+  if (!result.ok) {
+    return c.redirect(
+      `/admin/conexiones?waha=error&msg=${encodeURIComponent("No pude reiniciar la sesión: " + (result.message ?? "error desconocido") + ".")}`,
+    );
+  }
+  return c.redirect("/admin/conexiones?waha=saved");
+});
+
 // Proxea el QR de WAHA (PNG) para emparejar WhatsApp: la API key nunca sale al
 // navegador, solo el worker la usa para pedirlo. 404 si el canal no está
 // configurado o WAHA no tiene el QR listo (ej. sesión ya emparejada).
@@ -1179,7 +1203,11 @@ adminApp.get("/conexiones/waha/qr", async (c) => {
   const { fetchWahaQrPng } = await import("../channels/wahaApi");
   const cfg = await resolveWahaConfig(c.env);
   const png = await fetchWahaQrPng(cfg);
-  if (!png) return c.text("QR no disponible (revisa que la sesión de WAHA esté esperando el escaneo).", 404);
+  if (!png)
+    return c.text(
+      "No pude generar el QR: la sesión de WAHA no está esperando escaneo (o el servidor no responde). Usa «Reiniciar sesión y generar QR» en la card de WAHA.",
+      404,
+    );
   return new Response(png, { headers: { "Content-Type": "image/png", "Cache-Control": "no-store" } });
 });
 

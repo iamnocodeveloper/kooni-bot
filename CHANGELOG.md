@@ -25,6 +25,21 @@ hilo creado pero vacío.
   matriz de pausas y diagnóstico).
 - Regresión en `test/agent.media.test.ts`: "el mensaje del cliente NUNCA se pierde".
 
+### Corregido — el QR de WAHA no aparecía (sesión en FAILED/STOPPED)
+
+Con la URL y la API key bien puestas, la card de WAHA se veía "CONECTADO" pero
+sin QR. El panel solo pintaba el QR cuando el estado era `SCAN_QR_CODE` o
+`STARTING`; si la sesión quedaba `FAILED` (WhatsApp deslogueado), `STOPPED` o
+inalcanzable, la card quedaba muda — sin QR y sin pista de qué hacer.
+
+- **Nunca más en blanco**: cualquier estado configurado muestra algo — el QR, una
+  explicación del estado real (con el status de WAHA) o el aviso de que el
+  servidor no responde.
+- **Botón «Reiniciar sesión y generar QR»** (`POST /admin/conexiones/waha/restart`)
+  para recuperar una sesión caída sin re-guardar la card a mano.
+- El `<img>` del QR tiene fallback visible si el proxy falla, y el QR se
+  **renueva solo cada 20s** (WhatsApp lo rota: así el escaneo no falla por caducar).
+
 ## [1.47.0] — 2026-09-14
 
 ### Agregado — Nicho TAXIS (central de despacho con bases y cola de conductores)
