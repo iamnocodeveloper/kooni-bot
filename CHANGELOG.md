@@ -5,6 +5,21 @@ Cambios notables de Kooni. Formato aproximado de
 
 El CLI `kooni-bot` se versiona aparte (npm) — ver la nota de cada versión.
 
+## [1.48.0] — 2026-09-23
+
+### Agregado — sistema de licencias (super admin + panel del cliente) y login del CLI
+
+- **Backend InsForge `kooni`** (`migrations/` + `functions/`): licencias por
+  instalación con módulos, límites y marca blanca; uso agregado (sin PII).
+- **Paneles** (`kooni-paneles/`, React + Vite): super admin (`/admin`) y panel del
+  cliente (`/`), desplegados en InsForge.
+- **Bot**: `syncLicenseState()` (cron + `POST /license/sync`, fail-open) aplica
+  plan/módulos/límites/marca desde el panel; `unlockedModules()` reactiva el gating
+  por módulo (sin `module_unlocks` → todo abierto, retrocompatible).
+- **CLI `kooni-bot login`** (device flow) + registro de la instalación
+  (`licencia-emitir`) y token por instalación (`KOONI_INSTALL_TOKEN`).
+- Nuevas vars: `KOONI_API_URL`, `KOONI_INSTALL_TOKEN`, `LICENSE_PUBLIC_KEY`.
+
 ## [Unreleased]
 
 ### Corregido — mensajes que se perdían al pausar (conversación "vacía")

@@ -31,11 +31,13 @@ scripts/gen-license.ts
 # es wrangler.toml.example; tu instalador genera el tuyo.
 wrangler.toml
 
-# Backend InsForge (sistema de licencias/instalaciones) — PRIVADO, no va al repo
-# público de Kooni. Vive en admin-pagos/ + el proyecto InsForge.
+# InsForge: AGENTS.md e insforge.toml los genera el CLI (skills/agent).
 AGENTS.md
 insforge.toml
-migrations/
+
+# Backend de licencias (InsForge): SÍ se versiona en este repo —
+# migrations/ + functions/ + kooni-paneles/. (El proyecto viejo de admin-pagos/
+# sigue privado; ver arriba.)
 
 # Landing web (va a su propio repo web-kooni-bot)
 web/

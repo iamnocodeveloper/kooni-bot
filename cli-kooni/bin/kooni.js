@@ -45,8 +45,15 @@ const CHECKIN_URL = process.env.KOONI_CHECKIN_URL || "https://f5gacw7g.function2
 const CFG_DIR = join(homedir(), ".kooni");
 const CFG_FILE = join(CFG_DIR, "config.json");
 const INSTALLS_FILE = join(CFG_DIR, "installs.json");
+// Sesión del CLI (device login). Guarda el token con el que el CLI se identifica
+// ante el backend de licencias. NUNCA se sube a ningún lado.
+const CRED_FILE = join(CFG_DIR, "credentials.json");
 const MARKER = ".kooni-bot.json";
 const SKILL_DIR = join(homedir(), ".claude", "skills", "kooni");
+
+// Backend de licencias (super admin, InsForge). El CLI habla con sus edge
+// functions para el device login y para registrar la instalación.
+const KOONI_API = (process.env.KOONI_API_URL || "https://t6bferet.function2.insforge.app").replace(/\/+$/, "");
 
 // Clave PÚBLICA de licencias (Ed25519). Verifica códigos KOONI-PRO-V2-… pero NO
 // puede firmarlos: es segura de publicar en npm — ese es el punto de la v2.
@@ -55,7 +62,7 @@ const SKILL_DIR = join(homedir(), ".claude", "skills", "kooni");
 //
 // v2 (2026-09-01): reemplaza a LICENSE_MASTER_KEY (HMAC), que viajaba en este
 // mismo archivo público y permitía falsificar licencias — hallazgo S2 del PLAN.
-const LICENSE_PUBLIC_KEY = process.env.KOONI_LICENSE_PUBLIC_KEY || "MCowBQYDK2VwAyEAqpP9OBrju8ebMWjQM4uYLsUV5yqWG8k8ieozT8Me8EQ=";
+const LICENSE_PUBLIC_KEY = process.env.KOONI_LICENSE_PUBLIC_KEY || "MCowBQYDK2VwAyEALxrjpy7pkyHSqlCcObUfMygNXNznd9/YXhamO17e4tc=";
 
 // Token compartido de registro/uso (X-Kooni-Token). DEBE coincidir con el secret
 // REGISTER_TOKEN del panel de licencias (InsForge). Es "seguridad por oscuridad"
@@ -306,6 +313,12 @@ function recordInstall(dir, meta) {
 function listInstalls() {
   return loadInstalls().filter((x) => x && x.dir && existsSync(x.dir));
 }
+
+// ── credenciales del CLI (device login) ──────────────────────────────────────
+// Token de sesión que identifica al CLI ante el backend de licencias. Vive en
+// ~/.kooni/credentials.json y nunca se comparte.
+function loadCreds() { try { return JSON.parse(readFileSync(CRED_FILE, "utf8")); } catch { return {}; } }
+function saveCreds(o) { mkdirSync(CFG_DIR, { recursive: true }); writeFileSync(CRED_FILE, JSON.stringify(o, null, 2)); }
 
 // ── flags / interacción ──────────────────────────────────────────────────────
 function parseFlags(args) {
@@ -711,6 +724,19 @@ function stampWrangler(dir, answers, botUid) {
     set(/KOONI_REGISTER_TOKEN\s*=\s*"[^"]*"/g, `KOONI_REGISTER_TOKEN = "${KOONI_REGISTER_TOKEN}"`);
   } else {
     s = s.replace(/^(\s*\[vars\][^\n]*\n)/m, `$1KOONI_REGISTER_TOKEN = "${KOONI_REGISTER_TOKEN}"\n`);
+  }
+
+  // Backend de licencias: base de las edge functions + clave pública Ed25519 con
+  // la que el bot verifica los códigos. La privada vive solo en el backend.
+  if (hasInVars("KOONI_API_URL")) {
+    set(/KOONI_API_URL\s*=\s*"[^"]*"/g, `KOONI_API_URL = "${KOONI_API}"`);
+  } else {
+    s = s.replace(/^(\s*\[vars\][^\n]*\n)/m, `$1KOONI_API_URL = "${KOONI_API}"\n`);
+  }
+  if (hasInVars("LICENSE_PUBLIC_KEY")) {
+    set(/LICENSE_PUBLIC_KEY\s*=\s*"[^"]*"/g, `LICENSE_PUBLIC_KEY = "${LICENSE_PUBLIC_KEY}"`);
+  } else {
+    s = s.replace(/^(\s*\[vars\][^\n]*\n)/m, `$1LICENSE_PUBLIC_KEY = "${LICENSE_PUBLIC_KEY}"\n`);
   }
 
   if (answers.provider !== "anthropic") {
@@ -1343,6 +1369,16 @@ async function deployBot(dir, { flags = {}, rl } = {}) {
   } else {
     console.log(C.yellow("  ⚠ " + m("no se detectó la URL del worker — revisa la salida del deploy", "couldn't detect the worker URL — check the deploy output")));
   }
+
+  // Token por instalación + sync de licencia (si el usuario está logueado).
+  if (PENDING_INST_TOKEN) {
+    try {
+      wrangler(dir, ["secret", "put", "KOONI_INSTALL_TOKEN"], { input: PENDING_INST_TOKEN, capture: true });
+      console.log("  " + C.green("✓") + " " + m("token de instalación guardado", "install token saved"));
+    } catch { /* el sync nocturno lo tomará igual */ }
+  }
+  await syncWorkerLicense(dir, url);
+
   // Persistir identidad de Cloudflare en el marker (para update/doctor/selector).
   writeMarker(dir, { databaseId: d1Id, workerUrl: url || undefined, dbName, kbName });
   return url;
@@ -1395,6 +1431,7 @@ constructor. No hay licencia ni servidor de Horizontes: el tier free/pro se cont
 \`BOT_TIER\` en \`wrangler.toml\` y un código local en el panel.
 
 ## Comandos del CLI
+- \`npx kooni-bot login\` — conecta el CLI a la cuenta Kooni del usuario (device flow: abre el navegador y aprueba un código).
 - \`npx kooni-bot init [dir]\` — descarga el template, configura (idioma, negocio, cerebro) y ofrece desplegar.
 - \`npx kooni-bot deploy [dir]\` — provisiona Cloudflare (login, D1/Vectorize/R2, secrets, migraciones, deploy).
 - \`npx kooni-bot update [dir]\` — trae la versión nueva conservando \`member/\`, \`wrangler.toml\` y datos.
@@ -1469,6 +1506,105 @@ function installAgentSkill(flags = {}) {
       : "  ✎ guía de tu agente actualizada"));
   } catch { /* no romper el flujo por esto */ }
 }
+
+// ── backend de licencias (super admin) ───────────────────────────────────────
+async function apiPost(path, body, token) {
+  return fetchRetry(`${KOONI_API}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...(token ? { Authorization: "Bearer " + token } : {}) },
+    body: JSON.stringify(body || {}),
+  }, { ms: 15000, tries: 2 });
+}
+
+// Login por dispositivo (device flow, estilo Forja/GitHub): el CLI pide un
+// código, el usuario lo aprueba logueado en el sitio de Kooni, y el CLI recibe
+// su token de sesión.
+async function cmdLogin(flags) {
+  const cfg = loadCfg();
+  if (flags.lang === "en" || cfg.lang === "en") L = "en";
+  banner();
+
+  let j = {};
+  try {
+    const res = await apiPost("/cli-device-start", {});
+    j = await res.json().catch(() => ({}));
+  } catch { /* red */ }
+  if (!j.code) {
+    console.log("\n  " + C.red("✗ ") + m("no pude iniciar el login (revisa tu internet).", "couldn't start login (check your internet).") + "\n");
+    process.exit(1);
+  }
+
+  console.log("\n  " + C.b(m("Abre este link y aprueba el código:", "Open this link and approve the code:")));
+  console.log("  " + C.cyan(j.verification_url));
+  console.log("\n  " + m("Tu código:", "Your code:") + "  " + C.b(j.code) + "\n");
+
+  // Sin TTY (agente/CI): se delega al agente. `--wait` fuerza el polling.
+  if (!interactive() && !flags.wait) {
+    console.log(C.yellow("  ── PARA EL AGENTE ──  [E-INPUT-REQUIRED]"));
+    console.log("  " + m("Pídele al usuario que abra el link y apruebe el código; luego corre:", "Ask the user to open the link and approve the code; then run:"));
+    console.log("  " + C.cyan("npx kooni-bot login --wait") + "\n");
+    process.exit(0);
+  }
+
+  process.stdout.write(C.dim("  " + m("Esperando aprobación…", "Waiting for approval…")) + "\n");
+  const deadline = Date.now() + 15 * 60 * 1000;
+  while (Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 3000));
+    let pj = {};
+    try { const pr = await apiPost("/cli-device-poll", { code: j.code }); pj = await pr.json().catch(() => ({})); } catch { continue; }
+    if (pj.status === "approved" && pj.token) {
+      saveCreds({ token: pj.token, at: new Date().toISOString() });
+      console.log("  " + C.green("✓") + " " + m("CLI conectado a tu cuenta Kooni.", "CLI connected to your Kooni account.") + "\n");
+      return;
+    }
+    if (pj.status === "expired" || pj.status === "denied") {
+      console.log("  " + C.red("✗") + " " + m(`el código quedó ${pj.status}. Repite: npx kooni-bot login`, `code ${pj.status}. Retry: npx kooni-bot login`) + "\n");
+      process.exit(1);
+    }
+  }
+  console.log("  " + C.yellow("⚠") + " " + m("se agotó el tiempo del código.", "the code timed out.") + "\n");
+  process.exit(1);
+}
+
+// Registra la instalación en el backend y devuelve su token por instalación.
+// Sin sesión de CLI devuelve null (instalación anónima legacy).
+async function emitirLicencia(dir, answers, meta) {
+  const creds = loadCreds();
+  if (!creds.token) return null;
+  try {
+    const res = await apiPost("/licencia-emitir", {
+      uid: (meta && meta.uid) || answers.uid,
+      slug: answers.slug,
+      bot_name: answers.botName,
+      db_name: meta && meta.dbName,
+      kb_name: meta && meta.kbName,
+      provider: answers.provider,
+      platform: process.platform,
+      cli_version: CLI_VERSION,
+      bot_version: readPkgVersion(dir) || undefined,
+    }, creds.token);
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok || !j.inst_token) return null;
+    return j;
+  } catch { return null; }
+}
+
+// Pide al worker que re-sincronice su licencia (aplica plan, módulos, límites y
+// marca al instante, sin esperar el cron).
+async function syncWorkerLicense(dir, workerUrl) {
+  if (!workerUrl) return;
+  try {
+    const dv = readFileSync(join(dir, ".dev.vars"), "utf8");
+    const tok = (dv.match(/^KB_REINDEX_TOKEN=(.+)$/m) || [])[1];
+    if (!tok) return;
+    const res = await fetchTimeout(`${workerUrl.replace(/\/+$/, "")}/license/sync`, { method: "POST", headers: { "X-Reindex-Token": tok } }, 15000);
+    if (res.ok) console.log("  " + C.green("✓") + " " + m("licencia sincronizada con el panel", "license synced with the panel"));
+  } catch { /* best-effort */ }
+}
+
+// Token de instalación pendiente: lo llena `init` y lo guarda `deployBot` como
+// secret tras el primer deploy.
+let PENDING_INST_TOKEN = null;
 
 // ── comandos ─────────────────────────────────────────────────────────────────
 async function cmdInit(flags, rest) {
@@ -1547,6 +1683,18 @@ async function cmdInit(flags, rest) {
       dbName: meta && meta.dbName,
       kbName: meta && meta.kbName,
     });
+
+    // Registro en el backend de licencias (si hay sesión de CLI): guarda el
+    // token por instalación con el que el worker hablará con el panel.
+    if (!flags["no-login"]) {
+      const lic = await emitirLicencia(dir, answers, meta);
+      if (lic) {
+        PENDING_INST_TOKEN = lic.inst_token;
+        console.log("  " + C.green("✓") + " " + m("instalación registrada en tu cuenta Kooni", "install registered in your Kooni account"));
+      } else if (!loadCreds().token) {
+        console.log("  " + C.dim(m("(sin sesión) corre `npx kooni-bot login` para gestionar tu bot desde el panel", "(no session) run `npx kooni-bot login` to manage your bot from the panel")));
+      }
+    }
 
     // Check-in al panel de licencias ANTES del deploy: así TODAS las instalaciones
     // (gratis o pagas) quedan registradas aunque el deploy falle (ej. error 10063).
@@ -1662,6 +1810,8 @@ async function updateOne(dir, flags = {}) {
       const dv = readFileSync(join(dir, ".dev.vars"), "utf8");
       const tok = (dv.match(/^KB_REINDEX_TOKEN=(.+)$/m) || [])[1];
       if (tok) await fetchTimeout(`${st.worker_url}/kb/reindex`, { method: "POST", headers: { "X-Reindex-Token": tok } }, 15000);
+      // Re-sincroniza la licencia para aplicar plan/módulos/marca al instante.
+      await syncWorkerLicense(dir, st.worker_url);
     }
   } catch {}
 
@@ -1794,6 +1944,7 @@ function help() {
 ${C.cyan("kooni-bot")} — ${t().helpIntro}
 
   ${C.cyan("npx kooni-bot init [dir]")}    ${m("instala (descarga template + config + deploy)", "install (download template + config + deploy)")}
+  ${C.cyan("npx kooni-bot login")}         ${m("conecta el CLI a tu cuenta Kooni (abre el navegador)", "connect the CLI to your Kooni account (opens browser)")}
   ${C.cyan("npx kooni-bot deploy [dir]")}  ${m("provisiona Cloudflare y publica el worker", "provision Cloudflare and publish the worker")}
   ${C.cyan("npx kooni-bot update [dir]")}  ${m("actualiza sin perder tu configuración", "update without losing config")}
   ${C.cyan("npx kooni-bot update --all")}   ${m("actualiza TODAS las instalaciones registradas", "update ALL registered installs")}
@@ -1825,6 +1976,7 @@ if (IS_MAIN) {
     if (cmd === "help" || cmd === "--help" || cmd === "-h") return help();
     if (cmd === "version" || cmd === "--version" || cmd === "-v") { console.log("kooni-bot " + CLI_VERSION); return; }
     if (cmd === "init") return cmdInit(flags, rest);
+    if (cmd === "login") return cmdLogin(flags);
     if (cmd === "deploy") return cmdDeploy(flags, rest);
     if (cmd === "update") return cmdUpdate(flags, rest);
     if (cmd === "doctor") return cmdDoctor(flags, rest);

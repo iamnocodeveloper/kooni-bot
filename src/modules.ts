@@ -1,17 +1,19 @@
 /**
  * Catálogo de funciones "Extras" (Kooni+).
  *
- * MODELO (2026-09-07): **todas las funciones están disponibles en TODOS los
- * planes.** No hay paywall por feature — el free y el Pro tienen exactamente el
- * mismo set de capacidades. Lo único que separa a Pro del free son los
- * **límites de cantidad** (contactos, mensajes/mes, canales…) en `src/limits.ts`.
+ * MODELO: el free y el Pro tienen el MISMO set de capacidades por defecto; lo
+ * que separa a Pro del free son los **límites de cantidad** (`src/limits.ts`).
  *
- * Este array sigue siendo la fuente de verdad de las etiquetas/descripciones que
- * el panel muestra en el menú Extras; el dueño activa o apaga cada función con
- * su propio toggle. `unlockedModules()` / `isModuleUnlocked()` devuelven SIEMPRE
- * "todo desbloqueado" — quedaron como no-ops para no tocar los ~15 llamadores.
+ * Pero el super admin puede **activar funciones por licencia** desde el panel:
+ * escribe `settings.module_unlocks` (vía `syncLicenseState`) y `unlockedModules()`
+ * desbloquea exactamente esos ids. Sin `module_unlocks` seteado → todo abierto
+ * (retrocompat con las instalaciones que existían antes de este modelo).
+ *
+ * Este array es la fuente de verdad de las etiquetas/descripciones del panel.
  */
 import type { Env } from "./env";
+import { Db } from "./db/client";
+import { SettingsRepo, SETTING_KEYS } from "./db/settings";
 
 export interface PaidModule {
   id: string;
@@ -156,19 +158,36 @@ export const PAID_MODULES: PaidModule[] = [
 const ALL_MODULE_IDS: readonly string[] = PAID_MODULES.map((m) => m.id);
 
 /**
- * Módulos desbloqueados en esta instalación. MODELO ACTUAL: **todos, siempre**
- * — no hay paywall por feature; lo que separa free de Pro son los límites de
- * cantidad (`src/limits.ts`). Se mantiene `async` y la firma para no tocar los
- * llamadores. `_env`/`_settings` quedan sin usar a propósito.
+ * Módulos desbloqueados en esta instalación.
+ *
+ * - `settings.module_unlocks` AUSENTE o vacío → **TODOS** (retrocompat: las
+ *   instalaciones viejas, y el modo "todo incluido" que rigió hasta 2026-09-07).
+ * - `module_unlocks` PRESENTE (aunque sea `[]`) → **exactamente esos ids**. Es lo
+ *   que escribe el backend de licencias (`syncLicenseState`) cuando el super
+ *   admin activa funciones por licencia.
+ * - Fail-open: si el valor no se puede leer/parsear, se devuelven todos.
  */
 export async function unlockedModules(
-  _env: Env,
-  _settingsSnapshot?: Record<string, string>,
+  env: Env,
+  settingsSnapshot?: Record<string, string>,
 ): Promise<Set<string>> {
+  try {
+    const snapshot =
+      settingsSnapshot ??
+      ((await new SettingsRepo(new Db(env.DB)).all()) as Record<string, string>);
+    const raw = snapshot[SETTING_KEYS.moduleUnlocks];
+    if (raw == null || String(raw).trim() === "") return new Set(ALL_MODULE_IDS);
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      return new Set(parsed.map((x) => String(x)).filter((id) => ALL_MODULE_IDS.includes(id)));
+    }
+  } catch {
+    // sin D1 o valor inválido → todo desbloqueado (fail-open)
+  }
   return new Set(ALL_MODULE_IDS);
 }
 
-/** ¿Este módulo está desbloqueado? Siempre sí (ver `unlockedModules`). */
-export async function isModuleUnlocked(_env: Env, _id: string): Promise<boolean> {
-  return true;
+/** ¿Este módulo está desbloqueado? (ver `unlockedModules`). */
+export async function isModuleUnlocked(env: Env, id: string): Promise<boolean> {
+  return (await unlockedModules(env)).has(id);
 }

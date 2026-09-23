@@ -1,5 +1,6 @@
 import type { Env } from "./env";
 import { Db } from "./db/client";
+import { SettingsRepo, SETTING_KEYS } from "./db/settings";
 
 /**
  * Límites de uso por tier (free con límites, Pro sin límites).
@@ -58,10 +59,31 @@ export async function isProLicense(env: Env): Promise<boolean> {
   return false;
 }
 
-/** Devuelve los límites efectivos según el tier. */
+/**
+ * Devuelve los límites efectivos. Base = PRO/FREE según la licencia; si el
+ * backend de licencias dejó un overlay (`license_overlay.limits`, lo pone el
+ * super admin por licencia), se aplica encima (null = sin límite). Fail-open a
+ * la base si no hay overlay o no se puede leer.
+ */
 export async function getLimits(env: Env): Promise<Limits> {
   const pro = await isProLicense(env);
-  return pro ? PRO_LIMITS : FREE_LIMITS;
+  const base = pro ? PRO_LIMITS : FREE_LIMITS;
+  try {
+    const raw = await new SettingsRepo(new Db(env.DB)).get(SETTING_KEYS.licenseOverlay);
+    if (raw) {
+      const ov = JSON.parse(raw)?.limits;
+      if (ov && typeof ov === "object") {
+        const out: Limits = { ...base };
+        for (const k of Object.keys(base) as (keyof Limits)[]) {
+          if (k in ov) out[k] = ov[k] === null || ov[k] === undefined ? null : Number(ov[k]);
+        }
+        return out;
+      }
+    }
+  } catch {
+    /* sin overlay → base */
+  }
+  return base;
 }
 
 // ── Chequeos de uso (fail-open) ──────────────────────────────────────────────

@@ -41,7 +41,14 @@ export interface Env {
   // definida, el cron nocturno envía métricas agregadas + costos de IA (usage.ts).
   USAGE_PUSH_URL?: string;
   // Token compartido de registro/uso (X-Kooni-Token) — estampado por el CLI.
+  // Legacy: las instalaciones nuevas usan KOONI_INSTALL_TOKEN (por instalación).
   KOONI_REGISTER_TOKEN?: string;
+  // Base de las edge functions del backend de licencias (InsForge). El CLI la
+  // estampa en wrangler.toml. Sin ella, el sync de licencia queda apagado.
+  KOONI_API_URL?: string;
+  // Token POR INSTALACIÓN (secret) con el que este bot se identifica ante el
+  // backend (registrar-uso / estado-licencia). Reemplaza al token compartido.
+  KOONI_INSTALL_TOKEN?: string;
   // Marca blanca del panel /admin (para revendedores): colores, nombre y logo.
   BRAND_NAME?: string;
   BRAND_LOGO_URL?: string;

@@ -1,14 +1,26 @@
 {
   "name": "kooni-bot",
-  "version": "0.4.2",
+  "version": "0.5.0",
   "description": "Kooni — instala tu asistente de IA multicanal (WhatsApp, Instagram, Messenger, Telegram) en TU Cloudflare, en un comando.",
   "license": "MIT",
   "type": "module",
+  "author": "Horizontes IA <joeldavidar@gmail.com>",
+  "homepage": "https://github.com/iamnocodeveloper/kooni-bot#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/iamnocodeveloper/kooni-bot.git"
+  },
+  "bugs": {
+    "url": "https://github.com/iamnocodeveloper/kooni-bot/issues"
+  },
   "bin": {
     "kooni-bot": "bin/kooni.js"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "keywords": [
     "chatbot",
@@ -30,6 +42,8 @@
     "kooni"
   ],
   "files": [
-    "bin"
+    "bin",
+    "README.md",
+    "LICENSE"
   ]
 }

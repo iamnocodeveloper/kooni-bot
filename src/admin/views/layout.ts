@@ -11,6 +11,7 @@
 import type { Env } from "../../env";
 import { BOT_VERSION } from "../../version";
 import { isProUnlocked, PRO_ONLY_TABS, isTabAllowed } from "../../config";
+import { readOverlay } from "../../licenseSync";
 import { getNiche } from "../../niches";
 import { pwaHeadTags } from "../pwa";
 import type { NichePack } from "../../niches";
@@ -406,17 +407,20 @@ const K_MARK = `<svg width="18" height="18" viewBox="0 0 32 32" fill="none" aria
 // defina vars BRAND_* (ver wrangler.toml y env.ts). Colores = CSS custom
 // properties con override; nombre/logo van en la sidebar.
 interface Brand { name: string; logo: string; primary: string; primarySoft: string; accent2: string; bg: string; panel: string; }
-function resolveBrand(env?: Env): Brand {
-  // Sin BRAND_* → strings vacíos: el panel usa la identidad Kooni de GLOBAL_STYLE
-  // (morado/fucsia, claro + oscuro). Solo un revendedor con marca propia los llena.
+function resolveBrand(env?: Env, overlayBrand?: Record<string, string>): Brand {
+  // Precedencia: marca del backend (overlay que pone el super admin) > vars
+  // BRAND_* de wrangler.toml > identidad Kooni de GLOBAL_STYLE. Sin nada, los
+  // colores van vacíos y el panel usa la identidad Kooni por defecto.
+  const o = overlayBrand ?? {};
+  const pick = (k: string, envVal?: string) => (o[k] && String(o[k]).trim()) || envVal || "";
   return {
-    name: env?.BRAND_NAME || "Kooni",
-    logo: env?.BRAND_LOGO_URL || "",
-    primary: env?.BRAND_PRIMARY || "",
-    primarySoft: env?.BRAND_PRIMARY_SOFT || "",
-    accent2: env?.BRAND_ACCENT2 || "",
-    bg: env?.BRAND_BG || "",
-    panel: env?.BRAND_PANEL || "",
+    name: pick("name", env?.BRAND_NAME) || "Kooni",
+    logo: pick("logo_url", env?.BRAND_LOGO_URL),
+    primary: pick("primary", env?.BRAND_PRIMARY),
+    primarySoft: o["primary_soft"] || env?.BRAND_PRIMARY_SOFT || "",
+    accent2: pick("accent2", env?.BRAND_ACCENT2),
+    bg: pick("bg", env?.BRAND_BG),
+    panel: pick("panel", env?.BRAND_PANEL),
   };
 }
 function brandOverrides(b: Brand): string {
@@ -504,6 +508,8 @@ export async function layout(opts: { title: string; activeTab: string; body: str
   const niche = opts.env ? getNiche(opts.env) : null;
   const section = NAV.find((s) => s.items.some((i) => i.id === opts.activeTab)) ?? NAV[0];
   const item = applyNiche(section.items.find((i) => i.id === opts.activeTab) ?? section.items[0], niche);
+  // Marca blanca: la del backend (overlay) manda sobre las vars BRAND_*.
+  const brand = opts.env ? resolveBrand(opts.env, (await readOverlay(opts.env))?.brand) : resolveBrand();
 
   return `<!DOCTYPE html>
 <html lang="es">
@@ -513,12 +519,12 @@ export async function layout(opts: { title: string; activeTab: string; body: str
   <title>${opts.title}</title>
   ${HEAD_ASSETS}
   ${GLOBAL_STYLE}
-  ${opts.env ? `<style>${brandOverrides(resolveBrand(opts.env))}</style>` : ""}
+  ${opts.env ? `<style>${brandOverrides(brand)}</style>` : ""}
   ${opts.env ? pwaHeadTags(opts.env) : ""}
 </head>
 <body class="scanlines">
   <div class="shell">
-    ${sidebar(opts.activeTab, lockedSync, niche, tierLabel, resolveBrand(opts.env))}
+    ${sidebar(opts.activeTab, lockedSync, niche, tierLabel, brand)}
     <div class="nav-backdrop" data-nav-close></div>
     <div style="display:flex;flex-direction:column;min-width:0">
       <header style="position:sticky;top:0;z-index:30;background:var(--panel);border-bottom:1px solid var(--line);padding:14px 26px;display:flex;align-items:center;gap:14px">

@@ -1361,6 +1361,16 @@ adminApp.get("/conexiones/mercadolibre/oauth", async (c) => {
 // Licencia: activa Pro pegando un código KOONI-PRO-... (validación local HMAC).
 adminApp.get("/licencia", async (c) => c.html(await renderLicencia(c.env)));
 
+// Fuerza un sync inmediato del estado de licencia con el backend (super admin).
+adminApp.post("/licencia/sync", async (c) => {
+  const { syncLicenseState } = await import("../licenseSync");
+  const r = await syncLicenseState(c.env, { force: true });
+  const msg = r.ok
+    ? `✓ Sincronizado con el panel (${r.detail ?? "ok"}).`
+    : `No pude sincronizar: ${r.detail ?? "error"}. Se conserva el estado anterior.`;
+  return c.html(await renderLicencia(c.env, msg, !r.ok));
+});
+
 // Menú Extras (Kooni+): cuadrícula de funciones de pago con toggles on/off.
 adminApp.get("/extras", async (c) => {
   const saved = c.req.query("saved") === "1";

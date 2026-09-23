@@ -535,6 +535,20 @@ app.post("/usage/push", async (c) => {
   return c.json({ ok: r.ok, detail: r.detail }, r.ok ? 200 : 500);
 });
 
+// Trigger manual del sync de licencia (mismo token que /kb/reindex): el CLI lo
+// llama tras un deploy para aplicar plan/módulos/marca al instante, sin esperar
+// el cron nocturno.
+app.post("/license/sync", async (c) => {
+  const provided = c.req.header("X-Reindex-Token") ?? "";
+  const expected = c.env.KB_REINDEX_TOKEN ?? "";
+  if (!expected || !tokensMatch(provided, expected)) {
+    return c.json({ ok: false, error: "unauthorized" }, 401);
+  }
+  const { syncLicenseState } = await import("./licenseSync");
+  const r = await syncLicenseState(c.env, { force: true });
+  return c.json({ ok: r.ok, detail: r.detail }, r.ok ? 200 : 500);
+});
+
 export default {
   // Bind so Hono keeps its `this` when invoked as `worker.fetch(req, env, ctx)`
   // (both by the Cloudflare runtime and by tests). Passing `app.fetch` unbound
@@ -542,6 +556,16 @@ export default {
   fetch: (request: Request, env: Env, ctx: ExecutionContext) =>
     app.fetch(request, env, ctx),
   async scheduled(event: ScheduledController, env: Env): Promise<void> {
+    // Estado de licencia: plan, módulos activos, límites y marca blanca desde el
+    // backend (super admin). Corre PRIMERO para que los gates de abajo usen el
+    // estado fresco. Fail-open: si el backend no responde, conserva lo último.
+    try {
+      const { syncLicenseState } = await import("./licenseSync");
+      await syncLicenseState(env);
+    } catch (e) {
+      console.warn("[license] sync:", e);
+    }
+
     // Menú Extras (Kooni+): el Cazador de ventas (follow-up automático a leads
     // que se enfriaron) solo corre si el dueño lo encendió Y su módulo está
     // desbloqueado. Follow-up bot: UN mensaje breve de seguimiento a leads que

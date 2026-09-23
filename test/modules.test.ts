@@ -1,50 +1,58 @@
 import { describe, it, expect } from "vitest";
 import { unlockedModules, isModuleUnlocked, PAID_MODULES } from "../src/modules";
-import { generateLicenseV2 } from "../src/license";
 import type { Env } from "../src/env";
 
-const { generateKeyPairSync } = await import("node:crypto");
-const { privateKey, publicKey } = generateKeyPairSync("ed25519");
-const PRIV = privateKey.export({ format: "der", type: "pkcs8" }).toString("base64");
-const PUB = publicKey.export({ format: "der", type: "spki" }).toString("base64");
-
 function env(extra: Partial<Env> = {}): Env {
+  // DB vacío a propósito: sin D1, `unlockedModules` cae al modo legacy
+  // (todo desbloqueado) — el comportamiento fail-open.
   return {
     DB: {} as never,
-    LICENSE_PUBLIC_KEY: PUB,
     BOT_INSTANCE_ID: "abc123",
     ...extra,
   } as unknown as Env;
 }
 
-// MODELO (2026-09-07): no hay paywall por feature. `unlockedModules` /
-// `isModuleUnlocked` devuelven SIEMPRE "todo desbloqueado", sin importar
-// licencia ni settings. Lo que separa free de Pro son los límites de cantidad
-// (ver test/limits.test.ts).
-describe("unlockedModules — todo desbloqueado siempre", () => {
-  it("free sin licencia → TODOS los módulos", async () => {
+// MODELO: sin `module_unlocks` seteado → TODO desbloqueado (retrocompat con las
+// instalaciones viejas). Con `module_unlocks` presente → exactamente esos ids,
+// que es lo que escribe el backend de licencias desde el super admin.
+describe("unlockedModules — gating por licencia", () => {
+  it("sin module_unlocks (legacy) → TODOS los módulos", async () => {
     const mods = await unlockedModules(env());
     expect(mods.size).toBe(PAID_MODULES.length);
   });
 
-  it("con licencia legada → TODOS los módulos", async () => {
-    const code = generateLicenseV2(PRIV, { kind: "lifetime" });
-    const mods = await unlockedModules(env({ pro_license: code } as Partial<Env>));
+  it("con module_unlocks presente → exactamente esos ids", async () => {
+    const mods = await unlockedModules(env(), { module_unlocks: JSON.stringify(["cazador", "resenas"]) });
+    expect([...mods].sort()).toEqual(["cazador", "resenas"]);
+  });
+
+  it("array vacío → ninguno desbloqueado", async () => {
+    const mods = await unlockedModules(env(), { module_unlocks: "[]" });
+    expect(mods.size).toBe(0);
+  });
+
+  it("los ids desconocidos se filtran", async () => {
+    const mods = await unlockedModules(env(), { module_unlocks: JSON.stringify(["cazador", "nada_que_ver"]) });
+    expect([...mods]).toEqual(["cazador"]);
+  });
+
+  it("JSON inválido → todos (fail-open)", async () => {
+    const mods = await unlockedModules(env(), { module_unlocks: "{no json" });
     expect(mods.size).toBe(PAID_MODULES.length);
   });
 
-  it("cada id del catálogo está presente", async () => {
+  it("cada id del catálogo está presente en el modo legacy", async () => {
     const mods = await unlockedModules(env());
     for (const m of PAID_MODULES) expect(mods.has(m.id)).toBe(true);
   });
 });
 
-describe("isModuleUnlocked — siempre true", () => {
-  it("módulo conocido → true", async () => {
+describe("isModuleUnlocked", () => {
+  it("módulo conocido → true (legacy: todo abierto)", async () => {
     expect(await isModuleUnlocked(env(), "nightly_report")).toBe(true);
   });
 
-  it("módulo desconocido → true", async () => {
-    expect(await isModuleUnlocked(env(), "nada_que_ver")).toBe(true);
+  it("módulo desconocido → false", async () => {
+    expect(await isModuleUnlocked(env(), "nada_que_ver")).toBe(false);
   });
 });

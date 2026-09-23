@@ -50,6 +50,10 @@ export const SETTING_KEYS = {
   analysisLlmModel: "analysis_llm_model", // modelo concreto; vacío = hereda
   analysisLlmApiBaseUrl: "analysis_llm_api_base_url", // gateway propio; vacío = hereda
   proLicense: "pro_license", // código KOONI-PRO-... pegado en el panel (quita límites)
+  // Overlay del backend de licencias: JSON { plan, estado, limits, brand,
+  // syncedAt }. Lo escribe `syncLicenseState` desde el super admin. Manda sobre
+  // los límites por defecto y sobre BRAND_* de wrangler.toml.
+  licenseOverlay: "license_overlay",
   // Botones y multimedia (Fase A): activable desde Configuración.
   menuButtons: "menu_buttons", // JSON: botones del menú que se envían al saludo
   resourceLibrary: "resource_library", // JSON: biblioteca de recursos (imagen/audio/botones)
@@ -190,6 +194,7 @@ export const SETTING_LABELS: Record<string, string> = {
   [SETTING_KEYS.analysisLlmModel]: "Modelo de análisis",
   [SETTING_KEYS.analysisLlmApiBaseUrl]: "URL base del modelo de análisis",
   [SETTING_KEYS.proLicense]: "Código de licencia Pro",
+  [SETTING_KEYS.licenseOverlay]: "Estado de licencia (sincronizado)",
   [SETTING_KEYS.menuButtons]: "Botones del menú",
   [SETTING_KEYS.resourceLibrary]: "Biblioteca de recursos",
   [SETTING_KEYS.allowMultimedia]: "Permitir multimedia en respuestas",

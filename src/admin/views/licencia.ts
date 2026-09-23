@@ -5,6 +5,7 @@ import { Db } from "../../db/client";
 import { SettingsRepo, SETTING_KEYS } from "../../db/settings";
 import { inspectLicense } from "../../license";
 import { FREE_LIMITS } from "../../limits";
+import { readOverlay } from "../../licenseSync";
 
 const fecha = (ms: number) => new Date(ms).toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" });
 
@@ -18,6 +19,10 @@ export async function renderLicencia(env: Env, msg?: string, isError?: boolean):
   const ins = code ? inspectLicense(code, env) : null;
   const payload = ins && (ins.state === "active" || ins.state === "grace") ? ins.payload : null;
   const isPro = payload !== null;
+  // Estado que dejó el backend de licencias (super admin): plan, módulos,
+  // límites y marca. Si existe, es la fuente en vivo; el código de abajo es el
+  // respaldo offline.
+  const overlay = await readOverlay(env);
 
   const banner = msg
     ? `<div style="border:1px solid ${isError ? "var(--bad)" : "var(--ok)"};color:${isError ? "var(--bad)" : "var(--ok)"};padding:10px 14px;font-size:12px;background:${isError ? "rgba(248,113,113,.06)" : "rgba(52,211,153,.06)"}">${esc(msg)}</div>`
@@ -84,6 +89,20 @@ export async function renderLicencia(env: Env, msg?: string, isError?: boolean):
       </div>
       ${banner}
       ${statusCard}
+      ${
+        overlay
+          ? `<div class="bg-panel border" style="padding:16px 20px;display:flex;flex-direction:column;gap:10px">
+               <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">
+                 <span style="font-size:10px;letter-spacing:.14em;color:var(--accent);border:1px solid var(--accent);background:var(--accent-soft);padding:3px 10px;font-weight:700">SINCRONIZADO CON EL PANEL</span>
+                 <span class="text-dim text-[11px] font-mono">plan ${esc(overlay.plan)} · ${esc(overlay.estado)} · ${(overlay.modules ?? []).length} módulos</span>
+               </div>
+               <p class="text-muted text-[12px]" style="margin:0">Última sincronización: ${overlay.syncedAt ? esc(new Date(overlay.syncedAt).toLocaleString("es-MX")) : "—"}. El super admin controla plan, módulos, límites y marca; se aplica solo en el próximo sync.</p>
+               <form method="POST" action="/admin/licencia/sync" style="margin:0">
+                 <button type="submit" style="background:none;border:1px solid var(--line);color:var(--cream);padding:9px 14px;font-size:12.5px;cursor:pointer">Sincronizar ahora</button>
+               </form>
+             </div>`
+          : ""
+      }
       <div class="bg-panel border" style="padding:18px 20px;display:flex;flex-direction:column;gap:14px">
         <h3 class="font-display font-semibold text-[13.5px] text-cream">${isPro ? "Tu código activo" : "Activar Pro con un código"}</h3>
         ${code ? `<div class="font-mono text-[11px]" style="border:1px solid var(--line);background:var(--bg);padding:10px 12px;color:var(--accent2);word-break:break-all">${esc(code)}</div>` : ""}
