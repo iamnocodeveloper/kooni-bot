@@ -21,6 +21,7 @@ export const CHANNEL_LABELS: Record<string, string> = {
   manychat: "ManyChat",
   zernio: "Zernio",
   mercadolibre: "MercadoLibre",
+  webchat: "Sitio web",
 };
 
 export function channelLabel(channel: string | null | undefined): string {
@@ -70,6 +71,8 @@ export async function configuredChannels(env: Env): Promise<ConfiguredChannel[]>
   if (waha.base) {
     out.push({ id: "waha", label: "WhatsApp (WAHA)", detail: "self-hosted" });
   }
+  // El chat del sitio web está SIEMPRE disponible (no necesita credenciales).
+  out.push({ id: "webchat", label: "Sitio web", detail: "chat embebible" });
   // Nicho taxis: solo WhatsApp (oficial + WAHA) — igual que en Conexiones.
   if (getNiche(env).hooks?.taxiEngine) {
     return out.filter((ch) => ch.id === "whatsapp" || ch.id === "waha");

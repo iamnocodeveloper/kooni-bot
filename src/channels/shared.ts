@@ -1,4 +1,4 @@
-export type ChannelId = "manychat" | "telegram" | "twilio" | "messenger" | "instagram" | "whatsapp" | "zernio" | "waha" | "mercadolibre";
+export type ChannelId = "manychat" | "telegram" | "twilio" | "messenger" | "instagram" | "whatsapp" | "zernio" | "waha" | "mercadolibre" | "webchat";
 
 export interface IncomingMessage {
   channel: ChannelId;
@@ -62,6 +62,7 @@ export const CHANNEL_CAPABILITIES: Record<ChannelId, { buttons: boolean; image: 
   // MercadoLibre: preguntas y mensajería post-venta son texto plano. Sin
   // botones ni adjuntos por esta vía.
   mercadolibre: { buttons: false, image: false, audio: false },
+  webchat: { buttons: false, image: false, audio: false },
 };
 
 export interface ChannelAdapter {

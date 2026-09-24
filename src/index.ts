@@ -160,6 +160,68 @@ app.post("/webhooks/waha", async (c) => {
   }
 });
 
+// ── Chat del SITIO WEB (embebible) ────────────────────────────────────────────
+// El visitante escribe en el widget (GET /chat.js) → POST acá → el agente guarda
+// su respuesta, y el widget la levanta por polling. Sin tokens ni verificación.
+const WEBCHAT_CORS: Record<string, string> = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+};
+
+app.options("/webhooks/webchat", (c) => c.body(null, 204, WEBCHAT_CORS));
+
+app.post("/webhooks/webchat", async (c) => {
+  try {
+    const { webchatAdapter } = await import("./channels/webchat");
+    const msg = await webchatAdapter.parseIncoming(c.req.raw, c.env);
+    const doId = c.env.AGENT.idFromName(`${msg.channel}:${msg.channelUserId}`);
+    await c.env.AGENT.get(doId).ingest(msg).catch((e) => console.error("webchat ingest:", e));
+    return c.json({ ok: true }, 200, WEBCHAT_CORS);
+  } catch (e) {
+    return c.json({ ok: false, error: String((e as Error)?.message || e) }, 400, WEBCHAT_CORS);
+  }
+});
+
+app.get("/webhooks/webchat/:session/messages", async (c) => {
+  const session = c.req.param("session");
+  const since = Number(c.req.query("since") ?? 0) || 0;
+  const { Db } = await import("./db/client");
+  const rows = await new Db(c.env.DB)
+    .all<{ role: string; content: string; created_at: number }>(
+      `SELECT m.role, m.content, m.created_at FROM messages m
+       JOIN conversations c ON m.conversation_id = c.id
+       WHERE c.channel = 'webchat' AND c.channel_user_id = ? AND m.created_at > ?
+       ORDER BY m.created_at ASC LIMIT 20`,
+      [session, since],
+    )
+    .catch(() => [] as { role: string; content: string; created_at: number }[]);
+  return c.json({ messages: rows }, 200, WEBCHAT_CORS);
+});
+
+// Widget embebible: <script src="<worker>/chat.js" async></script>
+app.get("/chat.js", (c) => {
+  const base = (c.env.DASHBOARD_BASE_URL || new URL(c.req.url).origin).replace(/\/+$/, "");
+  const js = `(function(){
+  if(document.getElementById('kooni-chat-launch'))return;
+  var base=${JSON.stringify(base)};
+  var session=localStorage.getItem('kooni-chat-session');
+  if(!session){session='w'+Math.random().toString(36).slice(2)+Date.now().toString(36);localStorage.setItem('kooni-chat-session',session);}
+  var open=false,since=0,poll=null,built=false;
+  var launcher=document.createElement('button');launcher.id='kooni-chat-launch';launcher.textContent='\\ud83d\\udcac';
+  launcher.style.cssText='position:fixed;right:18px;bottom:18px;width:54px;height:54px;border-radius:50%;border:none;background:#111;color:#fff;font-size:24px;cursor:pointer;z-index:2147483000;box-shadow:0 6px 20px rgba(0,0,0,.25)';
+  var panel=document.createElement('div');
+  panel.style.cssText='position:fixed;right:18px;bottom:84px;width:320px;max-width:calc(100vw - 36px);height:420px;max-height:calc(100vh - 120px);background:#fff;color:#111;border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.28);display:none;flex-direction:column;overflow:hidden;z-index:2147483000;font:14px/1.4 system-ui,sans-serif';
+  panel.innerHTML='<div style="padding:12px 14px;background:#111;color:#fff;font-weight:600">Chate\\u00e1 con nosotros</div><div id="kooni-chat-log" style="flex:1;overflow:auto;padding:12px;display:flex;flex-direction:column;gap:8px"></div><form id="kooni-chat-form" style="display:flex;border-top:1px solid #eee"><input id="kooni-chat-input" placeholder="Escrib\\u00ed tu mensaje\\u2026" autocomplete="off" style="flex:1;border:none;padding:12px;outline:none"><button style="border:none;background:#111;color:#fff;padding:0 16px;cursor:pointer">\\u2794</button></form>';
+  document.body.appendChild(launcher);document.body.appendChild(panel);
+  function log(role,text){var l=document.getElementById('kooni-chat-log');var b=document.createElement('div');b.textContent=text;b.style.cssText='max-width:80%;padding:8px 11px;border-radius:10px;white-space:pre-wrap;'+(role==='user'?'align-self:flex-end;background:#111;color:#fff':'align-self:flex-start;background:#f2f2f2;color:#111');l.appendChild(b);l.scrollTop=l.scrollHeight;}
+  function fetchNew(){fetch(base+'/webhooks/webchat/'+encodeURIComponent(session)+'/messages?since='+since).then(function(r){return r.json();}).then(function(j){(j.messages||[]).forEach(function(m){if(m.created_at>since)since=m.created_at;if(m.role==='assistant')log('bot',m.content);});}).catch(function(){});}
+  launcher.onclick=function(){open=!open;panel.style.display=open?'flex':'none';if(open){if(!built){built=true;log('bot','\\u00a1Hola! \\u00bfEn qu\\u00e9 te puedo ayudar?');}fetchNew();poll=setInterval(fetchNew,3000);}else if(poll){clearInterval(poll);poll=null;}};
+  document.getElementById('kooni-chat-form').onsubmit=function(e){e.preventDefault();var i=document.getElementById('kooni-chat-input');var t=i.value.trim();if(!t)return;i.value='';log('user',t);fetch(base+'/webhooks/webchat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session:session,text:t})}).catch(function(){});setTimeout(fetchNew,2000);};
+})();`;
+  return c.body(js, 200, { "Content-Type": "application/javascript; charset=utf-8", "Access-Control-Allow-Origin": "*" });
+});
+
 // ── Webhooks de voz (cobros): Vapi / Retell ────────────────────────────────
 // Por ahora SOLO ack: dejan el endpoint listo para pegar en el dashboard de
 // cada plataforma (es la "Server URL" / "Webhook URL" que muestra Conexiones).
