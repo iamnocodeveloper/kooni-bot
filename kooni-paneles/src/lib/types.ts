@@ -63,6 +63,8 @@ export interface Modulo {
   tab: string | null;
   orden: number;
   activo: boolean;
+  incluida: boolean;
+  requiere: string | null;
 }
 
 export interface CliToken {
