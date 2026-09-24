@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { insforge } from "../lib/insforge";
 import type { Licencia, Modulo, Profile } from "../lib/types";
+import { logAdmin } from "../lib/audit";
 
 const LIMIT_FIELDS: [string, string][] = [
   ["maxContacts", "Contactos"],
@@ -126,6 +127,7 @@ export default function AdminLicencias() {
       }).eq("id", form.id);
       if (error) throw error;
 
+      await logAdmin("licencia.guardar", `${form.plan} · ${form.modules.length} módulos · ${form.estado}`);
       setFlash("Licencia guardada. El bot la aplicará en su próximo sync.");
       setForm(null);
       await load();

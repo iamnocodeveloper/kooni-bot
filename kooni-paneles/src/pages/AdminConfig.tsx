@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { insforge } from "../lib/insforge";
 import type { ConfigItem } from "../lib/types";
+import { logAdmin } from "../lib/audit";
 
 const LARGOS = new Set(["terminos", "privacidad", "aviso_upgrade"]);
 
@@ -33,7 +34,10 @@ export default function AdminConfig() {
     setFlash("");
     const { error } = await insforge.database.from("config_plataforma").update({ valor: r.valor ?? "" }).eq("clave", r.clave);
     if (error) setErr((error as any).message);
-    else setFlash("Guardado ✓");
+    else {
+      await logAdmin("config.guardar", r.clave);
+      setFlash("Guardado ✓");
+    }
     setBusy("");
   }
 

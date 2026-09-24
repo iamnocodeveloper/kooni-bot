@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { insforge } from "../lib/insforge";
 import type { Modulo, Plan } from "../lib/types";
+import { logAdmin } from "../lib/audit";
 
 interface Form {
   id: string;
@@ -97,6 +98,7 @@ export default function AdminPlanes() {
         ? await insforge.database.from("planes").insert([payload])
         : await insforge.database.from("planes").update(payload).eq("id", form.id);
       if (error) throw error;
+      await logAdmin(form.nuevo ? "plan.crear" : "plan.editar", payload.id);
       setForm(null);
       await load();
     } catch (e: any) {
