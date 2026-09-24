@@ -179,6 +179,16 @@ function channelStatuses(
           : undefined,
       howTo: "Pega la URL de tu servidor WAHA y su API key (X-Api-Key). El bot crea/arranca la sesión y registra el webhook solo — después escaneas el QR aquí mismo con tu WhatsApp.",
     },
+    {
+      id: "webchat",
+      name: "Sitio web (chat propio)",
+      icon: "globe",
+      desc: "El chat en tu propia página. Sin tokens ni verificación — el más fácil de todos.",
+      ok: true,
+      missing: [],
+      webhookPath: "/webhooks/webchat",
+      howTo: 'Pegá esta línea en tu web, antes de </body>: <script src="<tu-worker>/chat.js" async></script> — ya queda una burbuja de chat que contesta tu bot.',
+    },
   ];
 }
 
