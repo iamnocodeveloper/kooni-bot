@@ -80,7 +80,7 @@ function channelStatuses(
     !has(waha.apiKey) && "API key de WAHA",
   ].filter(Boolean) as string[];
 
-  return [
+  const channels: ChannelStatus[] = [
     {
       id: "telegram",
       name: "Telegram",
@@ -190,6 +190,9 @@ function channelStatuses(
       howTo: 'Pegá esta línea en tu web, antes de </body>: <script src="<tu-worker>/chat.js" async></script> — ya queda una burbuja de chat que contesta tu bot.',
     },
   ];
+  // WAHA NO es parte de las instalaciones normales: la card solo se muestra si
+  // ESA instalación lo configuró (WAHA_API_URL). Sin él, el canal está apagado.
+  return channels.filter((ch) => ch.id !== "waha" || has(waha.base));
 }
 
 function esc(s: string): string {
