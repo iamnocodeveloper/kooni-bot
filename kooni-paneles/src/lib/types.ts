@@ -179,3 +179,13 @@ export interface Comando {
   activo: boolean;
   orden: number;
 }
+
+export interface Integracion {
+  id: string;
+  tipo: "canal" | "app";
+  nombre: string;
+  proveedor: string | null;
+  requiere: string | null;
+  activo: boolean;
+  orden: number;
+}
