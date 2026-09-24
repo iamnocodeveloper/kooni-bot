@@ -7,6 +7,7 @@ import Cuenta from "./pages/Cuenta";
 import Vinculacion from "./pages/Vinculacion";
 import Novedades from "./pages/Novedades";
 import Configuracion from "./pages/Configuracion";
+import PlanPage from "./pages/Plan";
 import Invitacion from "./pages/Invitacion";
 import Cli from "./pages/Cli";
 import Sesiones from "./pages/Sesiones";
@@ -17,6 +18,7 @@ import AdminModulos from "./pages/AdminModulos";
 import AdminClientes from "./pages/AdminClientes";
 import AdminNovedades from "./pages/AdminNovedades";
 import AdminPlanes from "./pages/AdminPlanes";
+import AdminFacturacion from "./pages/AdminFacturacion";
 
 function Spinner() {
   return <div className="flex h-full items-center justify-center text-muted">Cargando…</div>;
@@ -61,6 +63,7 @@ export default function App() {
                 <Route path="clientes" element={<AdminClientes />} />
                 <Route path="novedades" element={<AdminNovedades />} />
                 <Route path="planes" element={<AdminPlanes />} />
+                <Route path="facturacion" element={<AdminFacturacion />} />
                 <Route path="*" element={<Navigate to="/admin" replace />} />
               </Routes>
             </AdminLayout>
@@ -81,6 +84,7 @@ export default function App() {
                 <Route path="vinculacion" element={<Vinculacion />} />
                 <Route path="novedades" element={<Novedades />} />
                 <Route path="configuracion" element={<Configuracion />} />
+                <Route path="plan" element={<PlanPage />} />
                 <Route path="cli" element={<Cli />} />
                 <Route path="sesiones" element={<Sesiones />} />
                 <Route path="*" element={<Navigate to="/" replace />} />

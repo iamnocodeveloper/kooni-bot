@@ -114,3 +114,24 @@ export interface Plan {
   orden: number;
   activo: boolean;
 }
+
+export interface Pago {
+  id: string;
+  user_id: string | null;
+  licencia_id: string | null;
+  provider: string;
+  amount: number | null;
+  currency: string;
+  status: "pendiente" | "pagado" | "fallido" | "reembolsado";
+  external_id: string | null;
+  plan_id: string | null;
+  checkout_ref: string | null;
+  created_at: string;
+}
+
+export interface ProveedorPago {
+  id: string;
+  nombre: string;
+  listo: boolean;
+  faltan: string[];
+}
