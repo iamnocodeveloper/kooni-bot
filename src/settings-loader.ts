@@ -79,7 +79,7 @@ export async function loadLlmOverrides(env: Env): Promise<LlmOverrides> {
   }
 }
 
-const PROVIDER_IDS = new Set(["anthropic", "openai", "xai", "minimax"]);
+const PROVIDER_IDS = new Set(["anthropic", "openai", "xai", "minimax", "google"]);
 
 /** Normaliza el id de proveedor que escribe el panel ("aisa" es OpenAI). */
 function normProviderId(value: string | undefined): string | undefined {
@@ -94,6 +94,7 @@ function providerFromModelId(modelId: string | undefined): string | undefined {
   if (!modelId) return undefined;
   if (/^grok/i.test(modelId)) return "xai";
   if (/minimax|abab/i.test(modelId)) return "minimax";
+  if (/gemini/i.test(modelId)) return "google";
   if (/^(gpt|o\d)/i.test(modelId)) return "openai";
   return "anthropic";
 }

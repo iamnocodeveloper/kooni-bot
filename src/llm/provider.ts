@@ -1,6 +1,7 @@
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createXai } from "@ai-sdk/xai";
+import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import type { Env } from "../env";
 import type { Tier } from "../upgrade/modelSelector";
 
@@ -12,7 +13,7 @@ import type { Tier } from "../upgrade/modelSelector";
  * provider maps a tier to a concrete model id (env-overridable). Embeddings and
  * voice transcription stay on Cloudflare Workers AI regardless of this setting.
  */
-export type LlmProvider = "anthropic" | "openai" | "xai" | "minimax";
+export type LlmProvider = "anthropic" | "openai" | "xai" | "minimax" | "google";
 
 const ANTHROPIC_DEFAULTS: Record<Tier, string> = {
   fast: "claude-haiku-4-5-20251001",
@@ -32,6 +33,11 @@ const XAI_DEFAULTS: Record<Tier, string> = {
 const MINIMAX_DEFAULTS: Record<Tier, string> = {
   fast: "abab6.5s-chat",
   smart: "MiniMax-Text-01",
+};
+
+const GOOGLE_DEFAULTS: Record<Tier, string> = {
+  fast: "gemini-2.5-flash-lite",
+  smart: "gemini-2.5-flash",
 };
 
 /**
@@ -60,6 +66,9 @@ export const CURATED_MODELS: { id: string; label: string; provider: LlmProvider 
   { id: "grok-4-fast-non-reasoning", label: "Grok 4 Fast · rápido y barato", provider: "xai" },
   { id: "grok-3-mini", label: "Grok 3 mini · económico", provider: "xai" },
   { id: "grok-4", label: "Grok 4 · más capaz", provider: "xai" },
+  { id: "gemini-2.5-flash-lite", label: "Gemini 2.5 Flash-Lite · el más rápido y barato", provider: "google" },
+  { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash · equilibrado", provider: "google" },
+  { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro · máxima inteligencia", provider: "google" },
   { id: "abab6.5s-chat", label: "MiniMax abab6.5s · económico", provider: "minimax" },
   { id: "MiniMax-Text-01", label: "MiniMax Text-01 · capaz y barato", provider: "minimax" },
 ];
@@ -76,6 +85,7 @@ export function resolveProvider(env: Env): LlmProvider {
   // default (anthropic), dejando a Grok como mero fallback todo el tiempo.
   if (explicit === "xai") return "xai";
   if (explicit === "minimax") return "minimax";
+  if (explicit === "google" || explicit === "gemini") return "google";
   if (!env.ANTHROPIC_API_KEY && env.OPENAI_API_KEY) return "openai";
   return "anthropic";
 }
@@ -92,6 +102,9 @@ export function modelIdFor(env: Env, provider: LlmProvider, tier: Tier): string 
   }
   if (provider === "minimax") {
     return tier === "smart" ? MINIMAX_DEFAULTS.smart : MINIMAX_DEFAULTS.fast;
+  }
+  if (provider === "google") {
+    return tier === "smart" ? GOOGLE_DEFAULTS.smart : GOOGLE_DEFAULTS.fast;
   }
   const smart = env.ANTHROPIC_MODEL_SMART?.trim() || ANTHROPIC_DEFAULTS.smart;
   const fast = env.ANTHROPIC_MODEL_FAST?.trim() || ANTHROPIC_DEFAULTS.fast;
@@ -112,6 +125,7 @@ function envKeyFor(env: Env, provider: LlmProvider): string | undefined {
   if (provider === "openai") return env.OPENAI_API_KEY;
   if (provider === "xai") return env.XAI_API_KEY;
   if (provider === "minimax") return env.MINIMAX_API_KEY;
+  if (provider === "google") return env.GEMINI_API_KEY;
   return env.ANTHROPIC_API_KEY;
 }
 
@@ -129,18 +143,20 @@ export function createModel(env: Env, tier: Tier, ov?: LlmOverrides): ResolvedMo
   const ovProviderNorm = ovProviderRaw === "aisa" ? "openai" : ovProviderRaw;
 
   let provider: LlmProvider | null =
-    ovProviderNorm === "anthropic" || ovProviderNorm === "openai" || ovProviderNorm === "xai" || ovProviderNorm === "minimax"
+    ovProviderNorm === "anthropic" || ovProviderNorm === "openai" || ovProviderNorm === "xai" || ovProviderNorm === "minimax" || ovProviderNorm === "google"
       ? (ovProviderNorm as LlmProvider)
       : null;
   // Modelo elegido sin proveedor explícito → dedúcelo del id.
   if (!provider && ovModel) {
     provider = /^grok/i.test(ovModel)
       ? "xai"
-      : /minimax|abab/i.test(ovModel)
-        ? "minimax"
-        : /^(gpt|o\d)/i.test(ovModel)
-          ? "openai"
-          : "anthropic";
+      : /gemini/i.test(ovModel)
+        ? "google"
+        : /minimax|abab/i.test(ovModel)
+          ? "minimax"
+          : /^(gpt|o\d)/i.test(ovModel)
+            ? "openai"
+            : "anthropic";
   }
   if (!provider) provider = resolveProvider(env);
 
@@ -179,6 +195,11 @@ export function createModel(env: Env, tier: Tier, ov?: LlmOverrides): ResolvedMo
     return { provider, modelId, model: minimax.chat(modelId), supportsPromptCache: false };
   }
 
+  if (provider === "google") {
+    const google = createGoogleGenerativeAI({ apiKey });
+    return { provider, modelId, model: google(modelId), supportsPromptCache: false };
+  }
+
   const anthropic = createAnthropic({ apiKey });
   return { provider, modelId, model: anthropic(modelId), supportsPromptCache: true };
 }
@@ -206,7 +227,7 @@ export function fallbackModel(
   tier: Tier,
   failedProvider: LlmProvider,
 ): ResolvedModel | null {
-  const order: LlmProvider[] = ["anthropic", "openai", "xai", "minimax"];
+  const order: LlmProvider[] = ["anthropic", "openai", "xai", "google", "minimax"];
   for (const p of order) {
     if (p === failedProvider) continue;
     if (!envKeyFor(env, p)) continue;

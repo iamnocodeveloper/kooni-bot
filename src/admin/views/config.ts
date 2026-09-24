@@ -161,6 +161,7 @@ function renderLlmSection(settings: Record<string, string>, llmTest?: string): s
     { v: "aisa", l: "AIsa (gateway)" },
     { v: "xai", l: "Grok (xAI)" },
     { v: "minimax", l: "MiniMax" },
+    { v: "google", l: "Google (Gemini)" },
   ]
     .map((o) => `<option value="${o.v}" ${provider === o.v ? "selected" : ""}>${o.l}</option>`)
     .join("");
@@ -175,6 +176,9 @@ function renderLlmSection(settings: Record<string, string>, llmTest?: string): s
     .map((m) => `<option value="${esc(m.id)}" ${model === m.id ? "selected" : ""}>${esc(m.label)}</option>`)
     .join("");
   const minimaxOpts = CURATED_MODELS.filter((m) => m.provider === "minimax")
+    .map((m) => `<option value="${esc(m.id)}" ${model === m.id ? "selected" : ""}>${esc(m.label)}</option>`)
+    .join("");
+  const googleOpts = CURATED_MODELS.filter((m) => m.provider === "google")
     .map((m) => `<option value="${esc(m.id)}" ${model === m.id ? "selected" : ""}>${esc(m.label)}</option>`)
     .join("");
 
@@ -205,6 +209,7 @@ function renderLlmSection(settings: Record<string, string>, llmTest?: string): s
             <optgroup label="ChatGPT (OpenAI)">${openaiOpts}</optgroup>
             <optgroup label="Grok (xAI)">${xaiOpts}</optgroup>
             <optgroup label="MiniMax">${minimaxOpts}</optgroup>
+            <optgroup label="Google (Gemini)">${googleOpts}</optgroup>
           </select>
         </div>
       </div>
@@ -275,6 +280,7 @@ function renderAnalysisLlmSection(settings: Record<string, string>): string {
     { v: "aisa", l: "AIsa (gateway)" },
     { v: "xai", l: "Grok (xAI)" },
     { v: "minimax", l: "MiniMax" },
+    { v: "google", l: "Google (Gemini)" },
   ]
     .map((o) => `<option value="${o.v}" ${provider === o.v ? "selected" : ""}>${o.l}</option>`)
     .join("");
@@ -303,6 +309,7 @@ function renderAnalysisLlmSection(settings: Record<string, string>): string {
             <optgroup label="ChatGPT (OpenAI)">${groupOpts("openai")}</optgroup>
             <optgroup label="Grok (xAI)">${groupOpts("xai")}</optgroup>
             <optgroup label="MiniMax">${groupOpts("minimax")}</optgroup>
+            <optgroup label="Google (Gemini)">${groupOpts("google")}</optgroup>
           </select>
         </div>
       </div>

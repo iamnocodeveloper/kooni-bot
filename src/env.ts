@@ -94,6 +94,7 @@ export interface Env {
   XAI_API_KEY?: string;             // xAI (Grok) — proveedor LLM alterno (ver src/llm/provider.ts)
   MINIMAX_API_KEY?: string;         // MiniMax — proveedor LLM (API compatible con OpenAI)
   MINIMAX_API_BASE_URL?: string;    // override de https://api.minimaxi.com/v1
+  GEMINI_API_KEY?: string;          // Google Gemini — proveedor LLM (Google AI Studio)
 
   // ── Zernio (proveedor unificado multicanal — IG/FB/X/TG/WhatsApp/…) ──────
   // Una sola api key para muchas redes (tipo ManyChat pero unificado).
