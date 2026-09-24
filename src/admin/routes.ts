@@ -58,6 +58,7 @@ import { renderAutomatizaciones } from "./views/automatizaciones";
 import { renderComentarios } from "./views/comentarios";
 import { renderContactos } from "./views/contactos";
 import { renderLicencia } from "./views/licencia";
+import { renderComandos } from "./views/comandos";
 import { AutoRulesRepo, type AutoRuleKind } from "../db/autoRules";
 
 /** Parsea el form de una automatización (crear o editar) a un objeto de regla. */
@@ -1357,6 +1358,9 @@ adminApp.get("/conexiones/mercadolibre/oauth", async (c) => {
   await new SettingsRepo(new Db(c.env.DB)).set(SETTING_KEYS.mlOauthState, state);
   return c.redirect(mlAuthorizeUrl(creds, redirectUri, state));
 });
+
+// Comandos: cheat sheet (terminal + prompts del agente), solo lectura.
+adminApp.get("/comandos", async (c) => c.html(await renderComandos(c.env)));
 
 // Licencia: activa Pro pegando un código KOONI-PRO-... (validación local HMAC).
 adminApp.get("/licencia", async (c) => c.html(await renderLicencia(c.env)));
