@@ -243,6 +243,22 @@ export const EXTRA_FEATURES: ExtraFeature[] = [
   },
 ];
 
+/**
+ * Habilidades BASE: lo que hace cualquier bot desde el primer día (incluido, sin
+ * costo extra). Es la mitad "incluida" del menú: se muestra aparte de los
+ * superpoderes de pago. Solo etiquetas — no se prenden/apagan.
+ */
+export const HABILIDADES: { emoji: string; nombre: string; descripcion: string }[] = [
+  { emoji: "🕐", nombre: "Atiende 24/7 al instante", descripcion: "Responde a cada cliente al momento, todo el día." },
+  { emoji: "📚", nombre: "Responde con TU información", descripcion: "Contesta con tu base de conocimiento — no inventa." },
+  { emoji: "🎯", nombre: "Captura leads", descripcion: "Registra a cada interesado con su nombre y contacto." },
+  { emoji: "🎙️", nombre: "Entiende notas de voz", descripcion: "Transcribe los audios de tus clientes y responde." },
+  { emoji: "🤝", nombre: "Te pasa el cliente cuando importa", descripcion: "Si piden una persona o hay una queja, te avisa." },
+  { emoji: "🗣️", nombre: "Habla en tu tono", descripcion: "Cercano, formal o divertido — suena a tu marca." },
+  { emoji: "📡", nombre: "Multicanal", descripcion: "WhatsApp, Instagram, Messenger y Telegram desde un mismo cerebro." },
+  { emoji: "📊", nombre: "Reportes y exportación", descripcion: "Pedí /reporte o /exportar y sacá el resumen." },
+];
+
 /** Texto que se inyecta al prompt del agente cuando el Blindaje está encendido. */
 export const BLINDAJE_PROMPT_BLOCK = `<blindaje_anti_inventos>
 Regla de oro del dueño (BLINDAJE): tu palabra es la del negocio, y una promesa que no puedes cumplir es peor que un "no sé".

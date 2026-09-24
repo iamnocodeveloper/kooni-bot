@@ -5,7 +5,7 @@
 import type { Env } from "../../env";
 import { Db } from "../../db/client";
 import { SettingsRepo, SETTING_KEYS } from "../../db/settings";
-import { EXTRA_FEATURES, extrasState } from "../../features";
+import { EXTRA_FEATURES, extrasState, HABILIDADES } from "../../features";
 import { layout } from "./layout";
 
 function esc(s: string): string {
@@ -114,19 +114,38 @@ export async function renderExtras(env: Env, saved = false, report?: string): Pr
       </div>`;
   }).join("");
 
+  const habilidadCards = HABILIDADES.map(
+    (h) => `
+      <div class="bg-panel border border-line" style="padding:14px;display:flex;gap:10px;align-items:flex-start">
+        <span style="font-size:20px;flex:none">${h.emoji}</span>
+        <div style="min-width:0">
+          <div class="font-display font-semibold text-[13px] text-cream">${esc(h.nombre)}</div>
+          <p class="text-muted text-[11.5px]" style="margin:3px 0 0">${esc(h.descripcion)}</p>
+        </div>
+      </div>`,
+  ).join("");
+
   const body = `
-    <form method="POST" action="/admin/extras" style="display:flex;flex-direction:column;gap:18px;max-width:1080px">
-      ${savedBanner}
+    <div style="display:flex;flex-direction:column;gap:18px;max-width:1080px">
       <div style="display:flex;flex-direction:column;gap:2px">
-        <h2 class="font-display font-semibold text-[15px] text-cream">Extras — funciones de pago</h2>
-        <p class="text-muted text-[12.5px]">Enciende o apaga cada función con su interruptor. Las bloqueadas (🔒) necesitan una licencia que las incluya — revisa la pestaña Licencia. Los cambios se guardan al presionar el botón de abajo.</p>
+        <h2 class="font-display font-semibold text-[15px] text-cream">Habilidades — incluidas</h2>
+        <p class="text-muted text-[12.5px]">Esto lo hace tu bot desde el primer día, sin costo extra. No hay nada que encender.</p>
       </div>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">${cards}</div>
-      <button type="submit" class="bigbtn font-display font-bold text-[13px] cursor-pointer"
-              style="width:fit-content;background:var(--accent);border:1px solid var(--accent);color:var(--on-accent);box-shadow:4px 4px 0 var(--linelit);padding:13px 24px;display:flex;align-items:center;gap:9px">
-        <i data-lucide="check" width="16" height="16"></i> Guardar cambios
-      </button>
-    </form>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">${habilidadCards}</div>
+
+      <form method="POST" action="/admin/extras" style="display:flex;flex-direction:column;gap:18px;margin-top:10px">
+        ${savedBanner}
+        <div style="display:flex;flex-direction:column;gap:2px">
+          <h2 class="font-display font-semibold text-[15px] text-cream">Superpoderes — funciones de pago</h2>
+          <p class="text-muted text-[12.5px]">Enciende o apaga cada superpoder con su interruptor. Las bloqueadas (🔒) necesitan una licencia que las incluya — revisa la pestaña Licencia. Los cambios se guardan al presionar el botón de abajo.</p>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">${cards}</div>
+        <button type="submit" class="bigbtn font-display font-bold text-[13px] cursor-pointer"
+                style="width:fit-content;background:var(--accent);border:1px solid var(--accent);color:var(--on-accent);box-shadow:4px 4px 0 var(--linelit);padding:13px 24px;display:flex;align-items:center;gap:9px">
+          <i data-lucide="check" width="16" height="16"></i> Guardar cambios
+        </button>
+      </form>
+    </div>
     <!-- Form del botón "Enviar prueba ahora" del Reporte nocturno: vive FUERA del
          form principal (HTML no permite forms anidados); el botón lo referencia
          con form="report-test-form". -->

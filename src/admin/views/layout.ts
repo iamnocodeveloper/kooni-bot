@@ -66,7 +66,7 @@ const NAV: Section[] = [
   },
   {
     label: "Extras",
-    items: [{ id: "extras", label: "Funciones", href: "/admin/extras", icon: "sparkles" }],
+    items: [{ id: "extras", label: "Habilidades", href: "/admin/extras", icon: "sparkles" }],
   },
   {
     label: "Análisis",
