@@ -59,6 +59,7 @@ import { renderComentarios } from "./views/comentarios";
 import { renderContactos } from "./views/contactos";
 import { renderLicencia } from "./views/licencia";
 import { renderComandos } from "./views/comandos";
+import { renderEquipo } from "./views/equipo";
 import { AutoRulesRepo, type AutoRuleKind } from "../db/autoRules";
 
 /** Parsea el form de una automatización (crear o editar) a un objeto de regla. */
@@ -1361,6 +1362,26 @@ adminApp.get("/conexiones/mercadolibre/oauth", async (c) => {
 
 // Comandos: cheat sheet (terminal + prompts del agente), solo lectura.
 adminApp.get("/comandos", async (c) => c.html(await renderComandos(c.env)));
+
+// Equipo: gestiona los accesos de colaboradores (admin_emails).
+adminApp.get("/equipo", async (c) => c.html(await renderEquipo(c.env, c.req.query("saved") ? "Guardado ✓" : undefined)));
+adminApp.post("/equipo/add", async (c) => {
+  const { Db } = await import("../db/client");
+  const { AdminEmailsRepo } = await import("../db/adminEmails");
+  const form = await c.req.formData();
+  const email = String(form.get("email") ?? "").trim().toLowerCase();
+  const role = String(form.get("role") ?? "staff") === "owner" ? "owner" : "staff";
+  if (email) await new AdminEmailsRepo(new Db(c.env.DB)).add(email, role);
+  return c.redirect("/admin/equipo?saved=1");
+});
+adminApp.post("/equipo/remove", async (c) => {
+  const { Db } = await import("../db/client");
+  const { AdminEmailsRepo } = await import("../db/adminEmails");
+  const form = await c.req.formData();
+  const email = String(form.get("email") ?? "").trim().toLowerCase();
+  if (email) await new AdminEmailsRepo(new Db(c.env.DB)).remove(email);
+  return c.redirect("/admin/equipo?saved=1");
+});
 
 // Licencia: activa Pro pegando un código KOONI-PRO-... (validación local HMAC).
 adminApp.get("/licencia", async (c) => c.html(await renderLicencia(c.env)));
