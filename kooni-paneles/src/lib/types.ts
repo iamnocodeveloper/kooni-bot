@@ -200,3 +200,21 @@ export interface Pack {
   activo: boolean;
   orden: number;
 }
+
+export interface Faq {
+  id: string;
+  pregunta: string;
+  respuesta: string;
+  orden: number;
+  activo: boolean;
+}
+
+export interface SoporteMensaje {
+  id: string;
+  user_id: string | null;
+  email: string | null;
+  asunto: string;
+  mensaje: string;
+  estado: "nuevo" | "leido" | "respondido";
+  created_at: string;
+}
