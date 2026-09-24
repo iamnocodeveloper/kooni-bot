@@ -150,3 +150,12 @@ export interface ProveedorConfig {
   config: Record<string, string>;
   orden: number;
 }
+
+export interface Dominio {
+  id: string;
+  instalacion_id: string | null;
+  user_id: string;
+  hostname: string;
+  estado: "pendiente" | "activo" | "error";
+  created_at: string;
+}

@@ -21,6 +21,7 @@ import AdminNovedades from "./pages/AdminNovedades";
 import AdminPlanes from "./pages/AdminPlanes";
 import AdminFacturacion from "./pages/AdminFacturacion";
 import AdminPagos from "./pages/AdminPagos";
+import AdminDominios from "./pages/AdminDominios";
 
 function Spinner() {
   return <div className="flex h-full items-center justify-center text-muted">Cargando…</div>;
@@ -67,6 +68,7 @@ export default function App() {
                 <Route path="planes" element={<AdminPlanes />} />
                 <Route path="facturacion" element={<AdminFacturacion />} />
                 <Route path="pagos" element={<AdminPagos />} />
+                <Route path="dominios" element={<AdminDominios />} />
                 <Route path="*" element={<Navigate to="/admin" replace />} />
               </Routes>
             </AdminLayout>

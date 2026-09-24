@@ -12,6 +12,7 @@ const NAV = [
   { to: "/admin/planes", label: "Planes" },
   { to: "/admin/facturacion", label: "Facturación" },
   { to: "/admin/pagos", label: "Config. pagos" },
+  { to: "/admin/dominios", label: "Dominios" },
   { to: "/admin/clientes", label: "Clientes" },
 ];
 
