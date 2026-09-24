@@ -31,6 +31,7 @@ import AdminSoporte from "./pages/AdminSoporte";
 import AdminEstadisticas from "./pages/AdminEstadisticas";
 import AdminConfig from "./pages/AdminConfig";
 import AdminAuditoria from "./pages/AdminAuditoria";
+import AdminEquipo from "./pages/AdminEquipo";
 
 function Spinner() {
   return <div className="flex h-full items-center justify-center text-muted">Cargando…</div>;
@@ -87,6 +88,7 @@ export default function App() {
                 <Route path="estadisticas" element={<AdminEstadisticas />} />
                 <Route path="configuracion" element={<AdminConfig />} />
                 <Route path="auditoria" element={<AdminAuditoria />} />
+                <Route path="equipo" element={<AdminEquipo />} />
                 <Route path="*" element={<Navigate to="/admin" replace />} />
               </Routes>
             </AdminLayout>
