@@ -1628,6 +1628,23 @@ adminApp.post("/campanas/send", async (c) => {
   return c.redirect("/admin/campanas?" + q.toString());
 });
 
+// Restaura una versión anterior del prompt (del historial).
+adminApp.post("/prompt/restore", async (c) => {
+  const { Db } = await import("../db/client");
+  const { SettingsRepo, SETTING_KEYS } = await import("../db/settings");
+  const { listPromptVersions } = await import("../prompt/versions");
+  const repo = new SettingsRepo(new Db(c.env.DB));
+  const form = await c.req.formData();
+  const at = Number(form.get("at") ?? 0);
+  const list = await listPromptVersions(repo);
+  const v = list.find((x) => x.at === at);
+  if (v) {
+    await repo.set(SETTING_KEYS.systemPromptOverride, v.system);
+    await repo.set(SETTING_KEYS.customInstructions, v.instructions);
+  }
+  return c.redirect("/admin/config?prompt_restored=1");
+});
+
 adminApp.get("/config", async (c) => {
   const settings = await new SettingsRepo(new Db(c.env.DB)).all();
   const saved = c.req.query("saved") === "1";
@@ -1697,10 +1714,19 @@ adminApp.post("/config", async (c) => {
     SETTING_KEYS.resourceLibrary,
     SETTING_KEYS.allowMultimedia,
   ];
+  // Historial del prompt: capturamos el estado PREVIO para versionar el cambio.
+  const beforePrompt = await repo.get(SETTING_KEYS.systemPromptOverride);
+  const beforeInstr = await repo.get(SETTING_KEYS.customInstructions);
   for (const key of textKeys) {
     const raw = form.get(key);
     if (raw === null) continue;
     await repo.set(key, String(raw).trim());
+  }
+  const afterPrompt = await repo.get(SETTING_KEYS.systemPromptOverride);
+  const afterInstr = await repo.get(SETTING_KEYS.customInstructions);
+  if ((beforePrompt ?? "") !== (afterPrompt ?? "") || (beforeInstr ?? "") !== (afterInstr ?? "")) {
+    const { snapshotPrompt } = await import("../prompt/versions");
+    await snapshotPrompt(repo, beforePrompt, beforeInstr);
   }
 
   // Persona del bot (¿asistente o el dueño mismo en primera persona?).

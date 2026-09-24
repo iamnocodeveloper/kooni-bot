@@ -352,9 +352,31 @@ export async function renderConfig(
     ? `<div style="border:1px solid var(--ok);background:var(--ok-soft);color:var(--ok);padding:10px 14px;font-size:12.5px;font-weight:600">Guardado ✓</div>`
     : "";
 
+  // Historial del prompt: las últimas versiones, con "volver".
+  let promptHistory = "";
+  try {
+    const list = JSON.parse(settings[SETTING_KEYS.promptVersions] ?? "[]") as { at: number; system: string; instructions: string }[];
+    if (Array.isArray(list) && list.length) {
+      promptHistory = `
+        <div class="bg-panel border border-line" style="padding:14px 16px;display:flex;flex-direction:column;gap:8px">
+          <div class="font-display font-semibold text-[12.5px] text-cream">Historial del prompt</div>
+          <p class="text-muted text-[11.5px]" style="margin:0">Últimas ${list.length} versiones. "Volver" restaura esa versión.</p>
+          ${list.map((v) => `
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid var(--line);padding:8px 10px">
+              <span class="text-muted text-[11.5px] font-mono">${esc(new Date(v.at).toLocaleString("es-MX"))}</span>
+              <button type="submit" form="prompt-restore-form" name="at" value="${v.at}"
+                      class="text-[11.5px] font-display font-semibold cursor-pointer"
+                      style="border:1px solid var(--line);color:var(--cream);padding:6px 12px;background:var(--panel2)">Volver a esta</button>
+            </div>`).join("")}
+        </div>`;
+    }
+  } catch { /* sin historial */ }
+
   const body = `
+    <form id="prompt-restore-form" method="POST" action="/admin/prompt/restore" style="display:none"></form>
     <form method="POST" action="/admin/config" style="display:flex;flex-direction:column;gap:28px">
       ${savedBanner}
+      ${promptHistory}
 
       <div style="display:flex;flex-direction:column;gap:2px">
         <h2 class="font-display font-semibold text-[15px] text-cream">Panel de control de ${esc(env.BUSINESS_NAME)}</h2>

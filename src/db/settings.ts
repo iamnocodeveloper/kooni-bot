@@ -9,6 +9,9 @@ export const SETTING_KEYS = {
   // system_prompt_override). Es el campo seguro para "siempre ofrece agendar
   // cita" sin perder el contexto del negocio, el playbook ni el KB.
   customInstructions: "custom_instructions",
+  // Historial del prompt: JSON [{ at, system, instructions }] — últimas 10
+  // versiones. Lo escribe el panel al guardar y permite "volver a esta".
+  promptVersions: "prompt_versions",
   businessContext: "business_context",
   botName: "bot_name",
   tone: "tone",
@@ -167,6 +170,7 @@ export type SettingKey = (typeof SETTING_KEYS)[keyof typeof SETTING_KEYS];
 export const SETTING_LABELS: Record<string, string> = {
   [SETTING_KEYS.systemPromptOverride]: "Prompt del sistema (reemplazo total)",
   [SETTING_KEYS.customInstructions]: "Instrucciones extra del dueño",
+  [SETTING_KEYS.promptVersions]: "Historial del prompt",
   [SETTING_KEYS.businessContext]: "Contexto del negocio",
   [SETTING_KEYS.botName]: "Nombre del bot",
   [SETTING_KEYS.businessTimezone]: "Zona horaria del negocio",
