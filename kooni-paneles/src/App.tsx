@@ -6,6 +6,8 @@ import Login from "./pages/Login";
 import Cuenta from "./pages/Cuenta";
 import Vinculacion from "./pages/Vinculacion";
 import Novedades from "./pages/Novedades";
+import Configuracion from "./pages/Configuracion";
+import Invitacion from "./pages/Invitacion";
 import Cli from "./pages/Cli";
 import Sesiones from "./pages/Sesiones";
 import AdminDashboard from "./pages/AdminDashboard";
@@ -38,6 +40,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={user ? <Navigate to={isAdmin ? "/admin" : "/"} replace /> : <Login />} />
+      <Route path="/invitacion" element={<Invitacion />} />
 
       {/* Área super admin */}
       <Route
@@ -75,6 +78,7 @@ export default function App() {
                 <Route index element={<Cuenta />} />
                 <Route path="vinculacion" element={<Vinculacion />} />
                 <Route path="novedades" element={<Novedades />} />
+                <Route path="configuracion" element={<Configuracion />} />
                 <Route path="cli" element={<Cli />} />
                 <Route path="sesiones" element={<Sesiones />} />
                 <Route path="*" element={<Navigate to="/" replace />} />

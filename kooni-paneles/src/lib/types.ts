@@ -86,3 +86,16 @@ export interface Novedad {
   visible: boolean;
   created_at: string;
 }
+
+export interface Colaborador {
+  id: string;
+  owner_id: string;
+  user_id: string | null;
+  email: string;
+  nombre: string | null;
+  puede_editar: boolean;
+  estado: "invitado" | "activo" | "revocado";
+  token: string;
+  created_at: string;
+  accepted_at: string | null;
+}

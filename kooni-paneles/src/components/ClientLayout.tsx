@@ -9,6 +9,7 @@ const NAV = [
   { to: "/novedades", label: "Novedades" },
   { to: "/cli", label: "Conectar CLI" },
   { to: "/sesiones", label: "Sesiones del CLI" },
+  { to: "/configuracion", label: "Configuración" },
 ];
 
 export default function ClientLayout({ children }: { children: ReactNode }) {
