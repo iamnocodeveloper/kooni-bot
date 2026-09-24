@@ -99,3 +99,13 @@ apiApp.get("/metrics", async (c) => {
   const metrics = await computeMetrics(new Db(c.env.DB), range);
   return c.json(metrics, 200);
 });
+
+// GET /api/leads → los leads del bot (con datos de personas). Guardado por el
+// mismo Bearer; el panel del dueño los lee EN VIVO y NO los almacena.
+apiApp.get("/leads", async (c) => {
+  const limit = Math.min(Number(c.req.query("limit") ?? 100) || 100, 500);
+  const rows = await new Db(c.env.DB)
+    .all("SELECT * FROM leads ORDER BY created_at DESC LIMIT ?", [limit])
+    .catch(() => [] as unknown[]);
+  return c.json({ leads: rows }, 200);
+});
