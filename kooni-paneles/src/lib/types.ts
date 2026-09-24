@@ -168,3 +168,14 @@ export interface IaProveedor {
   modelos: string[];
   orden: number;
 }
+
+export interface Comando {
+  id: string;
+  tipo: "terminal" | "agente";
+  comando: string;
+  descripcion: string | null;
+  requiere_pro: boolean;
+  version: string | null;
+  activo: boolean;
+  orden: number;
+}
