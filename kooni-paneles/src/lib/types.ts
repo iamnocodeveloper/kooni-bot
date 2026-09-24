@@ -99,3 +99,18 @@ export interface Colaborador {
   created_at: string;
   accepted_at: string | null;
 }
+
+export interface Plan {
+  id: string;
+  nombre: string;
+  precio: number | null;
+  moneda: string;
+  precio_nota: string | null;
+  etapa: string | null;
+  badge: string | null;
+  descripcion: string | null;
+  incluye: string[];
+  modulos: string[];
+  orden: number;
+  activo: boolean;
+}
