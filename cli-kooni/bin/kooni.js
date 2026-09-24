@@ -1432,6 +1432,8 @@ constructor. No hay licencia ni servidor de Horizontes: el tier free/pro se cont
 
 ## Comandos del CLI
 - \`npx kooni-bot login\` — conecta el CLI a la cuenta Kooni del usuario (device flow: abre el navegador y aprueba un código).
+- \`npx kooni-bot whoami\` — muestra con qué cuenta está conectado.
+- \`npx kooni-bot pair [dir]\` — vincula (o re-vincula) un bot YA desplegado a la cuenta.
 - \`npx kooni-bot init [dir]\` — descarga el template, configura (idioma, negocio, cerebro) y ofrece desplegar.
 - \`npx kooni-bot deploy [dir]\` — provisiona Cloudflare (login, D1/Vectorize/R2, secrets, migraciones, deploy).
 - \`npx kooni-bot update [dir]\` — trae la versión nueva conservando \`member/\`, \`wrangler.toml\` y datos.
@@ -1605,6 +1607,91 @@ async function syncWorkerLicense(dir, workerUrl) {
 // Token de instalación pendiente: lo llena `init` y lo guarda `deployBot` como
 // secret tras el primer deploy.
 let PENDING_INST_TOKEN = null;
+
+// Identidad de una instalación ya desplegada (para `pair`/`doctor`): la saca del
+// marker local y del wrangler.toml.
+function readInstallIdentity(dir) {
+  const marker = readMarker(dir) || {};
+  let wt = "";
+  try { wt = readFileSync(join(dir, "wrangler.toml"), "utf8"); } catch { /* sin wrangler */ }
+  const val = (k) => { const mm = wt.match(new RegExp(`^\\s*${k}\\s*=\\s*["']([^"']*)`, "m")); return mm ? mm[1] : null; };
+  const slug = marker.slug || basename(dir);
+  const uid = marker.uid || val("BOT_INSTANCE_ID") || (wt.match(/kooni-bot-.+-([a-f0-9]{6})/) || [])[1] || null;
+  return {
+    slug,
+    uid,
+    botName: val("BOT_NAME") || slug,
+    provider: val("LLM_PROVIDER") || "anthropic",
+    dbName: marker.dbName || val("database_name"),
+    kbName: marker.kbName || val("index_name"),
+  };
+}
+
+// `kooni-bot whoami` — confirma con qué cuenta está conectado el CLI.
+async function cmdWhoami(flags) {
+  const cfg = loadCfg();
+  if (flags.lang === "en" || cfg.lang === "en") L = "en";
+  banner();
+  const creds = loadCreds();
+  if (!creds.token) {
+    console.log("  " + C.yellow("⚠") + " " + m("no hay sesión. Corre: npx kooni-bot login", "no session. Run: npx kooni-bot login") + "\n");
+    process.exit(1);
+  }
+  let j = {};
+  try {
+    const res = await apiPost("/cli-whoami", {}, creds.token);
+    j = await res.json().catch(() => ({}));
+  } catch { /* red */ }
+  if (!j.email) {
+    console.log("  " + C.red("✗") + " " + m("la sesión no es válida. Corre: npx kooni-bot login", "session invalid. Run: npx kooni-bot login") + "\n");
+    process.exit(1);
+  }
+  console.log("  " + C.green("✓") + " " + m("Conectado como", "Connected as") + " " + C.b(j.email) + (j.role ? C.dim(` (${j.role})`) : "") + "\n");
+}
+
+// `kooni-bot pair` — vincula (o re-vincula) un bot ya desplegado a la cuenta.
+async function cmdPair(flags, rest) {
+  const cfg = loadCfg();
+  ASSUME_YES = !!(flags.yes || process.env.KOONI_YES);
+  if (flags.lang === "en" || cfg.lang === "en") L = "en";
+  banner();
+
+  const creds = loadCreds();
+  if (!creds.token) {
+    console.log("  " + C.yellow("⚠") + " " + m("primero conectá el CLI: npx kooni-bot login", "connect the CLI first: npx kooni-bot login") + "\n");
+    process.exit(1);
+  }
+
+  const rl = createInterface({ input, output });
+  let dir;
+  try { dir = await resolveBotDir(rest[0], rl); } finally { rl.close(); }
+  if (!dir) { console.log("  " + C.red(t().needDir) + " " + (rest[0] || process.cwd()) + "\n"); process.exit(1); }
+
+  const id = readInstallIdentity(dir);
+  if (!id.uid) {
+    console.log("  " + C.red("✗") + " " + m("no encontré el uid de la instalación (¿es la carpeta del bot?)", "couldn't find the install uid (is this the bot folder?)") + "\n");
+    process.exit(1);
+  }
+  console.log("  " + C.dim(m(`Vinculando ${id.slug} (${id.uid})…`, `Linking ${id.slug} (${id.uid})…`)));
+
+  const lic = await emitirLicencia(dir, { slug: id.slug, botName: id.botName, provider: id.provider }, { uid: id.uid, dbName: id.dbName, kbName: id.kbName });
+  if (!lic) {
+    console.log("  " + C.red("✗") + " " + m("no pude vincular el bot (revisá tu sesión e internet).", "couldn't link the bot (check your session and internet).") + "\n");
+    process.exit(1);
+  }
+
+  try { wrangler(dir, ["secret", "put", "KOONI_INSTALL_TOKEN"], { input: lic.inst_token, capture: true }); } catch { /* best-effort */ }
+  patchWranglerFile(dir, (s) => /KOONI_API_URL\s*=/.test(s)
+    ? s.replace(/KOONI_API_URL\s*=\s*"[^"]*"/, `KOONI_API_URL = "${KOONI_API}"`)
+    : s.replace(/^(\s*\[vars\][^\n]*\n)/m, `$1KOONI_API_URL = "${KOONI_API}"\n`));
+  try { runPnpm(dir, ["run", "deploy"], { capture: true }); } catch { /* el deploy-check imprime el detalle */ }
+
+  let workerUrl = (readMarker(dir) || {}).workerUrl || null;
+  try { const st = JSON.parse(readFileSync(join(dir, ".bot-state.json"), "utf8")); if (st.worker_url) workerUrl = st.worker_url; } catch { /* sin estado */ }
+  await syncWorkerLicense(dir, workerUrl);
+
+  console.log("  " + C.green("✓") + " " + C.b(m("bot conectado", "bot connected")) + "\n");
+}
 
 // ── comandos ─────────────────────────────────────────────────────────────────
 async function cmdInit(flags, rest) {
@@ -1945,6 +2032,8 @@ ${C.cyan("kooni-bot")} — ${t().helpIntro}
 
   ${C.cyan("npx kooni-bot init [dir]")}    ${m("instala (descarga template + config + deploy)", "install (download template + config + deploy)")}
   ${C.cyan("npx kooni-bot login")}         ${m("conecta el CLI a tu cuenta Kooni (abre el navegador)", "connect the CLI to your Kooni account (opens browser)")}
+  ${C.cyan("npx kooni-bot whoami")}        ${m("muestra con qué cuenta estás conectado", "shows which account you're connected as")}
+  ${C.cyan("npx kooni-bot pair [dir]")}    ${m("vincula un bot ya desplegado a tu cuenta", "link an already-deployed bot to your account")}
   ${C.cyan("npx kooni-bot deploy [dir]")}  ${m("provisiona Cloudflare y publica el worker", "provision Cloudflare and publish the worker")}
   ${C.cyan("npx kooni-bot update [dir]")}  ${m("actualiza sin perder tu configuración", "update without losing config")}
   ${C.cyan("npx kooni-bot update --all")}   ${m("actualiza TODAS las instalaciones registradas", "update ALL registered installs")}
@@ -1977,6 +2066,8 @@ if (IS_MAIN) {
     if (cmd === "version" || cmd === "--version" || cmd === "-v") { console.log("kooni-bot " + CLI_VERSION); return; }
     if (cmd === "init") return cmdInit(flags, rest);
     if (cmd === "login") return cmdLogin(flags);
+    if (cmd === "whoami") return cmdWhoami(flags);
+    if (cmd === "pair") return cmdPair(flags, rest);
     if (cmd === "deploy") return cmdDeploy(flags, rest);
     if (cmd === "update") return cmdUpdate(flags, rest);
     if (cmd === "doctor") return cmdDoctor(flags, rest);

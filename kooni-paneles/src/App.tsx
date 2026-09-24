@@ -4,6 +4,7 @@ import ClientLayout from "./components/ClientLayout";
 import AdminLayout from "./components/AdminLayout";
 import Login from "./pages/Login";
 import Cuenta from "./pages/Cuenta";
+import Vinculacion from "./pages/Vinculacion";
 import Cli from "./pages/Cli";
 import Sesiones from "./pages/Sesiones";
 import AdminDashboard from "./pages/AdminDashboard";
@@ -69,6 +70,7 @@ export default function App() {
             <ClientLayout>
               <Routes>
                 <Route index element={<Cuenta />} />
+                <Route path="vinculacion" element={<Vinculacion />} />
                 <Route path="cli" element={<Cli />} />
                 <Route path="sesiones" element={<Sesiones />} />
                 <Route path="*" element={<Navigate to="/" replace />} />

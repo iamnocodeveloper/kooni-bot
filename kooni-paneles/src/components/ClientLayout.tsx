@@ -4,7 +4,8 @@ import { insforge } from "../lib/insforge";
 import { useAuth } from "../lib/auth";
 
 const NAV = [
-  { to: "/", label: "Mi cuenta", end: true },
+  { to: "/", label: "Mis bots", end: true },
+  { to: "/vinculacion", label: "Vinculación" },
   { to: "/cli", label: "Conectar CLI" },
   { to: "/sesiones", label: "Sesiones del CLI" },
 ];
