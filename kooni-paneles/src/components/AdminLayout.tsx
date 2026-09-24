@@ -17,6 +17,7 @@ const NAV = [
   { to: "/admin/comandos", label: "Comandos/Skills" },
   { to: "/admin/integraciones", label: "Integraciones" },
   { to: "/admin/packs", label: "Plantillas/Packs" },
+  { to: "/admin/revendedores", label: "Revendedores" },
   { to: "/admin/clientes", label: "Clientes" },
 ];
 
