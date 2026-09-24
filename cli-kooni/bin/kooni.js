@@ -746,6 +746,12 @@ function stampWrangler(dir, answers, botUid) {
   } else {
     s = s.replace(/^(\s*\[vars\][^\n]*\n)/m, `$1KOONI_API_URL = "${KOONI_API}"\n`);
   }
+  // Reporte de uso: el worker lo empuja a `registrar-uso` de tu panel.
+  if (hasInVars("USAGE_PUSH_URL")) {
+    set(/USAGE_PUSH_URL\s*=\s*"[^"]*"/g, `USAGE_PUSH_URL = "${KOONI_API}/registrar-uso"`);
+  } else {
+    s = s.replace(/^(\s*\[vars\][^\n]*\n)/m, `$1USAGE_PUSH_URL = "${KOONI_API}/registrar-uso"\n`);
+  }
   if (hasInVars("LICENSE_PUBLIC_KEY")) {
     set(/LICENSE_PUBLIC_KEY\s*=\s*"[^"]*"/g, `LICENSE_PUBLIC_KEY = "${LICENSE_PUBLIC_KEY}"`);
   } else {
@@ -1399,30 +1405,11 @@ async function deployBot(dir, { flags = {}, rl } = {}) {
 }
 
 // ── check-in (no bloqueante) ─────────────────────────────────────────────────
-async function checkin(dir, answers, version) {
-  if (process.env.KOONI_NO_CHECKIN === "1" || process.env.KOONI_SILENT === "1") return;
-  try {
-    const marker = readMarker(dir) || {};
-    const slug = answers.slug || marker.slug || basename(dir);
-    await fetchTimeout(CHECKIN_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Kooni-Token": KOONI_REGISTER_TOKEN },
-      body: JSON.stringify({
-        email: answers.email || undefined,
-        slug,
-        uid: marker.uid,
-        workerName: marker.workerName,
-        dbName: marker.dbName,
-        kbName: marker.kbName,
-        workerUrl: marker.workerUrl || `https://kooni-bot-${slug}.workers.dev`,
-        cliVersion: CLI_VERSION,
-        botVersion: version,
-        tier: answers.tier,
-        provider: answers.provider,
-        platform: process.platform,
-      }),
-    }, 4000);
-  } catch { /* fire-and-forget */ }
+// Ya no se hace check-in anónimo: la instalación se registra al hacer
+// `licencia-emitir` (con la cuenta logueada). Se conserva la función para no
+// romper los llamadores; respeta KOONI_NO_CHECKIN.
+async function checkin(_dir, _answers, _version) {
+  return;
 }
 
 // ── skill de agente ─────────────────────────────────────────────────────────

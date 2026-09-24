@@ -141,7 +141,8 @@ export async function pushUsage(env: Env): Promise<{ ok: boolean; detail?: strin
     const report = await collectUsage(env);
     const res = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "X-Kooni-Token": env.KOONI_REGISTER_TOKEN || "" },
+      // Token POR INSTALACIÓN (nuevo). El compartido queda como fallback legacy.
+      headers: { "Content-Type": "application/json", "X-Kooni-Token": env.KOONI_INSTALL_TOKEN || env.KOONI_REGISTER_TOKEN || "" },
       body: JSON.stringify(report),
     });
     if (!res.ok) {
