@@ -29,6 +29,7 @@ import AdminPacks from "./pages/AdminPacks";
 import AdminRevendedores from "./pages/AdminRevendedores";
 import AdminSoporte from "./pages/AdminSoporte";
 import AdminEstadisticas from "./pages/AdminEstadisticas";
+import AdminConfig from "./pages/AdminConfig";
 
 function Spinner() {
   return <div className="flex h-full items-center justify-center text-muted">Cargando…</div>;
@@ -83,6 +84,7 @@ export default function App() {
                 <Route path="revendedores" element={<AdminRevendedores />} />
                 <Route path="soporte" element={<AdminSoporte />} />
                 <Route path="estadisticas" element={<AdminEstadisticas />} />
+                <Route path="configuracion" element={<AdminConfig />} />
                 <Route path="*" element={<Navigate to="/admin" replace />} />
               </Routes>
             </AdminLayout>

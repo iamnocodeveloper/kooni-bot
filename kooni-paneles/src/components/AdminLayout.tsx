@@ -20,6 +20,7 @@ const NAV = [
   { to: "/admin/revendedores", label: "Revendedores" },
   { to: "/admin/soporte", label: "Soporte" },
   { to: "/admin/estadisticas", label: "Estadísticas" },
+  { to: "/admin/configuracion", label: "Configuración" },
   { to: "/admin/clientes", label: "Clientes" },
 ];
 

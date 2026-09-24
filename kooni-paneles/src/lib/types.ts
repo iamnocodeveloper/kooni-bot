@@ -218,3 +218,9 @@ export interface SoporteMensaje {
   estado: "nuevo" | "leido" | "respondido";
   created_at: string;
 }
+
+export interface ConfigItem {
+  clave: string;
+  valor: string | null;
+  descripcion: string | null;
+}
