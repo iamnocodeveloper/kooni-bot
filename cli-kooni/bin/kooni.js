@@ -257,6 +257,19 @@ function normBotLang(v) {
   return "es-MX";
 }
 
+// Giros disponibles (packs de nicho). El que elige el usuario se estampa como
+// BOT_NICHE. Ver src/niches/ en el template.
+const NICHES = [
+  { key: "generico", label: "Genérico / otro" },
+  { key: "agencia-ia", label: "Agencia de IA / servicios" },
+  { key: "restaurante", label: "Restaurante / comida" },
+  { key: "inmobiliaria", label: "Inmobiliaria" },
+  { key: "clinica", label: "Clínica / consultorio" },
+  { key: "barberia", label: "Barbería / estética" },
+  { key: "cartera", label: "Cartera de cobros" },
+  { key: "taxis", label: "Taxis / central de despacho" },
+];
+
 const BRAINS = {
   claude: { provider: "anthropic", secret: "ANTHROPIC_API_KEY", label: "Claude" },
   chatgpt: { provider: "openai", secret: "OPENAI_API_KEY", label: "ChatGPT" },
@@ -862,6 +875,7 @@ function collectAnswers(flags) {
     faq: String(flags.faq || "").trim() || undefined,
     reglas: String(flags.reglas || "").trim() || undefined,
     tone,
+    niche: String(flags.niche || "").trim().toLowerCase() || undefined,
     email: String(flags.email || "").trim() || undefined,
     licenseCode: String(flags.license || "").trim() || undefined,
   };
@@ -1431,6 +1445,8 @@ constructor. No hay licencia ni servidor de Horizontes: el tier free/pro se cont
 \`BOT_TIER\` en \`wrangler.toml\` y un código local en el panel.
 
 ## Comandos del CLI
+- \`npx kooni-bot list\` — lista los giros (nichos) disponibles.
+- \`npx kooni-bot install <giro>\` — instala el bot de un giro (ej. \`restaurante\`).
 - \`npx kooni-bot login\` — conecta el CLI a la cuenta Kooni del usuario (device flow: abre el navegador y aprueba un código).
 - \`npx kooni-bot whoami\` — muestra con qué cuenta está conectado.
 - \`npx kooni-bot pair [dir]\` — vincula (o re-vincula) un bot YA desplegado a la cuenta.
@@ -1692,6 +1708,26 @@ async function cmdPair(flags, rest) {
   await syncWorkerLicense(dir, workerUrl);
 
   console.log("  " + C.green("✓") + " " + C.b(m("bot conectado", "bot connected")) + "\n");
+}
+
+// `kooni-bot list` — muestra los giros disponibles.
+function cmdList(flags) {
+  const cfg = loadCfg();
+  if (flags.lang === "en" || cfg.lang === "en") L = "en";
+  banner();
+  console.log("\n  " + C.b(m("Giros disponibles:", "Available niches:")) + "\n");
+  for (const n of NICHES) console.log("    " + C.cyan(n.key) + C.dim("   " + n.label));
+  console.log("\n  " + C.dim(m("Instalá uno con: npx kooni-bot install <giro>", "Install one with: npx kooni-bot install <niche>")) + "\n");
+}
+
+// `kooni-bot install <giro>` — instala el bot de un giro (init con el nicho fijo).
+async function cmdInstall(flags, rest) {
+  const giro = String(rest[0] || flags.niche || "").trim().toLowerCase();
+  if (!giro || !NICHES.some((n) => n.key === giro)) {
+    console.log("\n  " + C.red("✗") + " " + m("giro inválido. Mirá los disponibles con: npx kooni-bot list", "invalid niche. See available ones with: npx kooni-bot list") + "\n");
+    process.exit(1);
+  }
+  return cmdInit({ ...flags, niche: giro }, rest.slice(1));
 }
 
 // ── comandos ─────────────────────────────────────────────────────────────────
@@ -2032,6 +2068,8 @@ function help() {
 ${C.cyan("kooni-bot")} — ${t().helpIntro}
 
   ${C.cyan("npx kooni-bot init [dir]")}    ${m("instala (descarga template + config + deploy)", "install (download template + config + deploy)")}
+  ${C.cyan("npx kooni-bot list")}          ${m("lista los giros (nichos) disponibles", "list the available niches")}
+  ${C.cyan("npx kooni-bot install <giro>")} ${m("instala el bot de un giro (ej. restaurante)", "install a niche bot (e.g. restaurante)")}
   ${C.cyan("npx kooni-bot login")}         ${m("conecta el CLI a tu cuenta Kooni (abre el navegador)", "connect the CLI to your Kooni account (opens browser)")}
   ${C.cyan("npx kooni-bot whoami")}        ${m("muestra con qué cuenta estás conectado", "shows which account you're connected as")}
   ${C.cyan("npx kooni-bot pair [dir]")}    ${m("vincula un bot ya desplegado a tu cuenta", "link an already-deployed bot to your account")}
@@ -2066,6 +2104,8 @@ if (IS_MAIN) {
     if (cmd === "help" || cmd === "--help" || cmd === "-h") return help();
     if (cmd === "version" || cmd === "--version" || cmd === "-v") { console.log("kooni-bot " + CLI_VERSION); return; }
     if (cmd === "init") return cmdInit(flags, rest);
+    if (cmd === "list") return cmdList(flags);
+    if (cmd === "install") return cmdInstall(flags, rest);
     if (cmd === "login") return cmdLogin(flags);
     if (cmd === "whoami") return cmdWhoami(flags);
     if (cmd === "pair") return cmdPair(flags, rest);
