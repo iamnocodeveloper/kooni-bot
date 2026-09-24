@@ -71,3 +71,18 @@ export interface CliToken {
   last_used_at: string | null;
   created_at: string;
 }
+
+export interface Novedad {
+  id: string;
+  fecha: string;
+  origen: "kooni" | "kooni+";
+  tipo: "nuevo" | "mejora" | "arreglo";
+  version: string | null;
+  titulo: string;
+  cuerpo: string | null;
+  cta_label: string | null;
+  cta_url: string | null;
+  update_hint: string | null;
+  visible: boolean;
+  created_at: string;
+}

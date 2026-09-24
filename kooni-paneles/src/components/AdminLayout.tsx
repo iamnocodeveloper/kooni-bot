@@ -8,6 +8,7 @@ const NAV = [
   { to: "/admin/licencias", label: "Licencias" },
   { to: "/admin/instalaciones", label: "Instalaciones" },
   { to: "/admin/modulos", label: "Módulos" },
+  { to: "/admin/novedades", label: "Novedades" },
   { to: "/admin/clientes", label: "Clientes" },
 ];
 

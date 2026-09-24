@@ -6,6 +6,7 @@ import { useAuth } from "../lib/auth";
 const NAV = [
   { to: "/", label: "Mis bots", end: true },
   { to: "/vinculacion", label: "Vinculación" },
+  { to: "/novedades", label: "Novedades" },
   { to: "/cli", label: "Conectar CLI" },
   { to: "/sesiones", label: "Sesiones del CLI" },
 ];
