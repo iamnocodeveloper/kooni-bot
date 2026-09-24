@@ -159,3 +159,12 @@ export interface Dominio {
   estado: "pendiente" | "activo" | "error";
   created_at: string;
 }
+
+export interface IaProveedor {
+  id: string;
+  nombre: string;
+  incluido: boolean;
+  activo: boolean;
+  modelos: string[];
+  orden: number;
+}

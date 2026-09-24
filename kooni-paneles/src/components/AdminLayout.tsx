@@ -13,6 +13,7 @@ const NAV = [
   { to: "/admin/facturacion", label: "Facturación" },
   { to: "/admin/pagos", label: "Config. pagos" },
   { to: "/admin/dominios", label: "Dominios" },
+  { to: "/admin/ia", label: "Proveedores IA" },
   { to: "/admin/clientes", label: "Clientes" },
 ];
 
