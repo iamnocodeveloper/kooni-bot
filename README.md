@@ -175,8 +175,10 @@ Todo en el ecosistema de Cloudflare: un solo `pnpm run deploy` y está en línea
 ## 🔒 Privacidad — quién ve los datos
 
 **Nadie más que tú.** Kooni corre en TU cuenta de Cloudflare con TUS llaves: las
-conversaciones de tus clientes viven en tu base de datos y **el bot no envía
-telemetría ni datos de uso a nadie**. Puedes revisarlo tú mismo en `src/`.
+conversaciones de tus clientes viven en tu base de datos. Lo único que sale del
+bot es **uso agregado** (conteos y costo de IA, **sin datos de personas**) hacia
+tu panel de licencias, y **solo si está configurado**. Puedes revisarlo tú mismo
+en `src/usage.ts`.
 
 - Los **mensajes se borran solos a los 90 días** (cron diario). Los leads y tickets se quedan hasta que tú los borres.
 - **No se guardan audios ni imágenes**: se transcriben o describen y solo queda el texto.

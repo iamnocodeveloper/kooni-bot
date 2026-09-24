@@ -6,9 +6,17 @@ Este documento explica **qué datos maneja el bot, dónde viven y qué te toca h
 
 ---
 
-## 1. Kooni no llama a casa
+## 1. Qué sale del bot (y qué no)
 
-El bot **no envía telemetría, analíticas ni datos de uso a nadie**. No hay ping de activación, ni contador de instalaciones, ni reporte de errores remoto. Puedes verificarlo tú mismo: busca en `src/` cualquier `fetch` a un dominio y verás que solo aparecen los servicios que **tú** conectas (Twilio, Meta, Telegram, ManyChat, Cal.com) y el proveedor de IA que elegiste.
+El bot **no manda a nadie tus conversaciones, tus clientes ni tus llaves**. La única salida es **uso agregado hacia TU panel de licencias** (el que gestionás vos):
+
+- **Conteos agregados** (últimos 30 días): conversaciones, mensajes, leads, reglas, uso por canal y por herramienta.
+- **Costo estimado de IA** (tokens × precio del modelo).
+- **Identificadores técnicos**: el `uid` de la instalación, la URL del worker, y las versiones del bot y del CLI.
+
+**Nunca** se envía: el contenido de una conversación, nombres, teléfonos, correos de tus clientes, ni tus API keys.
+
+Esto ocurre **solo si la instalación está configurada** para ello: el panel de licencias estampa `KOONI_API_URL` / `USAGE_PUSH_URL`, y el CLI hace un *check-in* al instalar. Sin eso —o con `KOONI_NO_CHECKIN=1`— no se envía nada. Es verificable en `src/usage.ts`, `src/licenseSync.ts` y `cli-kooni/bin/kooni.js`.
 
 Existe una API opcional en `/api/*` para conectar el bot a un panel externo. Está **apagada por defecto**: solo responde si tú configuras el secreto `CONTROL_PLANE_TOKEN`, y aun activada devuelve **únicamente números agregados** (cuántos leads, cuántos mensajes, cuántas conversaciones) más la versión del bot. Nunca el contenido de una conversación ni datos de una persona.
 

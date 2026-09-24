@@ -278,8 +278,7 @@ purga de mensajes >90 días, análisis de insights, flywheel y reporte al dueño
 
 ## 10. Seguridad y privacidad
 
-- **Sin telemetría.** El bot no llama a ningún servicio externo salvo los que tú
-  conectas (canales, proveedor de IA, Cal.com, Resend). Verificable en `src/`.
+- **Sin datos de personas hacia afuera.** El bot no llama a ningún servicio externo salvo los que tú conectas (canales, proveedor de IA, Cal.com, Resend) y **tu panel de licencias**, al que solo le manda **uso agregado** (conteos + costo de IA, sin PII) si está configurado (`USAGE_PUSH_URL`). Verificable en `src/`.
 - **Secrets cifrados** en Cloudflare (`wrangler secret put`) — nunca en el repo.
 - **Panel protegido** (magic links / Basic Auth); `/api/*` cerrado por defecto.
 - **Datos** en tu cuenta: D1, Vectorize, R2. Mensajes purgados a los 90 días.

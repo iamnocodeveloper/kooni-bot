@@ -187,7 +187,7 @@ bot escala a una persona.
 ## 8. Privacidad (recordatorio)
 
 - Los **mensajes se purgan a los 90 días** automáticamente (cron diario).
-- El bot **no envía telemetría** a nadie.
+- El bot **no comparte datos de personas**; solo manda uso agregado (conteos y costo de IA) a tu panel de licencias, si está configurado.
 - El texto viaja al proveedor de IA que **tú** elegiste (con tu llave).
 - Si un cliente pregunta si es un bot, **lo admite** — no lo configures para negarlo.
 - Detalle completo: [`PRIVACY.md`](../PRIVACY.md).

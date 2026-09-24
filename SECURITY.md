@@ -34,4 +34,4 @@ divulgación. No hay programa de recompensas.
 - La **licencia Pro** se valida **localmente** con una firma Ed25519 (clave
   pública embebida). El repo es MIT y abierto: cualquiera puede quitar la
   validación. Eso es esperado — ver [`docs/LICENCIAS.md`](./docs/LICENCIAS.md).
-- Los **mensajes** se purgan a los 90 días (cron). El bot **no envía telemetría**.
+- Los **mensajes** se purgan a los 90 días (cron). El bot **no comparte datos de personas**: solo uso agregado (conteos + costo de IA) a tu panel de licencias, si está configurado.
