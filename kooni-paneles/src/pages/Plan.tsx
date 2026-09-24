@@ -3,6 +3,22 @@ import { useSearchParams } from "react-router-dom";
 import { insforge } from "../lib/insforge";
 import type { Licencia, Plan, ProveedorPago } from "../lib/types";
 
+function loadPayphoneSDK(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if ((window as any).PPaymentButtonBox) return resolve();
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = "https://cdn.payphonetodoesposible.com/box/v2.0/payphone-payment-box.css";
+    document.head.appendChild(link);
+    const script = document.createElement("script");
+    script.type = "module";
+    script.src = "https://cdn.payphonetodoesposible.com/box/v2.0/payphone-payment-box.js";
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("No se pudo cargar Payphone"));
+    document.head.appendChild(script);
+  });
+}
+
 export default function PlanPage() {
   const [params] = useSearchParams();
   const [planes, setPlanes] = useState<Plan[]>([]);
@@ -11,6 +27,9 @@ export default function PlanPage() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState("");
   const [err, setErr] = useState("");
+  const [aviso, setAviso] = useState("");
+  const [widget, setWidget] = useState<Record<string, any> | null>(null);
+  const [manual, setManual] = useState<Record<string, any> | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -30,10 +49,45 @@ export default function PlanPage() {
     })();
   }, []);
 
+  // Al volver de Payphone: confirmar la transacción (obligatorio dentro de 5 min).
+  useEffect(() => {
+    const id = params.get("id");
+    const clientTransactionId = params.get("clientTransactionId");
+    if (!id || !clientTransactionId) return;
+    (async () => {
+      setAviso("Confirmando el pago…");
+      try {
+        const { data, error } = await insforge.functions.invoke("pago-confirmar-payphone", { body: { id: Number(id), clientTxId: clientTransactionId } });
+        if (error) throw error;
+        if ((data as any)?.error) throw new Error((data as any).error);
+        setAviso("✓ Pago confirmado. Tu plan se activó.");
+      } catch (e: any) {
+        setAviso("");
+        setErr(e?.message || "No se pudo confirmar el pago");
+      }
+    })();
+  }, [params]);
+
+  // Render de la Cajita de Payphone cuando corresponde.
+  useEffect(() => {
+    if (!widget) return;
+    (async () => {
+      try {
+        await loadPayphoneSDK();
+        const ppb = new (window as any).PPaymentButtonBox({ ...widget, defaultMethod: "card" });
+        ppb.render("pp-button");
+      } catch (e: any) {
+        setErr(e?.message || "No se pudo cargar Payphone");
+      }
+    })();
+  }, [widget]);
+
   const pro = lics.find((l) => l.plan === "pro" && l.estado !== "revocada");
 
   async function pagar(planId: string, provider: string) {
     setErr("");
+    setManual(null);
+    setWidget(null);
     setBusy(provider);
     try {
       const { data, error } = await insforge.functions.invoke("pago-crear", { body: { plan_id: planId, provider } });
@@ -42,6 +96,14 @@ export default function PlanPage() {
       if (j?.error) throw new Error(j.error);
       if (j?.url) {
         location.href = j.url;
+        return;
+      }
+      if (j?.widget) {
+        setWidget(j.widget);
+        return;
+      }
+      if (j?.manual) {
+        setManual(j.manual);
         return;
       }
       throw new Error("No se pudo iniciar el pago.");
@@ -61,12 +123,13 @@ export default function PlanPage() {
 
       {params.get("pago") === "ok" && (
         <div className="rounded-lg border border-ok/40 bg-ok/10 px-3 py-2 text-xs text-ok">
-          Pago recibido. Tu plan se activa en cuanto el proveedor confirme (unos segundos). Refrescá en un momento.
+          Pago recibido. Se activa en cuanto el proveedor confirme (unos segundos).
         </div>
       )}
       {params.get("pago") === "cancelado" && (
         <div className="rounded-lg border border-warn/40 bg-warn/10 px-3 py-2 text-xs text-warn">Pago cancelado.</div>
       )}
+      {aviso && <div className="rounded-lg border border-line bg-panel2 px-3 py-2 text-xs text-muted">{aviso}</div>}
       {err && <div className="rounded-lg border border-bad/40 bg-bad/10 px-3 py-2 text-xs text-bad">{err}</div>}
 
       <div className="card p-5">
@@ -86,6 +149,30 @@ export default function PlanPage() {
           </div>
         )}
       </div>
+
+      {(widget || manual) && (
+        <div className="card p-5">
+          <div className="font-semibold">{widget ? "Pagá con Payphone" : "Pago manual (Binance)"}</div>
+          {widget ? (
+            <>
+              <p className="mt-1 text-sm text-muted">Completá el pago en la cajita. Tenés 10 minutos.</p>
+              <div id="pp-button" className="mt-3" />
+            </>
+          ) : (
+            <div className="mt-2 flex flex-col gap-2 text-sm text-muted">
+              {manual?.instructions ? <p className="whitespace-pre-wrap">{manual.instructions}</p> : null}
+              <div className="rounded-lg border border-line bg-panel2 p-3 font-mono text-[12px]">
+                <div>Monto: {manual?.currency} {Number(manual?.amount).toFixed(2)}</div>
+                {manual?.pay_id ? <div>Destino: {manual.pay_id}</div> : null}
+                <div>Referencia (ponela en la transferencia): {manual?.ref}</div>
+              </div>
+              <p className="text-[12px]">
+                Cuando transferís, el administrador confirma el pago y se activa tu plan. Mandá el comprobante con la referencia.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
 
       {planes.map((p) => (
         <div key={p.id} className="card p-5">
@@ -114,14 +201,8 @@ export default function PlanPage() {
 
           {p.precio != null && !pro ? (
             <div className="mt-4 flex flex-wrap gap-2">
-              {proveedores.map((pr) => (
-                <button
-                  key={pr.id}
-                  className="btn-primary"
-                  disabled={!pr.listo || busy === pr.id}
-                  title={pr.listo ? "" : `Falta configurar: ${pr.faltan.join(", ")}`}
-                  onClick={() => pagar(p.id, pr.id)}
-                >
+              {proveedores.filter((pr) => pr.listo).map((pr) => (
+                <button key={pr.id} className="btn-primary" disabled={busy === pr.id} onClick={() => pagar(p.id, pr.id)}>
                   {busy === pr.id ? "Abriendo…" : `Pagar con ${pr.nombre}`}
                 </button>
               ))}

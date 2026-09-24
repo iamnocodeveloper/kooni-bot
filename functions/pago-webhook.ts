@@ -60,7 +60,9 @@ export default async function (req: Request): Promise<Response> {
 
   try {
     if (provider === "stripe") {
-      const secret = Deno.env.get("STRIPE_WEBHOOK_SECRET");
+      const { data: provRows } = await admin.database.from("pago_proveedores").select("*").eq("id", "stripe");
+      const prov = Array.isArray(provRows) ? provRows[0] : provRows;
+      const secret = (prov?.config?.webhook_secret || Deno.env.get("STRIPE_WEBHOOK_SECRET") || "").trim();
       const sig = req.headers.get("stripe-signature") || "";
       if (!secret || !verifyStripe(raw, sig, secret)) return json({ error: "firma inválida" }, 400);
       const evt = JSON.parse(raw);

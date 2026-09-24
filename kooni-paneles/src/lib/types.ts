@@ -132,6 +132,19 @@ export interface Pago {
 export interface ProveedorPago {
   id: string;
   nombre: string;
+  modo?: string;
+  activo?: boolean;
   listo: boolean;
   faltan: string[];
+  widget?: { token: string; storeId: string };
+  manual?: { pay_id: string; instructions: string };
+}
+
+export interface ProveedorConfig {
+  id: string;
+  nombre: string;
+  activo: boolean;
+  modo: "test" | "live";
+  config: Record<string, string>;
+  orden: number;
 }

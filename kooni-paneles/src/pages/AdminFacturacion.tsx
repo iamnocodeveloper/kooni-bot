@@ -32,6 +32,11 @@ export default function AdminFacturacion() {
     })();
   }, []);
 
+  async function confirmar(id: string) {
+    const { error } = await insforge.functions.invoke("pago-confirmar-manual", { body: { pago_id: id } });
+    if (!error) location.reload();
+  }
+
   const statusCls = (s: string) =>
     s === "pagado" ? "bg-ok/15 text-ok" : s === "pendiente" ? "bg-warn/15 text-warn" : "bg-bad/15 text-bad";
 
@@ -75,14 +80,15 @@ export default function AdminFacturacion() {
               <th>Plan</th>
               <th>Monto</th>
               <th>Estado</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
             {loading && (
-              <tr><td colSpan={6} className="text-muted">Cargando…</td></tr>
+              <tr><td colSpan={7} className="text-muted">Cargando…</td></tr>
             )}
             {!loading && pagos.length === 0 && (
-              <tr><td colSpan={6} className="text-muted">Sin pagos todavía.</td></tr>
+              <tr><td colSpan={7} className="text-muted">Sin pagos todavía.</td></tr>
             )}
             {pagos.map((p) => (
               <tr key={p.id}>
@@ -92,6 +98,11 @@ export default function AdminFacturacion() {
                 <td className="text-muted">{p.plan_id ?? "—"}</td>
                 <td className="font-mono">{p.amount != null ? `${p.currency} ${Number(p.amount).toFixed(2)}` : "—"}</td>
                 <td><span className={`chip ${statusCls(p.status)}`}>{p.status}</span></td>
+                <td className="text-right">
+                  {p.status === "pendiente" ? (
+                    <button className="btn-ghost py-1 text-xs" onClick={() => confirmar(p.id)}>Marcar pagado</button>
+                  ) : null}
+                </td>
               </tr>
             ))}
           </tbody>
