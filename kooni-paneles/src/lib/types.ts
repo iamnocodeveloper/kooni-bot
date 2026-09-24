@@ -189,3 +189,14 @@ export interface Integracion {
   activo: boolean;
   orden: number;
 }
+
+export interface Pack {
+  id: string;
+  nombre: string;
+  emoji: string | null;
+  descripcion: string | null;
+  playbook: string | null;
+  version: string | null;
+  activo: boolean;
+  orden: number;
+}

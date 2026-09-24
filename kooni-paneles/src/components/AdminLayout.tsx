@@ -16,6 +16,7 @@ const NAV = [
   { to: "/admin/ia", label: "Proveedores IA" },
   { to: "/admin/comandos", label: "Comandos/Skills" },
   { to: "/admin/integraciones", label: "Integraciones" },
+  { to: "/admin/packs", label: "Plantillas/Packs" },
   { to: "/admin/clientes", label: "Clientes" },
 ];
 
