@@ -6,6 +6,7 @@ import Login from "./pages/Login";
 import Cuenta from "./pages/Cuenta";
 import Vinculacion from "./pages/Vinculacion";
 import Novedades from "./pages/Novedades";
+import Plantillas from "./pages/Plantillas";
 import Configuracion from "./pages/Configuracion";
 import PlanPage from "./pages/Plan";
 import Invitacion from "./pages/Invitacion";
@@ -85,6 +86,7 @@ export default function App() {
                 <Route index element={<Cuenta />} />
                 <Route path="vinculacion" element={<Vinculacion />} />
                 <Route path="novedades" element={<Novedades />} />
+                <Route path="plantillas" element={<Plantillas />} />
                 <Route path="configuracion" element={<Configuracion />} />
                 <Route path="plan" element={<PlanPage />} />
                 <Route path="cli" element={<Cli />} />
