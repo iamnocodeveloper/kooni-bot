@@ -1492,6 +1492,7 @@ Si dudas: **member/ es sagrado, src/ se actualiza.**
 - \`skill/configurar-mi-chatbot.md\` — instalación guiada en 4 fases.
 - \`skill/actualizar-mi-bot.md\` — actualización paso a paso.
 - \`skill/reporte.md\` / \`skill/exportar.md\` — operación diaria.
+- \`skill/prompt.md\` — comandos para gestionar el prompt (\`/prompt\`, \`/limpiar-prompt\`, \`/versionar-prompt\`, \`/lab-prompt\`, \`/prompt-por-canal\`, \`/auditar-prompt\`, \`/ejemplos-prompt\`).
 `;
 
 function installAgentSkill(flags = {}) {
