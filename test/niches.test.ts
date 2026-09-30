@@ -22,6 +22,7 @@ const GIROS: {
   { id: "inmobiliaria", navLabel: "Prospectos", recordPlural: "Prospectos", statusNew: "Nuevo", playbookTag: "playbook_inmobiliaria", columns: ["operacion", "zona", "presupuesto", "recamaras"] },
   { id: "clinica", navLabel: "Citas", recordPlural: "Citas", statusNew: "Solicitada", playbookTag: "playbook_clinica", columns: ["especialidad", "fecha", "hora", "motivo"] },
   { id: "barberia", navLabel: "Citas", recordPlural: "Citas", statusNew: "Solicitada", playbookTag: "playbook_barberia", columns: ["servicio", "barbero", "fecha", "hora"] },
+  { id: "eventos", navLabel: "Cotizaciones", recordPlural: "Cotizaciones", statusNew: "Solicitada", playbookTag: "playbook_eventos", columns: ["evento", "fecha", "equipo", "personas"] },
   { id: "taxis", navLabel: "Solicitudes", recordPlural: "Solicitudes", statusNew: "Solicitada", playbookTag: "playbook_taxis", columns: ["base", "zona", "conductor", "destino"] },
 ];
 

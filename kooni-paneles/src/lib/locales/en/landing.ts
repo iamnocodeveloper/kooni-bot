@@ -131,6 +131,14 @@ export const landingEn: Record<keyof typeof landingEs, string> = {
   "lp.giro.barberia.b4":
     "Offers the next open slot when someone asks last minute.",
 
+  "lp.giro.eventos.pain":
+    "In high season you can't keep up: the bot quotes on its own, leaves the date in your panel and never misses the customer who asks on a Sunday.",
+  "lp.giro.eventos.b1": "Quotes over WhatsApp: packages, hourly price, what's included and travel by zone.",
+  "lp.giro.eventos.b2": "Asks what matters: what's being celebrated, the date, the place, the gear and headcount.",
+  "lp.giro.eventos.b3": "Leaves every quote in the panel with event, date, gear and people.",
+  "lp.giro.eventos.b4":
+    "Never promises a date on its own: it holds a pre-booking and a person confirms the deposit.",
+
   "lp.giro.cartera.pain":
     "Collecting late is expensive. The bot reminds every customer with a firm, kind tone, and brings you payment promises.",
   "lp.giro.cartera.b1": "Reminds the overdue balance with the exact amount and days late.",

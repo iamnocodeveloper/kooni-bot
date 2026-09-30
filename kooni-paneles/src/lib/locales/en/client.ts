@@ -72,6 +72,8 @@ export const clientEn: Record<keyof typeof clientEs, string> = {
   "pla.giro.clinica.desc": "Appointments and follow-up (no diagnosing).",
   "pla.giro.barberia.name": "Barbershop / beauty",
   "pla.giro.barberia.desc": "Fills the chair and cuts no-shows.",
+  "pla.giro.eventos.name": "Events / party rentals",
+  "pla.giro.eventos.desc": "Quotes over WhatsApp and holds the date.",
   "pla.giro.cartera.name": "Collections portfolio",
   "pla.giro.cartera.desc": "Overdue reminders and payment promises.",
   "pla.giro.taxis.name": "Taxis / dispatch center",

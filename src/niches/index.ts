@@ -6,6 +6,7 @@ import { restaurante } from "./restaurante";
 import { inmobiliaria } from "./inmobiliaria";
 import { clinica } from "./clinica";
 import { barberia } from "./barberia";
+import { eventos } from "./eventos";
 import { cartera } from "./cartera";
 import { taxis } from "./taxis";
 
@@ -21,6 +22,7 @@ const PACKS: Record<string, NichePack> = {
   inmobiliaria,
   clinica,
   barberia,
+  eventos,
   cartera,
   taxis,
 };

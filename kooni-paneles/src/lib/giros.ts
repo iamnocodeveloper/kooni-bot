@@ -16,7 +16,7 @@ export interface Giro {
   emoji: string;
 }
 
-/** Los 8 giros, en el orden en que se muestran. */
+/** Los giros, en el orden en que se muestran. */
 export const GIROS: Giro[] = [
   { id: "generico", emoji: "🤖" },
   { id: "agencia-ia", emoji: "🚀" },
@@ -24,6 +24,7 @@ export const GIROS: Giro[] = [
   { id: "inmobiliaria", emoji: "🏠" },
   { id: "clinica", emoji: "🩺" },
   { id: "barberia", emoji: "💈" },
+  { id: "eventos", emoji: "🎉" },
   { id: "cartera", emoji: "💰" },
   { id: "taxis", emoji: "🚕" },
 ];

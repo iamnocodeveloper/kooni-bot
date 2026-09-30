@@ -33,6 +33,7 @@ const NICHE_TABLES: Record<string, string[]> = {
   inmobiliaria: [],
   clinica: [],
   barberia: [],
+  eventos: [],
   restaurante: ["products", "orders", "order_items", "order_events"],
   cartera: [
     "debtor_lists",

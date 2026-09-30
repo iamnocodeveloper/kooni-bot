@@ -131,6 +131,14 @@ export const landingEs = {
   "lp.giro.barberia.b4":
     "Ofrece el siguiente espacio libre cuando te piden a última hora.",
 
+  "lp.giro.eventos.pain":
+    "En temporada alta no das abasto: el bot cotiza solo, te deja la fecha en el panel y no pierde al cliente que pregunta un domingo.",
+  "lp.giro.eventos.b1": "Cotiza por WhatsApp: paquetes, precio por horas, qué incluye y traslado por zona.",
+  "lp.giro.eventos.b2": "Pregunta lo que importa: qué se celebra, qué día, dónde, qué equipo y cuántos invitados.",
+  "lp.giro.eventos.b3": "Deja cada cotización en el panel con evento, fecha, equipo y personas.",
+  "lp.giro.eventos.b4":
+    "Nunca promete una fecha por su cuenta: aparta la pre-reserva y una persona confirma el anticipo.",
+
   "lp.giro.cartera.pain":
     "Cobrar tarde cuesta caro. El bot le recuerda a cada cliente con voz firme y amable, y te trae promesas de pago.",
   "lp.giro.cartera.b1": "Recuerda el saldo vencido con el monto y los días exactos.",

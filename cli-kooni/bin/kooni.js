@@ -266,6 +266,7 @@ const NICHES = [
   { key: "inmobiliaria", label: "Inmobiliaria" },
   { key: "clinica", label: "Clínica / consultorio" },
   { key: "barberia", label: "Barbería / estética" },
+  { key: "eventos", label: "Eventos / renta de equipo" },
   { key: "cartera", label: "Cartera de cobros" },
   { key: "taxis", label: "Taxis / central de despacho" },
 ];
@@ -966,6 +967,7 @@ async function onboarding(rl, answers, defaultDir, flags = {}) {
     { key: "inmobiliaria", label: m("Inmobiliaria", "Real estate") },
     { key: "clinica", label: m("Clínica / consultorio", "Clinic") },
     { key: "barberia", label: m("Barbería / estética", "Barber / beauty") },
+    { key: "eventos", label: m("Eventos / renta de equipo", "Events / party rentals") },
     { key: "cartera", label: m("Cartera de cobros", "Debt collection") },
     { key: "taxis", label: m("Taxis / central de despacho", "Taxi / dispatch") },
   ];

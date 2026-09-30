@@ -7,6 +7,7 @@ import { demoRestaurante } from "./restaurante";
 import { demoInmobiliaria } from "./inmobiliaria";
 import { demoClinica } from "./clinica";
 import { demoBarberia } from "./barberia";
+import { demoEventos } from "./eventos";
 import { demoCartera } from "./cartera";
 import { demoTaxis } from "./taxis";
 
@@ -20,6 +21,7 @@ export const DEMOS: Record<string, DemoGuion> = {
   inmobiliaria: demoInmobiliaria,
   clinica: demoClinica,
   barberia: demoBarberia,
+  eventos: demoEventos,
   cartera: demoCartera,
   taxis: demoTaxis,
 };

@@ -72,6 +72,8 @@ export const clientEs = {
   "pla.giro.clinica.desc": "Citas y seguimiento (sin diagnosticar).",
   "pla.giro.barberia.name": "Barbería / estética",
   "pla.giro.barberia.desc": "Llena la silla y baja los no-shows.",
+  "pla.giro.eventos.name": "Eventos / renta de equipo",
+  "pla.giro.eventos.desc": "Cotiza por WhatsApp y aparta la fecha.",
   "pla.giro.cartera.name": "Cartera de cobros",
   "pla.giro.cartera.desc": "Recordatorios por mora y promesas de pago.",
   "pla.giro.taxis.name": "Taxis / central de despacho",
