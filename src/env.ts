@@ -151,6 +151,10 @@ export interface Env {
   // Credencial de Decodo Scraper API: "user:pass" o el base64 ya hecho. Ausente
   // = el módulo no scrapea nada (segundo candado, además de module_unlocks).
   DECODO_AUTH?: string;                    // secret
+  // API key de AIsa (gateway api.aisa.one): habilita el scraping vía Firecrawl
+  // para sitios que bloquean al Worker. Opcional: si está la del LLM y ES de
+  // AIsa, se hereda (`resolveAisaKey`). Se puede setear también desde el panel.
+  AISA_API_KEY?: string;                   // secret (opcional)
 
   // ── Web Push (avisos al celular del dueño con el panel instalado como PWA) ─
   // Sin las tres, no se manda ningún push (pushConfigured() = false).

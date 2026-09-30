@@ -95,6 +95,17 @@ export const configEn: Record<keyof typeof configEs, string> = {
   "cl.status.pausa.desc": "The bot doesn't reply (useful on vacation).",
 
   // Settings · Web scraping (Decodo)
+  "cfg.scrape.providerLabel": "Scraping provider",
+  "cfg.scrape.help": "Who reads the business site. In “Auto” it first tries a direct fetch (cheap) and, if the site blocks, uses AIsa and finally Decodo.",
+  "cfg.scrape.opt.auto": "Auto (recommended)",
+  "cfg.scrape.opt.aisa": "AIsa (Firecrawl)",
+  "cfg.scrape.opt.decodo": "Decodo",
+  "cfg.scrape.aisaKeyLabel": "AIsa — API key (empty = uses the LLM one)",
+  "cfg.scrape.phAisa": "sk-… (stored, never shown)",
+  "cfg.scrape.aisaOk": "AIsa ready",
+  "cfg.scrape.aisaOrigin": "(source: {src}, …{tail})",
+  "cfg.scrape.aisaMissing": "No AIsa key: only Decodo / the direct attempt will be used.",
+  "cfg.scrape.clear": "Clear (inherit the LLM one again)",
   "cfg.decodo.title": "Web scraping — Decodo API key",
   "cfg.decodo.help":
     'This is how the bot reads your site (Web Sync / inventory). You get it from <span class="font-mono">decodo.com</span> → Scraper API: username and password (or the Basic value already in base64). Decodo charges per use.',

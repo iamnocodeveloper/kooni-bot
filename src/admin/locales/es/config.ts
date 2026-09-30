@@ -97,6 +97,17 @@ export const configEs = {
   "cl.status.pausa.desc": "El bot no responde (útil en vacaciones).",
 
   // Config · Scraping web (Decodo)
+  "cfg.scrape.providerLabel": "Proveedor de scraping",
+  "cfg.scrape.help": "Quién lee el sitio del negocio. En «Auto» se intenta bajar directo (barato) y, si el sitio bloquea, se usa AIsa y por último Decodo.",
+  "cfg.scrape.opt.auto": "Auto (recomendado)",
+  "cfg.scrape.opt.aisa": "AIsa (Firecrawl)",
+  "cfg.scrape.opt.decodo": "Decodo",
+  "cfg.scrape.aisaKeyLabel": "AIsa — API key (vacío = usa la del LLM)",
+  "cfg.scrape.phAisa": "sk-… (se guarda, nunca se muestra)",
+  "cfg.scrape.aisaOk": "AIsa lista",
+  "cfg.scrape.aisaOrigin": "(origen: {src}, …{tail})",
+  "cfg.scrape.aisaMissing": "Sin key de AIsa: se usará solo Decodo / el intento directo.",
+  "cfg.scrape.clear": "Borrar (volver a heredar la del LLM)",
   "cfg.decodo.title": "Scraping web — API key de Decodo",
   "cfg.decodo.help":
     'Con esto el bot lee tu sitio (Web Sync / inventario). Se saca en <span class="font-mono">decodo.com</span> → Scraper API: usuario y contraseña (o el Basic ya en base64). Decodo cobra por uso.',

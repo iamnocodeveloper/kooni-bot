@@ -16,7 +16,7 @@
 import type { Env } from "../env";
 import { Db } from "../db/client";
 import { SettingsRepo, SETTING_KEYS } from "../db/settings";
-import { scrapeUrl } from "../integrations/decodo";
+import { scrapeForDetails } from "../integrations/scraper";
 
 /** Un auto tal como sale del parseo del feed (sin estado de foto). */
 export interface Vehicle {
@@ -933,25 +933,35 @@ export async function fetchVehicleDetails(
   if (!vehicle.listingUrl) return out;
   const timeoutMs = opts.timeoutMs ?? 60_000;
   try {
-    // 1) HTML primero: el JSON-LD de la ficha es la fuente AUTORITATIVA de
-    // precio/millas (el texto libre del markdown puede traer precios de autos
-    // "similares" u otros montos). De paso trae og:image y el widget de precio.
-    const html = await scrapeUrl(env, vehicle.listingUrl, { markdown: false, timeoutMs });
-    if (html.ok) {
+    // La fuente la decide `scrape_provider` (ver src/integrations/scraper.ts):
+    //  - "aisa"  → markdown de la ficha (1 crédito) con precio/millas/foto
+    //  - "decodo"/"auto" sin AIsa → HTML crudo, cuyo JSON-LD es la fuente
+    //    AUTORITATIVA de precio/millas (el texto libre puede traer precios de
+    //    autos "similares"), más og:image.
+    const first = await scrapeForDetails(env, vehicle.listingUrl, { timeoutMs });
+    if (first.ok && first.content) {
       out.scraped = true;
-      const d = extractDetailsFromHtml(html.content);
-      out.price = d.price;
-      out.miles = d.miles;
-      out.pricing = d.pricing;
-      if (d.image) out.imageUrl = absUrl(vehicle.listingUrl, d.image);
-    }
-    // 2) Solo si falta la foto, markdown (más liviano) para sacarla inline.
-    if (!out.imageUrl) {
-      const md = await scrapeUrl(env, vehicle.listingUrl, { markdown: true, timeoutMs });
-      if (md.ok) {
-        out.scraped = true;
-        const img = extractImageFromMarkdown(md.content);
+      if (first.kind === "markdown") {
+        // AIsa: extraemos del markdown (mismos helpers que el feed liviano).
+        out.price = extractPriceFromText(first.content);
+        out.miles = extractMilesFromText(first.content);
+        out.pricing = extractPricingFromText(first.content);
+        const img = extractImageFromMarkdown(first.content);
         if (img) out.imageUrl = absUrl(vehicle.listingUrl, img);
+      } else {
+        const d = extractDetailsFromHtml(first.content);
+        out.price = d.price;
+        out.miles = d.miles;
+        out.pricing = d.pricing;
+        if (d.image) out.imageUrl = absUrl(vehicle.listingUrl, d.image);
+        // Solo si falta la foto, segundo intento en markdown (más liviano).
+        if (!out.imageUrl) {
+          const md = await scrapeForDetails(env, vehicle.listingUrl, { timeoutMs, markdown: true });
+          if (md.ok && md.content) {
+            const img = extractImageFromMarkdown(md.content);
+            if (img) out.imageUrl = absUrl(vehicle.listingUrl, img);
+          }
+        }
       }
     }
   } catch {

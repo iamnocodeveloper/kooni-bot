@@ -5,6 +5,32 @@ Cambios notables de Kooni. Formato aproximado de
 
 El CLI `kooni-bot` se versiona aparte (npm) — ver la nota de cada versión.
 
+## [1.53.0] — 2026-09-30
+
+### Agregado — elegir el proveedor de scraping: **AIsa (Firecrawl)** o Decodo
+
+El scraping del inventario dejó de depender de una sola API. Nuevo setting
+**`scrape_provider`** (Configuración → Scraping): `auto` | `aisa` | `decodo`.
+
+- **AIsa (Firecrawl)** es la salida para sitios que **bloquean al Worker** (403 del
+  WAF) o cuando Decodo no tiene cuota. Usa la **misma key del LLM** si esa key es
+  de AIsa (`aisa_api_key` vacío ⇒ hereda `llm_api_key`); también se puede pegar una
+  propia en el panel.
+- **`auto`** (default): intento **directo** (barato) → **AIsa** → **Decodo**.
+  El intento directo ahora **exige que el cuerpo sea XML de verdad**: un WAF que
+  responde `200` con una página HTML de challenge ya no se confunde con un sitemap.
+- **Descubrimiento sin sitemap**: con AIsa se usa `firecrawl/map` sobre el sitio y
+  se **sintetiza un sitemap** con las fichas (`/inventory/…`), así el parser de
+  inventario existente funciona sin cambios.
+- **Fichas**: con AIsa, `firecrawl/scrape` devuelve el markdown de la ficha (1
+  crédito) con **precio, millas y la foto** (`extractImageFromMarkdown`), en una
+  sola llamada; con Decodo se mantiene el HTML + JSON-LD.
+- Nuevo `src/integrations/scraper.ts` (conmutador) y `src/integrations/aisaScrape.ts`
+  (cliente Firecrawl: `scrape`, `map`). `AISA_API_KEY` como secret opcional.
+- El resumen de la corrida informa cuántas URLs se bajaron **directo / AIsa / Decodo**.
+- UI: selector de proveedor + campo de key de AIsa (con origen: panel / LLM / worker).
+- Tests: `test/integrations/scraper.test.ts` (directo, challenge del WAF, AIsa, map→XML).
+
 ## [1.52.4] — 2026-09-30
 
 ### Agregado — "Inventario sincronizado" (ver TODOS los autos del bot)

@@ -113,19 +113,51 @@ function renderDecodoSection(env: Env, settings: Record<string, string>, t: T): 
   const source = settingVal ? "panel" : envVal ? "worker (secret)" : "";
   const configured = Boolean(source);
   const tail = (settingVal || envVal).slice(-4);
+  // Proveedor de scraping + estado de la key de AIsa (propia, heredada del LLM o
+  // del secret del worker).
+  const provider = (settings[SETTING_KEYS.scrapeProvider] ?? "auto").trim() || "auto";
+  const aisaSetting = (settings[SETTING_KEYS.aisaApiKey] ?? "").trim();
+  const aisaLlm = (settings[SETTING_KEYS.llmApiKey] ?? "").trim();
+  const aisaEnv = (env.AISA_API_KEY ?? "").trim();
+  const aisaOk = Boolean(aisaSetting || aisaLlm || aisaEnv);
+  const aisaOrigin = aisaSetting ? "panel" : aisaLlm ? "LLM" : aisaEnv ? "worker (secret)" : "";
+  const aisaTail = (aisaSetting || aisaLlm || aisaEnv).slice(-4);
   return `
     <div class="bg-panel border border-line" style="padding:20px;display:flex;flex-direction:column;gap:14px">
       <div style="display:flex;flex-direction:column;gap:2px">
         <h3 class="font-display font-semibold text-[13.5px] text-cream">${t("cfg.decodo.title")}</h3>
         <p class="text-dim text-[11.5px]" style="margin:0">${t("cfg.decodo.help")}</p>
       </div>
-      <div class="text-[11.5px]">${
-        configured
-          ? `<span style="color:var(--ok)">● ${t("cfg.decodo.configured")}</span> <span class="text-dim">${t("cfg.decodo.source", { src: esc(source), tail: esc(tail) })}</span>`
-          : `<span class="text-dim">○ ${t("cfg.decodo.notConfigured")}</span>`
-      }</div>
+
       <div style="display:flex;flex-direction:column;gap:6px;max-width:520px">
+        <label class="text-dim text-[11px]" for="${SETTING_KEYS.scrapeProvider}">${t("cfg.scrape.providerLabel")}</label>
+        <select id="${SETTING_KEYS.scrapeProvider}" name="${SETTING_KEYS.scrapeProvider}" style="${INPUT_STYLE}">
+          <option value="auto" ${provider === "auto" ? "selected" : ""}>${t("cfg.scrape.opt.auto")}</option>
+          <option value="aisa" ${provider === "aisa" ? "selected" : ""}>${t("cfg.scrape.opt.aisa")}</option>
+          <option value="decodo" ${provider === "decodo" ? "selected" : ""}>${t("cfg.scrape.opt.decodo")}</option>
+        </select>
+        <p class="text-dim text-[11px]" style="margin:0">${t("cfg.scrape.help")}</p>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:6px;max-width:520px">
+        <label class="text-dim text-[11px]" for="${SETTING_KEYS.aisaApiKey}">${t("cfg.scrape.aisaKeyLabel")}</label>
+        <input type="password" id="${SETTING_KEYS.aisaApiKey}" name="${SETTING_KEYS.aisaApiKey}" value="" autocomplete="off"
+               placeholder="${aisaSetting ? t("cfg.decodo.phKeep") : t("cfg.scrape.phAisa")}" style="${INPUT_STYLE}">
+        <div class="text-[11px]">${
+          aisaOk
+            ? `<span style="color:var(--ok)">● ${t("cfg.scrape.aisaOk")}</span> <span class="text-dim">${t("cfg.scrape.aisaOrigin", { src: esc(aisaOrigin), tail: esc(aisaTail) })}</span>`
+            : `<span class="text-dim">○ ${t("cfg.scrape.aisaMissing")}</span>`
+        }</div>
+        ${aisaSetting ? `<label class="text-dim text-[11.5px]" style="display:flex;gap:7px;align-items:center;cursor:pointer"><input type="checkbox" name="aisa_clear" value="1"> ${t("cfg.scrape.clear")}</label>` : ""}
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:6px;max-width:520px;border-top:1px solid var(--line);padding-top:13px">
         <label class="text-dim text-[11px]" for="decodo_auth">${t("cfg.decodo.apiKeyLabel")}</label>
+        <div class="text-[11.5px]">${
+          configured
+            ? `<span style="color:var(--ok)">● ${t("cfg.decodo.configured")}</span> <span class="text-dim">${t("cfg.decodo.source", { src: esc(source), tail: esc(tail) })}</span>`
+            : `<span class="text-dim">○ ${t("cfg.decodo.notConfigured")}</span>`
+        }</div>
         <input type="password" id="${SETTING_KEYS.decodoAuth}" name="${SETTING_KEYS.decodoAuth}" value="" autocomplete="off"
                placeholder="${configured ? t("cfg.decodo.phKeep") : t("cfg.decodo.phUserPass")}" style="${INPUT_STYLE}">
       </div>

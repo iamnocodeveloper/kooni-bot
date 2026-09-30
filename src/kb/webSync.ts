@@ -24,8 +24,7 @@ import { Db } from "../db/client";
 import { SettingsRepo, SETTING_KEYS } from "../db/settings";
 import { WebSyncLogRepo, type WebSyncChangeInput } from "../db/webSyncLog";
 import { KbDocsRepo, indexDoc, removeDocVectors, MAX_DOC_CHARS } from "./docs";
-import { scrapeUrl, decodoConfigured } from "../integrations/decodo";
-import { fetchSitemapDirect, looksLikeSitemap } from "../integrations/directFetch";
+import { scrapeForFeed, scraperConfigured } from "../integrations/scraper";
 import {
   parseInventoryFromAny,
   looksLikeInventory,
@@ -189,8 +188,9 @@ export interface WebSyncSummary {
   changed?: number;
   /** Análisis IA del inventario (solo si el toggle está encendido). */
   analysis?: { analyzed: number; applied: number; skipped?: string; error?: string };
-  /** Cuántas URLs se bajaron directo (sin gastar Decodo) vs por Decodo. */
+  /** Cuántas URLs se bajaron directo / con AIsa / con Decodo. */
   direct?: number;
+  aisa?: number;
   decodo?: number;
 }
 
@@ -231,10 +231,11 @@ export async function runWebSync(env: Env, opts: WebSyncRunOptions = {}): Promis
   const runStart = Date.now();
   const empty: WebSyncSummary = { scraped: 0, updated: 0, unchanged: 0, errors: [] };
 
-  // MODELO (2026-09-07): web_sync disponible en todos los planes — solo pide el
-  // secret DECODO_AUTH (cuenta de scraping del dueño).
-  if (!(await decodoConfigured(env))) {
-    return { ...empty, skipped: "falta la API key de Decodo (Configuración → Scraping web)" };
+  // MODELO (2026-09-07): web_sync disponible en todos los planes — solo pide una
+  // credencial de scraping: **AIsa** (Firecrawl, la misma key del LLM si es de
+  // AIsa) o **Decodo**. Ver `scrape_provider` en Configuración → Scraping.
+  if (!(await scraperConfigured(env))) {
+    return { ...empty, skipped: "falta la credencial de scraping (AIsa o Decodo) — Configuración → Scraping web" };
   }
 
   const db = new Db(env.DB);
@@ -271,43 +272,27 @@ export async function runWebSync(env: Env, opts: WebSyncRunOptions = {}): Promis
   const storeBefore: VehicleStore = await loadVehicleStore(db).catch(() => ({ updatedAt: 0, vehicles: {} }));
 
   for (const url of urls) {
-    // Sitemaps/XML: se bajan DIRECTO (público y estático) — 0 requests de Decodo.
-    // Si el sitio bloquea al Worker, se cae a Decodo. El resto sigue por Decodo.
-    let content: string | null = null;
-    let directNote: string | undefined;
-    if (looksLikeSitemap(url)) {
-      const direct = await fetchSitemapDirect(url, env);
-      if (direct.ok && direct.text && direct.text.trim()) {
-        content = direct.text;
-        summary.direct = (summary.direct ?? 0) + 1;
-      } else {
-        directNote = `fetch directo: ${direct.error ?? `HTTP ${direct.status}`}`;
-        console.warn(`[webSync] ${url}: ${directNote} → Decodo`);
+    // Fuente de scraping según `scrape_provider`: directo (barato) → AIsa → Decodo.
+    const f = await scrapeForFeed(env, url);
+    if (!f.ok) {
+      const err = f.error ?? "scrape falló";
+      console.warn(`[webSync] ${url}: ${err}${f.code ? ` [${f.code}]` : ""}`);
+      summary.errors.push({ url, error: err });
+      // Cuota/saldo agotado: no tiene sentido seguir martillando la API.
+      if (f.code === "quota") {
+        summary.errors.push({
+          url,
+          error: "Se detuvo la corrida: el proveedor de scraping no tiene cuota/saldo.",
+        });
+        break;
       }
+      continue;
     }
-
-    if (content === null) {
-      const r = await scrapeUrl(env, url);
-      if (!r.ok) {
-        // El motivo del fetch directo se guarda JUNTO al de Decodo: si el sitio
-        // bloquea al Worker, el panel debe decirlo (no solo el log).
-        const err = directNote ? `${directNote}; Decodo: ${r.error}` : r.error;
-        console.warn(`[webSync] ${url}: ${err}${r.code ? ` [${r.code}]` : ""}`);
-        summary.errors.push({ url, error: err });
-        // Cuota agotada: no tiene sentido seguir martillando la API.
-        if (r.code === "quota") {
-          summary.errors.push({
-            url,
-            error: "Se detuvo la corrida: la cuota de Decodo está agotada (revisá tu plan de Decodo).",
-          });
-          break;
-        }
-        continue;
-      }
-      content = r.content;
-      summary.decodo = (summary.decodo ?? 0) + 1;
-    }
+    if (f.source === "directo") summary.direct = (summary.direct ?? 0) + 1;
+    else if (f.source === "decodo") summary.decodo = (summary.decodo ?? 0) + 1;
+    else if (f.source) summary.aisa = (summary.aisa ?? 0) + 1;
     summary.scraped++;
+    const content = f.content ?? "";
 
     const trimmed = trimBoilerplate(content);
     const parsed = parseInventoryFromAny(trimmed, url);

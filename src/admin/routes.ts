@@ -2060,6 +2060,21 @@ adminApp.post("/config", async (c) => {
     }
   }
 
+  // Proveedor de scraping (auto | aisa | decodo) y la key de AIsa. La key vacía
+  // = hereda la del LLM, así que solo se guarda si escribieron algo.
+  const provider = String(form.get(SETTING_KEYS.scrapeProvider) ?? "").trim();
+  if (provider === "auto" || provider === "aisa" || provider === "decodo") {
+    await repo.set(SETTING_KEYS.scrapeProvider, provider);
+  }
+  if (form.get("aisa_clear") === "1") {
+    await repo.set(SETTING_KEYS.aisaApiKey, "");
+  } else {
+    const aisaRaw = form.get(SETTING_KEYS.aisaApiKey);
+    if (aisaRaw !== null && String(aisaRaw).trim() !== "") {
+      await repo.set(SETTING_KEYS.aisaApiKey, String(aisaRaw).trim());
+    }
+  }
+
   return c.redirect("/admin/config?saved=1");
 });
 

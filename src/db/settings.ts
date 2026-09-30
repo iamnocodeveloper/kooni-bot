@@ -138,6 +138,14 @@ export const SETTING_KEYS = {
   // API key de Decodo (scraping para Web Sync / inventario). Editable desde el
   // panel (Configuración → Scraping); si está vacía, cae al secret DECODO_AUTH.
   decodoAuth: "decodo_auth",
+  // Proveedor de scraping del inventario (feed + fichas):
+  //   "auto"   → directo (barato) → AIsa → Decodo
+  //   "aisa"   → Firecrawl vía el gateway de AIsa (misma key del LLM si existe)
+  //   "decodo" → Scraper API de Decodo
+  scrapeProvider: "scrape_provider", // "auto" | "aisa" | "decodo"
+  // API key de AIsa (gateway api.aisa.one). Vacía = hereda la del LLM
+  // (`llm_api_key`), que en muchas instalaciones ES la key de AIsa.
+  aisaApiKey: "aisa_api_key",
   // WAHA (WhatsApp self-hosted, Docker): datos editables desde el panel
   // (Conexiones → WAHA), mismo patrón que Telegram/Zernio — sin
   // `wrangler secret put` ni redeploy. Fallback a las vars/secrets de env.
@@ -240,6 +248,8 @@ export const SETTING_LABELS: Record<string, string> = {
   [SETTING_KEYS.webSyncUrls]: "URLs de Web Sync",
   [SETTING_KEYS.webSyncVehicles]: "Inventario Web Sync (autos parseados)",
   [SETTING_KEYS.decodoAuth]: "Decodo — API key (scraping)",
+  [SETTING_KEYS.scrapeProvider]: "Proveedor de scraping (auto | aisa | decodo)",
+  [SETTING_KEYS.aisaApiKey]: "AIsa — API key (scraping)",
   [SETTING_KEYS.wahaApiUrl]: "URL del servidor WAHA",
   [SETTING_KEYS.wahaSession]: "Sesión de WAHA",
   [SETTING_KEYS.wahaApiKey]: "API key de WAHA",
