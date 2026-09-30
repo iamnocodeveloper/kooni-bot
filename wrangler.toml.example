@@ -89,6 +89,13 @@ LICENSE_PUBLIC_KEY = "MCowBQYDK2VwAyEALxrjpy7pkyHSqlCcObUfMygNXNznd9/YXhamO17e4t
 #   DECODO_AUTH                 — módulo "Sincronizar sitio web" (una instalación):
 #                                 credencial de Decodo ("user:pass" o el base64).
 #                                 Sin esto + módulo web_sync, el bot no scrapea nada.
+#   AISA_API_KEY                — opcional: API key de AIsa (api.aisa.one, Firecrawl).
+#                                 Es la alternativa a Decodo cuando el sitio bloquea al
+#                                 worker o Decodo no tiene cuota. Si está vacía y la key
+#                                 del LLM (`llm_api_key`) es de AIsa, se hereda sola.
+#                                 El proveedor se elige en el panel:
+#                                 Configuración → Scraping → `scrape_provider`
+#                                 (auto = directo → AIsa → Decodo | aisa | decodo).
 
 [triggers]
 crons = ["0 3 * * *"]  # purga nocturna y trabajos diarios

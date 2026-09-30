@@ -103,18 +103,35 @@ SELECT value FROM settings WHERE key = 'module_unlocks';
 DELETE FROM settings WHERE key = 'module_unlocks';
 ```
 
-### 3.5 Scraping / Decodo
+### 3.5 Scraping: elegir proveedor (AIsa | Decodo | Auto)
 
-- **El sitemap de inventario se baja directo** (es XML público) → **no gasta requests de Decodo**.
-  Si el sitio bloquea al Worker, cae a Decodo.
+Setting **`scrape_provider`** (Configuración → Scraping):
+
+| Valor | Qué hace |
+|---|---|
+| `auto` (default) | intento **directo** (barato) → **AIsa** → **Decodo** |
+| `aisa` | solo **AIsa** (Firecrawl vía `api.aisa.one`) |
+| `decodo` | solo **Decodo** |
+
+- **AIsa** es la salida cuando el sitio **bloquea al Worker** (403 del WAF) o Decodo
+  no tiene cuota. Key: `aisa_api_key` en el panel; **vacía ⇒ hereda `llm_api_key`**
+  (si esa key es de AIsa). También sirve el secret `AISA_API_KEY`.
+- **Descubrimiento**: con AIsa se usa `firecrawl/map` sobre el sitio y se arma el
+  listado con las URLs `/inventory/…` (≈490 links → 341 fichas en greenwaykia).
+- **Fichas**: `firecrawl/scrape` devuelve el markdown con **precio y foto** en 1
+  llamada (~1 crédito/página). ⚠️ **Las millas pueden no venir** en el markdown de
+  AIsa (el sitio las muestra por JS); Decodo (HTML/JSON-LD) sí las trae.
+- **Costo**: ~1 crédito por ficha. Enriquecer 341 autos ≈ **341 créditos**; el `map`
+  es 1 sola llamada. Conviene enriquecer por lotes (la corrida nocturna ya lo hace).
+- **El sitemap se baja directo** y **se exige que sea XML de verdad**: un WAF que
+  responde `200` con una página HTML de challenge ya **no** se confunde con el sitemap.
 - Decodo: **reintentos con backoff** en 429/5xx/timeout, **modo barato** por default
   (`proxy_pool: standard`, sin `headless`) y **errores clasificados**:
   `quota` (plan/cuota agotada), `auth` (credencial inválida), `rate_limit`, `server`, `empty`, `timeout`.
   Si el error es `quota`, la corrida **se corta** en vez de seguir pegándole a la API.
 - Dónde ver el error concreto: **Scraping → detalle de la corrida** (recuadro rojo `Error: …`).
-  El flash de "Scrapear ahora" solo muestra el conteo.
-- Las páginas HTML del sitio (listado y fichas) **no se pueden bajar directo** (dan 504):
-  para enriquecer precio/foto se usa Decodo, en lotes por corrida.
+  El flash de "Scrapear ahora" solo muestra el conteo; el resumen dice cuántas URLs
+  se bajaron **directo / AIsa / Decodo**.
 
 ### 3.6 Validar los cambios del scraping
 
