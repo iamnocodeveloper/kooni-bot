@@ -583,6 +583,21 @@ adminApp.post("/scraping/changes/:id/review", async (c) => {
   return c.redirect(/^\/admin\//.test(back) ? back : "/admin/scraping");
 });
 
+// Inventario sincronizado: TODOS los autos del store, con búsqueda, filtros
+// (sin precio / sin foto / nuevos / usados) y paginación. Antes la pestaña solo
+// mostraba el diff de la corrida.
+adminApp.get("/scraping/inventario", async (c) => {
+  const { renderInventario } = await import("./views/inventario");
+  const pageRaw = Number.parseInt(c.req.query("page") ?? "", 10);
+  return c.html(
+    await renderInventario(c.env, {
+      q: c.req.query("q") || undefined,
+      f: c.req.query("f") || undefined,
+      page: Number.isFinite(pageRaw) && pageRaw > 0 ? pageRaw : undefined,
+    }),
+  );
+});
+
 adminApp.get("/scraping/export.csv", async (c) => {
   const { exportScrapingCsv } = await import("./views/scraping");
   const beforeRaw = Number(c.req.query("before"));

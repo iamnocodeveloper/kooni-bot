@@ -22,6 +22,9 @@ import {
   imageCandidates,
   ensureVehicleImage,
   queryInventory,
+  filterStoredVehicles,
+  paginate,
+  type StoredVehicle,
 } from "../../src/kb/inventory";
 import type { Env } from "../../src/env";
 
@@ -354,6 +357,53 @@ describe("consulta exacta (anti-alucinación)", () => {
     expect(queryInventory(store, {}, 50, 0).matches).toHaveLength(5);
     expect(queryInventory(store, {}, 50, 0).hasMore).toBe(false);
   });
+
+describe("inventario sincronizado (filtro + paginación del panel)", () => {
+  // Store mínimo con los casos que la vista necesita distinguir.
+  const mk = (over: Partial<StoredVehicle> & { key: string; title: string }): StoredVehicle =>
+    ({
+      vin: null, year: null, make: null, model: null, condition: null, price: null, miles: null,
+      listingUrl: null, feedUrl: "https://x", imageUrl: null, imgStatus: "pendiente", imgAt: null, changedAt: 0,
+      ...over,
+    }) as StoredVehicle;
+
+  const list = [
+    mk({ key: "a", title: "2022 Kia Telluride SX", condition: "Nuevo", price: 45000, imgStatus: "ok", imageUrl: "https://x/a.jpg" }),
+    mk({ key: "b", title: "2019 Toyota RAV4 LE", condition: "Usado", price: null }),
+    mk({ key: "c", title: "2023 Kia Sorento EX", condition: "Certificado", price: 32000, imgStatus: "error" }),
+  ];
+
+  it("filtra por sinprecio / sinfoto / condición", () => {
+    expect(filterStoredVehicles(list, { f: "sinprecio" }).map((v) => v.key)).toEqual(["b"]);
+    expect(filterStoredVehicles(list, { f: "sinfoto" }).map((v) => v.key)).toEqual(["b", "c"]);
+    expect(filterStoredVehicles(list, { f: "nuevo" }).map((v) => v.key)).toEqual(["a"]);
+    // "usado" incluye certificados.
+    expect(filterStoredVehicles(list, { f: "usado" }).map((v) => v.key)).toEqual(["b", "c"]);
+    expect(filterStoredVehicles(list, {}).map((v) => v.key)).toEqual(["a", "b", "c"]);
+  });
+
+  it("búsqueda libre por título, VIN o marca (case-insensitive)", () => {
+    expect(filterStoredVehicles(list, { q: "sorento" }).map((v) => v.key)).toEqual(["c"]);
+    expect(filterStoredVehicles(list, { q: "TOYOTA" }).map((v) => v.key)).toEqual(["b"]);
+    expect(filterStoredVehicles(list, { q: "nada" })).toHaveLength(0);
+  });
+
+  it("paginate normaliza la página y recorta", () => {
+    const p1 = paginate([1, 2, 3, 4, 5], 1, 2);
+    expect(p1).toMatchObject({ page: 1, pages: 3, total: 5 });
+    expect(p1.items).toEqual([1, 2]);
+
+    const p9 = paginate([1, 2, 3, 4, 5], 9, 2); // fuera de rango → última
+    expect(p9.page).toBe(3);
+    expect(p9.items).toEqual([5]);
+
+    const p0 = paginate([1, 2, 3], 0, 10);
+    expect(p0).toMatchObject({ page: 1, pages: 1 });
+    expect(p0.items).toEqual([1, 2, 3]);
+
+    expect(paginate([], 1, 10)).toMatchObject({ page: 1, pages: 1, total: 0 });
+  });
+});
 
   it("filtra por modelo, condición y rango de precio", () => {
     expect(queryInventory(store, { modelo: "Sorento" }).total).toBe(1);

@@ -5,6 +5,24 @@ Cambios notables de Kooni. Formato aproximado de
 
 El CLI `kooni-bot` se versiona aparte (npm) — ver la nota de cada versión.
 
+## [1.52.4] — 2026-09-30
+
+### Agregado — "Inventario sincronizado" (ver TODOS los autos del bot)
+
+La pestaña Scraping solo mostraba el **diff** de la corrida: no había forma de ver
+el inventario completo, que es de donde venía el "muchos resultados no se ven".
+
+- Nueva vista **`/admin/scraping/inventario`** (linkeada desde Scraping →
+  "Ver inventario completo →"): lista **todos** los autos del store con
+  **búsqueda** (título / VIN / marca / URL), **filtros** (Sin precio / Sin foto /
+  Nuevos / Usados-certificados) y **paginación** (50 por página).
+- KPIs: total, sin precio y sin foto (de un vistazo se ve el trabajo pendiente de
+  enriquecimiento).
+- Tabla con miniatura de la foto, condición, precio, millas, estado de la foto y
+  link a la ficha.
+- Lógica pura y testeable: `filterStoredVehicles()` y `paginate()` en
+  `src/kb/inventory.ts` (+ tests).
+
 ## [1.52.3] — 2026-09-30
 
 ### Cambiado — el scraping dice POR QUÉ falló el fetch directo (+ reintento)

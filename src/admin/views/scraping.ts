@@ -360,6 +360,7 @@ export async function renderScraping(env: Env, q: ScrapingQuery = {}): Promise<s
         <p class="text-muted text-[12.5px]">
           ${t("scr.subtitle", { runs: total.toLocaleString("es") })}
         </p>
+        <a href="/admin/scraping/inventario" style="font-size:12px;color:var(--accent);text-decoration:none;margin-top:2px">${t("scr.seeInventory")}</a>
       </div>
       ${flash}
       ${kpis}

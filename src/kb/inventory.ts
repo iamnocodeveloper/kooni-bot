@@ -519,6 +519,51 @@ export function listStoredVehicles(store: VehicleStore): StoredVehicle[] {
     .filter(Boolean);
 }
 
+/** Filtro de la vista "Inventario sincronizado" del panel. */
+export type StoreFilter = "all" | "sinprecio" | "sinfoto" | "nuevo" | "usado";
+
+/** ¿Este auto está "sin foto" (no la tiene o falló)? */
+export function lacksPhoto(v: StoredVehicle): boolean {
+  return !(v.imgStatus === "ok" && !!v.imageUrl);
+}
+
+/**
+ * Filtra el inventario guardado (búsqueda libre + filtro de estado). Puro, para
+ * poder testearlo sin DB. Usado por la vista /admin/scraping/inventario.
+ */
+export function filterStoredVehicles(
+  vehicles: StoredVehicle[],
+  opts: { q?: string; f?: StoreFilter } = {},
+): StoredVehicle[] {
+  const q = (opts.q ?? "").trim().toLowerCase();
+  const f = opts.f ?? "all";
+  return vehicles.filter((v) => {
+    if (f === "sinprecio" && v.price !== null) return false;
+    if (f === "sinfoto" && !lacksPhoto(v)) return false;
+    if (f === "nuevo" && (v.condition ?? "").toLowerCase() !== "nuevo") return false;
+    if (f === "usado" && !/usado|certificado/.test((v.condition ?? "").toLowerCase())) return false;
+    if (q) {
+      const hay = `${v.title} ${v.vin ?? ""} ${v.make ?? ""} ${v.model ?? ""} ${v.listingUrl ?? ""}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+/** Paginación simple: recorta y normaliza la página pedida. */
+export function paginate<T>(
+  items: T[],
+  page: number,
+  size: number,
+): { items: T[]; page: number; pages: number; total: number } {
+  const total = items.length;
+  const per = Math.max(1, Math.floor(size) || 1);
+  const pages = Math.max(1, Math.ceil(total / per));
+  const p = Math.min(Math.max(1, Math.floor(page) || 1), pages);
+  const start = (p - 1) * per;
+  return { items: items.slice(start, start + per), page: p, pages, total };
+}
+
 /**
  * Fusiona el inventario recién scrapeado con el store previo: agrega/cambia los
  * autos actuales, marca pendientes de foto los nuevos (o los que cambiaron de
