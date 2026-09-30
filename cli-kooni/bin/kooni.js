@@ -1805,7 +1805,17 @@ async function cmdInit(flags, rest) {
         PENDING_INST_TOKEN = lic.inst_token;
         console.log("  " + C.green("✓") + " " + m("instalación registrada en tu cuenta Kooni", "install registered in your Kooni account"));
       } else if (!loadCreds().token) {
-        console.log("  " + C.dim(m("(sin sesión) corre `npx kooni-bot login` para gestionar tu bot desde el panel", "(no session) run `npx kooni-bot login` to manage your bot from the panel")));
+        // Sin sesión del CLI no se emite licencia y la instalación NO aparece en
+        // el panel del super admin. Antes esto era una línea gris que se perdía:
+        // ahora es un aviso imposible de ignorar con el remedio exacto.
+        console.log("");
+        console.log("  " + C.yellow("⚠  " + C.b(m("NO se registró en tu panel de Kooni", "NOT registered in your Kooni panel"))));
+        console.log("  " + m(
+          "El bot quedó instalado, pero el panel no lo verá (no había sesión del CLI).",
+          "The bot is installed, but the panel won't see it (there was no CLI session).",
+        ));
+        console.log("  " + m("Para registrarlo, corré:", "To register it, run:"));
+        console.log("  " + C.cyan(`npx kooni-bot login && npx kooni-bot pair ${basename(dir)}`) + "\n");
       }
     }
 
