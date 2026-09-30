@@ -10,7 +10,7 @@ import {
   giroPainKey,
   installCommand,
 } from "../lib/giros";
-import { CONTACTO_EMAIL, mailtoDemo } from "../lib/landing";
+import { CONTACT_EMAIL, mailtoDemo } from "../lib/landing";
 import CopyCommand from "../components/CopyCommand";
 import DemoChat from "../components/DemoChat";
 import LandingTopBar from "../components/LandingTopBar";
@@ -188,7 +188,7 @@ export default function GiroPublico() {
                   href={enlaceContacto}
                   className={`break-all rounded-lg font-mono text-[12px] text-brand-accent2 hover:text-brand-accent ${FOCUS}`}
                 >
-                  {t("lp.close.mailLink", { email: CONTACTO_EMAIL })}
+                  {t("lp.close.mailLink", { email: CONTACT_EMAIL })}
                 </a>
               </div>
             </div>
