@@ -2,6 +2,7 @@
 
 | Doc | Contenido |
 |---|---|
+| [`ESTADO-Y-OPERACION.md`](./ESTADO-Y-OPERACION.md) | **Estado de la etapa (v1.52.1)**: dónde se publica cada pieza (GitHub/npm/InsForge), qué cambió, operación (idioma del panel, oído/vista y WAHA, `module_unlocks`, Decodo/scraping, comentarios), checklist de verificación y **pendientes**. |
 | [`IDENTIDAD-KOONI.md`](./IDENTIDAD-KOONI.md) | Marca: nombre, paleta, tipografía, logo, voz y reglas de uso. |
 | [`ARQUITECTURA.md`](./ARQUITECTURA.md) | Cómo funciona el bot por dentro (piezas, flujo, DB, canales, nichos, cron). |
 | [`MENSAJERIA.md`](./MENSAJERIA.md) | **Ciclo de vida de conversaciones y mensajes**: cuándo se guarda, cuándo responde el bot, matriz de pausas y diagnóstico. |

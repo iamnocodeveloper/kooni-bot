@@ -110,8 +110,9 @@ bindings creados. Si falta algo, se detiene y te dice qué.
 | El bot agrupa varios mensajes en una sola respuesta | comportamiento esperado del buffer | si lo quieres más reactivo baja `BUFFER_SECONDS`; si quieres que junte más, súbelo |
 | El bot responde en el idioma equivocado | `BOT_LANGUAGE` mal configurado | edita `BOT_LANGUAGE` en `wrangler.toml` y redeploya |
 | `streamText failed: 401` / `invalid x-api-key` | la llave de Claude es inválida o expiró | renueva en console.anthropic.com y vuelve a poner `pnpm wrangler secret put ANTHROPIC_API_KEY` |
-| El bot ignora notas de voz | falta transcripción o canal sin audio | la transcripción usa Whisper de Workers AI; confirma que el binding **AI** exista en `wrangler.toml` |
-| El bot no "ve" imágenes | función Pro de visión no activa | la lectura de imágenes usa Haiku (solo Pro); confirma que haya una **licencia Pro activa en `/admin/licencia`** (BOT_TIER ya no la desbloquea) y que llegue la imagen del canal |
+| El bot ignora notas de voz | el toggle "Oído y vista" está apagado, falta el binding **AI**, o el archivo no se puede descargar | confirmá que el binding **AI** exista en `wrangler.toml` y que esté encendido **Extras → Oído y vista**. Si el canal es WAHA, el archivo se descarga con su **API key + host** (ver `WAHA_PUBLIC_URL` abajo): si el log dice `media fetch failed`, es eso |
+| El bot no "ve" imágenes | igual que las notas de voz | la visión está disponible en **todos los planes** (no es Pro): la gobierna el toggle **Extras → Oído y vista**. Usa el modelo *fast* configurado (Haiku / gpt-4o-mini, que ya ven imágenes). Si no llega la imagen, revisá el canal y la descarga (WAHA: key + host) |
+| WAHA manda `http://localhost:80/api/files/…` | WAHA no sabe su URL pública | el bot y el panel **reescriben el origen** al `waha_api_url` configurado (así funciona igual), pero lo prolijo es setear `WAHA_PUBLIC_URL=https://tu-host-waha` en el servidor de WAHA y **reiniciar la sesión** |
 
 ### Handoff / avisos al dueño
 
