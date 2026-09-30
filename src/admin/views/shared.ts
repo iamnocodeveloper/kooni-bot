@@ -3,22 +3,27 @@
 // acá para que la pestaña de Comentarios no dependa de internals de esa vista.
 // No cambiar el comportamiento: los strings visibles son load-bearing.
 
+import { makeT, type T } from "../i18n";
+
+/** Traductor por defecto (español) para helpers llamados sin `t` explícito. */
+const esT = makeT("es");
+
 /** Escapa texto para inyectarlo en HTML. */
 export function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
 }
 
-/** Tiempo relativo corto en español (ej. "hace 5 min", "hace 2 h", "hace 3 d"). */
-export function ago(ms: number | null | undefined): string {
+/** Tiempo relativo corto (ej. "hace 5 min", "hace 2 h", "hace 3 d"). */
+export function ago(ms: number | null | undefined, t: T = esT): string {
   if (!ms) return "";
   const diff = Date.now() - ms;
   const min = Math.floor(diff / 60_000);
-  if (min < 1) return "ahora";
-  if (min < 60) return `hace ${min} min`;
+  if (min < 1) return t("sh.now");
+  if (min < 60) return t("sh.min", { n: min });
   const h = Math.floor(min / 60);
-  if (h < 24) return `hace ${h} h`;
+  if (h < 24) return t("sh.hour", { n: h });
   const d = Math.floor(h / 24);
-  return `hace ${d} d`;
+  return t("sh.day", { n: d });
 }
 
 /** Fecha corta dd/mm hh:mm para listados. */

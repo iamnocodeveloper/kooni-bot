@@ -5,6 +5,7 @@ import { ConversationLabelsRepo, NEEDS_HUMAN_LABEL } from "../../db/conversation
 import { getNiche } from "../../niches";
 import { layout } from "./layout";
 import { fmtDate, fmtDateTime } from "../format";
+import { panelI18n, type T } from "../i18n";
 
 // Escapa texto del LLM/cliente antes de meterlo en HTML.
 function esc(v: string | null | undefined): string {
@@ -21,7 +22,7 @@ const STATUS_COLOR: Record<LeadStatus, string> = {
 
 // ── Kanban (vista por defecto) ──────────────────────────────────────────────
 
-function kanbanCard(l: Lead, meta: Record<string, string>, niche: ReturnType<typeof getNiche>, needsHuman = false): string {
+function kanbanCard(t: T, l: Lead, meta: Record<string, string>, niche: ReturnType<typeof getNiche>, needsHuman = false): string {
   const cols = niche.columns.length
     ? niche.columns.map((c) => meta[c.key]).filter(Boolean).slice(0, 3).join(" · ")
     : "";
@@ -32,24 +33,25 @@ function kanbanCard(l: Lead, meta: Record<string, string>, niche: ReturnType<typ
   return `<div class="kb-card" draggable="true" data-lead-id="${l.id}"
     style="border:1px solid var(--line);background:var(--panel2);padding:10px 11px;display:flex;flex-direction:column;gap:5px;cursor:grab;font-size:12px">
     <div style="display:flex;justify-content:space-between;gap:6px">
-      <span class="text-cream" style="font-weight:600">${esc(l.name) || "(sin nombre)"}</span>
+      <span class="text-cream" style="font-weight:600">${esc(l.name) || t("lead.noName")}</span>
       <span class="text-dim" style="font-size:10px">${fmtDate(l.created_at)}</span>
     </div>
     ${l.contact ? `<div class="text-muted" style="font-size:11px">${esc(l.contact)}</div>` : ""}
-    ${needsHuman ? `<div><span style="font-size:9px;color:var(--bad);border:1px solid var(--bad);background:var(--bad-soft);padding:1px 6px;white-space:nowrap">⚑ atención humana</span></div>` : ""}
+    ${needsHuman ? `<div><span style="font-size:9px;color:var(--bad);border:1px solid var(--bad);background:var(--bad-soft);padding:1px 6px;white-space:nowrap">${t("lead.needsHuman")}</span></div>` : ""}
     ${cols ? `<div class="text-muted" style="font-size:11px">${esc(cols)}</div>` : ""}
     ${resumen ? `<div class="text-dim" style="font-size:11px;line-height:1.4;max-height:3.2em;overflow:hidden">${esc(resumen)}</div>` : ""}
     <div style="display:flex;gap:6px;align-items:center;margin-top:2px">
-      ${l.conversation_id ? `<a href="/admin/conversations?c=${encodeURIComponent(l.conversation_id)}" class="text-accent" style="font-size:10.5px;text-decoration:none">ver chat</a>` : ""}
-      <select class="kb-move" data-lead-id="${l.id}" aria-label="Mover a"
+      ${l.conversation_id ? `<a href="/admin/conversations?c=${encodeURIComponent(l.conversation_id)}" class="text-accent" style="font-size:10.5px;text-decoration:none">${t("lead.viewChat")}</a>` : ""}
+      <select class="kb-move" data-lead-id="${l.id}" aria-label="${t("lead.moveTo")}"
         style="margin-left:auto;background:var(--bg);border:1px solid var(--line);color:var(--muted);font-size:10.5px;padding:3px 5px">
-        <option value="">mover…</option>${moveOpts}
+        <option value="">${t("lead.move")}</option>${moveOpts}
       </select>
     </div>
   </div>`;
 }
 
-const KANBAN_JS = `
+function kanbanJs(t: T): string {
+  return `
 (function(){
   var dragId = null;
   async function move(id, to){
@@ -73,7 +75,7 @@ const KANBAN_JS = `
   }
   function rebuildSelect(card, cur){
     var sel = card.querySelector('.kb-move'); if(!sel || !window.__kbLabels) return;
-    sel.innerHTML = '<option value="">mover…</option>' + Object.keys(window.__kbLabels).filter(function(v){return v!==cur}).map(function(v){return '<option value="'+v+'">'+window.__kbLabels[v]+'</option>'}).join('');
+    sel.innerHTML = '<option value="">${t("lead.move")}</option>' + Object.keys(window.__kbLabels).filter(function(v){return v!==cur}).map(function(v){return '<option value="'+v+'">'+window.__kbLabels[v]+'</option>'}).join('');
   }
   document.addEventListener('dragstart', function(e){ var c=e.target.closest('.kb-card'); if(c){ dragId=c.getAttribute('data-lead-id'); c.style.opacity='.4'; }});
   document.addEventListener('dragend', function(e){ var c=e.target.closest('.kb-card'); if(c) c.style.opacity=''; });
@@ -88,13 +90,14 @@ const KANBAN_JS = `
   });
 })();
 `;
+}
 
-function renderKanban(env: Env, list: Lead[], niche: ReturnType<typeof getNiche>, humanSet: Set<string> = new Set()): string {
+function renderKanban(t: T, env: Env, list: Lead[], niche: ReturnType<typeof getNiche>, humanSet: Set<string> = new Set()): string {
   const labels = JSON.stringify(Object.fromEntries(LEAD_STATUSES.map((v) => [v, niche.statusLabels[v]])));
   const columns = LEAD_STATUSES.map((s) => {
     const items = list.filter((l) => l.status === s);
     const cards = items
-      .map((l) => kanbanCard(l, leadMetadata(l), niche, !!l.conversation_id && humanSet.has(l.conversation_id)))
+      .map((l) => kanbanCard(t, l, leadMetadata(l), niche, !!l.conversation_id && humanSet.has(l.conversation_id)))
       .join("");
     return `<div class="kb-col" data-status="${s}" style="flex:1;min-width:220px;display:flex;flex-direction:column;gap:8px;border:1px solid var(--line);background:var(--panel);padding:10px">
       <div style="display:flex;align-items:center;gap:7px">
@@ -107,12 +110,12 @@ function renderKanban(env: Env, list: Lead[], niche: ReturnType<typeof getNiche>
   }).join("");
 
   return `<div style="display:flex;gap:12px;overflow-x:auto;padding-bottom:6px">${columns}</div>
-    <script>window.__kbLabels=${labels};</script><script>${KANBAN_JS}</script>`;
+    <script>window.__kbLabels=${labels};</script><script>${kanbanJs(t)}</script>`;
 }
 
 // ── Tabla (?vista=tabla) ────────────────────────────────────────────────────
 
-function renderTabla(env: Env, list: Lead[], niche: ReturnType<typeof getNiche>, humanSet: Set<string> = new Set()): string {
+function renderTabla(t: T, env: Env, list: Lead[], niche: ReturnType<typeof getNiche>, humanSet: Set<string> = new Set()): string {
   const statusLabel = (s: LeadStatus) => niche.statusLabels[s];
   const rows = list
     .map((l) => {
@@ -123,7 +126,7 @@ function renderTabla(env: Env, list: Lead[], niche: ReturnType<typeof getNiche>,
         : `<td class="text-muted" style="padding:8px 10px">${esc(l.status === "entrada" ? "—" : l.intent)}</td>`;
       return `<tr style="border-top:1px solid var(--line)">
         <td class="text-dim" style="padding:8px 10px;font-size:11px">${fmtDate(l.created_at)}</td>
-        <td class="text-cream" style="padding:8px 10px">${esc(l.name) || "(sin nombre)"}${human ? ` <span style="font-size:9px;color:var(--bad);border:1px solid var(--bad);padding:0 5px">⚑</span>` : ""}</td>
+        <td class="text-cream" style="padding:8px 10px">${esc(l.name) || t("lead.noName")}${human ? ` <span style="font-size:9px;color:var(--bad);border:1px solid var(--bad);padding:0 5px">⚑</span>` : ""}</td>
         <td class="text-muted" style="padding:8px 10px">${esc(l.contact) || "—"}</td>
         ${nicheCells}
         <td style="padding:8px 10px">
@@ -134,23 +137,24 @@ function renderTabla(env: Env, list: Lead[], niche: ReturnType<typeof getNiche>,
             </select>
           </form>
         </td>
-        <td style="padding:8px 10px">${l.conversation_id ? `<a href="/admin/conversations?c=${encodeURIComponent(l.conversation_id)}" class="text-accent" style="font-size:11px;text-decoration:none">ver chat</a>` : ""}</td>
+        <td style="padding:8px 10px">${l.conversation_id ? `<a href="/admin/conversations?c=${encodeURIComponent(l.conversation_id)}" class="text-accent" style="font-size:11px;text-decoration:none">${t("lead.viewChat")}</a>` : ""}</td>
       </tr>`;
     })
     .join("");
-  const headExtra = niche.columns.length ? niche.columns.map((c) => `<th style="padding:8px 10px;text-align:left">${esc(c.label)}</th>`).join("") : `<th style="padding:8px 10px;text-align:left">Resumen</th>`;
+  const headExtra = niche.columns.length ? niche.columns.map((c) => `<th style="padding:8px 10px;text-align:left">${esc(c.label)}</th>`).join("") : `<th style="padding:8px 10px;text-align:left">${t("lead.colSummary")}</th>`;
   return `<div class="bg-panel border border-line" style="overflow-x:auto">
     <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:640px">
       <thead><tr style="font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim)">
-        <th style="padding:8px 10px;text-align:left">Fecha</th><th style="padding:8px 10px;text-align:left">Nombre</th><th style="padding:8px 10px;text-align:left">Contacto</th>
-        ${headExtra}<th style="padding:8px 10px;text-align:left">Estado</th><th></th>
+        <th style="padding:8px 10px;text-align:left">${t("lead.colDate")}</th><th style="padding:8px 10px;text-align:left">${t("lead.colName")}</th><th style="padding:8px 10px;text-align:left">${t("lead.colContact")}</th>
+        ${headExtra}<th style="padding:8px 10px;text-align:left">${t("lead.colStatus")}</th><th></th>
       </tr></thead>
-      <tbody>${list.length ? rows : `<tr><td colspan="7" style="padding:32px;text-align:center;color:var(--dim)">Aún no hay ${esc(niche.recordPlural.toLowerCase())}.</td></tr>`}</tbody>
+      <tbody>${list.length ? rows : `<tr><td colspan="7" style="padding:32px;text-align:center;color:var(--dim)">${t("lead.empty", { n: esc(niche.recordPlural.toLowerCase()) })}</td></tr>`}</tbody>
     </table>
   </div>`;
 }
 
 export async function renderLeads(env: Env, vista: "kanban" | "tabla" = "kanban"): Promise<string> {
+  const { t } = await panelI18n(env);
   const niche = getNiche(env);
   const db = new Db(env.DB);
   const list = await new LeadsRepo(db).list(300);
@@ -172,14 +176,14 @@ export async function renderLeads(env: Env, vista: "kanban" | "tabla" = "kanban"
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;gap:10px;flex-wrap:wrap">
       <div style="display:flex;flex-direction:column;gap:2px">
         <h2 class="font-display font-semibold text-[15px] text-cream">${esc(niche.recordPlural)}</h2>
-        <p class="text-muted text-[12px]">Las conversaciones sin clasificar entran en <b class="text-cream">${esc(niche.statusLabels.entrada)}</b>. Movelas acá o dejá que el bot las clasifique — la ficha se actualiza y el bot lo tiene en cuenta la próxima vez.</p>
+        <p class="text-muted text-[12px]">${t("lead.subtitleBefore")}<b class="text-cream">${esc(niche.statusLabels.entrada)}</b>${t("lead.subtitleAfter")}</p>
       </div>
       <div style="display:flex;gap:8px;align-items:center">
-        ${tab("kanban", "Kanban")} ${tab("tabla", "Tabla")}
-        <a href="/admin/leads/export.csv" style="font-size:12px;padding:6px 12px;border:1px solid var(--line);color:var(--muted);text-decoration:none">⬇ CSV</a>
+        ${tab("kanban", t("lead.tabKanban"))} ${tab("tabla", t("lead.tabTabla"))}
+        <a href="/admin/leads/export.csv" style="font-size:12px;padding:6px 12px;border:1px solid var(--line);color:var(--muted);text-decoration:none">${t("lead.exportCsv")}</a>
       </div>
     </div>
-    ${vista === "kanban" ? renderKanban(env, list, niche, humanSet) : renderTabla(env, list, niche, humanSet)}`;
+    ${vista === "kanban" ? renderKanban(t, env, list, niche, humanSet) : renderTabla(t, env, list, niche, humanSet)}`;
 
   return layout({ title: niche.recordPlural, activeTab: "leads", body, env });
 }

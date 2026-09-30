@@ -7,30 +7,32 @@ import { Db } from "../../db/client";
 import { SettingsRepo, SETTING_KEYS } from "../../db/settings";
 import { EXTRA_FEATURES, extrasState, HABILIDADES } from "../../features";
 import { layout } from "./layout";
+import { panelI18n } from "../i18n";
 
 function esc(s: string): string {
   return s.replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]!));
 }
 
 export async function renderExtras(env: Env, saved = false, report?: string): Promise<string> {
+  const { t } = await panelI18n(env);
   const settings = await new SettingsRepo(new Db(env.DB)).all();
   const state = await extrasState(env, settings);
 
   const savedBanner = saved
-    ? `<div style="border:1px solid var(--ok);background:var(--ok-soft);color:var(--ok);padding:10px 14px;font-size:12.5px;font-weight:600">Guardado ✓</div>`
+    ? `<div style="border:1px solid var(--ok);background:var(--ok-soft);color:var(--ok);padding:10px 14px;font-size:12.5px;font-weight:600">${t("extras.saved")}</div>`
     : "";
 
   let reportBanner = "";
   if (report?.startsWith("ok:")) {
     const ch = report.slice(3).split("+").join(" + ");
-    reportBanner = `<div style="border:1px solid var(--ok);background:var(--ok-soft);color:var(--ok);padding:9px 12px;font-size:12px;font-weight:600">✓ Reporte enviado por: ${esc(ch)}</div>`;
+    reportBanner = `<div style="border:1px solid var(--ok);background:var(--ok-soft);color:var(--ok);padding:9px 12px;font-size:12px;font-weight:600">${t("extras.reportOk", { channels: esc(ch) })}</div>`;
   } else if (report?.startsWith("err:")) {
     const msg = report.slice(4).slice(0, 180);
     reportBanner = `<div style="border:1px solid var(--bad);background:var(--bad-soft);color:var(--bad);padding:9px 12px;font-size:12px;font-weight:600">✕ ${esc(msg)}</div>`;
   }
 
   const actuaBadge = (a: string) => {
-    const txt = a === "bot" ? "Actúa en el bot" : a === "panel" ? "Actúa en el panel" : "Actúa en bot y panel";
+    const txt = a === "bot" ? t("extras.actua.bot") : a === "panel" ? t("extras.actua.panel") : t("extras.actua.both");
     return `<span class="text-[9px] tracking-wide border px-1.5" style="color:var(--dim);border-color:var(--line)">${txt}</span>`;
   };
 
@@ -41,16 +43,16 @@ export async function renderExtras(env: Env, saved = false, report?: string): Pr
     const st = state[f.id];
     const on = st.on && st.unlocked;
     const statusBadge = !st.unlocked
-      ? `<span class="text-[9px] tracking-wide border px-1.5" style="color:var(--accent2);border-color:var(--accent2)">🔒 BLOQUEADO</span>`
+      ? `<span class="text-[9px] tracking-wide border px-1.5" style="color:var(--accent2);border-color:var(--accent2)">${t("extras.locked")}</span>`
       : on
-        ? `<span class="text-[9px] tracking-wide border px-1.5" style="color:var(--ok);border-color:var(--ok)">● ACTIVO</span>`
-        : `<span class="text-[9px] tracking-wide border px-1.5" style="color:var(--dim);border-color:var(--line)">○ DESACTIVADO</span>`;
+        ? `<span class="text-[9px] tracking-wide border px-1.5" style="color:var(--ok);border-color:var(--ok)">${t("extras.active")}</span>`
+        : `<span class="text-[9px] tracking-wide border px-1.5" style="color:var(--dim);border-color:var(--line)">${t("extras.inactive")}</span>`;
     const toggle = st.unlocked
       ? `<label style="display:flex;align-items:center;gap:9px;cursor:pointer;flex:none">
            <input type="checkbox" name="${esc(f.toggleKey)}" value="1" ${on ? "checked" : ""} style="accent-color:var(--accent);width:16px;height:16px">
-           <span class="text-[11.5px] text-muted">${on ? "Encendida" : "Apagada"}</span>
+           <span class="text-[11.5px] text-muted">${on ? t("extras.on") : t("extras.off")}</span>
          </label>`
-      : `<span class="text-[11px] text-accent2" style="flex:none">Requiere licencia → <a href="/admin/licencia" style="color:var(--accent2)">Licencia</a></span>`;
+      : `<span class="text-[11px] text-accent2" style="flex:none">${t("extras.requiresLicense")} <a href="/admin/licencia" style="color:var(--accent2)">${t("extras.license")}</a></span>`;
 
     // El Reporte nocturno tiene config extra: canal (Telegram/correo) y botón
     // de prueba (POST a /admin/config/report-test, vive fuera de este form).
@@ -59,20 +61,20 @@ export async function renderExtras(env: Env, saved = false, report?: string): Pr
       const channel = settings[SETTING_KEYS.nightlyReportChannel] ?? "telegram";
       const opts = [
         { v: "telegram", l: "Telegram" },
-        { v: "email", l: "Correo" },
-        { v: "both", l: "Telegram + correo" },
+        { v: "email", l: t("extras.report.email") },
+        { v: "both", l: t("extras.report.both") },
       ]
         .map((o) => `<option value="${o.v}" ${channel === o.v ? "selected" : ""}>${o.l}</option>`)
         .join("");
       extra = `
         <div style="display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;margin-top:4px">
           <div style="display:flex;flex-direction:column;gap:4px;max-width:220px">
-            <label class="text-[11px] text-dim" for="${esc(SETTING_KEYS.nightlyReportChannel)}">¿Por dónde te lo mando?</label>
+            <label class="text-[11px] text-dim" for="${esc(SETTING_KEYS.nightlyReportChannel)}">${t("extras.report.channelLabel")}</label>
             <select id="${esc(SETTING_KEYS.nightlyReportChannel)}" name="${esc(SETTING_KEYS.nightlyReportChannel)}" style="${SELECT_STYLE}">${opts}</select>
           </div>
           <button type="submit" form="report-test-form"
                   class="text-[11.5px] font-display font-semibold cursor-pointer"
-                  style="border:1px solid var(--line);color:var(--cream);padding:8px 12px;background:var(--panel2);white-space:nowrap">📨 Enviar prueba ahora</button>
+                  style="border:1px solid var(--line);color:var(--cream);padding:8px 12px;background:var(--panel2);white-space:nowrap">${t("extras.report.testBtn")}</button>
         </div>`;
     }
 
@@ -102,7 +104,7 @@ export async function renderExtras(env: Env, saved = false, report?: string): Pr
               <div style="display:flex;gap:6px;margin-top:5px;flex-wrap:wrap">
                 ${statusBadge}
                 ${actuaBadge(f.actuaEn)}
-                <span class="text-[9px] tracking-wide border px-1.5" style="color:var(--dim);border-color:var(--line)">${f.tipo === "pago_unico" ? "PAGO ÚNICO" : "MEMBRESÍA"}</span>
+                <span class="text-[9px] tracking-wide border px-1.5" style="color:var(--dim);border-color:var(--line)">${f.tipo === "pago_unico" ? t("extras.singlePayment") : t("extras.membership")}</span>
               </div>
             </div>
           </div>
@@ -128,21 +130,21 @@ export async function renderExtras(env: Env, saved = false, report?: string): Pr
   const body = `
     <div style="display:flex;flex-direction:column;gap:18px;max-width:1080px">
       <div style="display:flex;flex-direction:column;gap:2px">
-        <h2 class="font-display font-semibold text-[15px] text-cream">Habilidades — incluidas</h2>
-        <p class="text-muted text-[12.5px]">Esto lo hace tu bot desde el primer día, sin costo extra. No hay nada que encender.</p>
+        <h2 class="font-display font-semibold text-[15px] text-cream">${t("extras.included.title")}</h2>
+        <p class="text-muted text-[12.5px]">${t("extras.included.help")}</p>
       </div>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">${habilidadCards}</div>
 
       <form method="POST" action="/admin/extras" style="display:flex;flex-direction:column;gap:18px;margin-top:10px">
         ${savedBanner}
         <div style="display:flex;flex-direction:column;gap:2px">
-          <h2 class="font-display font-semibold text-[15px] text-cream">Superpoderes — funciones de pago</h2>
-          <p class="text-muted text-[12.5px]">Enciende o apaga cada superpoder con su interruptor. Las bloqueadas (🔒) necesitan una licencia que las incluya — revisa la pestaña Licencia. Los cambios se guardan al presionar el botón de abajo.</p>
+          <h2 class="font-display font-semibold text-[15px] text-cream">${t("extras.paid.title")}</h2>
+          <p class="text-muted text-[12.5px]">${t("extras.paid.help")}</p>
         </div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">${cards}</div>
         <button type="submit" class="bigbtn font-display font-bold text-[13px] cursor-pointer"
                 style="width:fit-content;background:var(--accent);border:1px solid var(--accent);color:var(--on-accent);box-shadow:4px 4px 0 var(--linelit);padding:13px 24px;display:flex;align-items:center;gap:9px">
-          <i data-lucide="check" width="16" height="16"></i> Guardar cambios
+          <i data-lucide="check" width="16" height="16"></i> ${t("extras.save")}
         </button>
       </form>
     </div>
@@ -151,5 +153,5 @@ export async function renderExtras(env: Env, saved = false, report?: string): Pr
          con form="report-test-form". -->
     <form id="report-test-form" method="POST" action="/admin/config/report-test" style="display:none"></form>`;
 
-  return layout({ title: "Extras", activeTab: "extras", body, env });
+  return layout({ title: t("extras.title"), activeTab: "extras", body, env });
 }

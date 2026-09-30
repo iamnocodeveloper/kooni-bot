@@ -21,29 +21,32 @@ import { channelLabel } from "../../channels/labels";
 import { getNiche } from "../../niches";
 import { layout } from "./layout";
 import { fmtDateTime } from "../format";
+import { panelI18n, makeT, type T } from "../i18n";
 import { TELEGRAM_TOKEN_MASK } from "../../telegramFiles";
 
-/** Tiempo relativo corto en español (ej. "hace 5 min", "hace 2 h", "hace 3 d"). */
-function ago(ms: number | null | undefined): string {
+/** Tiempo relativo corto (ej. "hace 5 min", "hace 2 h", "hace 3 d"). */
+function ago(t: T, ms: number | null | undefined): string {
   if (!ms) return "";
   const diff = Date.now() - ms;
   const min = Math.floor(diff / 60_000);
-  if (min < 1) return "ahora";
-  if (min < 60) return `hace ${min} min`;
+  if (min < 1) return t("conv.agoNow");
+  if (min < 60) return t("conv.agoMin", { n: min });
   const h = Math.floor(min / 60);
-  if (h < 24) return `hace ${h} h`;
+  if (h < 24) return t("conv.agoHour", { n: h });
   const d = Math.floor(h / 24);
-  return `hace ${d} d`;
+  return t("conv.agoDay", { n: d });
 }
 
 // Lead pill colors follow the design-system's own "Lead" example (accent) —
 // see docs/design-system.md §3 Pill/badge.
-const LEAD_BADGE: Record<string, { txt: string; color: string }> = {
-  new: { txt: "💰 Lead nuevo", color: "var(--accent)" },
-  contacted: { txt: "💬 Contactado", color: "var(--info)" },
-  sold: { txt: "✅ Vendido", color: "var(--ok)" },
-  lost: { txt: "✖ Perdido", color: "var(--dim)" },
-};
+function leadBadges(t: T): Record<string, { txt: string; color: string }> {
+  return {
+    new: { txt: t("conv.leadNew"), color: "var(--accent)" },
+    contacted: { txt: t("conv.leadContacted"), color: "var(--info)" },
+    sold: { txt: t("conv.leadSold"), color: "var(--ok)" },
+    lost: { txt: t("conv.leadLost"), color: "var(--dim)" },
+  };
+}
 
 // We reuse SENTIMENT_BADGE's `.txt` labels (insights.ts) but render inbox pills
 // with inline token colors; both maps use the same semantics (frustrated→amber,
@@ -99,25 +102,25 @@ export function mediaSrc(ref: string): string {
  * solo tienen sentido dentro del canal real (Telegram/Zernio), así que en el
  * panel se muestran informativos, no clicables.
  */
-export function buttonChipHtml(buttons: MessageButton[]): string {
+export function buttonChipHtml(buttons: MessageButton[], t: T = makeT("es")): string {
   if (!buttons.length) return "";
   const chips = buttons
     .map((b) =>
       b.kind === "url" && b.value
         ? `<a href="${escapeHtml(b.value)}" target="_blank" rel="noopener noreferrer" style="font-size:11px;color:var(--accent-2);border:1px solid var(--linelit);background:var(--panel2);padding:4px 10px;border-radius:999px;text-decoration:none">${escapeHtml(b.label)} ↗</a>`
-        : `<span title="Botón de respuesta rápida — solo funciona dentro del canal real" style="font-size:11px;color:var(--muted);border:1px dashed var(--linelit);background:var(--panel2);padding:4px 10px;border-radius:999px">${escapeHtml(b.label)}</span>`,
+        : `<span title="${t("conv.quickReplyTitle")}" style="font-size:11px;color:var(--muted);border:1px dashed var(--linelit);background:var(--panel2);padding:4px 10px;border-radius:999px">${escapeHtml(b.label)}</span>`,
     )
     .join("");
   return `<div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end">${chips}</div>`;
 }
 
 /** Miniaturas de imagen (click → abrir grande) + reproductores de audio. */
-function mediaHtml(images: string[], audios: string[]): string {
+function mediaHtml(images: string[], audios: string[], t: T): string {
   if (images.length === 0 && audios.length === 0) return "";
   const imgs = images
     .map(
       (u) =>
-        `<img src="${escapeHtml(mediaSrc(u))}" loading="lazy" alt="Imagen del cliente" style="max-width:220px;max-height:220px;border-radius:8px;border:1px solid var(--line);cursor:pointer;display:block" onclick="window.open(this.src, '_blank')">`,
+        `<img src="${escapeHtml(mediaSrc(u))}" loading="lazy" alt="${t("conv.imageAlt")}" style="max-width:220px;max-height:220px;border-radius:8px;border:1px solid var(--line);cursor:pointer;display:block" onclick="window.open(this.src, '_blank')">`,
     )
     .join("");
   const auds = audios
@@ -232,6 +235,8 @@ function inboxUrl(p: InboxParams, convId?: string): string {
 // --- Left pane: conversation list --------------------------------------------
 
 export async function renderInboxList(env: Env, p: InboxParams): Promise<string> {
+  const { t } = await panelI18n(env);
+  const leadBadge = leadBadges(t);
   const db = new Db(env.DB);
   const now = Date.now();
 
@@ -290,11 +295,11 @@ export async function renderInboxList(env: Env, p: InboxParams): Promise<string>
       const paused = r.paused_until && r.paused_until > now;
       const badges: string[] = [];
       if (r.lead_count > 0) {
-        const b = LEAD_BADGE[r.lead_status as string] ?? LEAD_BADGE.new;
+        const b = leadBadge[r.lead_status as string] ?? leadBadge.new;
         badges.push(`<span style="${smallPill(b.color)}">${b.txt}</span>`);
       }
       if (r.open_tickets > 0) badges.push(`<span style="${smallPill("var(--accent-2)")}">🔔</span>`);
-      if (r.needs_human > 0) badges.push(`<span style="${smallPill("var(--bad)")}">⚑ atención humana</span>`);
+      if (r.needs_human > 0) badges.push(`<span style="${smallPill("var(--bad)")}">${t("conv.needsHuman")}</span>`);
       if (paused) badges.push(`<span style="${smallPill("var(--dim)")}">⏸</span>`);
       if (r.ai_sentiment === "frustrated" || r.ai_sentiment === "angry") {
         const s = SENTIMENT_BADGE[r.ai_sentiment as string];
@@ -313,7 +318,7 @@ export async function renderInboxList(env: Env, p: InboxParams): Promise<string>
           <div style="display:flex;align-items:center;gap:6px">
             <span style="font-size:12.5px;font-weight:600;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;color:var(--cream)">${name}</span>
             <span style="font-size:9px;letter-spacing:.05em;color:${chanColor};border:1px solid ${chanColor};padding:0 5px;flex:none">${escapeHtml(channelLabel(r.channel))}</span>
-            <span style="margin-left:auto;font-size:9.5px;color:var(--dim);white-space:nowrap">${ago(r.last_message_at)}</span>
+            <span style="margin-left:auto;font-size:9.5px;color:var(--dim);white-space:nowrap">${ago(t, r.last_message_at)}</span>
           </div>
           <div style="font-size:11.5px;color:var(--muted);white-space:nowrap;text-overflow:ellipsis;overflow:hidden;margin-top:3px">${preview || "—"}</div>
           ${badges.length ? `<div style="display:flex;gap:5px;margin-top:6px;flex-wrap:wrap">${badges.join("")}</div>` : ""}
@@ -321,7 +326,7 @@ export async function renderInboxList(env: Env, p: InboxParams): Promise<string>
       </a>`;
     })
     .join("") ||
-    `<div style="padding:32px 16px;text-align:center;font-size:12.5px;color:var(--dim)">Sin conversaciones${p.filter ? " con este filtro" : ""}.</div>`;
+    `<div style="padding:32px 16px;text-align:center;font-size:12.5px;color:var(--dim)">${p.filter ? t("conv.noConvsFiltered") : t("conv.noConvs")}</div>`;
 
   return items;
 }
@@ -351,26 +356,27 @@ function telefonoLegible(id: string): string {
   return "+" + d.replace(/^(\d{1,3})(\d{3})(\d{3})(\d{3,})$/, "$1 $2 $3 $4");
 }
 
-function bloqueContacto(canal: string | null | undefined, idCanal: string): string {
+function bloqueContacto(canal: string | null | undefined, idCanal: string, t: T): string {
   const tel = esTelefono(canal);
   const visible = tel ? telefonoLegible(idCanal) : idCanal;
   const crudo = tel ? "+" + (idCanal ?? "").replace(/\D/g, "") : idCanal;
   const enlace = tel
     ? `<a href="https://api.whatsapp.com/send?phone=${encodeURIComponent((idCanal ?? "").replace(/\D/g, ""))}" target="_blank" rel="noopener"
-         title="Abrir este chat en tu WhatsApp" style="color:inherit;text-decoration:none;border-bottom:1px dotted currentColor">${escapeHtml(visible)}</a>`
+         title="${t("conv.openWhatsAppTitle")}" style="color:inherit;text-decoration:none;border-bottom:1px dotted currentColor">${escapeHtml(visible)}</a>`
     : escapeHtml(visible);
   return `<span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--dim)">
     ${enlace}
-    <button type="button" title="Copiar" aria-label="Copiar el contacto"
+    <button type="button" title="${t("conv.copyTitle")}" aria-label="${t("conv.copyContactAria")}"
             onclick="navigator.clipboard.writeText('${crudo.replace(/'/g, "")}');this.textContent='✓';setTimeout(()=>this.textContent='⧉',1200)"
             style="background:none;border:none;color:inherit;cursor:pointer;font-size:11px;padding:0 2px;line-height:1">⧉</button>
   </span>`;
 }
 
 export async function renderThreadLive(env: Env, convId: string): Promise<string> {
+  const { t } = await panelI18n(env);
   const db = new Db(env.DB);
   const conv = await db.first<any>("SELECT * FROM conversations WHERE id = ?", [convId]);
-  if (!conv) return `<div style="padding:24px;font-size:12.5px;color:var(--dim)">Conversación no encontrada.</div>`;
+  if (!conv) return `<div style="padding:24px;font-size:12.5px;color:var(--dim)">${t("conv.notFound")}</div>`;
 
   const insight = await new InsightsRepo(db).getByConversation(convId);
   const msgs = await db.all<any>(
@@ -395,7 +401,7 @@ export async function renderThreadLive(env: Env, convId: string): Promise<string
       [convId],
     ))?.n ?? 0;
   const humanChip = `<form method="POST" action="/admin/conversations/${encodeURIComponent(convId)}/label" style="display:inline-flex" title="${
-    needsHuman ? "Quitar la etiqueta de atención humana" : "Marcar: este chat necesita atención de una persona"
+    needsHuman ? t("conv.unmarkHumanTitle") : t("conv.markHumanTitle")
   }">
     <input type="hidden" name="label" value="atencion_humana">
     <input type="hidden" name="action" value="${needsHuman ? "remove" : "add"}">
@@ -403,13 +409,13 @@ export async function renderThreadLive(env: Env, convId: string): Promise<string
       needsHuman
         ? "color:var(--bad);border:1px solid var(--bad);background:var(--bad-soft)"
         : "color:var(--muted);border:1px solid var(--linelit);background:var(--panel2)"
-    }">${needsHuman ? "⚑ Atención humana ✓" : "⚑ Atención humana"}</button>
+    }">${needsHuman ? t("conv.humanOn") : t("conv.humanOff")}</button>
   </form>`;
 
   // Header: identity + live state + takeover controls.
   const statusColor = paused ? "var(--accent-2)" : "var(--ok)";
   const statusPill = `<span style="${statusBadge(statusColor)}">${
-    paused ? "⏸ bot pausado · tú tienes el control" : "🟢 bot activo"
+    paused ? t("conv.botPaused") : t("conv.botActive")
   }</span>`;
 
   // "NEUTRAL" NO SE MUESTRA. El analizador clasifica cómo quedó el cliente en
@@ -433,20 +439,20 @@ export async function renderThreadLive(env: Env, convId: string): Promise<string
       <summary class="chip"
                hx-post="/admin/conversations/${encodeURIComponent(convId)}/resume"
                hx-swap="none"
-               title="Devolver el bot: vuelve a responder en este chat"
-               style="cursor:pointer;list-style:none;font-size:11px;color:var(--accent-2);background:var(--panel2);border:1px solid var(--linelit);padding:6px 11px;display:inline-flex;align-items:center;gap:6px">▸ Devolver bot</summary>
+               title="${t("conv.returnBotTitle")}"
+               style="cursor:pointer;list-style:none;font-size:11px;color:var(--accent-2);background:var(--panel2);border:1px solid var(--linelit);padding:6px 11px;display:inline-flex;align-items:center;gap:6px">${t("conv.returnBot")}</summary>
       <form method="POST" action="/admin/conversations/${encodeURIComponent(convId)}/resume"
             style="position:absolute;right:0;z-index:10;margin-top:8px;width:280px;background:var(--panel);border:1px solid var(--linelit);box-shadow:6px 6px 0 rgba(0,0,0,.4);padding:12px">
-        <p style="font-size:11px;color:var(--muted);margin:0 0 8px">Cuéntale al bot qué resolviste para que siga con contexto.</p>
-        <textarea name="summary" rows="3" required placeholder="Ej. Ya le confirmé su pago y le di acceso."
+        <p style="font-size:11px;color:var(--muted);margin:0 0 8px">${t("conv.resumeHint")}</p>
+        <textarea name="summary" rows="3" required placeholder="${t("conv.resumePlaceholder")}"
                   style="width:100%;background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:8px 10px;font-size:12px;outline:none;resize:vertical;margin-bottom:8px"></textarea>
-        <button class="bigbtn" style="width:100%;background:var(--accent);border:1px solid var(--accent);color:var(--on-accent);box-shadow:3px 3px 0 var(--linelit);padding:9px;font-size:12px;font-weight:700;font-family:'Sora';cursor:pointer">Enviar al bot</button>
+        <button class="bigbtn" style="width:100%;background:var(--accent);border:1px solid var(--accent);color:var(--on-accent);box-shadow:3px 3px 0 var(--linelit);padding:9px;font-size:12px;font-weight:700;font-family:'Sora';cursor:pointer">${t("conv.sendToBot")}</button>
       </form>
     </details>`
     : `
     <button hx-post="/admin/conversations/${encodeURIComponent(convId)}/pause" hx-target="#thread-live" hx-swap="innerHTML"
             class="chip" style="margin-left:auto;font-size:11px;color:var(--muted);background:var(--panel2);border:1px solid var(--linelit);padding:6px 11px;cursor:pointer">
-      ⏸ Pausar bot aquí
+      ${t("conv.pauseBot")}
     </button>`;
 
   // Nicho taxis: selector "Elegir conductor" en la cabecera del hilo. Al elegir,
@@ -459,17 +465,17 @@ export async function renderThreadLive(env: Env, convId: string): Promise<string
       const trip = await new TaxiTripsRepo(db).activeForConversation(convId);
       const options = drivers
         .map((d) => {
-          const l = [d.name ?? "sin nombre", d.code, d.plate].filter(Boolean).join(" · ");
+          const l = [d.name ?? t("conv.driverNoName"), d.code, d.plate].filter(Boolean).join(" · ");
           return `<option value="${d.id}"${trip?.driver_id === d.id ? " selected" : ""}>${escapeHtml(l)}</option>`;
         })
         .join("");
       taxiControls = `<form hx-post="/admin/conversations/${encodeURIComponent(convId)}/assign-driver" hx-target="#thread-live" hx-swap="innerHTML" style="display:inline-flex;align-items:center;gap:6px">
-        <select name="driver_id" required title="Asignar un conductor a este viaje"
+        <select name="driver_id" required title="${t("conv.assignDriverTitle")}"
                 style="background:var(--bg);border:1px solid var(--linelit);color:var(--cream);padding:6px 9px;font-size:11.5px;max-width:190px">
-          <option value="">Elegir conductor…</option>
+          <option value="">${t("conv.chooseDriver")}</option>
           ${options}
         </select>
-        <button class="chip" type="submit" style="cursor:pointer;font-size:11px;color:var(--accent-2);background:var(--panel2);border:1px solid var(--linelit);padding:6px 11px">🚕 Asignar taxi</button>
+        <button class="chip" type="submit" style="cursor:pointer;font-size:11px;color:var(--accent-2);background:var(--panel2);border:1px solid var(--linelit);padding:6px 11px">${t("conv.assignTaxi")}</button>
       </form>`;
     } catch {
       // Sin repos de taxis (instalación vieja) → sin selector.
@@ -478,12 +484,12 @@ export async function renderThreadLive(env: Env, convId: string): Promise<string
 
   const header = `
   <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--line);background:var(--panel)">
-    <span style="font-family:'Sora';font-weight:600;font-size:14px;color:var(--cream)">${escapeHtml(conv.display_name || "Sin nombre")}</span>
-    ${bloqueContacto(conv.channel, conv.channel_user_id)}
+    <span style="font-family:'Sora';font-weight:600;font-size:14px;color:var(--cream)">${escapeHtml(conv.display_name || t("conv.noName"))}</span>
+    ${bloqueContacto(conv.channel, conv.channel_user_id, t)}
     <span style="${smallPill("var(--info)")}">${escapeHtml(channelLabel(conv.channel))}</span>
     ${statusPill}
     ${sentBadge}
-    ${openTicket > 0 ? `<span style="${statusBadge("var(--accent-2)")}">🔔 ticket abierto</span>` : ""}
+    ${openTicket > 0 ? `<span style="${statusBadge("var(--accent-2)")}">${t("conv.ticketOpen")}</span>` : ""}
     ${humanChip}
     ${taxiControls}
     ${controls}
@@ -515,7 +521,7 @@ export async function renderThreadLive(env: Env, convId: string): Promise<string
         const { text, images, audios } = extractMedia(m.content);
         return `
         <div style="display:flex;flex-direction:column;align-items:flex-start;gap:4px;max-width:78%">
-          ${mediaHtml(images, audios)}
+          ${mediaHtml(images, audios, t)}
           <div style="background:var(--panel2);border:1px solid var(--line);padding:9px 13px;font-size:12.5px;line-height:1.5;white-space:pre-wrap;color:var(--cream)">${linkify(escapeHtml(text))}</div>
           <span style="font-size:9.5px;color:var(--dim)">${time}</span>
         </div>`;
@@ -524,7 +530,7 @@ export async function renderThreadLive(env: Env, convId: string): Promise<string
       const isOwner = m.role === "owner";
       const cost = turnCost(m);
       const meta = isOwner
-        ? `Tú · ${time}`
+        ? `${t("conv.you")} · ${time}`
         : [m.model_used ? modelShort(m.model_used) : null, cost || null, time].filter(Boolean).join(" · ");
       const bubbleBg = isOwner
         ? "background:var(--warn-soft);border:1px solid var(--warn)"
@@ -533,7 +539,7 @@ export async function renderThreadLive(env: Env, convId: string): Promise<string
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;max-width:78%;margin-left:auto">
         ${chips}
         <div style="${bubbleBg};padding:9px 13px;font-size:12.5px;line-height:1.5;white-space:pre-wrap;color:var(--cream)">${linkify(escapeHtml(m.content))}</div>
-        ${buttonChipHtml(buttonsByMsg.get(m.id) ?? [])}
+        ${buttonChipHtml(buttonsByMsg.get(m.id) ?? [], t)}
         <span style="font-size:9.5px;color:var(--dim)">${meta}</span>
       </div>`;
     })
@@ -542,13 +548,13 @@ export async function renderThreadLive(env: Env, convId: string): Promise<string
   return `
   ${header}
   <div id="msgscroll" style="flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column-reverse;gap:12px;padding:16px;background:var(--bg)">
-    ${bubbles || `<div style="text-align:center;font-size:12.5px;color:var(--dim);padding:32px 0">Sin mensajes.</div>`}
+    ${bubbles || `<div style="text-align:center;font-size:12.5px;color:var(--dim);padding:32px 0">${t("conv.noMessages")}</div>`}
   </div>`;
 }
 
 // --- Composer (static per selection — NOT inside the polled fragment) ---------
 
-function renderComposer(convId: string): string {
+function renderComposer(convId: string, t: T): string {
   const id = encodeURIComponent(convId);
   return `
   <div class="composer" style="border-top:1px solid var(--line);background:var(--panel);padding:12px;padding-bottom:max(12px,env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:8px">
@@ -557,14 +563,14 @@ function renderComposer(convId: string): string {
           hx-on::after-request="if(event.detail.xhr.getResponseHeader('X-Sent')==='1')this.reset()"
           style="display:flex;align-items:flex-end;gap:9px">
       <textarea name="text" id="reply-text" rows="2" required
-                placeholder="Responde como humano — se envía por el canal del cliente y el bot se pausa…"
+                placeholder="${t("conv.replyPlaceholder")}"
                 style="flex:1;background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:10px 12px;font-size:12.5px;resize:none;outline:none"></textarea>
       <button type="button" hx-post="/admin/conversations/${id}/suggest" hx-target="#suggestion-box" hx-swap="innerHTML"
-              class="chip" style="background:var(--panel2);border:1px solid var(--linelit);color:var(--accent-2);padding:11px 13px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:6px" title="El co-pilot sugiere una respuesta">
-        <i data-lucide="sparkles" width="13" height="13"></i> Sugerir
+              class="chip" style="background:var(--panel2);border:1px solid var(--linelit);color:var(--accent-2);padding:11px 13px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:6px" title="${t("conv.suggestTitle")}">
+        <i data-lucide="sparkles" width="13" height="13"></i> ${t("conv.suggest")}
       </button>
       <button type="submit" class="bigbtn" style="background:var(--accent);border:1px solid var(--accent);color:var(--on-accent);box-shadow:4px 4px 0 var(--linelit);padding:11px 18px;font-size:12.5px;font-weight:700;font-family:'Sora';cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:6px">
-        Enviar <i data-lucide="send" width="14" height="14"></i>
+        ${t("conv.send")} <i data-lucide="send" width="14" height="14"></i>
       </button>
     </form>
     <div id="send-status" style="font-size:11px;min-height:1rem;color:var(--muted)"></div>
@@ -572,22 +578,23 @@ function renderComposer(convId: string): string {
 }
 
 /** Fragment returned by /suggest — suggestion + a "use it" button that fills the textarea. */
-export function renderSuggestionBox(text: string): string {
+export function renderSuggestionBox(text: string, t: T = makeT("es")): string {
   return `
   <div style="border:1px solid var(--accent-2);background:var(--warn-soft);padding:10px 12px;font-size:12.5px;display:flex;align-items:flex-start;gap:10px">
     <div style="flex:1">
-      <div style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent-2);margin-bottom:3px">✦ Sugerencia del co-pilot</div>
+      <div style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent-2);margin-bottom:3px">${t("conv.copilotSuggestion")}</div>
       <div class="sugg-text" style="white-space:pre-wrap;color:var(--cream)">${escapeHtml(text)}</div>
     </div>
     <button type="button"
             onclick="document.getElementById('reply-text').value=this.parentElement.querySelector('.sugg-text').textContent;document.getElementById('suggestion-box').innerHTML=''"
-            class="chip" style="font-size:11px;background:var(--accent-2);color:var(--on-accent);font-weight:700;border:1px solid var(--accent-2);padding:5px 10px;white-space:nowrap;cursor:pointer">Usar</button>
+            class="chip" style="font-size:11px;background:var(--accent-2);color:var(--on-accent);font-weight:700;border:1px solid var(--accent-2);padding:5px 10px;white-space:nowrap;cursor:pointer">${t("conv.use")}</button>
   </div>`;
 }
 
 // --- Full page -----------------------------------------------------------------
 
 export async function renderInbox(env: Env, p: InboxParams): Promise<string> {
+  const { t } = await panelI18n(env);
   const db = new Db(env.DB);
   const now = Date.now();
 
@@ -643,29 +650,29 @@ export async function renderInbox(env: Env, p: InboxParams): Promise<string> {
            hx-trigger="every 5s[window.puedeRefrescar('msgscroll')]" hx-swap="innerHTML">
         ${thread}
       </div>
-      ${renderComposer(p.selectedId)}`;
+      ${renderComposer(p.selectedId, t)}`;
   } else {
     rightPane = `
       <div class="flex-1 flex items-center justify-center" style="font-size:12.5px;color:var(--dim);background:var(--bg)">
-        Selecciona una conversación para abrirla aquí.
+        ${t("conv.selectPrompt")}
       </div>`;
   }
 
   const body = `
    <div class="inbox" data-view="${p.selectedId ? "thread" : "list"}">
     <div class="inbox-filters flex flex-wrap items-center gap-2" style="margin-bottom:10px">
-      ${filterPill(pillUrl(), `Todas · ${totalConvs}`, !p.filter, "var(--accent)")}
-      ${filterPill(pillUrl("leads"), `💰 Leads · ${totalLeads}`, p.filter === "leads", "var(--accent)")}
-      ${filterPill(pillUrl("atencion"), `🔔 Atención · ${needAttention}`, p.filter === "atencion", "var(--bad)")}
-      ${filterPill(pillUrl("molestos"), `😠 Molestos · ${nMolestos}`, p.filter === "molestos", "var(--bad)")}
-      ${filterPill(pillUrl("contentos"), `🙂 Contentos · ${nContentos}`, p.filter === "contentos", "var(--ok)")}
+      ${filterPill(pillUrl(), `${t("conv.filterAll")} · ${totalConvs}`, !p.filter, "var(--accent)")}
+      ${filterPill(pillUrl("leads"), `${t("conv.filterLeads")} · ${totalLeads}`, p.filter === "leads", "var(--accent)")}
+      ${filterPill(pillUrl("atencion"), `${t("conv.filterAttention")} · ${needAttention}`, p.filter === "atencion", "var(--bad)")}
+      ${filterPill(pillUrl("molestos"), `${t("conv.filterAngry")} · ${nMolestos}`, p.filter === "molestos", "var(--bad)")}
+      ${filterPill(pillUrl("contentos"), `${t("conv.filterHappy")} · ${nContentos}`, p.filter === "contentos", "var(--ok)")}
       <form method="GET" action="/admin/conversations" class="ml-auto" style="display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);padding:7px 12px;min-width:200px">
         <i data-lucide="search" width="14" height="14" style="color:var(--dim)"></i>
         ${p.filter ? `<input type="hidden" name="f" value="${escapeHtml(p.filter)}">` : ""}
         ${p.selectedId ? `<input type="hidden" name="c" value="${escapeHtml(p.selectedId)}">` : ""}
         ${p.channel ? `<input type="hidden" name="ch" value="${escapeHtml(p.channel)}">` : ""}
         ${p.days ? `<input type="hidden" name="d" value="${p.days}">` : ""}
-        <input name="q" value="${escapeHtml(p.search ?? "")}" placeholder="Buscar nombre o texto…"
+        <input name="q" value="${escapeHtml(p.search ?? "")}" placeholder="${t("conv.searchPlaceholder")}"
                style="flex:1;background:transparent;border:none;color:var(--cream);font-size:12px;outline:none">
       </form>
     </div>
@@ -673,7 +680,7 @@ export async function renderInbox(env: Env, p: InboxParams): Promise<string> {
       chanRows.length > 1
         ? `<div class="inbox-filters flex flex-wrap items-center gap-2" style="margin-bottom:14px">
       <select onchange="if(this.value)window.location=this.value" style="background:var(--panel);border:1px solid var(--line);color:var(--cream);font-size:11.5px;padding:6px 10px;outline:none">
-        <option value="${escapeHtml(inboxUrl({ ...p, channel: undefined }, p.selectedId))}" ${p.channel ? "" : "selected"}>Todos los canales</option>
+        <option value="${escapeHtml(inboxUrl({ ...p, channel: undefined }, p.selectedId))}" ${p.channel ? "" : "selected"}>${t("conv.allChannels")}</option>
         ${chanRows
           .map(
             (r) =>
@@ -681,15 +688,15 @@ export async function renderInbox(env: Env, p: InboxParams): Promise<string> {
           )
           .join("")}
       </select>
-      ${dayChip("Cualquier fecha")}
-      ${dayChip("24 h", 1)}
-      ${dayChip("7 días", 7)}
-      ${dayChip("30 días", 30)}
-      ${p.channel || p.days || p.search ? `<a href="${inboxUrl({ selectedId: p.selectedId })}" class="chip" style="font-size:11px;padding:5px 10px;color:var(--dim);border:1px solid var(--line)">✕ limpiar</a>` : ""}
+      ${dayChip(t("conv.anyDate"))}
+      ${dayChip(t("conv.day24"), 1)}
+      ${dayChip(t("conv.day7"), 7)}
+      ${dayChip(t("conv.day30"), 30)}
+      ${p.channel || p.days || p.search ? `<a href="${inboxUrl({ selectedId: p.selectedId })}" class="chip" style="font-size:11px;padding:5px 10px;color:var(--dim);border:1px solid var(--line)">${t("conv.clear")}</a>` : ""}
     </div>`
         : `<div class="inbox-filters flex flex-wrap items-center gap-2" style="margin-bottom:14px">
-      ${dayChip("Cualquier fecha")}${dayChip("24 h", 1)}${dayChip("7 días", 7)}${dayChip("30 días", 30)}
-      ${p.days || p.search ? `<a href="${inboxUrl({ selectedId: p.selectedId })}" class="chip" style="font-size:11px;padding:5px 10px;color:var(--dim);border:1px solid var(--line)">✕ limpiar</a>` : ""}
+      ${dayChip(t("conv.anyDate"))}${dayChip(t("conv.day24"), 1)}${dayChip(t("conv.day7"), 7)}${dayChip(t("conv.day30"), 30)}
+      ${p.days || p.search ? `<a href="${inboxUrl({ selectedId: p.selectedId })}" class="chip" style="font-size:11px;padding:5px 10px;color:var(--dim);border:1px solid var(--line)">${t("conv.clear")}</a>` : ""}
     </div>`
     }
 
@@ -703,7 +710,7 @@ export async function renderInbox(env: Env, p: InboxParams): Promise<string> {
       <div class="inbox-pane flex flex-col" style="min-height:0;background:var(--bg)">
         ${
           p.selectedId
-            ? `<a href="${inboxUrl({ filter: p.filter, search: p.search })}" class="inbox-back" style="align-items:center;gap:7px;padding:11px 14px;border-bottom:1px solid var(--line);background:var(--panel);font-size:12.5px;font-weight:600;color:var(--accent)"><i data-lucide="arrow-left" width="15" height="15"></i> Conversaciones</a>`
+            ? `<a href="${inboxUrl({ filter: p.filter, search: p.search })}" class="inbox-back" style="align-items:center;gap:7px;padding:11px 14px;border-bottom:1px solid var(--line);background:var(--panel);font-size:12.5px;font-weight:600;color:var(--accent)"><i data-lucide="arrow-left" width="15" height="15"></i> ${t("conv.title")}</a>`
             : ""
         }
         ${rightPane}
@@ -711,5 +718,5 @@ export async function renderInbox(env: Env, p: InboxParams): Promise<string> {
     </div>
    </div>`;
 
-  return layout({ title: "Conversaciones", activeTab: "conversations", body, env });
+  return layout({ title: t("conv.title"), activeTab: "conversations", body, env });
 }

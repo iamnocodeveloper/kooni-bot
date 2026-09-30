@@ -5,6 +5,7 @@
 // ponerse verdes.
 import type { Env } from "../../env";
 import { layout } from "./layout";
+import { makeT, panelI18n, type T } from "../i18n";
 import type { ZernioAccount } from "../../channels/zernioAccounts";
 import { zernioPlatformIcon, zernioPlatformLabel } from "../../channels/zernioAccounts";
 import type { ZernioCredentials } from "../../channels/zernioCredentials";
@@ -33,6 +34,7 @@ interface ChannelStatus {
 function channelStatuses(
   env: Env,
   zernioCreds: ZernioCredentials,
+  t: T,
   telegramToken?: string,
   mlCreds?: MlCredentials,
   wahaCfg?: WahaConfig,
@@ -66,7 +68,7 @@ function channelStatuses(
   const mlMissing = [
     !has(ml.clientId) && "App ID",
     !has(ml.clientSecret) && "Secret Key",
-    has(ml.clientId) && has(ml.clientSecret) && !mlConnected(ml) && "autorización del vendedor",
+    has(ml.clientId) && has(ml.clientSecret) && !mlConnected(ml) && t("cx.ml.missingAuth"),
   ].filter(Boolean) as string[];
   const whatsappCloudMissing = [
     !has(env.WHATSAPP_PHONE_NUMBER_ID) && "WHATSAPP_PHONE_NUMBER_ID",
@@ -76,8 +78,8 @@ function channelStatuses(
   ].filter(Boolean) as string[];
   const waha = wahaCfg ?? { base: "", session: "default" };
   const wahaMissing = [
-    !has(waha.base) && "URL del servidor WAHA",
-    !has(waha.apiKey) && "API key de WAHA",
+    !has(waha.base) && t("cx.waha.missingUrl"),
+    !has(waha.apiKey) && t("cx.waha.missingKey"),
   ].filter(Boolean) as string[];
 
   const channels: ChannelStatus[] = [
@@ -85,109 +87,103 @@ function channelStatuses(
       id: "telegram",
       name: "Telegram",
       icon: "send",
-      desc: "Bot de Telegram — gratis y el más rápido de conectar.",
+      desc: t("cx.telegram.desc"),
       ok: telegramMissing.length === 0,
       missing: telegramMissing,
       webhookPath: "/webhooks/telegram",
-      howTo: "Crea el bot con @BotFather y pega el token abajo: lo valida y registra el webhook automáticamente. Opcional: tu chat id para los avisos al dueño.",
+      howTo: t("cx.telegram.howTo"),
     },
     {
       id: "whatsapp",
       name: "WhatsApp (Twilio)",
       icon: "phone",
-      desc: "WhatsApp Business vía Twilio — el canal que más venden.",
+      desc: t("cx.twilio.desc"),
       ok: twilioMissing.length === 0,
       missing: twilioMissing,
       webhookPath: "/webhooks/twilio",
       securityNote:
         twilioMissing.length === 0 && !has(env.TWILIO_HANDOFF_CONTENT_SID)
-          ? "Sin TWILIO_HANDOFF_CONTENT_SID: el aviso de handoff por WhatsApp requiere una plantilla (HSM) aprobada."
+          ? t("cx.twilio.security")
           : undefined,
-      howTo: "En Twilio: número WhatsApp aprobado → apunta el webhook de mensajes entrantes a la URL de abajo.",
+      howTo: t("cx.twilio.howTo"),
     },
     {
       id: "whatsapp-cloud",
-      name: "WhatsApp (Oficial · Cloud API)",
+      name: t("cx.name.wacloud"),
       icon: "message-circle",
-      desc: "WhatsApp directo con Meta, sin intermediario — mejor margen.",
+      desc: t("cx.wacloud.desc"),
       ok: whatsappCloudMissing.length === 0,
       missing: whatsappCloudMissing,
       webhookPath: "/webhooks/whatsapp",
-      howTo:
-        "App de Meta → WhatsApp → Configuration: apunta el webhook a la URL de abajo, suscribe el campo messages, y guarda tu Phone Number ID y token. Pruébalo con el número de prueba gratis.",
+      howTo: t("cx.wacloud.howTo"),
     },
     {
       id: "meta",
       name: "Instagram + Messenger (Meta)",
       icon: "instagram",
-      desc: "DMs de Instagram y Messenger con la API oficial de Meta.",
+      desc: t("cx.meta.desc"),
       ok: metaMissing.length === 0,
       missing: metaMissing,
       webhookPath: "/webhooks/meta",
-      howTo: "App de Meta → Webhooks → suscribe messages con tu VERIFY_TOKEN; la firma se valida sola.",
+      howTo: t("cx.meta.howTo"),
     },
     {
       id: "manychat",
       name: "ManyChat",
       icon: "bot",
-      desc: "Si ya usas ManyChat, el bot puede vivir detrás de tus flujos.",
+      desc: t("cx.manychat.desc"),
       ok: manychatMissing.length === 0,
       missing: manychatMissing,
       webhookPath: "/webhooks/manychat",
-      howTo: "En ManyChat: External Request hacia la URL de abajo.",
+      howTo: t("cx.manychat.howTo"),
     },
     {
       id: "zernio",
-      name: "Zernio (multicanal)",
+      name: t("cx.name.zernio"),
       icon: "globe",
-      desc: "Todas tus redes con una api key: Instagram, Facebook/Messenger, X, Telegram, WhatsApp, Bluesky, Reddit… Conecta TU cuenta personal (no el bot) — la IA responde tus DMs y quedan en el panel.",
+      desc: t("cx.zernio.desc"),
       ok: zernioMissing.length === 0,
       missing: zernioMissing,
       webhookPath: "/webhooks/zernio",
       securityNote:
         !has(zernioCreds.webhookSecret)
-          ? "Sin ZERNIO_WEBHOOK_SECRET el webhook acepta todo (fail-open). Recomendado: ponlo para validar la firma."
+          ? t("cx.zernio.security")
           : undefined,
-      howTo: "zernio.com → copia tu API key y pégala aquí. El canal queda conectado y su webhook se registra automáticamente (message.received + comment.received); el webhook secret es opcional para validar la firma.",
+      howTo: t("cx.zernio.howTo"),
     },
     {
       id: "mercadolibre",
       name: "MercadoLibre",
       icon: "shopping-bag",
-      desc: "La IA responde las preguntas de tus publicaciones y los mensajes post-venta con el comprador. Necesita una app propia (gratis) en tu cuenta de vendedor.",
+      desc: t("cx.ml.desc"),
       ok: mlMissing.length === 0,
       missing: mlMissing,
       webhookPath: "/webhooks/mercadolibre",
-      howTo:
-        "1) developers.mercadolibre.com → Crear aplicación (con tu cuenta de vendedor, necesita 2FA). " +
-        "2) En 'URI de redirect' pega la URL de OAuth de abajo. " +
-        "3) En 'Notificaciones (callbacks)' pega la URL de webhook de abajo y activa los tópicos 'questions' y 'messages'. " +
-        "4) Marca los permisos read, write y offline_access. " +
-        "5) Copia el App ID y la Secret Key, elige tu país y guárdalos aquí. Luego toca 'Autorizar con MercadoLibre'.",
+      howTo: t("cx.ml.howTo"),
     },
     {
       id: "waha",
       name: "WhatsApp (WAHA · self-hosted)",
       icon: "qr-code",
-      desc: "Tu propio WhatsApp por QR, sin Meta ni Twilio — corre en un servidor WAHA (Docker) que tú controlas.",
+      desc: t("cx.waha.desc"),
       ok: wahaMissing.length === 0,
       missing: wahaMissing,
       webhookPath: "/webhooks/waha",
       securityNote:
         wahaMissing.length === 0 && !waha.webhookToken
-          ? "Sin webhook token: el webhook acepta cualquier request (fail-open). Se genera solo al guardar la conexión."
+          ? t("cx.waha.security")
           : undefined,
-      howTo: "Pega la URL de tu servidor WAHA y su API key (X-Api-Key). El bot crea/arranca la sesión y registra el webhook solo — después escaneas el QR aquí mismo con tu WhatsApp.",
+      howTo: t("cx.waha.howTo"),
     },
     {
       id: "webchat",
-      name: "Sitio web (chat propio)",
+      name: t("cx.name.webchat"),
       icon: "globe",
-      desc: "El chat en tu propia página. Sin tokens ni verificación — el más fácil de todos.",
+      desc: t("cx.webchat.desc"),
       ok: true,
       missing: [],
       webhookPath: "/webhooks/webchat",
-      howTo: 'Pegá esta línea en tu web, antes de </body>: <script src="<tu-worker>/chat.js" async></script> — ya queda una burbuja de chat que contesta tu bot.',
+      howTo: t("cx.webchat.howTo"),
     },
   ];
   // WAHA NO es parte de las instalaciones normales: la card solo se muestra si
@@ -220,6 +216,7 @@ export async function renderConexiones(
     error?: string;
   } = {},
 ): Promise<string> {
+  const { t } = await panelI18n(env);
   const zernioCreds = opts.zernioCreds ?? {
     apiKey: env.ZERNIO_API_KEY,
     webhookSecret: env.ZERNIO_WEBHOOK_SECRET,
@@ -241,7 +238,7 @@ export async function renderConexiones(
   // Nicho taxis: solo se ofrecen canales de WhatsApp (oficial + WAHA). El resto
   // sigue en el código, pero no se muestra en esta instalación.
   const taxiOnly = getNiche(env).hooks?.taxiEngine === true;
-  const allChannels = channelStatuses(env, zernioCreds, telegramToken, mlCreds, wahaCfg);
+  const allChannels = channelStatuses(env, zernioCreds, t, telegramToken, mlCreds, wahaCfg);
   const channels = taxiOnly ? allChannels.filter((ch) => ch.id === "whatsapp" || ch.id === "waha") : allChannels;
   const connected = channels.filter((ch) => ch.ok).length;
   // Fallback de base: la ruta GET pasa el origin real si DASHBOARD_BASE_URL está
@@ -257,21 +254,21 @@ export async function renderConexiones(
     return `
       <form method="POST" action="/admin/conexiones/zernio" style="display:flex;flex-direction:column;gap:10px;margin-top:4px">
         <div style="display:flex;flex-direction:column;gap:6px">
-          <label class="font-display font-semibold text-[12.5px] text-cream">API key de Zernio</label>
+          <label class="font-display font-semibold text-[12.5px] text-cream">${t("cx.zernio.apiKeyLabel")}</label>
           <input type="password" name="zernio_api_key" value="" autocomplete="off"
-                 placeholder="${keyTail ? `hay una key guardada (…${keyTail})` : "Pega tu API key de zernio.com"}"
+                 placeholder="${keyTail ? t("cx.zernio.phKeySaved", { tail: keyTail }) : t("cx.zernio.phKey")}"
                  style="background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:10px 12px;font-size:12.5px;outline:none">
         </div>
         <div style="display:flex;flex-direction:column;gap:6px">
-          <label class="font-display font-semibold text-[12.5px] text-cream">Webhook secret (recomendado)</label>
+          <label class="font-display font-semibold text-[12.5px] text-cream">${t("cx.zernio.secretLabel")}</label>
           <input type="password" name="zernio_webhook_secret" value="" autocomplete="off"
-                 placeholder="${hasSecret ? "secreto guardado — escribe para reemplazar" : "opcional: firma HMAC de los webhooks"}"
+                 placeholder="${hasSecret ? t("cx.phSecretSaved") : t("cx.zernio.phSecret")}"
                  style="background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:10px 12px;font-size:12.5px;outline:none">
         </div>
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
           <button type="submit" class="text-[12px] font-display font-semibold"
-                  style="border:1px solid var(--line);color:var(--cream);padding:9px 14px;cursor:pointer;background:none">${ch.ok ? "Actualizar conexión" : "Conectar Zernio"}</button>
-          ${ch.ok ? `<label class="text-dim text-[11.5px]" style="display:flex;align-items:center;gap:7px;cursor:pointer"><input type="checkbox" name="clear" value="1"> Quitar conexión</label>` : ""}
+                  style="border:1px solid var(--line);color:var(--cream);padding:9px 14px;cursor:pointer;background:none">${ch.ok ? t("cx.update") : t("cx.zernio.connect")}</button>
+          ${ch.ok ? `<label class="text-dim text-[11.5px]" style="display:flex;align-items:center;gap:7px;cursor:pointer"><input type="checkbox" name="clear" value="1"> ${t("cx.clear")}</label>` : ""}
         </div>
       </form>`;
   };
@@ -286,22 +283,22 @@ export async function renderConexiones(
     return `
       <form method="POST" action="/admin/conexiones/telegram" style="display:flex;flex-direction:column;gap:10px;margin-top:4px">
         <div style="display:flex;flex-direction:column;gap:6px">
-          <label class="font-display font-semibold text-[12.5px] text-cream">Token del bot (BotFather)</label>
+          <label class="font-display font-semibold text-[12.5px] text-cream">${t("cx.telegram.tokenLabel")}</label>
           <input type="password" name="telegram_bot_token" value="" autocomplete="off"
-                 placeholder="${hasToken ? "token guardado — escribe para reemplazar" : "Pega el token de @BotFather"}"
+                 placeholder="${hasToken ? t("cx.telegram.phTokenSaved") : t("cx.telegram.phToken")}"
                  style="background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:10px 12px;font-size:12.5px;outline:none">
         </div>
         <div style="display:flex;flex-direction:column;gap:6px">
-          <label class="font-display font-semibold text-[12.5px] text-cream">Tu chat id de Telegram (avisos al dueño)</label>
+          <label class="font-display font-semibold text-[12.5px] text-cream">${t("cx.telegram.chatLabel")}</label>
           <input type="text" name="owner_telegram_chat_id" value="" autocomplete="off"
-                 placeholder="${hasOwner ? `hay un id guardado (…${ownerTail}) — escribe para reemplazar` : "opcional: mándale /start a tu bot y mira tu id con @userinfobot"}"
+                 placeholder="${hasOwner ? t("cx.telegram.phChatSaved", { tail: ownerTail }) : t("cx.telegram.phChat")}"
                  style="background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:10px 12px;font-size:12.5px;outline:none">
         </div>
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
           <button type="submit" class="text-[12px] font-display font-semibold"
-                  style="border:1px solid var(--line);color:var(--cream);padding:9px 14px;cursor:pointer;background:none">${ch.ok ? "Actualizar conexión" : "Conectar Telegram"}</button>
-          ${ch.ok ? `<label class="text-dim text-[11.5px]" style="display:flex;align-items:center;gap:7px;cursor:pointer"><input type="checkbox" name="clear" value="1"> Quitar conexión</label>` : ""}
-          ${hasOwner ? `<label class="text-dim text-[11.5px]" style="display:flex;align-items:center;gap:7px;cursor:pointer"><input type="checkbox" name="clear_owner" value="1"> Quitar aviso</label>` : ""}
+                  style="border:1px solid var(--line);color:var(--cream);padding:9px 14px;cursor:pointer;background:none">${ch.ok ? t("cx.update") : t("cx.telegram.connect")}</button>
+          ${ch.ok ? `<label class="text-dim text-[11.5px]" style="display:flex;align-items:center;gap:7px;cursor:pointer"><input type="checkbox" name="clear" value="1"> ${t("cx.clear")}</label>` : ""}
+          ${hasOwner ? `<label class="text-dim text-[11.5px]" style="display:flex;align-items:center;gap:7px;cursor:pointer"><input type="checkbox" name="clear_owner" value="1"> ${t("cx.telegram.clearOwner")}</label>` : ""}
         </div>
       </form>`;
   };
@@ -321,43 +318,43 @@ export async function renderConexiones(
     return `
       <div style="display:flex;flex-direction:column;gap:8px;margin-top:4px">
         <div class="text-dim text-[10.5px] font-mono" style="display:flex;flex-direction:column;gap:5px">
-          <span>URI de redirect (OAuth) — pégala en tu app de MercadoLibre:</span>
+          <span>${t("cx.ml.redirectHint")}</span>
           <span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
             <span style="border:1px solid var(--line);padding:4px 8px;background:var(--bg)">${esc(oauthUrl)}</span>
             <button type="button" class="text-[10.5px]" style="border:1px solid var(--line);color:var(--cream);padding:4px 8px;cursor:pointer;background:none"
-                    onclick="navigator.clipboard.writeText('${esc(oauthUrl)}');this.textContent='copiado ✓'">copiar</button>
+                    onclick="navigator.clipboard.writeText('${esc(oauthUrl)}');this.textContent='${t("cx.copied")}'">${t("cx.copy")}</button>
           </span>
         </div>
         <form method="POST" action="/admin/conexiones/mercadolibre" style="display:flex;flex-direction:column;gap:10px">
           <div style="display:flex;flex-direction:column;gap:6px">
-            <label class="font-display font-semibold text-[12.5px] text-cream">País de tu cuenta</label>
+            <label class="font-display font-semibold text-[12.5px] text-cream">${t("cx.ml.country")}</label>
             <select name="ml_site" style="background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:10px 12px;font-size:12.5px;outline:none">${options}</select>
           </div>
           <div style="display:flex;flex-direction:column;gap:6px">
-            <label class="font-display font-semibold text-[12.5px] text-cream">App ID (client_id)</label>
+            <label class="font-display font-semibold text-[12.5px] text-cream">${t("cx.ml.appId")}</label>
             <input type="text" name="ml_client_id" value="" autocomplete="off"
-                   placeholder="${hasId ? "hay un App ID guardado — escribe para reemplazar" : "número de tu app en developers.mercadolibre.com"}"
+                   placeholder="${hasId ? t("cx.ml.phAppIdSaved") : t("cx.ml.phAppId")}"
                    style="background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:10px 12px;font-size:12.5px;outline:none">
           </div>
           <div style="display:flex;flex-direction:column;gap:6px">
-            <label class="font-display font-semibold text-[12.5px] text-cream">Secret Key (client_secret)</label>
+            <label class="font-display font-semibold text-[12.5px] text-cream">${t("cx.ml.secret")}</label>
             <input type="password" name="ml_client_secret" value="" autocomplete="off"
-                   placeholder="${hasSecret ? "secreto guardado — escribe para reemplazar" : "Secret Key de tu app"}"
+                   placeholder="${hasSecret ? t("cx.phSecretSaved") : t("cx.ml.phSecret")}"
                    style="background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:10px 12px;font-size:12.5px;outline:none">
           </div>
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
             <button type="submit" class="text-[12px] font-display font-semibold"
-                    style="border:1px solid var(--line);color:var(--cream);padding:9px 14px;cursor:pointer;background:none">Guardar datos</button>
+                    style="border:1px solid var(--line);color:var(--cream);padding:9px 14px;cursor:pointer;background:none">${t("cx.ml.save")}</button>
             ${
               canAuthorize
-                ? `<a href="/admin/conexiones/mercadolibre/oauth" class="text-[12px] font-display font-semibold" style="border:1px solid var(--accent);color:var(--accent);padding:9px 14px;text-decoration:none">${mlConnected(mlCreds) ? "Volver a autorizar" : "Autorizar con MercadoLibre →"}</a>`
+                ? `<a href="/admin/conexiones/mercadolibre/oauth" class="text-[12px] font-display font-semibold" style="border:1px solid var(--accent);color:var(--accent);padding:9px 14px;text-decoration:none">${mlConnected(mlCreds) ? t("cx.ml.reauth") : t("cx.ml.authorize")} →</a>`
                 : ""
             }
-            ${ch.ok || mlConnected(mlCreds) ? `<label class="text-dim text-[11.5px]" style="display:flex;align-items:center;gap:7px;cursor:pointer"><input type="checkbox" name="clear" value="1"> Quitar conexión</label>` : ""}
+            ${ch.ok || mlConnected(mlCreds) ? `<label class="text-dim text-[11.5px]" style="display:flex;align-items:center;gap:7px;cursor:pointer"><input type="checkbox" name="clear" value="1"> ${t("cx.clear")}</label>` : ""}
           </div>
           ${
             mlConnected(mlCreds)
-              ? `<div class="text-[11.5px]" style="color:var(--ok)">✓ Vendedor autorizado${mlCreds.nickname ? `: <span class="font-mono">${esc(mlCreds.nickname)}</span>` : ` (id ${esc(mlCreds.userId ?? "")})`}</div>`
+              ? `<div class="text-[11.5px]" style="color:var(--ok)">✓ ${t("cx.ml.authorized")}${mlCreds.nickname ? `: <span class="font-mono">${esc(mlCreds.nickname)}</span>` : ` (id ${esc(mlCreds.userId ?? "")})`}</div>`
               : ""
           }
         </form>
@@ -388,19 +385,19 @@ export async function renderConexiones(
     const unreachable = configured && !working && !showQr && !needsRelink;
     const restartBtn = `<form method="POST" action="/admin/conexiones/waha/restart" style="margin:0">
         <button type="submit" class="text-[12px] font-display font-semibold"
-                style="border:1px solid var(--line);color:var(--cream);padding:9px 14px;cursor:pointer;background:none">Reiniciar sesión y generar QR</button>
+                style="border:1px solid var(--line);color:var(--cream);padding:9px 14px;cursor:pointer;background:none">${t("cx.waha.restart")}</button>
       </form>`;
     const statusLine = status
-      ? ` (estado: <span class="font-mono">${esc(status)}</span>)`
-      : " (no pude consultar el estado de WAHA)";
+      ? t("cx.waha.statusLine", { status: `<span class="font-mono">${esc(status)}</span>` })
+      : t("cx.waha.statusUnknown");
     const qrBlock = showQr
       ? `<div style="display:flex;flex-direction:column;gap:8px">
-           <div class="text-[11.5px]" style="color:var(--warn)">⚠ Falta emparejar: escanea este QR con WhatsApp (Dispositivos vinculados → Vincular dispositivo).</div>
-           <img id="waha-qr" src="/admin/conexiones/waha/qr?t=${Date.now()}" width="220" height="220" style="border:1px solid var(--line);background:#fff;padding:6px" alt="QR de WhatsApp (WAHA)"
+           <div class="text-[11.5px]" style="color:var(--warn)">${t("cx.waha.qrWarn")}</div>
+           <img id="waha-qr" src="/admin/conexiones/waha/qr?t=${Date.now()}" width="220" height="220" style="border:1px solid var(--line);background:#fff;padding:6px" alt="${t("cx.waha.qrAlt")}"
                 onload="var e=document.getElementById('waha-qr-err');if(e)e.style.display='none'"
                 onerror="var e=document.getElementById('waha-qr-err');if(e)e.style.display='block'">
-           <div id="waha-qr-err" class="text-[11.5px]" style="color:var(--bad);display:none">No pude cargar la imagen del QR. Reinicia la sesión e inténtalo de nuevo.</div>
-           <div class="text-dim text-[10.5px]">El QR se renueva solo cada 20 seg (WhatsApp lo rota): escanéalo apenas aparezca.</div>
+           <div id="waha-qr-err" class="text-[11.5px]" style="color:var(--bad);display:none">${t("cx.waha.qrError")}</div>
+           <div class="text-dim text-[10.5px]">${t("cx.waha.qrHint")}</div>
            ${restartBtn}
          </div>
          <script>(function(){setInterval(function(){var img=document.getElementById('waha-qr');if(img){img.src='/admin/conexiones/waha/qr?t='+Date.now();}},20000);})();</script>`
@@ -408,40 +405,40 @@ export async function renderConexiones(
     return `
       <form method="POST" action="/admin/conexiones/waha" style="display:flex;flex-direction:column;gap:10px;margin-top:4px">
         <div style="display:flex;flex-direction:column;gap:6px">
-          <label class="font-display font-semibold text-[12.5px] text-cream">URL del servidor WAHA</label>
+          <label class="font-display font-semibold text-[12.5px] text-cream">${t("cx.waha.urlLabel")}</label>
           <input type="text" name="waha_api_url" value="" autocomplete="off"
-                 placeholder="${wahaCfg.base ? `hay una URL guardada (${esc(wahaCfg.base)}) — escribe para reemplazar` : "http://tu-servidor-waha:3000"}"
+                 placeholder="${wahaCfg.base ? t("cx.waha.phUrlSaved", { url: esc(wahaCfg.base) }) : t("cx.waha.phUrl")}"
                  style="background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:10px 12px;font-size:12.5px;outline:none">
         </div>
         <div style="display:flex;flex-direction:column;gap:6px">
-          <label class="font-display font-semibold text-[12.5px] text-cream">API key (X-Api-Key)</label>
+          <label class="font-display font-semibold text-[12.5px] text-cream">${t("cx.waha.keyLabel")}</label>
           <input type="password" name="waha_api_key" value="" autocomplete="off"
-                 placeholder="${hasKey ? `hay una key guardada (…${keyTail})` : "la API key de tu servidor WAHA"}"
+                 placeholder="${hasKey ? t("cx.phKeySaved", { tail: keyTail }) : t("cx.waha.phKey")}"
                  style="background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:10px 12px;font-size:12.5px;outline:none">
         </div>
         <div style="display:flex;flex-direction:column;gap:6px">
-          <label class="font-display font-semibold text-[12.5px] text-cream">Sesión</label>
+          <label class="font-display font-semibold text-[12.5px] text-cream">${t("cx.waha.session")}</label>
           <input type="text" name="waha_session" value="" autocomplete="off"
                  placeholder="${esc(wahaCfg.session || "default")}"
                  style="background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:10px 12px;font-size:12.5px;outline:none">
         </div>
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
           <button type="submit" class="text-[12px] font-display font-semibold"
-                  style="border:1px solid var(--line);color:var(--cream);padding:9px 14px;cursor:pointer;background:none">${ch.ok ? "Actualizar conexión" : "Conectar WAHA"}</button>
-          ${ch.ok ? `<label class="text-dim text-[11.5px]" style="display:flex;align-items:center;gap:7px;cursor:pointer"><input type="checkbox" name="clear" value="1"> Quitar conexión</label>` : ""}
+                  style="border:1px solid var(--line);color:var(--cream);padding:9px 14px;cursor:pointer;background:none">${ch.ok ? t("cx.update") : t("cx.waha.connect")}</button>
+          ${ch.ok ? `<label class="text-dim text-[11.5px]" style="display:flex;align-items:center;gap:7px;cursor:pointer"><input type="checkbox" name="clear" value="1"> ${t("cx.clear")}</label>` : ""}
         </div>
       </form>
       ${
         working
-          ? `<div class="text-[11.5px]" style="color:var(--ok)">✓ WhatsApp emparejado y activo${wahaCfg.session ? ` (sesión <span class="font-mono">${esc(wahaCfg.session)}</span>)` : ""}</div>`
+          ? `<div class="text-[11.5px]" style="color:var(--ok)">${t("cx.waha.working")}${wahaCfg.session ? t("cx.waha.sessionSuffix", { session: `<span class="font-mono">${esc(wahaCfg.session)}</span>` }) : ""}</div>`
           : needsRelink
             ? `<div style="display:flex;flex-direction:column;gap:8px">
-                 <div class="text-[11.5px]" style="color:var(--warn)">⚠ La sesión de WAHA está cerrada${statusLine}: hay que volver a vincular WhatsApp. Reinicia la sesión y escanea el QR nuevo.</div>
+                 <div class="text-[11.5px]" style="color:var(--warn)">${t("cx.waha.closed")}${statusLine}${t("cx.waha.relinkHint")}</div>
                  ${restartBtn}
                </div>`
             : unreachable
               ? `<div style="display:flex;flex-direction:column;gap:8px">
-                   <div class="text-[11.5px]" style="color:var(--warn)">⚠ No pude leer el estado de la sesión en WAHA${statusLine}. Revisa que el servidor esté encendido y que la URL y la API key sean correctas.</div>
+                   <div class="text-[11.5px]" style="color:var(--warn)">${t("cx.waha.unreachable")}${statusLine}${t("cx.waha.unreachableHint")}</div>
                    ${restartBtn}
                  </div>`
               : qrBlock
@@ -451,12 +448,12 @@ export async function renderConexiones(
   const cards = channels
     .map((ch) => {
       const badge = ch.ok
-        ? `<span style="font-size:10px;letter-spacing:.14em;color:var(--ok);border:1px solid var(--ok);background:var(--ok-soft);padding:3px 10px;font-weight:700">● CONECTADO</span>`
-        : `<span style="font-size:10px;letter-spacing:.14em;color:var(--dim);border:1px solid var(--line);padding:3px 10px;font-weight:600">○ SIN CONECTAR</span>`;
+        ? `<span style="font-size:10px;letter-spacing:.14em;color:var(--ok);border:1px solid var(--ok);background:var(--ok-soft);padding:3px 10px;font-weight:700">${t("cx.connected")}</span>`
+        : `<span style="font-size:10px;letter-spacing:.14em;color:var(--dim);border:1px solid var(--line);padding:3px 10px;font-weight:600">${t("cx.disconnected")}</span>`;
 
       const missing = ch.ok
         ? ""
-        : `<div class="text-[11.5px]" style="color:var(--bad)">Falta configurar: <span class="font-mono">${ch.missing
+        : `<div class="text-[11.5px]" style="color:var(--bad)">${t("cx.missing")} <span class="font-mono">${ch.missing
             .map(esc)
             .join(", ")}</span></div>
            <div class="text-dim text-[11.5px]">${esc(ch.howTo)}</div>`;
@@ -466,7 +463,7 @@ export async function renderConexiones(
           ? `<div class="text-dim text-[10.5px] font-mono" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
                <span style="border:1px solid var(--line);padding:4px 8px;background:var(--bg)">${esc(base + ch.webhookPath)}</span>
                <button type="button" class="text-[10.5px]" style="border:1px solid var(--line);color:var(--cream);padding:4px 8px;cursor:pointer;background:none"
-                       onclick="navigator.clipboard.writeText('${esc(base + ch.webhookPath)}');this.textContent='copiado ✓'">copiar</button>
+                       onclick="navigator.clipboard.writeText('${esc(base + ch.webhookPath)}');this.textContent='${t("cx.copied")}'">${t("cx.copy")}</button>
              </div>`
           : "";
 
@@ -480,9 +477,9 @@ export async function renderConexiones(
              <input type="hidden" name="channel_pause" value="${esc(ch.id)}">
              <input type="hidden" name="channel_paused" value="${isPaused ? "0" : "1"}">
              <button type="submit" class="text-[11px]" style="border:1px solid ${isPaused ? "var(--bad)" : "var(--line)"};color:${isPaused ? "var(--bad)" : "var(--muted)"};padding:5px 11px;cursor:pointer;background:${isPaused ? "rgba(248,113,113,.07)" : "none"}">
-               ${isPaused ? "▶ Reanudar canal" : "⏸ Pausar canal"}
+               ${isPaused ? t("cx.resume") : t("cx.pause")}
              </button>
-             ${isPaused ? `<span class="text-[10.5px]" style="color:var(--bad)">Este canal está pausado: los mensajes se ignoran.</span>` : ""}
+             ${isPaused ? `<span class="text-[10.5px]" style="color:var(--bad)">${t("cx.pausedNote")}</span>` : ""}
            </form>`
         : "";
 
@@ -490,20 +487,20 @@ export async function renderConexiones(
       const zernioBlock =
         ch.id === "zernio" && zernioAccounts.length > 0
           ? `<div style="margin-top:4px;display:flex;flex-direction:column;gap:6px">
-               <div class="text-[10.5px]" style="letter-spacing:.14em;color:var(--dim);font-weight:700">CUENTAS CONECTADAS EN ZERNIO</div>
+               <div class="text-[10.5px]" style="letter-spacing:.14em;color:var(--dim);font-weight:700">${t("cx.za.title")}</div>
                ${zernioAccounts
                  .map((a) => {
                    const icon = zernioPlatformIcon(a.platform);
                    const label = zernioPlatformLabel(a.platform);
                    const name = a.displayName || a.username || "—";
                    const status = a.needsReconnection
-                     ? `<span class="text-[10px]" style="color:var(--bad)">· reconectar</span>`
+                     ? `<span class="text-[10px]" style="color:var(--bad)">${t("cx.za.reconnect")}</span>`
                      : a.isActive === false
-                       ? `<span class="text-[10px]" style="color:var(--dim)">· inactiva</span>`
-                       : `<span class="text-[10px]" style="color:var(--ok)">· activa</span>`;
+                       ? `<span class="text-[10px]" style="color:var(--dim)">${t("cx.za.inactive")}</span>`
+                       : `<span class="text-[10px]" style="color:var(--ok)">${t("cx.za.active")}</span>`;
                    const followers =
                      typeof a.followersCount === "number" && a.followersCount > 0
-                       ? `<span class="text-[10px] font-mono" style="color:var(--muted)">· ${a.followersCount.toLocaleString("es")} seguidores</span>`
+                       ? `<span class="text-[10px] font-mono" style="color:var(--muted)">${t("cx.za.followers", { n: a.followersCount.toLocaleString("es") })}</span>`
                        : "";
                    // Barra de rate limit (DM de esta hora / 700).
                    const usage = rateUsage[a.id];
@@ -514,7 +511,7 @@ export async function renderConexiones(
                          const color = pct >= 90 ? "var(--bad)" : pct >= 60 ? "var(--warn)" : "var(--ok)";
                          return `<div style="margin-top:5px">
                            <div style="display:flex;justify-content:space-between" class="text-[10px] font-mono" style="color:var(--dim)">
-                             <span>DM esta hora</span><span style="color:${color}">${usage.used}/${max}</span>
+                             <span>${t("cx.za.dmThisHour")}</span><span style="color:${color}">${usage.used}/${max}</span>
                            </div>
                            <div style="height:4px;background:var(--line);margin-top:2px"><div style="height:4px;width:${pct}%;background:${color}"></div></div>
                          </div>`;
@@ -532,7 +529,7 @@ export async function renderConexiones(
                  .join("")}
              </div>`
           : ch.id === "zernio" && zernioAccounts.length === 0 && env.ZERNIO_API_KEY?.trim()
-            ? `<div class="text-[11px]" style="color:var(--dim);margin-top:4px">No se pudieron listar tus cuentas de Zernio (o no hay cuentas conectadas aún). Conéctalas en zernio.com.</div>`
+            ? `<div class="text-[11px]" style="color:var(--dim);margin-top:4px">${t("cx.za.empty")}</div>`
             : "";
 
       return `
@@ -559,19 +556,19 @@ export async function renderConexiones(
     .join("");
 
   const savedBanner = opts.savedKind === "telegram"
-    ? `<div style="border:1px solid var(--ok);background:var(--ok-soft);color:var(--ok);padding:10px 14px;font-size:12.5px;font-weight:600">✓ Telegram conectado: webhook registrado automáticamente. Envía un mensaje a tu bot para probarlo.</div>`
+    ? `<div style="border:1px solid var(--ok);background:var(--ok-soft);color:var(--ok);padding:10px 14px;font-size:12.5px;font-weight:600">${t("cx.saved.telegram")}</div>`
     : opts.savedKind === "zernio"
-      ? `<div style="border:1px solid var(--ok);background:var(--ok-soft);color:var(--ok);padding:10px 14px;font-size:12.5px;font-weight:600">✓ Zernio conectado: webhook registrado automáticamente (message.received + comment.received). Los comentarios/DMs ya deberían fluir.</div>`
+      ? `<div style="border:1px solid var(--ok);background:var(--ok-soft);color:var(--ok);padding:10px 14px;font-size:12.5px;font-weight:600">${t("cx.saved.zernio")}</div>`
       : opts.savedKind === "mercadolibre"
-        ? `<div style="border:1px solid var(--ok);background:var(--ok-soft);color:var(--ok);padding:10px 14px;font-size:12.5px;font-weight:600">✓ MercadoLibre: datos guardados. Si ya autorizaste al vendedor, la IA responderá las preguntas y mensajes post-venta. Falta activar los tópicos 'questions' y 'messages' en las notificaciones de tu app.</div>`
+        ? `<div style="border:1px solid var(--ok);background:var(--ok-soft);color:var(--ok);padding:10px 14px;font-size:12.5px;font-weight:600">${t("cx.saved.mercadolibre")}</div>`
         : opts.savedKind === "waha"
-          ? `<div style="border:1px solid var(--ok);background:var(--ok-soft);color:var(--ok);padding:10px 14px;font-size:12.5px;font-weight:600">✓ WAHA conectado: sesión creada/actualizada y webhook registrado. Si te pide QR, bájalo en la card de WAHA aquí abajo.</div>`
+          ? `<div style="border:1px solid var(--ok);background:var(--ok-soft);color:var(--ok);padding:10px 14px;font-size:12.5px;font-weight:600">${t("cx.saved.waha")}</div>`
           : opts.savedKind === "vapi"
-            ? `<div style="border:1px solid var(--ok);background:var(--ok-soft);color:var(--ok);padding:10px 14px;font-size:12.5px;font-weight:600">✓ Vapi guardado. Pegá el Server URL de arriba en el dashboard de Vapi (Assistant → Server URL).</div>`
+            ? `<div style="border:1px solid var(--ok);background:var(--ok-soft);color:var(--ok);padding:10px 14px;font-size:12.5px;font-weight:600">${t("cx.saved.vapi")}</div>`
             : opts.savedKind === "retell"
-              ? `<div style="border:1px solid var(--ok);background:var(--ok-soft);color:var(--ok);padding:10px 14px;font-size:12.5px;font-weight:600">✓ Retell guardado. Pegá el Webhook URL de arriba en el dashboard de Retell.</div>`
+              ? `<div style="border:1px solid var(--ok);background:var(--ok-soft);color:var(--ok);padding:10px 14px;font-size:12.5px;font-weight:600">${t("cx.saved.retell")}</div>`
               : opts.savedKind === "voz"
-                ? `<div style="border:1px solid var(--ok);background:var(--ok-soft);color:var(--ok);padding:10px 14px;font-size:12.5px;font-weight:600">✓ Parámetros de la cartera por voz guardados.</div>`
+                ? `<div style="border:1px solid var(--ok);background:var(--ok-soft);color:var(--ok);padding:10px 14px;font-size:12.5px;font-weight:600">${t("cx.saved.voz")}</div>`
                 : "";
   const errorBanner = opts.error
     ? `<div style="border:1px solid var(--bad);background:var(--bad-soft);color:var(--bad);padding:10px 14px;font-size:12.5px;font-weight:600">✕ ${esc(opts.error)}</div>`
@@ -591,14 +588,14 @@ export async function renderConexiones(
     </label>`;
   const vBadge = (ok: boolean) =>
     ok
-      ? `<span class="text-[10px]" style="border:1px solid var(--ok);color:var(--ok);background:var(--ok-soft);padding:3px 9px;letter-spacing:.08em">LISTO</span>`
-      : `<span class="text-[10px] text-dim" style="border:1px solid var(--line);padding:3px 9px;letter-spacing:.08em">FALTA</span>`;
+      ? `<span class="text-[10px]" style="border:1px solid var(--ok);color:var(--ok);background:var(--ok-soft);padding:3px 9px;letter-spacing:.08em">${t("cx.vReady")}</span>`
+      : `<span class="text-[10px] text-dim" style="border:1px solid var(--line);padding:3px 9px;letter-spacing:.08em">${t("cx.vMissing")}</span>`;
   const vWebhook = (path: string) => `
     <div class="text-dim text-[10.5px] font-mono" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <span>Webhook URL:</span>
+      <span>${t("cx.webhookUrl")}</span>
       <span style="border:1px solid var(--line);padding:4px 8px;background:var(--bg);word-break:break-all">${esc((base || "") + path)}</span>
       <button type="button" class="text-[10.5px]" style="border:1px solid var(--line);color:var(--cream);padding:4px 8px;cursor:pointer;background:none"
-              onclick="navigator.clipboard.writeText('${esc((base || "") + path)}');this.textContent='copiado ✓'">copiar</button>
+              onclick="navigator.clipboard.writeText('${esc((base || "") + path)}');this.textContent='${t("cx.copied")}'">${t("cx.copy")}</button>
     </div>`;
   const vapiOk = vapiConfigured(voiceCfg.vapi);
   const retellOk = retellConfigured(voiceCfg.retell);
@@ -606,23 +603,23 @@ export async function renderConexiones(
   const vapiCard = `
     <div class="bg-panel border" style="padding:18px 20px;display:flex;flex-direction:column;gap:10px;border-color:${vapiOk ? "var(--ok)" : "var(--line)"}">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
-        <div class="font-display font-semibold text-[13.5px] text-cream">Vapi (voz)</div>
+        <div class="font-display font-semibold text-[13.5px] text-cream">${t("cx.vapi.title")}</div>
         ${vBadge(vapiOk)}
       </div>
-      <p class="text-dim text-[12px]" style="margin:0">Agente de voz para llamar a los deudores de la cartera. Créalo en dashboard.vapi.ai, pega aquí sus datos y su Server URL abajo.</p>
+      <p class="text-dim text-[12px]" style="margin:0">${t("cx.vapi.help")}</p>
       ${vWebhook("/webhooks/vapi")}
       <form method="POST" action="/admin/conexiones/vapi" style="display:flex;flex-direction:column;gap:10px;margin-top:4px">
-        ${vField("Private API key", `<input type="password" name="vapi_api_key" value="" autocomplete="off" placeholder="sk_live_… (vacío = conservar)" style="${voiceInputStyle}">`, "dashboard.vapi.ai → API Keys")}
-        ${vField("Assistant ID", `<input type="text" name="vapi_assistant_id" value="${esc(voiceCfg.vapi.assistantId ?? "")}" autocomplete="off" placeholder="asst_…" style="${voiceInputStyle}">`, "El asistente que contesta la llamada")}
-        ${vField("Phone Number ID", `<input type="text" name="vapi_phone_number_id" value="${esc(voiceCfg.vapi.phoneNumberId ?? "")}" autocomplete="off" placeholder="pn_…" style="${voiceInputStyle}">`, "Phone Numbers → id del número saliente")}
-        ${vField("Webhook secret", `<input type="password" name="vapi_webhook_secret" value="" autocomplete="off" placeholder="(secreto del Server URL, opcional)" style="${voiceInputStyle}">`, "Se recibe en el header X-Vapi-Secret y se valida el webhook")}
+        ${vField("Private API key", `<input type="password" name="vapi_api_key" value="" autocomplete="off" placeholder="${t("cx.vapi.keyPh")}" style="${voiceInputStyle}">`, "dashboard.vapi.ai → API Keys")}
+        ${vField("Assistant ID", `<input type="text" name="vapi_assistant_id" value="${esc(voiceCfg.vapi.assistantId ?? "")}" autocomplete="off" placeholder="asst_…" style="${voiceInputStyle}">`, t("cx.vapi.assistantHint"))}
+        ${vField("Phone Number ID", `<input type="text" name="vapi_phone_number_id" value="${esc(voiceCfg.vapi.phoneNumberId ?? "")}" autocomplete="off" placeholder="pn_…" style="${voiceInputStyle}">`, t("cx.vapi.phoneHint"))}
+        ${vField("Webhook secret", `<input type="password" name="vapi_webhook_secret" value="" autocomplete="off" placeholder="${t("cx.vapi.secretPh")}" style="${voiceInputStyle}">`, t("cx.vapi.secretHint"))}
         ${vField("API base URL", `<input type="text" name="vapi_api_base_url" value="${esc(voiceCfg.vapi.baseUrl ?? "")}" autocomplete="off" placeholder="https://api.vapi.ai" style="${voiceInputStyle}">`)}
         <label class="text-dim text-[11.5px]" style="display:flex;align-items:center;gap:7px;cursor:pointer">
-          <input type="checkbox" name="make_active" value="1" ${voiceCfg.provider === "vapi" ? "checked" : ""}> Usar Vapi como proveedor activo de cobros
+          <input type="checkbox" name="make_active" value="1" ${voiceCfg.provider === "vapi" ? "checked" : ""}> ${t("cx.vapi.useActive")}
         </label>
         <div style="display:flex;gap:12px;align-items:center">
-          <button type="submit" class="font-display font-semibold text-[12px]" style="background:var(--accent);color:#0b0b0b;border:none;padding:9px 16px;cursor:pointer">Guardar Vapi</button>
-          ${vapiOk ? `<label class="text-dim text-[11.5px]" style="display:flex;align-items:center;gap:7px;cursor:pointer"><input type="checkbox" name="clear" value="1"> Quitar conexión</label>` : ""}
+          <button type="submit" class="font-display font-semibold text-[12px]" style="background:var(--accent);color:#0b0b0b;border:none;padding:9px 16px;cursor:pointer">${t("cx.vapi.save")}</button>
+          ${vapiOk ? `<label class="text-dim text-[11.5px]" style="display:flex;align-items:center;gap:7px;cursor:pointer"><input type="checkbox" name="clear" value="1"> ${t("cx.clear")}</label>` : ""}
         </div>
       </form>
     </div>`;
@@ -630,34 +627,34 @@ export async function renderConexiones(
   const retellCard = `
     <div class="bg-panel border" style="padding:18px 20px;display:flex;flex-direction:column;gap:10px;border-color:${retellOk ? "var(--ok)" : "var(--line)"}">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
-        <div class="font-display font-semibold text-[13.5px] text-cream">Retell (voz)</div>
+        <div class="font-display font-semibold text-[13.5px] text-cream">${t("cx.retell.title")}</div>
         ${vBadge(retellOk)}
       </div>
-      <p class="text-dim text-[12px]" style="margin:0">Alternativa a Vapi para las llamadas de cobranza. Crea el agente en dashboard.retellai.com y pega aquí sus datos.</p>
+      <p class="text-dim text-[12px]" style="margin:0">${t("cx.retell.help")}</p>
       ${vWebhook("/webhooks/retell")}
       <form method="POST" action="/admin/conexiones/retell" style="display:flex;flex-direction:column;gap:10px;margin-top:4px">
-        ${vField("API key", `<input type="password" name="retell_api_key" value="" autocomplete="off" placeholder="key_… (vacío = conservar)" style="${voiceInputStyle}">`, "dashboard.retellai.com → API Keys")}
-        ${vField("Agent ID", `<input type="text" name="retell_agent_id" value="${esc(voiceCfg.retell.agentId ?? "")}" autocomplete="off" placeholder="agent_…" style="${voiceInputStyle}">`, "El agente que contesta la llamada")}
-        ${vField("Número saliente", `<input type="text" name="retell_phone_number" value="${esc(voiceCfg.retell.phoneNumber ?? "")}" autocomplete="off" placeholder="+1561…" style="${voiceInputStyle}">`, "Número comprado en Retell (E.164). Opcional si el agente ya lo trae.")}
-        ${vField("Webhook secret", `<input type="password" name="retell_webhook_secret" value="" autocomplete="off" placeholder="(secreto del webhook, opcional)" style="${voiceInputStyle}">`, "Se usa para verificar los webhooks de Retell")}
+        ${vField("API key", `<input type="password" name="retell_api_key" value="" autocomplete="off" placeholder="${t("cx.retell.keyPh")}" style="${voiceInputStyle}">`, "dashboard.retellai.com → API Keys")}
+        ${vField("Agent ID", `<input type="text" name="retell_agent_id" value="${esc(voiceCfg.retell.agentId ?? "")}" autocomplete="off" placeholder="agent_…" style="${voiceInputStyle}">`, t("cx.retell.agentHint"))}
+        ${vField(t("cx.retell.phoneLabel"), `<input type="text" name="retell_phone_number" value="${esc(voiceCfg.retell.phoneNumber ?? "")}" autocomplete="off" placeholder="+1561…" style="${voiceInputStyle}">`, t("cx.retell.phoneHint"))}
+        ${vField("Webhook secret", `<input type="password" name="retell_webhook_secret" value="" autocomplete="off" placeholder="${t("cx.retell.secretPh")}" style="${voiceInputStyle}">`, t("cx.retell.secretHint"))}
         ${vField("API base URL", `<input type="text" name="retell_api_base_url" value="${esc(voiceCfg.retell.baseUrl ?? "")}" autocomplete="off" placeholder="https://api.retellai.com" style="${voiceInputStyle}">`)}
         <label class="text-dim text-[11.5px]" style="display:flex;align-items:center;gap:7px;cursor:pointer">
-          <input type="checkbox" name="make_active" value="1" ${voiceCfg.provider === "retell" ? "checked" : ""}> Usar Retell como proveedor activo de cobros
+          <input type="checkbox" name="make_active" value="1" ${voiceCfg.provider === "retell" ? "checked" : ""}> ${t("cx.retell.useActive")}
         </label>
         <div style="display:flex;gap:12px;align-items:center">
-          <button type="submit" class="font-display font-semibold text-[12px]" style="background:var(--accent);color:#0b0b0b;border:none;padding:9px 16px;cursor:pointer">Guardar Retell</button>
-          ${retellOk ? `<label class="text-dim text-[11.5px]" style="display:flex;align-items:center;gap:7px;cursor:pointer"><input type="checkbox" name="clear" value="1"> Quitar conexión</label>` : ""}
+          <button type="submit" class="font-display font-semibold text-[12px]" style="background:var(--accent);color:#0b0b0b;border:none;padding:9px 16px;cursor:pointer">${t("cx.retell.save")}</button>
+          ${retellOk ? `<label class="text-dim text-[11.5px]" style="display:flex;align-items:center;gap:7px;cursor:pointer"><input type="checkbox" name="clear" value="1"> ${t("cx.clear")}</label>` : ""}
         </div>
       </form>
     </div>`;
 
   const vozComun = `
     <div class="bg-panel border border-line" style="padding:18px 20px;display:flex;flex-direction:column;gap:10px">
-      <div class="font-display font-semibold text-[13.5px] text-cream">Cartera de cobros — parámetros</div>
+      <div class="font-display font-semibold text-[13.5px] text-cream">${t("cx.voz.title")}</div>
       <form method="POST" action="/admin/conexiones/voz" style="display:flex;flex-direction:column;gap:10px">
-        ${vField("Objetivo / tono del guion", `<textarea name="cobros_voice_objective" rows="3" style="${voiceInputStyle};resize:vertical" placeholder="Ej: recordar el saldo, ofrecer plan de pagos, tono firme pero respetuoso">${esc(voiceCfg.objective)}</textarea>`, "Contexto que el agente de voz usa durante la llamada")}
-        ${vField("Intentos máximos por deudor", `<input type="number" name="cobros_voice_max_attempts" min="1" max="10" value="${voiceCfg.maxAttempts}" style="${voiceInputStyle}">`)}
-        <button type="submit" class="font-display font-semibold text-[12px]" style="background:var(--accent);color:#0b0b0b;border:none;padding:9px 16px;cursor:pointer;align-self:flex-start">Guardar parámetros</button>
+        ${vField(t("cx.voz.objectiveLabel"), `<textarea name="cobros_voice_objective" rows="3" style="${voiceInputStyle};resize:vertical" placeholder="${t("cx.voz.objectivePh")}">${esc(voiceCfg.objective)}</textarea>`, t("cx.voz.objectiveHint"))}
+        ${vField(t("cx.voz.attemptsLabel"), `<input type="number" name="cobros_voice_max_attempts" min="1" max="10" value="${voiceCfg.maxAttempts}" style="${voiceInputStyle}">`)}
+        <button type="submit" class="font-display font-semibold text-[12px]" style="background:var(--accent);color:#0b0b0b;border:none;padding:9px 16px;cursor:pointer;align-self:flex-start">${t("cx.voz.save")}</button>
       </form>
     </div>`;
 
@@ -666,15 +663,15 @@ export async function renderConexiones(
       ${savedBanner}
       ${errorBanner}
       <div style="display:flex;flex-direction:column;gap:2px">
-        <h2 class="font-display font-semibold text-[15px] text-cream">Canales conectados: ${connected} de ${channels.length}</h2>
-        <p class="text-muted text-[12.5px]">Conecta los canales donde están tus clientes. Cuando un canal queda listo, su tarjeta se pone verde. Zernio se conecta pegando su API key aquí mismo; los demás canales se configuran con <span class="font-mono">wrangler secret put NOMBRE</span>.</p>
+        <h2 class="font-display font-semibold text-[15px] text-cream">${t("cx.heading", { connected, total: channels.length })}</h2>
+        <p class="text-muted text-[12.5px]">${t("cx.subtitle")}</p>
       </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px">
         ${cards}
       </div>
       ${taxiOnly ? "" : `<div style="display:flex;flex-direction:column;gap:2px;margin-top:6px">
-        <h2 class="font-display font-semibold text-[15px] text-cream">Cobros por voz: Vapi / Retell</h2>
-        <p class="text-muted text-[12.5px]">Llamadas con IA para la cartera de cobros. Elegí el proveedor activo y pegá sus datos; el webhook de cada plataforma ya está listo para pegar en su dashboard.</p>
+        <h2 class="font-display font-semibold text-[15px] text-cream">${t("cx.voice.title")}</h2>
+        <p class="text-muted text-[12.5px]">${t("cx.voice.help")}</p>
       </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px">
         ${vapiCard}
@@ -683,7 +680,7 @@ export async function renderConexiones(
       </div>`}
     </div>`;
 
-  return layout({ title: "Conexiones", activeTab: "conexiones", body, env });
+  return layout({ title: t("cx.title"), activeTab: "conexiones", body, env });
 }
 
 /** Resumen corto para el badge de salud del Resumen. */
@@ -694,7 +691,7 @@ export function connectionsSummary(
   mlCreds?: MlCredentials,
   wahaCfg?: WahaConfig,
 ): { connected: number; total: number } {
-  const channels = channelStatuses(env, zernioCreds, telegramToken, mlCreds, wahaCfg);
+  const channels = channelStatuses(env, zernioCreds, makeT("es"), telegramToken, mlCreds, wahaCfg);
   return { connected: channels.filter((ch) => ch.ok).length, total: channels.length };
 }
 
@@ -717,7 +714,7 @@ export async function countConnectedChannels(
     loadMlCredentials(env),
     resolveWahaConfig(env),
   ]);
-  const channels = channelStatuses(env, zernioCreds, telegramToken, mlCreds, wahaCfg);
+  const channels = channelStatuses(env, zernioCreds, makeT("es"), telegramToken, mlCreds, wahaCfg);
   const byId: Record<string, boolean> = {};
   for (const ch of channels) byId[ch.id] = ch.ok;
   return { connected: channels.filter((ch) => ch.ok).length, byId };

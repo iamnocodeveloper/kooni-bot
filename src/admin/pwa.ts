@@ -14,6 +14,7 @@
  * suscripciones. Ver PLAN.md § PWA.
  */
 import type { Env } from "../env";
+import { makeT, type T } from "./i18n";
 
 interface PwaBrand {
   name: string;
@@ -100,7 +101,7 @@ export function manifest(env: Env): string {
  * CDN (Tailwind, htmx, fuentes) son cross-origin y se dejan pasar sin cachear.
  * Incluye los handlers de push para la Fase 1.
  */
-export function serviceWorker(): string {
+export function serviceWorker(t: T = makeT("es")): string {
   return `/* Kooni PWA service worker — Fase 0 */
 const CACHE = 'kooni-admin-v2'; // subir en cada rediseño para tirar la caché vieja
 
@@ -142,8 +143,8 @@ self.addEventListener('fetch', (e) => {
         return new Response(
           '<meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">' +
           '<body style="font-family:system-ui;background:#0f0e17;color:#ece9f5;padding:40px;text-align:center">' +
-          '<h1 style="font-size:18px">Sin conexión</h1>' +
-          '<p style="opacity:.7;font-size:14px">Abre el panel de nuevo cuando tengas señal.</p></body>',
+          '<h1 style="font-size:18px">${t("pwa.offline.title")}</h1>' +
+          '<p style="opacity:.7;font-size:14px">${t("pwa.offline.body")}</p></body>',
           { headers: { 'Content-Type': 'text/html; charset=utf-8' }, status: 503 },
         );
       }
@@ -160,7 +161,7 @@ self.addEventListener('fetch', (e) => {
 // aviso más reciente a /admin/push/latest y lo mostramos.
 self.addEventListener('push', (e) => {
   e.waitUntil((async () => {
-    let n = { title: 'Kooni', body: 'Tienes una novedad en el panel.', url: '/admin/overview' };
+    let n = { title: 'Kooni', body: '${t("pwa.push.body")}', url: '/admin/overview' };
     try {
       const r = await fetch('/admin/push/latest', { credentials: 'include' });
       if (r.ok) { const j = await r.json(); n = { title: j.title || n.title, body: j.body || n.body, url: j.url || n.url }; }
@@ -191,7 +192,7 @@ self.addEventListener('notificationclick', (e) => {
 }
 
 /** `<head>` del panel: enlaza el manifest, colores e íconos y registra el SW. */
-export function pwaHeadTags(env: Env): string {
+export function pwaHeadTags(env: Env, t: T = makeT("es")): string {
   const b = brand(env);
   return `
   <link rel="manifest" href="/admin/manifest.webmanifest">
@@ -226,7 +227,7 @@ export function pwaHeadTags(env: Env): string {
         el = document.createElement('button');
         el.id = 'kooni-install';
         el.type = 'button';
-        el.textContent = '📲 Instalar app';
+        el.textContent = '${t("pwa.installBtn")}';
         el.setAttribute('style',
           'position:fixed;right:14px;bottom:14px;z-index:9999;padding:10px 14px;' +
           'font:600 13px system-ui;border:1px solid ' + ACCENT + ';border-radius:10px;' +
@@ -245,8 +246,8 @@ export function pwaHeadTags(env: Env): string {
         }
         var isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
         alert(isIOS
-          ? 'Para instalar: toca el botón Compartir y elige "Añadir a pantalla de inicio".'
-          : 'Abre el menú del navegador (⋮) y elige "Instalar aplicación" / "Agregar a pantalla de inicio".');
+          ? '${t("pwa.install.iOS")}'
+          : '${t("pwa.install.other")}');
       }
 
       window.addEventListener('beforeinstallprompt', function (e) {
@@ -291,19 +292,19 @@ export function pwaHeadTags(env: Env): string {
               sub = null;
             } else {
               var perm = await Notification.requestPermission();
-              if (perm !== 'granted') { alert('Activa los permisos de notificación del navegador para recibir avisos.'); el.disabled = false; return; }
+              if (perm !== 'granted') { alert('${t("pwa.push.needPermission")}'); el.disabled = false; return; }
               sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64urlToU8(cfg.publicKey) });
               var j = sub.toJSON();
               await fetch('/admin/push/subscribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ endpoint: j.endpoint, keys: j.keys }) });
               fetch('/admin/push/test', { method: 'POST' });
             }
             paint(el, !!sub);
-          } catch (e) { console.warn('push:', e); alert('No se pudo cambiar los avisos: ' + e.message); }
+          } catch (e) { console.warn('push:', e); alert('${t("pwa.push.changeError")}' + e.message); }
           el.disabled = false;
         };
       }
       function paint(el, on) {
-        el.title = on ? 'Avisos activados en este dispositivo — toca para apagar' : 'Activar avisos en este dispositivo';
+        el.title = on ? '${t("pwa.push.on")}' : '${t("pwa.push.off")}';
         el.style.color = on ? (${JSON.stringify(b.accent)}) : 'var(--muted)';
         var i = el.querySelector('[data-lucide]');
         if (i) { i.setAttribute('data-lucide', on ? 'bell-ring' : 'bell'); if (window.lucide) window.lucide.createIcons(); }

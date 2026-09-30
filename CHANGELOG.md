@@ -5,6 +5,31 @@ Cambios notables de Kooni. Formato aproximado de
 
 El CLI `kooni-bot` se versiona aparte (npm) — ver la nota de cada versión.
 
+## [1.52.0] — 2026-09-30
+
+### Agregado — el panel del bot quedó 100% bilingüe (ES/EN)
+
+Se completó la traducción de **todas** las secciones del panel `/admin`, no solo
+el shell:
+
+- **Todas las vistas** traducidas: Inbox (Conversaciones, Comentarios, Contactos,
+  Leads, Tickets), Configuración y Conexiones, Mi Agente (Flujo, Probar,
+  Conocimiento, editores), Automatizaciones, Licencia, Extras, y Análisis
+  (Resumen, Scraping, Estadísticas, Insights, Costos, Mejoras, Auditoría,
+  Campañas), más los nichos (Pedidos, Viajes, Cartera, Cola, Conductores,
+  Reportes), la pantalla de **ingreso** y las **tarjetas de control** de
+  Configuración.
+- **Mensajes flash/redirect** de las acciones del panel (guardados, errores,
+  avisos) también traducidos (`msg.*`).
+- Diccionarios por área (`src/admin/locales/{es,en}/`: `core`, `inbox`, `config`,
+  `analisis`, `agente`, `resto`); el **par ES/EN se valida por tipo** y por test.
+- ~1900 claves. **El español sigue siendo el default y byte-idéntico**, así que el
+  panel se ve exactamente igual que antes hasta que cambies el idioma, y los
+  tests que afirman textos en español siguen pasando.
+- Los helpers compartidos (`ago()` de tiempo relativo) y el selector 🇲🇽/🇺🇸 del
+  header se mantienen como única fuente del idioma, independiente de
+  `BOT_LANGUAGE` (el idioma con el que el bot le habla a los clientes).
+
 ## [1.51.0] — 2026-09-30
 
 ### Corregido — el scraping de inventario ya no depende de la cuota de Decodo

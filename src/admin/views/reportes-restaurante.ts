@@ -3,10 +3,20 @@
 // Datos: src/reports/restaurante.ts. Filtro por rango de fechas + export CSV.
 import type { Env } from "../../env";
 import { layout } from "./layout";
+import { panelI18n, type T, type MessageKey } from "../i18n";
 import { buildRestaurantReports, type RestaurantReports, type ReportWindow } from "../../reports/restaurante";
 
 const DAY = 86_400_000;
-const DOW = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+/** Días de la semana (Dom→Sáb) por clave i18n; el índice debe seguir a `Date.getDay`. */
+const DOW_KEY: MessageKey[] = [
+  "rr.dow.dom",
+  "rr.dow.lun",
+  "rr.dow.mar",
+  "rr.dow.mie",
+  "rr.dow.jue",
+  "rr.dow.vie",
+  "rr.dow.sab",
+];
 
 function esc(s: string): string {
   return s.replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]!));
@@ -29,14 +39,14 @@ export function windowFromQuery(q: URLSearchParams): ReportWindow {
   return from < to ? { from, to } : { from: to - 30 * DAY, to };
 }
 
-function delta(pct: number | null): string {
-  if (pct === null) return `<span class="text-dim text-[11px]">sin comparación</span>`;
+function delta(t: T, pct: number | null): string {
+  if (pct === null) return `<span class="text-dim text-[11px]">${t("rr.delta.none")}</span>`;
   const c = pct > 2 ? "var(--ok)" : pct < -2 ? "var(--bad)" : "var(--muted)";
-  return `<span style="color:${c};font-size:11px;font-weight:600">${pct >= 0 ? "▲" : "▼"} ${Math.abs(pct)}% vs. período anterior</span>`;
+  return `<span style="color:${c};font-size:11px;font-weight:600">${pct >= 0 ? "▲" : "▼"} ${Math.abs(pct)}% ${t("rr.delta.vs")}</span>`;
 }
 
-function sparkline(byDay: { day: string; total: number }[]): string {
-  if (byDay.length < 2) return `<div class="text-dim text-[11px] py-3">Poca actividad para graficar.</div>`;
+function sparkline(t: T, byDay: { day: string; total: number }[]): string {
+  if (byDay.length < 2) return `<div class="text-dim text-[11px] py-3">${t("rr.noActivity")}</div>`;
   const w = 320, h = 54, pad = 4;
   const max = Math.max(...byDay.map((d) => d.total), 1);
   const step = (w - 2 * pad) / (byDay.length - 1);
@@ -46,12 +56,13 @@ function sparkline(byDay: { day: string; total: number }[]): string {
   </svg></div>`;
 }
 
-function heatmapMini(cells: { dow: number; hour: number; n: number }[]): string {
+function heatmapMini(t: T, cells: { dow: number; hour: number; n: number }[]): string {
   const map = new Map(cells.map((c) => [`${c.dow}:${c.hour}`, c.n]));
   const max = Math.max(...cells.map((c) => c.n), 1);
   // Solo el horario de comercio típico (10–24) para que quepa.
   const hours = Array.from({ length: 15 }, (_, i) => i + 10);
-  const rows = DOW.map((name, dow) => {
+  const rows = DOW_KEY.map((dowKey, dow) => {
+    const name = t(dowKey);
     const tds = hours.map((hour) => {
       const n = map.get(`${dow}:${hour}`) ?? 0;
       const bg = n === 0 ? "var(--panel2)" : `color-mix(in srgb, var(--accent) ${Math.round((0.15 + 0.8 * (n / max)) * 100)}%, var(--panel2))`;
@@ -63,8 +74,8 @@ function heatmapMini(cells: { dow: number; hour: number; n: number }[]): string 
   return `<div class="overflow-x-auto"><table style="border-spacing:2px;border-collapse:separate"><tbody>${rows}<tr><td></td>${labels}</tr></tbody></table></div>`;
 }
 
-function barList(items: { label: string; value: string; pct: number }[]): string {
-  if (!items.length) return `<div class="text-dim text-[11px] py-2">Sin datos.</div>`;
+function barList(t: T, items: { label: string; value: string; pct: number }[]): string {
+  if (!items.length) return `<div class="text-dim text-[11px] py-2">${t("rr.noData")}</div>`;
   return items
     .map(
       (it) => `<div style="display:flex;align-items:center;gap:8px;font-size:12px;margin:3px 0">
@@ -92,48 +103,49 @@ function card(title: string, headline: string, sub: string, body: string, action
   </div>`;
 }
 
-function renderCards(r: RestaurantReports): string {
+function renderCards(t: T, r: RestaurantReports): string {
   const c1 = card(
-    "1 · Ventas",
+    t("rr.card.sales"),
     money(r.ventas.total),
-    `${delta(r.ventas.deltaPct)} <span class="text-dim text-[11px]">· ${r.ventas.pedidos} pedidos${r.ventas.cancelados ? ` · ${r.ventas.cancelados} cancelados` : ""}</span>`,
-    sparkline(r.ventas.byDay),
+    `${delta(t, r.ventas.deltaPct)} <span class="text-dim text-[11px]">· ${t("rr.ordersCount", { n: r.ventas.pedidos })}${r.ventas.cancelados ? ` · ${t("rr.cancelledCount", { n: r.ventas.cancelados })}` : ""}</span>`,
+    sparkline(t, r.ventas.byDay),
     r.ventas.action,
   );
 
   const c2 = card(
-    "2 · Ticket promedio",
+    t("rr.card.ticket"),
     money(r.ticket.avg),
-    delta(r.ticket.deltaPct),
-    `<div class="text-dim text-[11px]">Antes: ${money(r.ticket.prevAvg)}</div>`,
+    delta(t, r.ticket.deltaPct),
+    `<div class="text-dim text-[11px]">${t("rr.before")} ${money(r.ticket.prevAvg)}</div>`,
     r.ticket.action,
   );
 
   const topMax = Math.max(...r.productos.top.map((p) => p.units), 1);
   const c3 = card(
-    "3 · Productos",
+    t("rr.card.products"),
     `${r.productos.top.length}`,
-    `<span class="text-dim text-[11px]">que rotan · ${r.productos.sinVenta.length} sin venta</span>`,
-    barList(r.productos.top.slice(0, 5).map((p) => ({ label: p.name, value: `${p.units} u`, pct: (p.units / topMax) * 100 }))) +
+    `<span class="text-dim text-[11px]">${t("rr.rotating")} · ${t("rr.noSalesCount", { n: r.productos.sinVenta.length })}</span>`,
+    barList(t, r.productos.top.slice(0, 5).map((p) => ({ label: p.name, value: `${p.units} u`, pct: (p.units / topMax) * 100 }))) +
       (r.productos.sinVenta.length
-        ? `<div class="text-dim text-[11px]" style="margin-top:6px">Sin venta: ${esc(r.productos.sinVenta.slice(0, 8).join(", "))}${r.productos.sinVenta.length > 8 ? "…" : ""}</div>`
+        ? `<div class="text-dim text-[11px]" style="margin-top:6px">${t("rr.withoutSales")} ${esc(r.productos.sinVenta.slice(0, 8).join(", "))}${r.productos.sinVenta.length > 8 ? "…" : ""}</div>`
         : ""),
     r.productos.action,
   );
 
   const c4 = card(
-    "4 · Horas y días pico",
+    t("rr.card.peak"),
     r.pico.topLabel ?? "—",
-    `<span class="text-dim text-[11px]">tu franja más cargada</span>`,
-    heatmapMini(r.pico.cells),
+    `<span class="text-dim text-[11px]">${t("rr.busiest")}</span>`,
+    heatmapMini(t, r.pico.cells),
     r.pico.action,
   );
 
   const c5 = card(
-    "5 · Clientes",
+    t("rr.card.customers"),
     `${r.clientes.nuevos}`,
-    `<span class="text-dim text-[11px]">nuevos · ${r.clientes.recurrentes} recurrentes</span>`,
+    `<span class="text-dim text-[11px]">${t("rr.newCustomers")} · ${t("rr.recurringCount", { n: r.clientes.recurrentes })}</span>`,
     barList(
+      t,
       r.clientes.top.map((cl) => ({
         label: cl.name || cl.phone,
         value: `${money(cl.total)}`,
@@ -142,7 +154,7 @@ function renderCards(r: RestaurantReports): string {
     ) +
       (r.clientes.dejaron.length
         ? `<div style="margin-top:8px;border-top:1px solid var(--line);padding-top:8px">
-             <div class="text-bad text-[11.5px]" style="font-weight:600">⚠ Dejaron de pedir (30–60 d): ${r.clientes.dejaron.length} · ${money(r.clientes.dejaronMonto)}</div>
+             <div class="text-bad text-[11.5px]" style="font-weight:600">${t("rr.lostCustomers")} ${r.clientes.dejaron.length} · ${money(r.clientes.dejaronMonto)}</div>
              <div class="text-dim text-[11px]">${esc(r.clientes.dejaron.slice(0, 6).map((d) => d.name || d.phone).join(", "))}</div>
            </div>`
         : ""),
@@ -151,13 +163,13 @@ function renderCards(r: RestaurantReports): string {
 
   const conv = r.salud.conversionPct;
   const c6 = card(
-    "6 · Salud del bot",
+    t("rr.card.health"),
     conv !== null ? `${conv}%` : "—",
-    `<span class="text-dim text-[11px]">conversaciones → pedido</span>`,
+    `<span class="text-dim text-[11px]">${t("rr.convToOrder")}</span>`,
     `<div class="text-[12px] text-muted" style="display:flex;flex-direction:column;gap:2px">
-       <span>${r.salud.pedidosBot} pedidos por el bot · ${r.salud.pedidosSinHumano} sin intervención</span>
-       <span>${r.salud.abandonadas} conversaciones abandonadas</span>
-       <span>Costo IA del período: <b class="text-cream">${money(r.salud.costoIA)}</b>${r.salud.costoPorPedido !== null ? ` · ${money(r.salud.costoPorPedido)}/pedido` : ""}</span>
+       <span>${t("rr.botOrders", { n: r.salud.pedidosBot })} · ${t("rr.noHuman", { n: r.salud.pedidosSinHumano })}</span>
+       <span>${t("rr.abandoned", { n: r.salud.abandonadas })}</span>
+       <span>${t("rr.aiCost")} <b class="text-cream">${money(r.salud.costoIA)}</b>${r.salud.costoPorPedido !== null ? ` · ${t("rr.perOrder", { v: money(r.salud.costoPorPedido) })}` : ""}</span>
      </div>`,
     r.salud.action,
   );
@@ -166,6 +178,7 @@ function renderCards(r: RestaurantReports): string {
 }
 
 export async function renderReportesRestaurante(env: Env, win: ReportWindow): Promise<string> {
+  const { t } = await panelI18n(env);
   const r = await buildRestaurantReports(env, win);
   const from = ymd(win.from);
   const to = ymd(win.to - DAY);
@@ -173,23 +186,23 @@ export async function renderReportesRestaurante(env: Env, win: ReportWindow): Pr
   const body = `
     <div style="display:flex;flex-direction:column;gap:16px">
       <div style="display:flex;flex-direction:column;gap:3px">
-        <h2 class="font-display font-semibold text-[15px] text-cream">Reportes del restaurante</h2>
-        <p class="text-muted text-[12.5px]">Seis números que sirven para decidir. Cada uno termina en una acción, no en un dato.</p>
+        <h2 class="font-display font-semibold text-[15px] text-cream">${t("rr.heading")}</h2>
+        <p class="text-muted text-[12.5px]">${t("rr.subtitle")}</p>
       </div>
 
       <form method="GET" action="/admin/reportes" style="display:flex;gap:8px;flex-wrap:wrap;align-items:end">
-        <label style="display:flex;flex-direction:column;gap:3px;font-size:11px;color:var(--muted)">Desde
+        <label style="display:flex;flex-direction:column;gap:3px;font-size:11px;color:var(--muted)">${t("rr.from")}
           <input type="date" name="desde" value="${from}" style="background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:7px 9px;font-size:12px">
         </label>
-        <label style="display:flex;flex-direction:column;gap:3px;font-size:11px;color:var(--muted)">Hasta
+        <label style="display:flex;flex-direction:column;gap:3px;font-size:11px;color:var(--muted)">${t("rr.to")}
           <input type="date" name="hasta" value="${to}" style="background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:7px 9px;font-size:12px">
         </label>
-        <button type="submit" style="background:var(--accent);color:var(--on-accent);font-weight:700;border:none;padding:8px 16px;font-size:12px;cursor:pointer">Ver</button>
+        <button type="submit" style="background:var(--accent);color:var(--on-accent);font-weight:700;border:none;padding:8px 16px;font-size:12px;cursor:pointer">${t("rr.view")}</button>
         <a href="/admin/reportes/export.csv?desde=${from}&hasta=${to}" style="border:1px solid var(--line);color:var(--muted);padding:8px 14px;font-size:12px;text-decoration:none">⬇ CSV</a>
       </form>
 
-      ${renderCards(r)}
+      ${renderCards(t, r)}
     </div>`;
 
-  return layout({ title: "Reportes", activeTab: "reportes", body, env });
+  return layout({ title: t("rr.title"), activeTab: "reportes", body, env });
 }

@@ -11,14 +11,21 @@
 // and back again, so the UI can highlight the right card.
 
 import { SETTING_KEYS } from "../db/settings";
+import type { MessageKey } from "./i18n";
 
 export interface ControlOption {
   /** Persisted value (the raw setting value stored in D1). */
   value: string;
-  /** Short human label shown on the card (Spanish). */
+  /** Short human label shown on the card (Spanish). ALSO the stored-value
+   *  matcher used by valueToLevel + the `opt.label === currentLevel` check, so
+   *  it must NOT change; the visible text comes from `labelKey`. */
   label: string;
-  /** One-line description in plain Spanish. */
+  /** i18n key for the DISPLAYED label (label stays the ES source + match key). */
+  labelKey?: MessageKey;
+  /** One-line description in plain Spanish (ES source; display via `descKey`). */
   desc: string;
+  /** i18n key for the DISPLAYED description. */
+  descKey?: MessageKey;
   /** Inline 24x24 SVG, stroke=currentColor, no external deps. */
   svg: string;
 }
@@ -28,8 +35,12 @@ export interface ControlDef {
   key: string;
   /** Friendly section title for the card group. */
   title: string;
+  /** i18n key for the displayed title. */
+  titleKey?: MessageKey;
   /** One-line helper text shown above the cards. */
   help: string;
+  /** i18n key for the displayed helper text. */
+  helpKey?: MessageKey;
   options: ControlOption[];
 }
 
@@ -68,24 +79,32 @@ const SVG_PAUSE = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24
 export const TONE_CONTROL: ControlDef = {
   key: SETTING_KEYS.tone,
   title: "Tono",
+  titleKey: "cl.tone.title",
   help: "Cómo le habla el bot a sus clientes.",
+  helpKey: "cl.tone.help",
   options: [
     {
       value: "cálido y cercano",
       label: "Cálido",
+      labelKey: "cl.tone.calido.label",
       desc: "Amable y cercano, como un amigo.",
+      descKey: "cl.tone.calido.desc",
       svg: SVG_SMILE,
     },
     {
       value: "formal y profesional",
       label: "Formal",
+      labelKey: "cl.tone.formal.label",
       desc: "Serio y profesional, trato de usted.",
+      descKey: "cl.tone.formal.desc",
       svg: SVG_BRIEFCASE,
     },
     {
       value: "divertido y relajado",
       label: "Divertido",
+      labelKey: "cl.tone.divertido.label",
       desc: "Relajado y con buen humor.",
+      descKey: "cl.tone.divertido.desc",
       svg: SVG_CONFETTI,
     },
   ],
@@ -94,24 +113,32 @@ export const TONE_CONTROL: ControlDef = {
 export const SPEED_CONTROL: ControlDef = {
   key: SETTING_KEYS.bufferSeconds,
   title: "Velocidad de respuesta",
+  titleKey: "cl.speed.title",
   help: "Qué tanto espera el bot a que el cliente termine de escribir.",
+  helpKey: "cl.speed.help",
   options: [
     {
       value: "5",
       label: "Rápido",
+      labelKey: "cl.speed.rapido.label",
       desc: "Responde casi al instante (5 segundos).",
+      descKey: "cl.speed.rapido.desc",
       svg: SVG_BOLT,
     },
     {
       value: "15",
       label: "Normal",
+      labelKey: "cl.speed.normal.label",
       desc: "Espera un poco por si siguen escribiendo (15 segundos).",
+      descKey: "cl.speed.normal.desc",
       svg: SVG_CLOCK,
     },
     {
       value: "30",
       label: "Pausado",
+      labelKey: "cl.speed.pausado.label",
       desc: "Espera más para juntar todo el mensaje (30 segundos).",
+      descKey: "cl.speed.pausado.desc",
       svg: SVG_TURTLE,
     },
   ],
@@ -120,24 +147,32 @@ export const SPEED_CONTROL: ControlDef = {
 export const STYLE_CONTROL: ControlDef = {
   key: SETTING_KEYS.maxChunks,
   title: "Estilo de mensajes",
+  titleKey: "cl.style.title",
   help: "En cuántas burbujas parte su respuesta.",
+  helpKey: "cl.style.help",
   options: [
     {
       value: "1",
       label: "Un mensaje",
+      labelKey: "cl.style.unico.label",
       desc: "Todo en una sola burbuja.",
+      descKey: "cl.style.unico.desc",
       svg: SVG_ONE_BUBBLE,
     },
     {
       value: "3",
       label: "2-3 cortos",
+      labelKey: "cl.style.pocos.label",
       desc: "Parte la respuesta en pocas burbujas.",
+      descKey: "cl.style.pocos.desc",
       svg: SVG_TWO_BUBBLES,
     },
     {
       value: "5",
       label: "Varios cortos",
+      labelKey: "cl.style.varios.label",
       desc: "Muchas burbujas cortas, estilo chat.",
+      descKey: "cl.style.varios.desc",
       svg: SVG_MANY_BUBBLES,
     },
   ],
@@ -146,24 +181,32 @@ export const STYLE_CONTROL: ControlDef = {
 export const MODEL_CONTROL: ControlDef = {
   key: SETTING_KEYS.modelOverride,
   title: "Cerebro del bot",
+  titleKey: "cl.model.title",
   help: "Más barato vs más inteligente.",
+  helpKey: "cl.model.help",
   options: [
     {
       value: "haiku",
       label: "Económico",
+      labelKey: "cl.model.economico.label",
       desc: "El más barato, ideal para preguntas simples.",
+      descKey: "cl.model.economico.desc",
       svg: SVG_FEATHER,
     },
     {
       value: "auto",
       label: "Equilibrado",
+      labelKey: "cl.model.equilibrado.label",
       desc: "Elige solo según la dificultad de cada mensaje.",
+      descKey: "cl.model.equilibrado.desc",
       svg: SVG_SCALE,
     },
     {
       value: "sonnet",
       label: "Máximo",
+      labelKey: "cl.model.maximo.label",
       desc: "El más inteligente, para conversaciones complejas.",
+      descKey: "cl.model.maximo.desc",
       svg: SVG_BRAIN,
     },
   ],
@@ -172,18 +215,24 @@ export const MODEL_CONTROL: ControlDef = {
 export const STATUS_CONTROL: ControlDef = {
   key: SETTING_KEYS.botPaused,
   title: "Estado",
+  titleKey: "cl.status.title",
   help: "Encienda o apague el bot (ej. en vacaciones).",
+  helpKey: "cl.status.help",
   options: [
     {
       value: "0",
       label: "Activo",
+      labelKey: "cl.status.activo.label",
       desc: "El bot responde a sus clientes.",
+      descKey: "cl.status.activo.desc",
       svg: SVG_GREEN_DOT,
     },
     {
       value: "1",
       label: "En pausa",
+      labelKey: "cl.status.pausa.label",
       desc: "El bot no responde (útil en vacaciones).",
+      descKey: "cl.status.pausa.desc",
       svg: SVG_PAUSE,
     },
   ],

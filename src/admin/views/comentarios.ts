@@ -11,13 +11,22 @@ import { CommentPostsRepo } from "../../db/commentPosts";
 import { AutoRulesRepo } from "../../db/autoRules";
 import { escapeHtml, ago, shortDate, initialsOf, platformColor, snippet } from "./shared";
 import { fetchCommentThread, type CommentThreadItem } from "../../channels/zernioComments";
+import { panelI18n, makeT, type T } from "../i18n";
 
-const KIND_LABEL: Record<string, string> = {
-  comment_dm: "Comentario → DM",
-  comment_dm_public: "Comentario → DM + respuesta pública",
-  comment_reply: "Comentario → respuesta pública",
-  dm_reply: "Auto-respuesta a DM",
-};
+function kindLabel(t: T, kind: string | null | undefined): string {
+  switch (kind) {
+    case "comment_dm":
+      return t("com.kindCommentDm");
+    case "comment_dm_public":
+      return t("com.kindCommentDmPublic");
+    case "comment_reply":
+      return t("com.kindCommentReply");
+    case "dm_reply":
+      return t("com.kindDmReply");
+    default:
+      return kind || t("com.rule");
+  }
+}
 
 const RULE_FILTERS = ["matched", "fallback", "none"] as const;
 const LEG_FILTERS = ["dm", "public"] as const;
@@ -64,13 +73,13 @@ function filtersFrom(p: CommentsParams) {
 const smallPill = (color: string) =>
   `font-size:9px;letter-spacing:.03em;color:${color};border:1px solid ${color};padding:1px 6px`;
 
-function statusChips(c: CommentRecord): string {
+function statusChips(t: T, c: CommentRecord): string {
   const chips: string[] = [];
-  if (c.dmSent) chips.push(`<span style="${smallPill("var(--ok)")}">DM enviado</span>`);
-  if (c.publicReplySent) chips.push(`<span style="${smallPill("var(--accent)")}">Resp. pública ✓</span>`);
-  if (c.ruleId) chips.push(`<span style="${smallPill("var(--linelit)")}">regla</span>`);
-  else if (c.publicReplySent) chips.push(`<span style="${smallPill("var(--muted)")}">fallback</span>`);
-  else chips.push(`<span style="font-size:9px;color:var(--dim)">sin automatización</span>`);
+  if (c.dmSent) chips.push(`<span style="${smallPill("var(--ok)")}">${t("com.chipDmSent")}</span>`);
+  if (c.publicReplySent) chips.push(`<span style="${smallPill("var(--accent)")}">${t("com.chipPublicReply")}</span>`);
+  if (c.ruleId) chips.push(`<span style="${smallPill("var(--linelit)")}">${t("com.chipRule")}</span>`);
+  else if (c.publicReplySent) chips.push(`<span style="${smallPill("var(--muted)")}">${t("com.chipFallback")}</span>`);
+  else chips.push(`<span style="font-size:9px;color:var(--dim)">${t("com.chipNoAutomation")}</span>`);
   return chips.join(" ");
 }
 
@@ -81,6 +90,7 @@ function authorLabel(c: CommentRecord): string {
 // --- Left pane: list ---------------------------------------------------------
 
 export async function renderComentariosList(env: Env, p: CommentsParams): Promise<string> {
+  const { t } = await panelI18n(env);
   const repo = new CommentsRepo(new Db(env.DB));
   const { rule, leg } = filtersFrom(p);
   let rows: CommentRecord[] = [];
@@ -97,7 +107,7 @@ export async function renderComentariosList(env: Env, p: CommentsParams): Promis
   }
 
   if (rows.length === 0) {
-    return `<div style="padding:32px 16px;text-align:center;font-size:12.5px;color:var(--dim)">Sin comentarios${p.filter || p.search ? " con este filtro" : ""}.</div>`;
+    return `<div style="padding:32px 16px;text-align:center;font-size:12.5px;color:var(--dim)">${p.filter || p.search ? t("com.noCommentsFiltered") : t("com.noComments")}</div>`;
   }
 
   return rows
@@ -113,11 +123,11 @@ export async function renderComentariosList(env: Env, p: CommentsParams): Promis
           <div style="display:flex;align-items:center;gap:6px">
             <span style="font-size:12.5px;font-weight:600;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;color:var(--cream)">${escapeHtml(authorLabel(c))}</span>
             <span style="font-size:9px;letter-spacing:.05em;color:${color};border:1px solid ${color};padding:0 5px;flex:none">${escapeHtml(c.platform)}</span>
-            <span style="margin-left:auto;font-size:9.5px;color:var(--dim);white-space:nowrap">${ago(c.createdAt)}</span>
+            <span style="margin-left:auto;font-size:9.5px;color:var(--dim);white-space:nowrap">${ago(c.createdAt, t)}</span>
           </div>
           <div style="font-size:11.5px;color:var(--cream);white-space:nowrap;text-overflow:ellipsis;overflow:hidden;margin-top:3px">${escapeHtml(snippet(c.text, 70)) || "—"}</div>
           ${postCaption ? `<div style="font-size:10.5px;color:var(--dim);white-space:nowrap;text-overflow:ellipsis;overflow:hidden;margin-top:3px">📷 ${escapeHtml(snippet(postCaption, 60))}</div>` : ""}
-          <div style="display:flex;gap:5px;margin-top:6px;flex-wrap:wrap">${statusChips(c)}</div>
+          <div style="display:flex;gap:5px;margin-top:6px;flex-wrap:wrap">${statusChips(t, c)}</div>
         </div>
       </a>`;
     })
@@ -144,27 +154,27 @@ async function loadDmLogs(env: Env, commentId: string): Promise<DmLogRow[]> {
   }
 }
 
-async function conversationLink(env: Env, c: CommentRecord): Promise<string> {
+async function conversationLink(env: Env, c: CommentRecord, t: T): Promise<string> {
   if (!c.authorId) return "";
   const convId = `zernio:${c.accountId ?? ""}:${c.authorId}`;
   try {
     const row = await new Db(env.DB).first<{ id: string }>("SELECT id FROM conversations WHERE id = ?", [convId]);
     if (!row) return "";
-    return `<a href="/admin/conversations?c=${encodeURIComponent(convId)}" style="font-size:11.5px;color:var(--accent);text-decoration:underline">Ver su conversación de DM →</a>`;
+    return `<a href="/admin/conversations?c=${encodeURIComponent(convId)}" style="font-size:11.5px;color:var(--accent);text-decoration:underline">${t("com.viewDmConv")}</a>`;
   } catch {
     return "";
   }
 }
 
-function threadItemsHtml(items: CommentThreadItem[], rootId: string): string {
+function threadItemsHtml(items: CommentThreadItem[], rootId: string, t: T): string {
   const replies = items.filter((i) => i.id !== rootId);
   if (replies.length === 0) return "";
   return replies
     .map((r) => {
-      const who = r.author.isOwner ? "Nosotros" : r.author.name || r.author.username || "—";
+      const who = r.author.isOwner ? t("com.us") : r.author.name || r.author.username || "—";
       const color = r.author.isOwner ? "var(--accent)" : "var(--accent-2)";
       return `<div style="margin-top:8px;padding-left:10px;border-left:2px solid ${color}">
-        <div style="font-size:11px;color:${color};font-weight:600">${escapeHtml(who)}${r.isHidden ? " · oculto" : ""}</div>
+        <div style="font-size:11px;color:${color};font-weight:600">${escapeHtml(who)}${r.isHidden ? " · " + t("com.hidden") : ""}</div>
         <div style="font-size:12.5px;color:var(--cream);white-space:pre-wrap">${escapeHtml(r.text)}</div>
         ${r.createdTime ? `<div style="font-size:10px;color:var(--dim)">${escapeHtml(r.createdTime)}</div>` : ""}
       </div>`;
@@ -172,14 +182,14 @@ function threadItemsHtml(items: CommentThreadItem[], rootId: string): string {
     .join("");
 }
 
-export function renderComposeBox(id: string, prefill = ""): string {
+export function renderComposeBox(id: string, prefill = "", t: T = makeT("es")): string {
   return `
-    <textarea id="comment-compose-text" name="text" rows="3" placeholder="Escribí una respuesta…"
+    <textarea id="comment-compose-text" name="text" rows="3" placeholder="${t("com.composePlaceholder")}"
       style="width:100%;background:var(--bg);border:1px solid var(--line);color:var(--cream);font-size:12.5px;padding:9px 11px;font-family:inherit">${escapeHtml(prefill)}</textarea>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
-      <button class="bigbtn" hx-post="/admin/comentarios/${encodeURIComponent(id)}/reply" hx-include="#comment-compose-text" hx-target="#comment-detail" hx-swap="innerHTML" style="font-size:12px">Responder en público</button>
-      <button class="ghostbtn" hx-post="/admin/comentarios/${encodeURIComponent(id)}/dm" hx-include="#comment-compose-text" hx-target="#comment-detail" hx-swap="innerHTML" style="font-size:12px">Enviar DM</button>
-      <button class="ghostbtn" hx-post="/admin/comentarios/${encodeURIComponent(id)}/suggest" hx-target="#comment-compose" hx-swap="innerHTML" style="font-size:12px">✨ Generar con IA</button>
+      <button class="bigbtn" hx-post="/admin/comentarios/${encodeURIComponent(id)}/reply" hx-include="#comment-compose-text" hx-target="#comment-detail" hx-swap="innerHTML" style="font-size:12px">${t("com.replyPublic")}</button>
+      <button class="ghostbtn" hx-post="/admin/comentarios/${encodeURIComponent(id)}/dm" hx-include="#comment-compose-text" hx-target="#comment-detail" hx-swap="innerHTML" style="font-size:12px">${t("com.sendDm")}</button>
+      <button class="ghostbtn" hx-post="/admin/comentarios/${encodeURIComponent(id)}/suggest" hx-target="#comment-compose" hx-swap="innerHTML" style="font-size:12px">${t("com.generateAi")}</button>
     </div>`;
 }
 
@@ -188,6 +198,7 @@ export async function renderComentarioThread(
   id: string,
   notice?: { type: "ok" | "error"; text: string },
 ): Promise<string> {
+  const { t } = await panelI18n(env);
   const repo = new CommentsRepo(new Db(env.DB));
   let c: CommentRecord | null = null;
   try {
@@ -196,7 +207,7 @@ export async function renderComentarioThread(
     console.warn("[comentarios] detalle no disponible:", e);
   }
   if (!c) {
-    return `<div style="padding:32px;text-align:center;color:var(--dim);font-size:12.5px">Elegí un comentario de la lista.</div>`;
+    return `<div style="padding:32px;text-align:center;color:var(--dim);font-size:12.5px">${t("com.pickOne")}</div>`;
   }
 
   const noticeHtml = notice
@@ -209,19 +220,19 @@ export async function renderComentarioThread(
   let thread: CommentThreadItem[] = [];
   if (c.postId) {
     try {
-      const t = await fetchCommentThread(env, { accountId: c.accountId, postId: c.postId, commentId: c.id });
-      thread = t.comments;
-      if (t.post) {
-        post = { ...(post ?? {}), ...t.post, fetchedAt: Date.now() } as any;
+      const threadRes = await fetchCommentThread(env, { accountId: c.accountId, postId: c.postId, commentId: c.id });
+      thread = threadRes.comments;
+      if (threadRes.post) {
+        post = { ...(post ?? {}), ...threadRes.post, fetchedAt: Date.now() } as any;
         await postRepo
           .upsert({
-            postId: t.post.postId,
-            platformPostId: t.post.platformPostId,
-            platform: t.post.platform ?? c.platform,
+            postId: threadRes.post.postId,
+            platformPostId: threadRes.post.platformPostId,
+            platform: threadRes.post.platform ?? c.platform,
             accountId: c.accountId,
-            caption: t.post.caption,
-            permalink: t.post.permalink,
-            picture: t.post.picture,
+            caption: threadRes.post.caption,
+            permalink: threadRes.post.permalink,
+            picture: threadRes.post.picture,
           })
           .catch(() => {});
       }
@@ -231,20 +242,20 @@ export async function renderComentarioThread(
   }
 
   // Automatización: regla que disparó, fallback, o ninguna.
-  let ruleHtml = `<span style="color:var(--dim);font-size:12px">Sin automatización (el bot no actuó sobre este comentario).</span>`;
+  let ruleHtml = `<span style="color:var(--dim);font-size:12px">${t("com.ruleNone")}</span>`;
   if (c.ruleId) {
     try {
       const rule = await new AutoRulesRepo(new Db(env.DB)).get(c.ruleId);
       const kws = (rule?.keywords ?? []).map((k: string) => `"${escapeHtml(k)}"`).join(", ");
       ruleHtml = `
-        <div style="font-size:12.5px;color:var(--cream)">${escapeHtml(KIND_LABEL[rule?.kind ?? ""] ?? rule?.kind ?? "Regla")}</div>
-        ${kws ? `<div style="font-size:11.5px;color:var(--muted);margin-top:2px">Keywords: ${kws}</div>` : ""}
+        <div style="font-size:12.5px;color:var(--cream)">${escapeHtml(kindLabel(t, rule?.kind ?? ""))}</div>
+        ${kws ? `<div style="font-size:11.5px;color:var(--muted);margin-top:2px">${t("com.keywords")}: ${kws}</div>` : ""}
         <div style="font-family:var(--mono);font-size:10px;color:var(--dim);margin-top:2px">${escapeHtml(c.ruleId)}</div>`;
     } catch {
-      ruleHtml = `<div style="font-size:12px;color:var(--muted)">Regla ${escapeHtml(c.ruleId)}</div>`;
+      ruleHtml = `<div style="font-size:12px;color:var(--muted)">${t("com.rule")} ${escapeHtml(c.ruleId)}</div>`;
     }
   } else if (c.publicReplySent) {
-    ruleHtml = `<span style="color:var(--muted);font-size:12px">Respuesta pública automática (fallback sin regla).</span>`;
+    ruleHtml = `<span style="color:var(--muted);font-size:12px">${t("com.fallbackReply")}</span>`;
   }
 
   const logs = await loadDmLogs(env, c.id);
@@ -255,16 +266,16 @@ export async function renderComentarioThread(
             `<div style="font-size:11px;color:var(--muted);display:flex;gap:8px"><span style="font-family:var(--mono);color:var(--dim)">${escapeHtml(shortDate(l.created_at))}</span><span>${escapeHtml(l.kind)} · ${escapeHtml(l.status)}${l.error ? ` · ${escapeHtml(snippet(l.error, 90))}` : ""}</span></div>`,
         )
         .join("")
-    : `<div style="font-size:11px;color:var(--dim)">Sin eventos registrados.</div>`;
+    : `<div style="font-size:11px;color:var(--dim)">${t("com.noEvents")}</div>`;
 
-  const convLink = await conversationLink(env, c);
+  const convLink = await conversationLink(env, c, t);
   const permalink = post?.permalink
-    ? `<a href="${escapeHtml(post.permalink)}" target="_blank" rel="noreferrer" style="font-size:11.5px;color:var(--accent);text-decoration:underline">Abrir publicación ↗</a>`
+    ? `<a href="${escapeHtml(post.permalink)}" target="_blank" rel="noreferrer" style="font-size:11.5px;color:var(--accent);text-decoration:underline">${t("com.openPost")}</a>`
     : "";
   const postCard = `
     <div style="margin-top:10px;padding:10px 12px;background:var(--panel2);border:1px solid var(--line)">
-      <div style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--dim)">Publicación</div>
-      <div style="font-size:12.5px;color:var(--cream);margin-top:4px;white-space:pre-wrap">${escapeHtml(post?.caption ?? "(sin caption)")}</div>
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--dim)">${t("com.postLabel")}</div>
+      <div style="font-size:12.5px;color:var(--cream);margin-top:4px;white-space:pre-wrap">${escapeHtml(post?.caption ?? t("com.noCaption"))}</div>
       <div style="display:flex;gap:12px;margin-top:6px">${permalink}${c.postId ? `<span style="font-family:var(--mono);font-size:10px;color:var(--dim)">${escapeHtml(c.postId)}</span>` : ""}</div>
     </div>`;
 
@@ -280,17 +291,17 @@ export async function renderComentarioThread(
       </div>
 
       <div style="padding:12px 14px;background:var(--panel);border:1px solid var(--line)">
-        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--dim)">Comentario</div>
-        <div style="font-size:13px;color:var(--cream);margin-top:5px;white-space:pre-wrap">${escapeHtml(c.text ?? "(sin texto)")}</div>
-        <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">${statusChips(c)}</div>
-        ${c.publicReplyText ? `<div style="margin-top:8px;padding-left:10px;border-left:2px solid var(--accent)"><div style="font-size:10px;color:var(--accent)">Nuestra respuesta pública</div><div style="font-size:12.5px;color:var(--cream);white-space:pre-wrap">${escapeHtml(c.publicReplyText)}</div></div>` : ""}
-        ${threadItemsHtml(thread, c.id)}
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--dim)">${t("com.commentLabel")}</div>
+        <div style="font-size:13px;color:var(--cream);margin-top:5px;white-space:pre-wrap">${escapeHtml(c.text ?? t("com.noText"))}</div>
+        <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">${statusChips(t, c)}</div>
+        ${c.publicReplyText ? `<div style="margin-top:8px;padding-left:10px;border-left:2px solid var(--accent)"><div style="font-size:10px;color:var(--accent)">${t("com.ourPublicReply")}</div><div style="font-size:12.5px;color:var(--cream);white-space:pre-wrap">${escapeHtml(c.publicReplyText)}</div></div>` : ""}
+        ${threadItemsHtml(thread, c.id, t)}
       </div>
 
       ${postCard}
 
       <div style="padding:10px 12px;background:var(--panel2);border:1px solid var(--line)">
-        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--dim)">Automatización que entró</div>
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--dim)">${t("com.automationEntered")}</div>
         <div style="margin-top:5px">${ruleHtml}</div>
         <div style="margin-top:8px;display:flex;flex-direction:column;gap:3px">${logsHtml}</div>
       </div>
@@ -298,8 +309,8 @@ export async function renderComentarioThread(
       ${convLink ? `<div>${convLink}</div>` : ""}
 
       <div id="comment-compose" style="padding:10px 12px;background:var(--panel);border:1px solid var(--line)">
-        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);margin-bottom:6px">Responder</div>
-        ${renderComposeBox(c.id)}
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);margin-bottom:6px">${t("com.replyLabel")}</div>
+        ${renderComposeBox(c.id, "", t)}
       </div>
     </div>`;
 }
@@ -307,6 +318,7 @@ export async function renderComentarioThread(
 // --- Full page ---------------------------------------------------------------
 
 export async function renderComentarios(env: Env, p: CommentsParams): Promise<string> {
+  const { t } = await panelI18n(env);
   const repo = new CommentsRepo(new Db(env.DB));
   let counts = { total: 0, matched: 0, fallback: 0, none: 0, dm: 0, publicReply: 0 };
   let list = "";
@@ -326,31 +338,31 @@ export async function renderComentarios(env: Env, p: CommentsParams): Promise<st
 
   const right = p.selectedId
     ? await renderComentarioThread(env, p.selectedId)
-    : `<div style="padding:32px;text-align:center;color:var(--dim);font-size:12.5px">Elegí un comentario de la lista para ver su publicación, su automatización y el hilo.</div>`;
+    : `<div style="padding:32px;text-align:center;color:var(--dim);font-size:12.5px">${t("com.pickOneDetail")}</div>`;
 
   const body = `
     <div class="inbox" data-view="${p.selectedId ? "thread" : "list"}" style="display:flex;flex-direction:column;gap:12px">
       <div style="display:flex;flex-direction:column;gap:2px">
-        <div class="font-display font-semibold text-[15px] text-cream">Comentarios</div>
-        <p class="text-muted text-[12.5px]">Los comentarios que llegan a tus publicaciones (${counts.total} en total). Ves a qué publicación pertenecen, en qué automatización entraron y podés responder en público o por DM.</p>
+        <div class="font-display font-semibold text-[15px] text-cream">${t("com.title")}</div>
+        <p class="text-muted text-[12.5px]">${t("com.subtitle", { n: counts.total })}</p>
       </div>
 
       <div class="inbox-filters" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-        ${pill("", "Todas", counts.total)}
-        ${pill("matched", "Con regla", counts.matched)}
-        ${pill("fallback", "Fallback", counts.fallback)}
-        ${pill("none", "Sin regla", counts.none)}
-        ${pill("dm", "DM enviado", counts.dm)}
-        ${pill("public", "Resp. pública", counts.publicReply)}
+        ${pill("", t("com.filterAll"), counts.total)}
+        ${pill("matched", t("com.filterMatched"), counts.matched)}
+        ${pill("fallback", t("com.filterFallback"), counts.fallback)}
+        ${pill("none", t("com.filterNone"), counts.none)}
+        ${pill("dm", t("com.filterDm"), counts.dm)}
+        ${pill("public", t("com.filterPublic"), counts.publicReply)}
         <form method="get" action="/admin/comentarios" style="margin-left:auto;display:flex;gap:6px">
-          <input name="q" value="${escapeHtml(p.search ?? "")}" placeholder="Buscar…" style="background:var(--bg);border:1px solid var(--line);color:var(--cream);font-size:12px;padding:4px 9px" />
+          <input name="q" value="${escapeHtml(p.search ?? "")}" placeholder="${t("com.searchPlaceholder")}" style="background:var(--bg);border:1px solid var(--line);color:var(--cream);font-size:12px;padding:4px 9px" />
           <select name="p" style="background:var(--bg);border:1px solid var(--line);color:var(--cream);font-size:12px;padding:4px 9px">
-            <option value="">Toda plataforma</option>
+            <option value="">${t("com.allPlatforms")}</option>
             ${["instagram", "facebook", "threads", "tiktok", "youtube", "linkedin", "reddit", "bluesky"]
               .map((pl) => `<option value="${pl}" ${p.platform === pl ? "selected" : ""}>${pl}</option>`)
               .join("")}
           </select>
-          <button class="ghostbtn" style="font-size:12px">Filtrar</button>
+          <button class="ghostbtn" style="font-size:12px">${t("com.filterBtn")}</button>
         </form>
       </div>
 
@@ -364,5 +376,5 @@ export async function renderComentarios(env: Env, p: CommentsParams): Promise<st
       </div>
     </div>`;
 
-  return layout({ title: "Comentarios", activeTab: "comentarios", body, env });
+  return layout({ title: t("com.title"), activeTab: "comentarios", body, env });
 }

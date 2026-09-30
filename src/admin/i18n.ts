@@ -20,7 +20,6 @@ export type Lang = "es" | "en";
 
 export const DICTS: Record<Lang, Record<string, string>> = { es, en };
 export type MessageKey = keyof typeof es;
-
 const STORAGE_TTL_MS = 60_000;
 let cache: { at: number; lang: Lang } | null = null;
 

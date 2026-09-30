@@ -65,7 +65,7 @@ import { CommentsRepo } from "../db/comments";
 import { DmLogsRepo } from "../db/dmLogs";
 import { replyToComment, privateReplyToComment, MAX_PUBLIC_REPLIES_PER_DAY } from "../channels/zernioComments";
 import { generateAiCommentReply } from "../aiReply";
-import { clearPanelLangCache } from "./i18n";
+import { panelI18n, clearPanelLangCache } from "./i18n";
 import { ChangeReviewsRepo } from "../db/changeReviews";
 
 /** Parsea el form de una automatización (crear o editar) a un objeto de regla. */
@@ -190,15 +190,17 @@ function audit(
 // `POST /admin/login` valida el password contra `DASHBOARD_PASSWORD` y abre la
 // sesión por cookie firmada. Basic Auth sigue funcionando en paralelo para
 // scripts y tests (no pasan por acá).
-adminApp.get("/login", (c) => {
+adminApp.get("/login", async (c) => {
   // Solo se salta la página si YA hay cookie de sesión válida. Una credencial
   // Basic Auth vieja del navegador NO cuenta acá — si no, nunca vería el login.
   if (hasValidSessionCookie(c, c.env)) return c.redirect("/admin/overview", 302);
   const error = c.req.query("error");
-  return c.html(loginPage({ env: c.env, error: error || undefined }));
+  const { t } = await panelI18n(c.env);
+  return c.html(loginPage({ env: c.env, error: error || undefined, t }));
 });
 
 adminApp.post("/login", async (c) => {
+  const { t } = await panelI18n(c.env);
   const form = await c.req.formData().catch(() => null);
   const password = String(form?.get("password") ?? "");
 
@@ -218,7 +220,7 @@ adminApp.post("/login", async (c) => {
         await auditAuthEvent(c, "login.blocked", "denied", ipHash);
         return c.redirect(
           "/admin/login?error=" +
-            encodeURIComponent(`Demasiados intentos fallidos. Espera ${mins} minuto(s) y prueba de nuevo.`),
+            encodeURIComponent(t("msg.loginTooManyAttempts", { mins })),
           302,
         );
       }
@@ -232,7 +234,7 @@ adminApp.post("/login", async (c) => {
     if (attempts) await attempts.recordFailure(ipHash).catch(() => {});
     await auditAuthEvent(c, "login.fail", "denied", ipHash || undefined);
     return c.redirect(
-      "/admin/login?error=" + encodeURIComponent("Contraseña incorrecta. Prueba de nuevo."),
+      "/admin/login?error=" + encodeURIComponent(t("msg.loginWrongPassword")),
       302,
     );
   }
@@ -347,9 +349,10 @@ adminApp.get("/upgrade", async (c) => c.html(await renderUpgrade(c.env)));
 adminApp.get("/", (c) => c.redirect("/admin/overview"));
 
 // Selector de proyectos (header): instancia actual + hermanas de PEER_BOTS.
-adminApp.get("/projects", (c) =>
-  c.json({ current: c.env.BOT_NAME ?? "Mi bot", peers: parsePeerBots(c.env) }),
-);
+adminApp.get("/projects", async (c) => {
+  const { t } = await panelI18n(c.env);
+  return c.json({ current: c.env.BOT_NAME ?? t("msg.botNameFallback"), peers: parsePeerBots(c.env) });
+});
 
 // --- Read-only tabs ---------------------------------------------------------
 
@@ -487,42 +490,45 @@ adminApp.post("/push/unsubscribe", async (c) => {
 
 // El service worker lo pide al recibir un push (que va sin cuerpo).
 adminApp.get("/push/latest", async (c) => {
+  const { t } = await panelI18n(c.env);
   const { PushEventsRepo } = await import("../db/push");
   const ev = await new PushEventsRepo(new Db(c.env.DB)).takeLatest();
   return c.json(
     ev
       ? { title: ev.title, body: ev.body, url: ev.url }
-      : { title: c.env.BRAND_NAME || "Kooni", body: "Tienes una novedad en el panel.", url: "/admin/overview" },
+      : { title: c.env.BRAND_NAME || "Kooni", body: t("msg.pushFallbackBody"), url: "/admin/overview" },
   );
 });
 
 // Aviso de prueba (botón "Enviar aviso de prueba").
 adminApp.post("/push/test", async (c) => {
+  const { t } = await panelI18n(c.env);
   const { notifyOwnerPush } = await import("../push");
-  await notifyOwnerPush(c.env, { title: "Prueba ✓", body: "Los avisos funcionan en este dispositivo.", url: "/admin/overview" });
+  await notifyOwnerPush(c.env, { title: t("msg.pushTestTitle"), body: t("msg.pushTestBody"), url: "/admin/overview" });
   return c.json({ ok: true });
 });
 
 // Web Sync manual (módulo web_sync): scrapea ya las páginas configuradas.
 adminApp.post("/kb/web-sync", async (c) => {
+  const { t } = await panelI18n(c.env);
   const { runWebSync } = await import("../kb/webSync");
   const r = await runWebSync(c.env, { trigger: "manual" });
   let msg: string;
   if (r.skipped) {
-    msg = `omitido: ${r.skipped}`;
+    msg = t("msg.kbWebSyncSkipped", { skipped: r.skipped });
   } else {
-    msg = `${r.updated} actualizadas · ${r.unchanged} sin cambios`;
+    msg = t("msg.kbWebSyncUpdated", { updated: r.updated, unchanged: r.unchanged });
     if (r.vehicles !== undefined) {
-      msg += ` · ${r.vehicles} autos`;
-      if ((r.imagesPending ?? 0) > 0) msg += ` · ${r.imagesPending} fotos pendientes (se buscan en segundo plano)`;
+      msg += ` · ${t("msg.kbWebSyncVehicles", { vehicles: r.vehicles })}`;
+      if ((r.imagesPending ?? 0) > 0) msg += ` · ${t("msg.kbWebSyncImagesPending", { imagesPending: r.imagesPending ?? 0 })}`;
     }
     if ((r.added ?? 0) > 0 || (r.removed ?? 0) > 0 || (r.changed ?? 0) > 0) {
-      msg += ` · ${r.added ?? 0} nuevos / ${r.removed ?? 0} salieron / ${r.changed ?? 0} cambios`;
+      msg += ` · ${t("msg.kbWebSyncDelta", { added: r.added ?? 0, removed: r.removed ?? 0, changed: r.changed ?? 0 })}`;
     }
     if (r.errors.length) {
       // Mostrar el primer error concreto (no solo el conteo).
       const e = r.errors[0];
-      msg += ` · error en ${new URL(e.url).pathname}${new URL(e.url).search}: ${e.error.slice(0, 160)}`;
+      msg += ` · ${t("msg.kbWebSyncError", { path: `${new URL(e.url).pathname}${new URL(e.url).search}`, error: e.error.slice(0, 160) })}`;
     }
   }
   // Las fotos de autos nuevos/cambiados van en background (delta acotado).
@@ -594,9 +600,10 @@ adminApp.get("/scraping/export.csv", async (c) => {
 
 // Scrapeo manual desde el registro (mismo pipeline que /kb/web-sync).
 adminApp.post("/scraping/run", async (c) => {
+  const { t } = await panelI18n(c.env);
   const { runWebSync } = await import("../kb/webSync");
   const r = await runWebSync(c.env, { trigger: "manual" });
-  if (r.skipped) return c.redirect(`/admin/scraping?err=${encodeURIComponent(`Omitido: ${r.skipped}`)}`);
+  if (r.skipped) return c.redirect(`/admin/scraping?err=${encodeURIComponent(t("msg.scrapingSkipped", { skipped: r.skipped }))}`);
   if (r.vehicles !== undefined && (r.imagesPending ?? 0) > 0) {
     c.executionCtx.waitUntil(
       (async () => {
@@ -607,8 +614,8 @@ adminApp.post("/scraping/run", async (c) => {
     );
   }
   const msg =
-    `${r.added ?? 0} nuevos · ${r.removed ?? 0} salieron · ${r.changed ?? 0} cambios · ${r.vehicles ?? 0} autos` +
-    (r.errors.length ? ` · ${r.errors.length} error(es)` : "");
+    t("msg.scrapingOk", { added: r.added ?? 0, removed: r.removed ?? 0, changed: r.changed ?? 0, vehicles: r.vehicles ?? 0 }) +
+    (r.errors.length ? ` · ${t("msg.scrapingErrors", { n: r.errors.length })}` : "");
   return c.redirect(`/admin/scraping?ok=${encodeURIComponent(msg)}`);
 });
 
@@ -626,10 +633,11 @@ adminApp.post("/handoff/template/setup", async (c) => {
 
 // Estado de aprobación de la plantilla del handoff (approved | pending | …).
 adminApp.get("/handoff/template/status", async (c) => {
+  const { t } = await panelI18n(c.env);
   const sid =
     c.env.TWILIO_HANDOFF_CONTENT_SID ||
     (await new SettingsRepo(new Db(c.env.DB)).get(SETTING_KEYS.twilioHandoffContentSid));
-  if (!sid) return c.json({ error: "sin plantilla — corre el setup primero" }, 404);
+  if (!sid) return c.json({ error: t("msg.configHandoffNoTemplate") }, 404);
   const r = await contentApprovalStatus(c.env, sid);
   return c.json({ sid, ...r });
 });
@@ -744,11 +752,12 @@ adminApp.get("/probar", async (c) => {
   return c.html(await renderProbar(c.env));
 });
 adminApp.post("/probar/send", async (c) => {
+  const { t } = await panelI18n(c.env);
   const body = (await c.req.json().catch(() => null)) as
     | { text?: string; history?: { role: "user" | "assistant"; content: string }[] }
     | null;
   const text = (body?.text ?? "").trim();
-  if (!text) return c.json({ error: "escribe un mensaje" }, 400);
+  if (!text) return c.json({ error: t("msg.probarEmpty") }, 400);
   const history = Array.isArray(body?.history)
     ? body!.history.filter((m) => (m.role === "user" || m.role === "assistant") && typeof m.content === "string")
     : [];
@@ -772,6 +781,7 @@ adminApp.get("/agente/node/:id", async (c) =>
 // `canvas-refresh` event so the diagram updates immediately.
 adminApp.post("/agente/node/:id/save", async (c) => {
   const id = c.req.param("id");
+  const { t } = await panelI18n(c.env);
   const form = await c.req.formData();
   const repo = new SettingsRepo(new Db(c.env.DB));
 
@@ -795,8 +805,8 @@ adminApp.post("/agente/node/:id/save", async (c) => {
   } else if (id === "model") {
     const m = String(form.get("model_override") ?? "");
     if (m === "auto" || m === "haiku" || m === "sonnet") await repo.set(SETTING_KEYS.modelOverride, m);
-    const t = num("temperature");
-    if (t !== null) await repo.set(SETTING_KEYS.temperature, String(clamp(t, 0, 1)));
+    const temp = num("temperature");
+    if (temp !== null) await repo.set(SETTING_KEYS.temperature, String(clamp(temp, 0, 1)));
   } else if (id === "brain") {
     // Three sub-actions share the brain modal: reset-to-auto, pause toggle,
     // and saving the manual prompt. Checked in that priority order.
@@ -831,21 +841,22 @@ adminApp.post("/agente/node/:id/save", async (c) => {
       await repo.set(SETTING_KEYS.systemPromptOverride, String(form.get("system_prompt_override")).trim());
     }
   } else {
-    return c.text("Nodo desconocido", 404);
+    return c.text(t("msg.agenteUnknownNode"), 404);
   }
 
   c.header("HX-Trigger", "canvas-refresh");
-  return c.html((await renderNodeModal(c.env, id, true)) + toastOob("✓ Guardado"));
+  return c.html((await renderNodeModal(c.env, id, true)) + toastOob(t("msg.saved")));
 });
 
 // Toggle a tool on/off (settings.disabled_tools). Returns the refreshed modal;
 // the canvas badge updates via the canvas-refresh event.
 adminApp.post("/agente/tools/:name/toggle", async (c) => {
+  const { t } = await panelI18n(c.env);
   const name = c.req.param("name");
   const ok = await toggleTool(c.env, name);
-  if (!ok) return c.text("Tool no encontrada", 404);
+  if (!ok) return c.text(t("msg.agenteToolNotFound"), 404);
   c.header("HX-Trigger", "canvas-refresh");
-  return c.html((await renderNodeModal(c.env, `tool:${name}`, true)) + toastOob("✓ Guardado"));
+  return c.html((await renderNodeModal(c.env, `tool:${name}`, true)) + toastOob(t("msg.saved")));
 });
 
 adminApp.get("/leads", async (c) =>
@@ -857,6 +868,7 @@ adminApp.get("/tickets", async (c) => c.html(await renderTickets(c.env)));
 // Conexiones: mapa de canales con estado verde/gris (paso 4 del onboarding).
 // Lee los canales pausados de settings y las cuentas conectadas de Zernio.
 adminApp.get("/conexiones", async (c) => {
+  const { t } = await panelI18n(c.env);
   let pausedChannels: string[] = [];
   try {
     const { Db } = await import("../db/client");
@@ -926,17 +938,17 @@ adminApp.get("/conexiones", async (c) => {
                     : undefined,
     error:
       c.req.query("zernio") === "error"
-        ? (c.req.query("msg") ?? "No se pudo validar la API key.")
+        ? (c.req.query("msg") ?? t("msg.conexionesErrZernio"))
         : c.req.query("telegram") === "error"
-          ? (c.req.query("msg") ?? "No se pudo validar el token de Telegram.")
+          ? (c.req.query("msg") ?? t("msg.conexionesErrTelegram"))
           : c.req.query("ml") === "error"
-            ? (c.req.query("msg") ?? "No se pudo conectar MercadoLibre.")
+            ? (c.req.query("msg") ?? t("msg.conexionesErrMl"))
             : c.req.query("waha") === "error"
-              ? (c.req.query("msg") ?? "No se pudo conectar con el servidor de WAHA.")
+              ? (c.req.query("msg") ?? t("msg.conexionesErrWaha"))
               : c.req.query("vapi") === "error"
-                ? (c.req.query("msg") ?? "No se pudo validar la API key de Vapi.")
+                ? (c.req.query("msg") ?? t("msg.conexionesErrVapi"))
                 : c.req.query("retell") === "error"
-                  ? (c.req.query("msg") ?? "No se pudo validar la API key de Retell.")
+                  ? (c.req.query("msg") ?? t("msg.conexionesErrRetell"))
                   : undefined,
   }));
 });
@@ -945,6 +957,7 @@ adminApp.get("/conexiones", async (c) => {
 // para que el canal quede activo sin `wrangler secret put` ni redeploy. Si viene
 // una key nueva, se valida con GET /v1/accounts antes de guardarla.
 adminApp.post("/conexiones/zernio", async (c) => {
+  const { t } = await panelI18n(c.env);
   const form = await c.req.formData();
   const repo = new SettingsRepo(new Db(c.env.DB));
   const zBase = c.env.ZERNIO_API_BASE_URL ?? "https://zernio.com/api";
@@ -1001,10 +1014,10 @@ adminApp.post("/conexiones/zernio", async (c) => {
       status = res.status;
       valid = res.ok;
     } catch {
-      return c.redirect(`/admin/conexiones?zernio=error&msg=${encodeURIComponent("No se pudo contactar Zernio para validar la API key.")}`);
+      return c.redirect(`/admin/conexiones?zernio=error&msg=${encodeURIComponent(t("msg.conexionesZernioNoContact"))}`);
     }
     if (!valid) {
-      return c.redirect(`/admin/conexiones?zernio=error&msg=${encodeURIComponent(`La API key no es válida (HTTP ${status}).`)}`);
+      return c.redirect(`/admin/conexiones?zernio=error&msg=${encodeURIComponent(t("msg.conexionesZernioKeyInvalid", { status }))}`);
     }
   }
 
@@ -1034,10 +1047,10 @@ adminApp.post("/conexiones/zernio", async (c) => {
         regRes = await fetch(`${zBase}/v1/webhooks/settings`, { method: "POST", headers, body: JSON.stringify(body), signal: AbortSignal.timeout(8000) });
       }
       if (!regRes.ok) {
-        return c.redirect(`/admin/conexiones?zernio=error&msg=${encodeURIComponent("API key guardada, pero no pude registrar el webhook en Zernio (HTTP " + regRes.status + ").")}`);
+        return c.redirect(`/admin/conexiones?zernio=error&msg=${encodeURIComponent(t("msg.conexionesZernioWebhookRegFail", { status: regRes.status }))}`);
       }
     } catch {
-      return c.redirect(`/admin/conexiones?zernio=error&msg=${encodeURIComponent("API key guardada, pero no pude contactar Zernio para registrar el webhook.")}`);
+      return c.redirect(`/admin/conexiones?zernio=error&msg=${encodeURIComponent(t("msg.conexionesZernioWebhookNoContact"))}`);
     }
   }
 
@@ -1048,6 +1061,7 @@ adminApp.post("/conexiones/zernio", async (c) => {
 // validándolo con getMe antes de persistirlo, y REGISTRA el webhook del worker
 // automáticamente (setWebhook). Sin `wrangler secret put` ni redeploy.
 adminApp.post("/conexiones/telegram", async (c) => {
+  const { t } = await panelI18n(c.env);
   const form = await c.req.formData();
   const repo = new SettingsRepo(new Db(c.env.DB));
   const existing = await repo.get(SETTING_KEYS.telegramBotToken);
@@ -1091,10 +1105,10 @@ adminApp.post("/conexiones/telegram", async (c) => {
       });
       const j = (await res.json().catch(() => ({}))) as { ok?: boolean };
       if (!res.ok || j.ok !== true) {
-        return c.redirect(`/admin/conexiones?telegram=error&msg=${encodeURIComponent("El token de Telegram no es válido.")}`);
+        return c.redirect(`/admin/conexiones?telegram=error&msg=${encodeURIComponent(t("msg.conexionesTelegramTokenInvalid"))}`);
       }
     } catch {
-      return c.redirect(`/admin/conexiones?telegram=error&msg=${encodeURIComponent("No se pudo contactar Telegram para validar el token.")}`);
+      return c.redirect(`/admin/conexiones?telegram=error&msg=${encodeURIComponent(t("msg.conexionesTelegramNoContact"))}`);
     }
 
     await repo.set(SETTING_KEYS.telegramBotToken, tokenToSave);
@@ -1115,14 +1129,14 @@ adminApp.post("/conexiones/telegram", async (c) => {
         });
         const wh = (await whRes.json().catch(() => ({}))) as { ok?: boolean; description?: string };
         if (whRes.ok && wh.ok === true) { whError = ""; break; }
-        whError = wh.description ?? "error de Telegram";
+        whError = wh.description ?? t("msg.conexionesTelegramWebhookErrDefault");
       } catch {
-        whError = "no se pudo contactar Telegram";
+        whError = t("msg.conexionesTelegramWebhookUnreachable");
       }
       if (attempt < 3) await new Promise((r) => setTimeout(r, 2000));
     }
     if (whError) {
-      return c.redirect(`/admin/conexiones?telegram=error&msg=${encodeURIComponent("Token guardado, pero no pude registrar el webhook: " + whError)}`);
+      return c.redirect(`/admin/conexiones?telegram=error&msg=${encodeURIComponent(t("msg.conexionesTelegramWebhookFail", { error: whError }))}`);
     }
   }
 
@@ -1136,6 +1150,7 @@ adminApp.post("/conexiones/telegram", async (c) => {
 // emparejar se ve en GET /conexiones/waha/qr (proxiado: la API key nunca llega
 // al navegador).
 adminApp.post("/conexiones/waha", async (c) => {
+  const { t } = await panelI18n(c.env);
   const form = await c.req.formData();
   const repo = new SettingsRepo(new Db(c.env.DB));
 
@@ -1164,7 +1179,7 @@ adminApp.post("/conexiones/waha", async (c) => {
   const sessionToSave = sessionInput || current.session || "default";
 
   if (!baseToSave || !keyToSave) {
-    return c.redirect(`/admin/conexiones?waha=error&msg=${encodeURIComponent("Falta la URL del servidor o la API key de WAHA.")}`);
+    return c.redirect(`/admin/conexiones?waha=error&msg=${encodeURIComponent(t("msg.conexionesWahaMissing"))}`);
   }
 
   await repo.set(SETTING_KEYS.wahaApiUrl, baseToSave);
@@ -1190,7 +1205,7 @@ adminApp.post("/conexiones/waha", async (c) => {
   );
   if (!result.ok) {
     return c.redirect(
-      `/admin/conexiones?waha=error&msg=${encodeURIComponent("Datos guardados, pero " + (result.message ?? "no pude conectar con WAHA") + ".")}`,
+      `/admin/conexiones?waha=error&msg=${encodeURIComponent(t("msg.conexionesWahaSavedButError", { msg: result.message ?? t("msg.conexionesWahaConnectFail") }))}`,
     );
   }
 
@@ -1202,12 +1217,13 @@ adminApp.post("/conexiones/waha", async (c) => {
 // FAILED/STOPPED (WhatsApp deslogueado) y hay que volver a emparejar: el panel
 // no mostraba forma de recuperarla sin re-guardar la card a mano.
 adminApp.post("/conexiones/waha/restart", async (c) => {
+  const { t } = await panelI18n(c.env);
   const { resolveWahaConfig } = await import("../channels/wahaCredentials");
   const { ensureWahaSession } = await import("../channels/wahaApi");
   const cfg = await resolveWahaConfig(c.env);
   if (!cfg.base || !cfg.apiKey) {
     return c.redirect(
-      `/admin/conexiones?waha=error&msg=${encodeURIComponent("Falta la URL del servidor o la API key de WAHA.")}`,
+      `/admin/conexiones?waha=error&msg=${encodeURIComponent(t("msg.conexionesWahaMissing"))}`,
     );
   }
   const baseUrl = (c.env.DASHBOARD_BASE_URL?.trim() || new URL(c.req.url).origin).replace(/\/$/, "");
@@ -1215,7 +1231,7 @@ adminApp.post("/conexiones/waha/restart", async (c) => {
   const result = await ensureWahaSession(cfg, webhookUrl);
   if (!result.ok) {
     return c.redirect(
-      `/admin/conexiones?waha=error&msg=${encodeURIComponent("No pude reiniciar la sesión: " + (result.message ?? "error desconocido") + ".")}`,
+      `/admin/conexiones?waha=error&msg=${encodeURIComponent(t("msg.conexionesWahaRestartError", { msg: result.message ?? t("msg.conexionesWahaUnknown") }))}`,
     );
   }
   return c.redirect("/admin/conexiones?waha=saved");
@@ -1225,15 +1241,13 @@ adminApp.post("/conexiones/waha/restart", async (c) => {
 // navegador, solo el worker la usa para pedirlo. 404 si el canal no está
 // configurado o WAHA no tiene el QR listo (ej. sesión ya emparejada).
 adminApp.get("/conexiones/waha/qr", async (c) => {
+  const { t } = await panelI18n(c.env);
   const { resolveWahaConfig } = await import("../channels/wahaCredentials");
   const { fetchWahaQrPng } = await import("../channels/wahaApi");
   const cfg = await resolveWahaConfig(c.env);
   const png = await fetchWahaQrPng(cfg);
   if (!png)
-    return c.text(
-      "No pude generar el QR: la sesión de WAHA no está esperando escaneo (o el servidor no responde). Usa «Reiniciar sesión y generar QR» en la card de WAHA.",
-      404,
-    );
+    return c.text(t("msg.conexionesWahaNoQr"), 404);
   return new Response(png, { headers: { "Content-Type": "image/png", "Cache-Control": "no-store" } });
 });
 
@@ -1244,6 +1258,7 @@ adminApp.get("/conexiones/waha/qr", async (c) => {
 // proveedor (best-effort: si no hay red, igual se guarda).
 // POR AHORA es solo configuración; el flujo de llamadas se cablea después.
 async function saveVoiceProvider(c: any, provider: "vapi" | "retell"): Promise<Response> {
+  const { t } = await panelI18n(c.env);
   const form = await c.req.formData();
   const repo = new SettingsRepo(new Db(c.env.DB));
   const { resolveVoiceConfig, VAPI_DEFAULT_BASE, RETELL_DEFAULT_BASE } = await import("../integrations/voiceProviders");
@@ -1269,7 +1284,7 @@ async function saveVoiceProvider(c: any, provider: "vapi" | "retell"): Promise<R
     const webhookSecret = field("vapi_webhook_secret") || current.vapi.webhookSecret || "";
     const baseUrl = (field("vapi_api_base_url") || current.vapi.baseUrl || VAPI_DEFAULT_BASE).replace(/\/+$/, "");
     if (!apiKey) {
-      return c.redirect(`/admin/conexiones?vapi=error&msg=${encodeURIComponent("Falta la API key de Vapi.")}`);
+      return c.redirect(`/admin/conexiones?vapi=error&msg=${encodeURIComponent(t("msg.conexionesVapiMissing"))}`);
     }
     await repo.set(SETTING_KEYS.vapiApiKey, apiKey);
     await repo.set(SETTING_KEYS.vapiAssistantId, assistantId);
@@ -1284,7 +1299,7 @@ async function saveVoiceProvider(c: any, provider: "vapi" | "retell"): Promise<R
       });
       if (!res.ok && res.status !== 404) {
         return c.redirect(
-          `/admin/conexiones?vapi=error&msg=${encodeURIComponent(`Datos guardados, pero Vapi respondió HTTP ${res.status} al validar la API key.`)}`,
+          `/admin/conexiones?vapi=error&msg=${encodeURIComponent(t("msg.conexionesVapiBadStatus", { status: res.status }))}`,
         );
       }
     } catch {
@@ -1300,7 +1315,7 @@ async function saveVoiceProvider(c: any, provider: "vapi" | "retell"): Promise<R
   const webhookSecret = field("retell_webhook_secret") || current.retell.webhookSecret || "";
   const baseUrl = (field("retell_api_base_url") || current.retell.baseUrl || RETELL_DEFAULT_BASE).replace(/\/+$/, "");
   if (!apiKey) {
-    return c.redirect(`/admin/conexiones?retell=error&msg=${encodeURIComponent("Falta la API key de Retell.")}`);
+    return c.redirect(`/admin/conexiones?retell=error&msg=${encodeURIComponent(t("msg.conexionesRetellMissing"))}`);
   }
   await repo.set(SETTING_KEYS.retellApiKey, apiKey);
   await repo.set(SETTING_KEYS.retellAgentId, agentId);
@@ -1315,7 +1330,7 @@ async function saveVoiceProvider(c: any, provider: "vapi" | "retell"): Promise<R
     });
     if (!res.ok && res.status !== 404) {
       return c.redirect(
-        `/admin/conexiones?retell=error&msg=${encodeURIComponent(`Datos guardados, pero Retell respondió HTTP ${res.status} al validar la API key.`)}`,
+        `/admin/conexiones?retell=error&msg=${encodeURIComponent(t("msg.conexionesRetellBadStatus", { status: res.status }))}`,
       );
     }
   } catch {
@@ -1367,11 +1382,12 @@ adminApp.post("/conexiones/mercadolibre", async (c) => {
 // Arranca el OAuth de MercadoLibre: guarda un `state` anti-CSRF y redirige al
 // login del vendedor. MercadoLibre vuelve a /webhooks/mercadolibre/oauth.
 adminApp.get("/conexiones/mercadolibre/oauth", async (c) => {
+  const { t } = await panelI18n(c.env);
   const { loadMlCredentials, mlAuthorizeUrl } = await import("../channels/mercadolibreCredentials");
   const creds = await loadMlCredentials(c.env);
   if (!creds.clientId || !creds.clientSecret) {
     return c.redirect(
-      `/admin/conexiones?ml=error&msg=${encodeURIComponent("Primero guarda el App ID y la Secret Key.")}`,
+      `/admin/conexiones?ml=error&msg=${encodeURIComponent(t("msg.conexionesMlMissingCreds"))}`,
     );
   }
   // Límite de canales del plan gratis (no aplica si ML ya estaba conectado).
@@ -1388,7 +1404,10 @@ adminApp.get("/conexiones/mercadolibre/oauth", async (c) => {
 adminApp.get("/comandos", async (c) => c.html(await renderComandos(c.env)));
 
 // Equipo: gestiona los accesos de colaboradores (admin_emails).
-adminApp.get("/equipo", async (c) => c.html(await renderEquipo(c.env, c.req.query("saved") ? "Guardado ✓" : undefined)));
+adminApp.get("/equipo", async (c) => {
+  const { t } = await panelI18n(c.env);
+  return c.html(await renderEquipo(c.env, c.req.query("saved") ? t("msg.equipoSaved") : undefined));
+});
 adminApp.post("/equipo/add", async (c) => {
   const { Db } = await import("../db/client");
   const { AdminEmailsRepo } = await import("../db/adminEmails");
@@ -1412,11 +1431,12 @@ adminApp.get("/licencia", async (c) => c.html(await renderLicencia(c.env)));
 
 // Fuerza un sync inmediato del estado de licencia con el backend (super admin).
 adminApp.post("/licencia/sync", async (c) => {
+  const { t } = await panelI18n(c.env);
   const { syncLicenseState } = await import("../licenseSync");
   const r = await syncLicenseState(c.env, { force: true });
   const msg = r.ok
-    ? `✓ Sincronizado con el panel (${r.detail ?? "ok"}).`
-    : `No pude sincronizar: ${r.detail ?? "error"}. Se conserva el estado anterior.`;
+    ? t("msg.licenciaSyncOk", { detail: r.detail ?? "ok" })
+    : t("msg.licenciaSyncError", { detail: r.detail ?? "error" });
   return c.html(await renderLicencia(c.env, msg, !r.ok));
 });
 
@@ -1445,6 +1465,7 @@ adminApp.post("/extras", async (c) => {
 });
 
 adminApp.post("/licencia", async (c) => {
+  const { t } = await panelI18n(c.env);
   const { Db } = await import("../db/client");
   const { SettingsRepo, SETTING_KEYS } = await import("../db/settings");
   const { verifyLicense, verifyLicenseFor } = await import("../license");
@@ -1453,23 +1474,23 @@ adminApp.post("/licencia", async (c) => {
 
   if (form.get("clear")) {
     await repo.set(SETTING_KEYS.proLicense, "");
-    return c.html(await renderLicencia(c.env, "Licencia quitada. El bot vuelve al plan gratis.", false));
+    return c.html(await renderLicencia(c.env, t("msg.licenciaRemoved"), false));
   }
 
   const code = String(form.get("code") ?? "").trim();
-  if (!code) return c.html(await renderLicencia(c.env, "Pega un código de licencia.", true));
+  if (!code) return c.html(await renderLicencia(c.env, t("msg.licenciaEmpty"), true));
   const payload = verifyLicense(code, c.env);
   if (!payload) {
-    return c.html(await renderLicencia(c.env, "Código inválido o vencido. Verifícalo con quien te lo vendió.", true));
+    return c.html(await renderLicencia(c.env, t("msg.licenciaInvalid"), true));
   }
   if (!verifyLicenseFor(c.env, code, { instanceUid: c.env.BOT_INSTANCE_ID })) {
-    return c.html(await renderLicencia(c.env, "Este código es de OTRA instalación. Pide una licencia para este bot específico.", true));
+    return c.html(await renderLicencia(c.env, t("msg.licenciaWrongInstance"), true));
   }
   await repo.set(SETTING_KEYS.proLicense, code);
   const detail = payload.kind === "monthly" && payload.expiry
-    ? `válido hasta ${new Date(payload.expiry).toLocaleDateString("es")}`
-    : "para siempre";
-  return c.html(await renderLicencia(c.env, `✓ Pro activado (${payload.kind}, ${detail}). Límites quitados.`, false));
+    ? t("msg.licenciaValidUntil", { date: new Date(payload.expiry).toLocaleDateString("es") })
+    : t("msg.licenciaForever");
+  return c.html(await renderLicencia(c.env, t("msg.licenciaActivated", { kind: payload.kind, detail }), false));
 });
 
 // Automatizaciones: flujos keyword → respuesta (comentarios y DMs) desde el panel.
@@ -1511,19 +1532,20 @@ async function publicRepliesLast24h(env: Env, accountId: string | undefined): Pr
 // Responde EN PÚBLICO un comentario desde el panel (respeta el tope diario).
 adminApp.post("/comentarios/:id/reply", async (c) => {
   const id = c.req.param("id");
+  const { t } = await panelI18n(c.env);
   const form = await c.req.parseBody();
   const text = String(form.text ?? "").trim();
   const repo = new CommentsRepo(new Db(c.env.DB));
   const comment = await repo.getById(id).catch(() => null);
   if (!comment?.postId || !text) {
-    return c.html(await renderComentarioThread(c.env, id, { type: "error", text: "Faltan datos para responder." }));
+    return c.html(await renderComentarioThread(c.env, id, { type: "error", text: t("msg.commentsMissingData") }));
   }
   const sent = await publicRepliesLast24h(c.env, comment.accountId);
   if (sent >= MAX_PUBLIC_REPLIES_PER_DAY) {
     return c.html(
       await renderComentarioThread(c.env, id, {
         type: "error",
-        text: `Tope diario de respuestas públicas alcanzado (${sent}/24h). Se omite para no inundar el público.`,
+        text: t("msg.commentsDailyLimit", { n: sent }),
       }),
     );
   }
@@ -1558,8 +1580,8 @@ adminApp.post("/comentarios/:id/reply", async (c) => {
       c.env,
       id,
       res.ok
-        ? { type: "ok", text: "Respuesta pública enviada." }
-        : { type: "error", text: `No se pudo responder: ${res.error ?? res.status}` },
+        ? { type: "ok", text: t("msg.commentsReplySent") }
+        : { type: "error", text: t("msg.commentsReplyError", { error: res.error ?? res.status }) },
     ),
   );
 });
@@ -1567,12 +1589,13 @@ adminApp.post("/comentarios/:id/reply", async (c) => {
 // Manda el DM (private reply) al comentarista desde el panel.
 adminApp.post("/comentarios/:id/dm", async (c) => {
   const id = c.req.param("id");
+  const { t } = await panelI18n(c.env);
   const form = await c.req.parseBody();
   const text = String(form.text ?? "").trim();
   const repo = new CommentsRepo(new Db(c.env.DB));
   const comment = await repo.getById(id).catch(() => null);
   if (!comment?.postId || !text) {
-    return c.html(await renderComentarioThread(c.env, id, { type: "error", text: "Faltan datos para enviar el DM." }));
+    return c.html(await renderComentarioThread(c.env, id, { type: "error", text: t("msg.commentsDmMissingData") }));
   }
   const res = await privateReplyToComment(c.env, {
     accountId: comment.accountId,
@@ -1601,16 +1624,17 @@ adminApp.post("/comentarios/:id/dm", async (c) => {
     result: res.ok ? "ok" : "error",
   });
   const notice = res.ok
-    ? { type: "ok" as const, text: "DM enviado." }
+    ? { type: "ok" as const, text: t("msg.commentsDmSent") }
     : res.consumed
-      ? { type: "error" as const, text: "Instagram ya había usado la respuesta privada de ese comentario (solo se permite una)." }
-      : { type: "error" as const, text: `No se pudo enviar el DM: ${res.error ?? res.status}` };
+      ? { type: "error" as const, text: t("msg.commentsDmConsumed") }
+      : { type: "error" as const, text: t("msg.commentsDmError", { error: res.error ?? res.status }) };
   return c.html(await renderComentarioThread(c.env, id, notice));
 });
 
 // Borrador con IA para responder el comentario (el dueño lo revisa y envía).
 adminApp.post("/comentarios/:id/suggest", async (c) => {
   const id = c.req.param("id");
+  const { t } = await panelI18n(c.env);
   const comment = await new CommentsRepo(new Db(c.env.DB)).getById(id).catch(() => null);
   if (!comment) return c.html(renderComposeBox(id));
   const draft = await generateAiCommentReply(c.env, {
@@ -1621,7 +1645,7 @@ adminApp.post("/comentarios/:id/suggest", async (c) => {
   return c.html(
     renderComposeBox(
       id,
-      draft ?? "No se pudo generar una sugerencia. Escribí la respuesta a mano.",
+      draft ?? t("msg.commentsSuggestError"),
     ),
   );
 });
@@ -1680,11 +1704,12 @@ adminApp.post("/automatizaciones/fallback", async (c) => {
 });
 
 adminApp.post("/automatizaciones/save", async (c) => {
+  const { t } = await panelI18n(c.env);
   try {
     const form = await c.req.formData();
     const input = parseRuleForm(form);
     if (input.keywords.length === 0 || !input.message) {
-      return c.redirect("/admin/automatizaciones?error=keywords%20y%20mensaje%20son%20obligatorios");
+      return c.redirect("/admin/automatizaciones?error=" + encodeURIComponent(t("msg.automationsKeywordsRequired")));
     }
     const { Db } = await import("../db/client");
     const { checkLimit } = await import("../limits");
@@ -1692,7 +1717,7 @@ adminApp.post("/automatizaciones/save", async (c) => {
     if (!limitCheck.allowed) {
       return c.redirect(
         "/admin/automatizaciones?error=" +
-          encodeURIComponent(`Límite gratis de reglas alcanzado (${limitCheck.used}/${limitCheck.limit}). Activa Pro en Licencia para quitarlo.`),
+          encodeURIComponent(t("msg.automationsLimit", { used: limitCheck.used, limit: String(limitCheck.limit) })),
       );
     }
     await new AutoRulesRepo(new Db(c.env.DB)).create(input);
@@ -1709,19 +1734,21 @@ adminApp.post("/automatizaciones/save", async (c) => {
 
 // Editar una automatización: vista con el formulario precargado.
 adminApp.get("/automatizaciones/:id/edit", async (c) => {
+  const { t } = await panelI18n(c.env);
   const { Db } = await import("../db/client");
   const rule = await new AutoRulesRepo(new Db(c.env.DB)).get(c.req.param("id"));
-  if (!rule) return c.redirect("/admin/automatizaciones?error=regla%20no%20encontrada");
+  if (!rule) return c.redirect("/admin/automatizaciones?error=" + encodeURIComponent(t("msg.automationsRuleNotFound")));
   return c.html(await renderAutomatizaciones(c.env, false, undefined, rule));
 });
 
 // Guardar edición de una automatización.
 adminApp.post("/automatizaciones/:id/save", async (c) => {
+  const { t } = await panelI18n(c.env);
   try {
     const form = await c.req.formData();
     const input = parseRuleForm(form);
     if (input.keywords.length === 0 || !input.message) {
-      return c.redirect("/admin/automatizaciones?error=keywords%20y%20mensaje%20son%20obligatorios");
+      return c.redirect("/admin/automatizaciones?error=" + encodeURIComponent(t("msg.automationsKeywordsRequired")));
     }
     const { Db } = await import("../db/client");
     const repo = new AutoRulesRepo(new Db(c.env.DB));
@@ -1787,6 +1814,7 @@ adminApp.get("/campanas", async (c) => {
 });
 
 adminApp.post("/campanas/send", async (c) => {
+  const { t } = await panelI18n(c.env);
   const form = await c.req.formData();
   const segmentId = String(form.get("segment") ?? "");
   const campaignKey = String(form.get("campaign_key") ?? "").trim();
@@ -1794,14 +1822,14 @@ adminApp.post("/campanas/send", async (c) => {
   const templateSid = String(form.get("template_sid") ?? "").trim();
   const varsRaw = String(form.get("template_vars") ?? "").trim();
   if (!segmentId || !campaignKey || (!freeformText && !templateSid)) {
-    return c.redirect("/admin/campanas?err=" + encodeURIComponent("Falta el segmento, el nombre de campaña, o un mensaje/plantilla."));
+    return c.redirect("/admin/campanas?err=" + encodeURIComponent(t("msg.campaignsMissingFields")));
   }
   let variables: Record<string, string> | undefined;
   if (varsRaw) {
     try {
       variables = JSON.parse(varsRaw);
     } catch {
-      return c.redirect("/admin/campanas?err=" + encodeURIComponent("Las variables no son JSON válido."));
+      return c.redirect("/admin/campanas?err=" + encodeURIComponent(t("msg.campaignsInvalidJson")));
     }
   }
   // El body de la plantilla viaja al historial de cada conversación — sin él,
@@ -1809,7 +1837,7 @@ adminApp.post("/campanas/send", async (c) => {
   let templateBody: string | undefined;
   if (templateSid) {
     const { listContentTemplates } = await import("../campaigns");
-    const tpl = (await listContentTemplates(c.env).catch(() => [])).find((t) => t.sid === templateSid);
+    const tpl = (await listContentTemplates(c.env).catch(() => [])).find((x) => x.sid === templateSid);
     templateBody = tpl?.body || undefined;
   }
   const result = await sendCampaign(c.env, {
@@ -1862,11 +1890,12 @@ adminApp.get("/config", async (c) => {
 // por el canal configurado (aunque el reporte esté apagado) y vuelve con el
 // resultado en la query para el banner de la sección.
 adminApp.post("/config/report-test", async (c) => {
+  const { t } = await panelI18n(c.env);
   try {
     const { sendReportTest } = await import("../reports/nightly");
     const res = await sendReportTest(c.env);
     if (res.sentTo.length === 0) {
-      return c.redirect("/admin/extras?report=" + encodeURIComponent("err:No hay ningún canal configurado (Telegram o correo). Revisa Conexiones y los secrets."));
+      return c.redirect("/admin/extras?report=" + encodeURIComponent("err:" + t("msg.configReportNoChannel")));
     }
     return c.redirect("/admin/extras?report=ok:" + res.sentTo.join("+"));
   } catch (err) {
@@ -2444,16 +2473,17 @@ adminApp.post("/conductores/:id/delete", async (c) => {
 adminApp.post("/conversations/:id/assign-driver", async (c) => {
   if (!isTaxis(c)) return c.body(null, 404);
   const id = c.req.param("id");
+  const { t } = await panelI18n(c.env);
   const form = await c.req.formData().catch(() => null);
   const driverId = String(form?.get("driver_id") ?? "").trim();
-  if (!driverId) return c.html(`<span class="text-red-600">Elegí un conductor.</span>`);
+  if (!driverId) return c.html(`<span class="text-red-600">${t("msg.taxiPickDriver")}</span>`);
   const { TaxiTripsRepo, TaxiDriversRepo, TaxiQueueRepo, TaxiBasesRepo } = await import("../db/taxi");
   const { notifyCustomerAssigned, notifyDriverAssigned } = await import("../taxi/notify");
   const db = new Db(c.env.DB);
   const conv = await new ConversationsRepo(db).getById(id);
-  if (!conv) return c.html(`<span class="text-red-600">✗ Conversación no encontrada.</span>`);
+  if (!conv) return c.html(`<span class="text-red-600">${t("msg.conversationsNotFound")}</span>`);
   const driver = await new TaxiDriversRepo(db).get(driverId);
-  if (!driver) return c.html(`<span class="text-red-600">✗ Conductor no encontrado.</span>`);
+  if (!driver) return c.html(`<span class="text-red-600">${t("msg.taxiDriverNotFound")}</span>`);
 
   const trips = new TaxiTripsRepo(db);
   let tripId = (await trips.activeForConversation(id))?.id;
@@ -2467,7 +2497,7 @@ adminApp.post("/conversations/:id/assign-driver", async (c) => {
     });
   }
   const updated = await trips.assignDriver(tripId, driver.id, driver.base_id, "asignado por el operador desde el chat");
-  if (!updated) return c.html(`<span class="text-red-600">✗ El viaje no acepta la asignación.</span>`);
+  if (!updated) return c.html(`<span class="text-red-600">${t("msg.taxiTripNoAssign")}</span>`);
 
   const queue = new TaxiQueueRepo(db);
   const entry = await queue.activeEntryForDriver(driver.id);
@@ -2797,14 +2827,15 @@ const TAKEOVER_MS = 60 * 60 * 1000;
 // refreshes #thread-live instantly. X-Sent: 1 tells the composer to reset.
 adminApp.post("/conversations/:id/reply", async (c) => {
   const id = c.req.param("id");
+  const { t } = await panelI18n(c.env);
   const form = await c.req.formData().catch(() => null);
   const text = String(form?.get("text") ?? "").trim();
-  if (!text) return c.html(`<span class="text-stone-400">Escribe un mensaje primero.</span>`);
+  if (!text) return c.html(`<span class="text-stone-400">${t("msg.conversationsEmptyMessage")}</span>`);
 
   const db = new Db(c.env.DB);
   const convs = new ConversationsRepo(db);
   const conv = await convs.getById(id);
-  if (!conv) return c.html(`<span class="text-red-600">✗ Conversación no encontrada.</span>`);
+  if (!conv) return c.html(`<span class="text-red-600">${t("msg.conversationsNotFound")}</span>`);
 
   try {
     const adapter = pickAdapter(conv.channel as ChannelId);
@@ -2820,7 +2851,7 @@ adminApp.post("/conversations/:id/reply", async (c) => {
   } catch (e) {
     // Nothing persisted on failure: the customer never got the message.
     const msg = e instanceof Error ? e.message : String(e);
-    return c.html(`<span class="text-red-600">✗ No se pudo enviar: ${escapeHtml(msg)}</span>`);
+    return c.html(`<span class="text-red-600">${t("msg.conversationsSendError", { error: escapeHtml(msg) })}</span>`);
   }
 
   const msgs = new MessagesRepo(db);
@@ -2836,7 +2867,7 @@ adminApp.post("/conversations/:id/reply", async (c) => {
 
   c.header("X-Sent", "1");
   return c.html(
-    `<span class="text-emerald-600">✓ Enviado por ${escapeHtml(channelLabel(conv.channel))}</span>` +
+    `<span class="text-emerald-600">${t("msg.conversationsSent", { channel: escapeHtml(channelLabel(conv.channel)) })}</span>` +
       `<div id="thread-live" hx-swap-oob="innerHTML">${await renderThreadLive(c.env, id)}</div>`,
   );
 });
@@ -2952,13 +2983,14 @@ adminApp.post("/conversations/:id/suggest", async (c) => {
 
 // --- Fallback ---------------------------------------------------------------
 
-adminApp.notFound(async (c) =>
-  c.html(
+adminApp.notFound(async (c) => {
+  const { t } = await panelI18n(c.env);
+  return c.html(
     await layout({
-      title: "No encontrado",
+      title: t("msg.notFoundTitle"),
       activeTab: "overview",
-      body: "<p class='text-stone-500'>Página no encontrada.</p>",
+      body: `<p class='text-stone-500'>${t("msg.notFoundBody")}</p>`,
     }),
     404,
-  ),
-);
+  );
+});

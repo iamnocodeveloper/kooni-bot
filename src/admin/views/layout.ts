@@ -14,7 +14,7 @@ import { isProUnlocked, PRO_ONLY_TABS, isTabAllowed } from "../../config";
 import { readOverlay } from "../../licenseSync";
 import { getNiche } from "../../niches";
 import { pwaHeadTags } from "../pwa";
-import { panelI18n } from "../i18n";
+import { panelI18n, makeT, type T } from "../i18n";
 import type { NichePack } from "../../niches";
 
 const UPGRADE_URL = "/admin/upgrade";
@@ -394,10 +394,10 @@ function navItem(item: Item, active: boolean, label = item.label): string {
 
 // Tier free: los tabs Pro se muestran bloqueados (candado + tag PRO) y llevan a
 // la página de upgrade en vez de a la vista real. Se ven, pero invitan a subir.
-function navItemLocked(item: Item, label = item.label): string {
+function navItemLocked(item: Item, label = item.label, t: T = makeT("es")): string {
   const base =
     "display:flex;align-items:center;gap:11px;padding:9px 10px;font-size:13px;color:var(--dim);border-left:2px solid transparent";
-  return `<a href="${UPGRADE_URL}" class="navlink" style="${base}" title="Disponible en Pro">
+  return `<a href="${UPGRADE_URL}" class="navlink" style="${base}" title="${t("chrome.proTab")}">
     <i data-lucide="lock" width="15" height="15" style="color:var(--dim)"></i> ${label}
     <span style="margin-left:auto;font-size:8.5px;letter-spacing:.14em;color:var(--accent2);border:1px solid var(--line);padding:1px 5px">PRO</span>
   </a>`;
@@ -468,7 +468,7 @@ function sidebar(activeTab: string, locked: (id: string) => boolean, niche: Nich
         // El pack de nicho puede re-etiquetar (ej. leads → Reservaciones): si la
         // etiqueta cruda no es la del NAV, se respeta la del nicho.
         const label = i.label !== raw.label ? i.label : t(`nav.${i.id}`);
-        return locked(i.id) ? navItemLocked(i, label) : navItem(i, i.id === activeTab, label);
+        return locked(i.id) ? navItemLocked(i, label, t) : navItem(i, i.id === activeTab, label);
       })
       .join("");
 
@@ -606,7 +606,7 @@ export async function layout(opts: { title: string; activeTab: string; body: str
     el.innerHTML = '<select onchange="if(this.value.indexOf(&#39;http&#39;)===0)window.location=this.value" ' +
       'style="background:rgba(20,16,9,.9);color:var(--fg,#e8e0cf);border:1px solid var(--line);border-radius:8px;' +
       'padding:6px 10px;font-family:&#39;IBM Plex Mono&#39;,monospace;font-size:11px;letter-spacing:.04em;cursor:pointer" ' +
-      'title="Cambiar de proyecto">' + opts + '</select>';
+      'title="${t("chrome.switchProject")}">' + opts + '</select>';
   }).catch(function(){});
   </script>
   <div id="toast-root" style="position:fixed;bottom:1rem;right:1rem;z-index:60"></div>
@@ -665,7 +665,8 @@ export async function renderUpgrade(env: Env, feature?: string): Promise<string>
  * de `auth.ts`). En mobile colapsa a una sola columna (mismo breakpoint que
  * usa el shell del panel).
  */
-export function loginPage(opts: { error?: string; env?: Env } = {}): string {
+export function loginPage(opts: { error?: string; env?: Env; t?: T } = {}): string {
+  const t = opts.t ?? makeT("es");
   const brand = resolveBrand(opts.env);
   const businessName = opts.env?.BUSINESS_NAME?.trim();
 
@@ -702,22 +703,22 @@ export function loginPage(opts: { error?: string; env?: Env } = {}): string {
           <div style="font-family:'Sora';font-weight:700;font-size:24px;letter-spacing:-.02em">${brand.name}</div>
         </div>
         <p style="font-size:14px;color:var(--muted);line-height:1.6;margin:0">
-          Agentes de IA que atienden tu negocio 24/7 — WhatsApp, Instagram, Messenger y Telegram, desde tu propia infraestructura.
+          ${t("login.tagline")}
         </p>
-        ${businessName ? `<div style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)">Panel de <span style="color:var(--accent-2)">${escLogin(businessName)}</span></div>` : ""}
+        ${businessName ? `<div style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)">${t("login.panelOf")} <span style="color:var(--accent-2)">${escLogin(businessName)}</span></div>` : ""}
         <div style="font-size:10.5px;font-family:'IBM Plex Mono';color:var(--dim);letter-spacing:.04em">v${escLogin(BOT_VERSION)}</div>
       </div>
     </div>
     <div class="login-form-side">
       <form method="POST" action="/admin/login" style="background:var(--panel);border:1px solid var(--linelit);box-shadow:var(--shadow);padding:32px;max-width:360px;width:100%">
-        <h1 style="font-family:'Sora';font-weight:700;font-size:18px;margin:0 0 4px;letter-spacing:-.02em">Ingresar</h1>
-        <p style="font-size:12px;color:var(--dim);margin:0 0 18px">Usuario: <span style="color:var(--muted)">admin</span></p>
+        <h1 style="font-family:'Sora';font-weight:700;font-size:18px;margin:0 0 4px;letter-spacing:-.02em">${t("login.title")}</h1>
+        <p style="font-size:12px;color:var(--dim);margin:0 0 18px">${t("login.userLabel")} <span style="color:var(--muted)">admin</span></p>
         ${opts.error ? `<p style="color:var(--bad);font-size:12px;margin:0 0 12px">${escLogin(opts.error)}</p>` : ""}
-        <input name="password" type="password" required autofocus placeholder="Contraseña"
+        <input name="password" type="password" required autofocus placeholder="${t("login.passwordPlaceholder")}"
           style="width:100%;background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:10px 12px;font-size:13px;outline:none;margin-bottom:14px">
         <button class="bigbtn" type="submit"
           style="width:100%;background:var(--accent);border:1px solid var(--accent);color:var(--on-accent);box-shadow:var(--shadow);padding:11px;font-family:'Sora';font-weight:700;font-size:13px;cursor:pointer">
-          Entrar
+          ${t("login.submit")}
         </button>
       </form>
     </div>

@@ -1,6 +1,7 @@
 import type { Env } from "../../env";
 import { Db } from "../../db/client";
 import { layout } from "./layout";
+import { panelI18n, type T } from "../i18n";
 import { costOfUsage, type ModelId } from "../../pricing";
 import { resolveAgentConfig, type AgentConfig } from "../../settings-loader";
 import { buildTools } from "../../tools";
@@ -25,14 +26,14 @@ function esc(s: string): string {
 }
 
 /** Short relative time in Spanish (ej. "hace 5 min", "hace 2 h", "hace 3 d"). */
-function ago(ms: number | null | undefined): string {
+function ago(t: T, ms: number | null | undefined): string {
   if (!ms) return "—";
   const min = Math.floor((Date.now() - ms) / 60_000);
-  if (min < 1) return "ahora";
-  if (min < 60) return `hace ${min} min`;
+  if (min < 1) return t("ov.now");
+  if (min < 60) return t("ov.agoMin", { min });
   const h = Math.floor(min / 60);
-  if (h < 24) return `hace ${h} h`;
-  return `hace ${Math.floor(h / 24)} d`;
+  if (h < 24) return t("ov.agoH", { h });
+  return t("ov.agoD", { d: Math.floor(h / 24) });
 }
 
 /** Two-letter avatar initials from a display name (or channel-id fallback). */
@@ -49,10 +50,19 @@ function agentModelLabel(env: Env, cfg: AgentConfig): string {
   return modelIdFor(env, provider, cfg.modelOverride === "haiku" ? "fast" : "smart");
 }
 
-// Single-letter Spanish day-of-week labels, indexed like Date#getUTCDay() (0 = Dom).
-const DOW_LETTER = ["D", "L", "M", "M", "J", "V", "S"];
+// Single-letter day-of-week labels by i18n key, indexed like Date#getUTCDay() (0 = Dom).
+const DOW_LETTER_KEY = [
+  "ov.dow0",
+  "ov.dow1",
+  "ov.dow2",
+  "ov.dow3",
+  "ov.dow4",
+  "ov.dow5",
+  "ov.dow6",
+] as const;
 
 export async function renderOverview(env: Env): Promise<string> {
+  const { t } = await panelI18n(env);
   const db = new Db(env.DB);
   const niche = getNiche(env);
   const zernioCreds = await resolveZernioCredentials(env);
@@ -144,14 +154,14 @@ export async function renderOverview(env: Env): Promise<string> {
     <div class="card bg-panel border border-line p-[18px]" style="animation-delay:.22s">
       <div class="font-display font-semibold text-[15px] text-cream flex items-center gap-2 mb-0.5">
         <i data-lucide="bar-chart-3" width="16" height="16" class="text-accent"></i>
-        Actividad — últimos 7 días
+        ${t("ov.activityTitle")}
       </div>
-      <div class="text-[11px] text-dim mb-1">mensajes procesados por día</div>
+      <div class="text-[11px] text-dim mb-1">${t("ov.activitySub")}</div>
       <div class="flex items-end gap-3" style="height:150px;padding-top:16px">
         ${activityDays
           .map((d) => {
             const pct = d.msgs === 0 ? 3 : Math.max(8, Math.round((d.msgs / activityMax) * 90));
-            const label = d.isToday ? "HOY" : DOW_LETTER[d.dow];
+            const label = d.isToday ? t("ov.today") : t(DOW_LETTER_KEY[d.dow]);
             const barColor = d.isToday ? "var(--accent)" : "var(--linelit)";
             const numClass = d.isToday ? "text-accent font-semibold" : "text-muted";
             const labelClass = d.isToday ? "text-accent font-semibold" : "text-dim";
@@ -170,32 +180,32 @@ export async function renderOverview(env: Env): Promise<string> {
     <div class="card bg-panel border border-line p-[18px] flex flex-col" style="animation-delay:.26s">
       <div class="font-display font-semibold text-[15px] text-cream flex items-center gap-2 mb-3.5">
         <i data-lucide="activity" width="16" height="16" class="text-accent"></i>
-        Estado del agente
+        ${t("ov.agentTitle")}
       </div>
       <div class="flex flex-col gap-[11px] text-[12.5px]">
         <div class="flex items-center justify-between">
-          <span class="text-muted">Modelo activo</span>
+          <span class="text-muted">${t("ov.agentModel")}</span>
           <span class="font-semibold font-mono text-[11.5px]">${esc(agentModelLabel(env, agentCfg))}</span>
         </div>
         <div style="height:1px;background:var(--line)"></div>
         <div class="flex items-center justify-between">
-          <span class="text-muted">Tools activas</span>
-          <span class="font-semibold">${agentCfg.enabledToolNames.length} <span class="text-dim font-normal">de ${toolNames.length}</span></span>
+          <span class="text-muted">${t("ov.agentTools")}</span>
+          <span class="font-semibold">${agentCfg.enabledToolNames.length} <span class="text-dim font-normal">${t("ov.agentToolsOf", { n: toolNames.length })}</span></span>
         </div>
         <div style="height:1px;background:var(--line)"></div>
         <div class="flex items-center justify-between">
-          <span class="text-muted">Docs de conocimiento</span>
-          <span class="font-semibold">${totalKbDocs} <span class="text-dim font-normal">(${FIXTURE_CHUNKS.length} precargados)</span></span>
+          <span class="text-muted">${t("ov.agentDocs")}</span>
+          <span class="font-semibold">${totalKbDocs} <span class="text-dim font-normal">${t("ov.agentDocsPre", { n: FIXTURE_CHUNKS.length })}</span></span>
         </div>
         <div style="height:1px;background:var(--line)"></div>
         <div class="flex items-center justify-between">
-          <span class="text-muted">Resueltas sin humano</span>
+          <span class="text-muted">${t("ov.agentResolved")}</span>
           <span class="font-semibold ${resolvedPct7d === null ? "text-dim" : "text-ok"}">${resolvedPct7d === null ? "—" : `${resolvedPct7d}%`}</span>
         </div>
       </div>
       <a href="/admin/agente" class="bigbtn font-display font-bold text-[12.5px] cursor-pointer flex items-center justify-center gap-2"
          style="background:var(--accent);color:var(--on-accent);border:1px solid var(--accent);box-shadow:4px 4px 0 var(--linelit);padding:13px;margin-top:18px">
-        <i data-lucide="settings-2" width="16" height="16"></i> Ajustar mi agente
+        <i data-lucide="settings-2" width="16" height="16"></i> ${t("ov.agentCta")}
       </a>
     </div>`;
 
@@ -218,27 +228,27 @@ export async function renderOverview(env: Env): Promise<string> {
             </div>
             <div class="text-[12px] text-muted mt-0.5" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${preview}</div>
           </div>
-          <div class="text-[10px] text-dim flex-none">${ago(c.last_message_at)}</div>
+          <div class="text-[10px] text-dim flex-none">${ago(t, c.last_message_at)}</div>
           <i data-lucide="chevron-right" width="16" height="16" class="arr flex-none" style="color:var(--accent);opacity:0;transform:translateX(-4px);transition:all .15s ease"></i>
         </a>`;
       })
-      .join("") || `<div class="text-center text-[12.5px] text-dim" style="padding:32px 16px">Aún no hay conversaciones.</div>`;
+      .join("") || `<div class="text-center text-[12.5px] text-dim" style="padding:32px 16px">${t("ov.convEmpty")}</div>`;
 
   const recentConversations = `
     <div class="card bg-panel border border-line" style="animation-delay:.3s">
       <div class="flex items-center justify-between" style="padding:16px 18px 12px">
         <div class="font-display font-semibold text-[15px] text-cream flex items-center gap-2">
           <i data-lucide="messages-square" width="16" height="16" class="text-accent"></i>
-          Conversaciones recientes
+          ${t("ov.convTitle")}
         </div>
-        <a href="/admin/conversations" class="flex items-center gap-1 text-[11.5px]">ver todas <i data-lucide="arrow-right" width="13" height="13"></i></a>
+        <a href="/admin/conversations" class="flex items-center gap-1 text-[11.5px]">${t("ov.seeAll")} <i data-lucide="arrow-right" width="13" height="13"></i></a>
       </div>
       <div>${convRows}</div>
     </div>`;
 
   const suggestionItems =
     proposedSuggestions.length === 0
-      ? `<p class="text-[12px] text-dim">Sin mejoras pendientes.</p>`
+      ? `<p class="text-[12px] text-dim">${t("ov.imprEmpty")}</p>`
       : proposedSuggestions
           .slice(0, 2)
           .map(
@@ -251,13 +261,13 @@ export async function renderOverview(env: Env): Promise<string> {
     <div class="card bg-panel border border-line p-[18px] relative overflow-hidden" style="animation-delay:.34s;background:linear-gradient(160deg,var(--panel2),var(--panel));border-color:var(--linelit)">
       <div class="flex items-center gap-2 mb-1">
         <i data-lucide="sparkles" width="16" height="16" class="text-accent2"></i>
-        <span class="font-display font-semibold text-[15px] text-cream">Mejoras sugeridas</span>
+        <span class="font-display font-semibold text-[15px] text-cream">${t("ov.imprTitle")}</span>
       </div>
       <div class="text-[11px] text-dim mb-3.5">
-        ${proposedSuggestions.length} ${proposedSuggestions.length === 1 ? "sugerencia detectada" : "sugerencias detectadas"} por IA sobre tus conversaciones
+        ${t(proposedSuggestions.length === 1 ? "ov.imprCountOne" : "ov.imprCountMany", { n: proposedSuggestions.length })}
       </div>
       ${suggestionItems}
-      <a href="/admin/mejoras" class="flex items-center gap-1 text-[11.5px] mt-2.5">ver todas <i data-lucide="arrow-right" width="13" height="13"></i></a>
+      <a href="/admin/mejoras" class="flex items-center gap-1 text-[11.5px] mt-2.5">${t("ov.seeAll")} <i data-lucide="arrow-right" width="13" height="13"></i></a>
     </div>`;
 
   // Banner de límites free (si aplica): muestra X/Y usados y CTA a Licencia.
@@ -269,11 +279,11 @@ export async function renderOverview(env: Env): Promise<string> {
     const usage = await getUsage(env);
     const channels = await countConnectedChannels(env).catch(() => ({ connected: 0, byId: {} }));
     const rows: { label: string; used: number; limit: number | null }[] = [
-      { label: "contactos", used: usage.contacts, limit: limits.maxContacts },
-      { label: "mensajes/mes", used: usage.messagesThisMonth, limit: limits.maxMessagesPerMonth },
-      { label: "canales", used: channels.connected, limit: limits.maxChannels },
-      { label: "reglas", used: usage.rules, limit: limits.maxRules },
-      { label: "respuestas automáticas/mes", used: usage.autoDmsThisMonth, limit: limits.maxAutoDmsPerMonth },
+      { label: t("ov.limitContacts"), used: usage.contacts, limit: limits.maxContacts },
+      { label: t("ov.limitMessages"), used: usage.messagesThisMonth, limit: limits.maxMessagesPerMonth },
+      { label: t("ov.limitChannels"), used: channels.connected, limit: limits.maxChannels },
+      { label: t("ov.limitRules"), used: usage.rules, limit: limits.maxRules },
+      { label: t("ov.limitAutoDms"), used: usage.autoDmsThisMonth, limit: limits.maxAutoDmsPerMonth },
     ];
     const active = rows.filter((r) => r.limit !== null);
     if (active.length > 0) {
@@ -286,10 +296,10 @@ export async function renderOverview(env: Env): Promise<string> {
         .join(" ");
       limitsBanner = `<div class="bg-panel border border-line p-4 flex items-center justify-between gap-3 flex-wrap" style="border-color:var(--warn)">
         <div style="display:flex;flex-direction:column;gap:4px">
-          <span class="font-display font-semibold text-[12.5px] text-cream">Plan gratis — límites de uso</span>
+          <span class="font-display font-semibold text-[12.5px] text-cream">${t("ov.limitsTitle")}</span>
           <div style="display:flex;gap:6px;flex-wrap:wrap">${chips}</div>
         </div>
-        <a href="/admin/licencia" class="font-display font-semibold text-[11.5px]" style="border:1px solid var(--accent);color:var(--accent2);padding:8px 14px;background:rgba(45,212,191,.06)">Quitar límites con Pro →</a>
+        <a href="/admin/licencia" class="font-display font-semibold text-[11.5px]" style="border:1px solid var(--accent);color:var(--accent2);padding:8px 14px;background:rgba(45,212,191,.06)">${t("ov.limitsCta")}</a>
       </div>`;
     }
   } catch (e) {
@@ -309,10 +319,10 @@ export async function renderOverview(env: Env): Promise<string> {
         const grace = ins.state === "grace";
         licenseBanner = `<div class="bg-panel border p-4 flex items-center justify-between gap-3 flex-wrap" style="border-color:var(--bad)">
           <div style="display:flex;flex-direction:column;gap:3px">
-            <span class="font-display font-semibold text-[12.5px]" style="color:var(--bad)">${grace ? "Licencia vencida — periodo de gracia" : `Tu licencia Pro vence en ${ins.daysLeft} ${ins.daysLeft === 1 ? "día" : "días"}`}</span>
-            <span class="text-[11px] text-dim">${grace ? "El bot pasará al plan gratis pronto. Pega el código nuevo para no perder Pro." : "Pídele el código nuevo a tu proveedor y pégalo antes de que venza."}</span>
+            <span class="font-display font-semibold text-[12.5px]" style="color:var(--bad)">${grace ? t("ov.licGrace") : t(ins.daysLeft === 1 ? "ov.licSoonOne" : "ov.licSoonMany", { n: ins.daysLeft ?? 0 })}</span>
+            <span class="text-[11px] text-dim">${grace ? t("ov.licGraceSub") : t("ov.licSoonSub")}</span>
           </div>
-          <a href="/admin/licencia" class="font-display font-semibold text-[11.5px]" style="border:1px solid var(--bad);color:var(--bad);padding:8px 14px">Renovar licencia →</a>
+          <a href="/admin/licencia" class="font-display font-semibold text-[11.5px]" style="border:1px solid var(--bad);color:var(--bad);padding:8px 14px">${t("ov.licRenew")}</a>
         </div>`;
       }
     }
@@ -329,20 +339,20 @@ export async function renderOverview(env: Env): Promise<string> {
           <div class="absolute top-3 right-3 text-[9.5px] tracking-[.2em] text-dim uppercase">01</div>
           <div class="flex items-center gap-2 text-muted">
             <i data-lucide="message-circle" width="15" height="15"></i>
-            <span class="text-[11px] tracking-[.05em]">MENSAJES HOY</span>
+            <span class="text-[11px] tracking-[.05em]">${t("ov.kpiMsgsToday")}</span>
           </div>
           <div class="glow font-display font-bold text-[38px] leading-none mt-3">${todayMsgs}</div>
-          <div class="text-[11px] text-dim mt-2">últimas 24 horas</div>
+          <div class="text-[11px] text-dim mt-2">${t("ov.kpiMsgsSub")}</div>
         </div>
 
         <div class="card bg-panel border border-line p-4 relative overflow-hidden" style="animation-delay:.06s">
           <div class="absolute top-3 right-3 text-[9.5px] tracking-[.2em] text-dim uppercase">02</div>
           <div class="flex items-center gap-2 text-muted">
             <i data-lucide="users" width="15" height="15"></i>
-            <span class="text-[11px] tracking-[.05em]">CLIENTES ÚNICOS</span>
+            <span class="text-[11px] tracking-[.05em]">${t("ov.kpiUnique")}</span>
           </div>
           <div class="glow font-display font-bold text-[38px] leading-none mt-3">${todayConvs}</div>
-          <div class="text-[11px] text-dim mt-2">conversaciones distintas hoy</div>
+          <div class="text-[11px] text-dim mt-2">${t("ov.kpiUniqueSub")}</div>
         </div>
 
         <div class="card bg-panel border border-line p-4 relative overflow-hidden" style="animation-delay:.1s">
@@ -352,17 +362,17 @@ export async function renderOverview(env: Env): Promise<string> {
             <span class="text-[11px] tracking-[.05em]">${niche.kpiLabel.toUpperCase()}</span>
           </div>
           <div class="glow font-display font-bold text-[38px] leading-none mt-3 text-accent">${todayLeads}</div>
-          <div class="text-[11px] text-dim mt-2">nuevos hoy</div>
+          <div class="text-[11px] text-dim mt-2">${t("ov.kpiLeadsSub")}</div>
         </div>
 
         <div class="card bg-panel border border-line p-4 relative overflow-hidden" style="animation-delay:.14s">
           <div class="absolute top-3 right-3 text-[9.5px] tracking-[.2em] text-dim uppercase">04</div>
           <div class="flex items-center gap-2 text-muted">
             <i data-lucide="coins" width="15" height="15"></i>
-            <span class="text-[11px] tracking-[.05em]">COSTO DEL MES</span>
+            <span class="text-[11px] tracking-[.05em]">${t("ov.kpiCost")}</span>
           </div>
           <div class="glow font-display font-bold text-[38px] leading-none mt-3">$${totalCost.toFixed(2)}</div>
-          <div class="text-[11px] text-dim mt-2">${monthMsgs} mensajes · Claude · 30 días</div>
+          <div class="text-[11px] text-dim mt-2">${t("ov.kpiCostSub", { n: monthMsgs })}</div>
         </div>
       </section>
 
@@ -370,30 +380,30 @@ export async function renderOverview(env: Env): Promise<string> {
         <div class="flex items-center justify-between">
           <div class="font-display font-semibold text-[15px] text-cream flex items-center gap-2">
             <i data-lucide="activity" width="16" height="16" class="text-accent"></i>
-            Salud del bot
+            ${t("ov.healthTitle")}
           </div>
           <a href="/admin/tickets" class="flex items-center gap-1 text-[11.5px]">
-            ver tickets <i data-lucide="arrow-right" width="13" height="13"></i>
+            ${t("ov.healthTickets")} <i data-lucide="arrow-right" width="13" height="13"></i>
           </a>
         </div>
         <div class="mt-3" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
           ${
             openTickets > 0
-              ? `<span style="font-size:9px;color:var(--bad);border:1px solid var(--bad);padding:1px 6px">⚠ ${openTickets} tickets abiertos</span>`
-              : `<span style="font-size:9px;color:var(--ok);border:1px solid var(--ok);padding:1px 6px">✓ 0 tickets abiertos</span>`
+              ? `<span style="font-size:9px;color:var(--bad);border:1px solid var(--bad);padding:1px 6px">⚠ ${t("ov.healthTicketsOpen", { n: openTickets })}</span>`
+              : `<span style="font-size:9px;color:var(--ok);border:1px solid var(--ok);padding:1px 6px">✓ ${t("ov.healthTicketsNone")}</span>`
           }
           ${await (async () => {
             // Cuando el bot escala a humano, ¿alguien se entera? Antes esto
             // fallaba en silencio; ahora se ve aquí en rojo si falta configurar.
             const notify = await handoffNotifyStatus(env);
             return notify.ok
-              ? `<span style="font-size:9px;color:var(--ok);border:1px solid var(--ok);padding:1px 6px">✓ handoff avisa por ${notify.channels.join(" + ")}</span>`
-              : `<span style="font-size:9px;color:var(--bad);border:1px solid var(--bad);padding:1px 6px">⚠ HANDOFF SIN AVISO — el bot crea tickets pero NADIE recibe notificación (configura Telegram, WhatsApp o email del dueño)</span>`;
+              ? `<span style="font-size:9px;color:var(--ok);border:1px solid var(--ok);padding:1px 6px">✓ ${t("ov.healthHandoffOk", { channels: notify.channels.join(" + ") })}</span>`
+              : `<span style="font-size:9px;color:var(--bad);border:1px solid var(--bad);padding:1px 6px">⚠ ${t("ov.healthHandoffBad")}</span>`;
           })()}
           ${(() => {
             const conn = connectionsSummary(env, zernioCreds, telegramToken, mlCreds, wahaCfg);
             const ok = conn.connected > 0;
-            return `<a href="/admin/conexiones" style="font-size:9px;color:${ok ? "var(--ok)" : "var(--bad)"};border:1px solid ${ok ? "var(--ok)" : "var(--bad)"};padding:1px 6px;text-decoration:none">${ok ? "✓" : "⚠"} ${conn.connected}/${conn.total} canales conectados</a>`;
+            return `<a href="/admin/conexiones" style="font-size:9px;color:${ok ? "var(--ok)" : "var(--bad)"};border:1px solid ${ok ? "var(--ok)" : "var(--bad)"};padding:1px 6px;text-decoration:none">${ok ? "✓" : "⚠"} ${t("ov.healthChannels", { connected: conn.connected, total: conn.total })}</a>`;
           })()}
         </div>
       </section>
@@ -409,5 +419,5 @@ export async function renderOverview(env: Env): Promise<string> {
       </section>
     </div>`;
 
-  return layout({ title: "Overview", activeTab: "overview", body, env });
+  return layout({ title: t("ov.pageTitle"), activeTab: "overview", body, env });
 }

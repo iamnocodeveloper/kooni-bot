@@ -8,6 +8,7 @@ import { InsightsRepo } from "../../db/insights";
 import { costOfUsage, type ModelId } from "../../pricing";
 import { channelLabel } from "../../channels/labels";
 import { layout } from "./layout";
+import { panelI18n, type T, type MessageKey } from "../i18n";
 
 const ACCENT = "var(--accent)";
 
@@ -20,9 +21,9 @@ function esc(s: string): string {
 
 // --- SVG area chart -------------------------------------------------------------
 
-function areaChart(points: { label: string; value: number }[], width = 640, height = 150): string {
+function areaChart(t: T, points: { label: string; value: number }[], width = 640, height = 150): string {
   if (points.length === 0) {
-    return `<p class="text-[12.5px] text-dim py-8 text-center">Aún no hay actividad.</p>`;
+    return `<p class="text-[12.5px] text-dim py-8 text-center">${t("stats.chartEmpty")}</p>`;
   }
   const pad = 12;
   const max = Math.max(...points.map((p) => p.value), 1);
@@ -36,7 +37,7 @@ function areaChart(points: { label: string; value: number }[], width = 640, heig
 
   return `
   <div class="overflow-x-auto">
-    <svg viewBox="0 0 ${width} ${height}" class="w-full" style="min-width:480px" role="img" aria-label="Mensajes por día">
+    <svg viewBox="0 0 ${width} ${height}" class="w-full" style="min-width:480px" role="img" aria-label="${t("stats.chartAria")}">
       <line x1="${pad}" y1="${height - pad}" x2="${width - pad}" y2="${height - pad}" stroke="var(--line)" stroke-width="1"/>
       <path d="${area}" fill="${ACCENT}" opacity="0.14"/>
       <polyline points="${line}" fill="none" stroke="${ACCENT}" stroke-width="2" stroke-linejoin="round"/>
@@ -50,16 +51,17 @@ function areaChart(points: { label: string; value: number }[], width = 640, heig
 
 // --- Heatmap día × hora -----------------------------------------------------------
 
-const DOW = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+const DOW_KEY: MessageKey[] = ["stats.dow0", "stats.dow1", "stats.dow2", "stats.dow3", "stats.dow4", "stats.dow5", "stats.dow6"];
 
-function heatmap(cells: Map<string, number>): string {
+function heatmap(t: T, cells: Map<string, number>): string {
   const max = Math.max(...cells.values(), 1);
-  const rows = DOW.map((name, dow) => {
+  const rows = DOW_KEY.map((dowKey, dow) => {
+    const name = t(dowKey);
     const tds = Array.from({ length: 24 }, (_, hour) => {
       const n = cells.get(`${dow}:${hour}`) ?? 0;
       const pct = n === 0 ? 0 : Math.round((0.12 + 0.8 * (n / max)) * 100);
       const bg = n === 0 ? "var(--panel2)" : `color-mix(in srgb, var(--accent) ${pct}%, var(--panel2))`;
-      return `<td class="p-0"><div style="width:13px;height:13px;background:${bg}" title="${name} ${hour}:00 — ${n} ${n === 1 ? "mensaje" : "mensajes"}"></div></td>`;
+      return `<td class="p-0"><div style="width:13px;height:13px;background:${bg}" title="${name} ${hour}:00 — ${n} ${n === 1 ? t("stats.msgOne") : t("stats.msgMany")}"></div></td>`;
     }).join("");
     return `<tr><td class="pr-2 text-[9px] text-dim font-mono text-right">${name}</td>${tds}</tr>`;
   }).join("");
@@ -98,6 +100,7 @@ function funnel(stages: { label: string; value: number }[]): string {
 // --- Page -------------------------------------------------------------------------
 
 export async function renderStats(env: Env): Promise<string> {
+  const { t } = await panelI18n(env);
   const db = new Db(env.DB);
   const thirtyDays = Date.now() - 30 * 86_400_000;
 
@@ -185,51 +188,51 @@ export async function renderStats(env: Env): Promise<string> {
   const body = `
     <div class="flex flex-col gap-4" style="max-width:1080px">
       <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-        ${bigCard(`${savedHours.toFixed(1)}<span class="text-[16px] text-dim"> h</span>`, "⏱ Horas ahorradas", "mensajes atendidos × 2 min · 30 días", true)}
-        ${bigCard(costPerConv === null ? "—" : money(costPerConv), "Costo por conversación", "IA / conversaciones · 30 días")}
-        ${bigCard(`<span class="text-accent">${costPerLead === null ? "—" : money(costPerLead)}</span>`, "💰 Costo por lead", "IA / leads captados · 30 días")}
-        ${bigCard(`<span class="text-ok">${resolvedPct === null ? "—" : `${resolvedPct}%`}</span>`, "Resueltas sin humano", "según el análisis de IA · 30 días")}
+        ${bigCard(`${savedHours.toFixed(1)}<span class="text-[16px] text-dim"> h</span>`, t("stats.savedHours"), t("stats.savedHoursSub"), true)}
+        ${bigCard(costPerConv === null ? "—" : money(costPerConv), t("stats.costPerConv"), t("stats.costPerConvSub"))}
+        ${bigCard(`<span class="text-accent">${costPerLead === null ? "—" : money(costPerLead)}</span>`, t("stats.costPerLead"), t("stats.costPerLeadSub"))}
+        ${bigCard(`<span class="text-ok">${resolvedPct === null ? "—" : `${resolvedPct}%`}</span>`, t("stats.resolved"), t("stats.resolvedSub"))}
       </div>
 
       <div class="card bg-panel border border-line p-[18px]">
-        <div class="font-display font-semibold text-[14px] mb-3">📈 Mensajes por día <span class="text-[10px] text-dim font-normal">(30 días)</span></div>
-        ${areaChart(byDay.map((d) => ({ label: d.day.slice(5), value: d.msgs })))}
+        <div class="font-display font-semibold text-[14px] mb-3">${t("stats.perDay")} <span class="text-[10px] text-dim font-normal">${t("stats.last30")}</span></div>
+        ${areaChart(t, byDay.map((d) => ({ label: d.day.slice(5), value: d.msgs })))}
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-[14px]">
         <div class="card bg-panel border border-line p-[18px]">
-          <div class="font-display font-semibold text-[14px] mb-4">🎯 Funnel de conversión <span class="text-[10px] text-dim font-normal">(30 días)</span></div>
+          <div class="font-display font-semibold text-[14px] mb-4">${t("stats.funnelTitle")} <span class="text-[10px] text-dim font-normal">${t("stats.last30")}</span></div>
           <div class="flex flex-col gap-3">
             ${funnel([
-              { label: "Conversaciones", value: nConvs },
-              { label: "💰 Leads", value: nLeads },
-              { label: "Contactados", value: nContacted },
-              { label: "✅ Vendidos", value: nSold },
+              { label: t("stats.funnel.convs"), value: nConvs },
+              { label: t("stats.funnel.leads"), value: nLeads },
+              { label: t("stats.funnel.contacted"), value: nContacted },
+              { label: t("stats.funnel.sold"), value: nSold },
             ])}
           </div>
         </div>
         <div class="card bg-panel border border-line p-[18px]">
-          <div class="font-display font-semibold text-[14px] mb-4">🔥 Horas pico <span class="text-[10px] text-dim font-normal">(mensajes de clientes, 30 días)</span></div>
-          ${heatmap(heatCells)}
-          <p class="text-[10px] text-dim mt-2.5 leading-relaxed">Las horas fuera de tu horario son donde el bot es el único que contesta.</p>
+          <div class="font-display font-semibold text-[14px] mb-4">${t("stats.heatTitle")} <span class="text-[10px] text-dim font-normal">${t("stats.heatSub")}</span></div>
+          ${heatmap(t, heatCells)}
+          <p class="text-[10px] text-dim mt-2.5 leading-relaxed">${t("stats.heatNote")}</p>
         </div>
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-[14px]">
         <div class="card bg-panel border border-line p-[18px]">
-          <div class="font-display font-semibold text-[14px] mb-2.5">Por canal</div>
+          <div class="font-display font-semibold text-[14px] mb-2.5">${t("stats.byChannel")}</div>
           <table class="w-full text-[12.5px]"><tbody>
-            ${channels.map((c) => `<tr style="border-top:1px solid var(--line)"><td class="py-2.5 text-cream">${esc(channelLabel(c.channel))}</td><td class="text-right text-muted text-[11px]">${c.n}</td></tr>`).join("") || `<tr><td class="py-3 text-dim text-[12.5px]">Sin datos.</td></tr>`}
+            ${channels.map((c) => `<tr style="border-top:1px solid var(--line)"><td class="py-2.5 text-cream">${esc(channelLabel(c.channel))}</td><td class="text-right text-muted text-[11px]">${c.n}</td></tr>`).join("") || `<tr><td class="py-3 text-dim text-[12.5px]">${t("stats.noData")}</td></tr>`}
           </tbody></table>
         </div>
         <div class="card bg-panel border border-line p-[18px]">
-          <div class="font-display font-semibold text-[14px] mb-2.5">Tools más usadas</div>
+          <div class="font-display font-semibold text-[14px] mb-2.5">${t("stats.topTools")}</div>
           <table class="w-full text-[12px]"><tbody>
-            ${tools.filter((t) => t.tool).map((t) => `<tr style="border-top:1px solid var(--line)"><td class="py-2.5 text-accent2">${esc(t.tool)}</td><td class="text-right text-muted text-[11px]">${t.n}</td></tr>`).join("") || `<tr><td class="py-3 text-dim text-[12.5px]">Aún sin tool calls registradas.</td></tr>`}
+            ${tools.filter((tool) => tool.tool).map((tool) => `<tr style="border-top:1px solid var(--line)"><td class="py-2.5 text-accent2">${esc(tool.tool)}</td><td class="text-right text-muted text-[11px]">${tool.n}</td></tr>`).join("") || `<tr><td class="py-3 text-dim text-[12.5px]">${t("stats.noTools")}</td></tr>`}
           </tbody></table>
         </div>
       </div>
     </div>`;
 
-  return layout({ title: "Estadísticas", activeTab: "stats", body, env });
+  return layout({ title: t("stats.pageTitle"), activeTab: "stats", body, env });
 }

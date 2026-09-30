@@ -14,6 +14,7 @@ import {
   type ControlDef,
 } from "../control-levels";
 import { layout } from "./layout";
+import { panelI18n, type T } from "../i18n";
 
 /** Escape untrusted text before interpolating it into an HTML attribute/body. */
 function esc(s: string): string {
@@ -32,7 +33,7 @@ const CARD_BASE =
   "cfgcard flex flex-col gap-1 h-full border border-line bg-panel2 p-4 cursor-pointer";
 
 /** Render one card group (radio cards) for a level-based control. */
-function renderCardGroup(control: ControlDef, settings: Record<string, string>): string {
+function renderCardGroup(control: ControlDef, settings: Record<string, string>, t: T): string {
   const currentLevel = valueToLevel(control.key, settings[control.key]);
   const cards = control.options
     .map((opt) => {
@@ -44,16 +45,16 @@ function renderCardGroup(control: ControlDef, settings: Record<string, string>):
                  class="peer sr-only absolute" ${checked}>
           <label for="${esc(id)}" class="${CARD_BASE}">
             <span class="card-icon text-dim">${opt.svg}</span>
-            <span class="card-label font-display font-semibold text-[12.5px] text-cream">${esc(opt.label)}</span>
-            <span class="text-dim text-[11px] leading-snug">${esc(opt.desc)}</span>
+            <span class="card-label font-display font-semibold text-[12.5px] text-cream">${esc(t(opt.labelKey!))}</span>
+            <span class="text-dim text-[11px] leading-snug">${esc(t(opt.descKey!))}</span>
           </label>
         </div>`;
     })
     .join("");
   return `
     <fieldset style="display:flex;flex-direction:column;gap:8px">
-      <legend class="font-display font-semibold text-[13.5px] text-cream">${esc(control.title)}</legend>
-      <p class="text-muted text-[12px]">${esc(control.help)}</p>
+      <legend class="font-display font-semibold text-[13.5px] text-cream">${esc(t(control.titleKey!))}</legend>
+      <p class="text-muted text-[12px]">${esc(t(control.helpKey!))}</p>
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">${cards}</div>
     </fieldset>`;
 }
@@ -106,7 +107,7 @@ const SELECT_STYLE =
  * guarda en settings (D1) y, si está vacía, cae al secret del worker. Nunca se
  * muestra el valor: solo el origen y los últimos 4 caracteres.
  */
-function renderDecodoSection(env: Env, settings: Record<string, string>): string {
+function renderDecodoSection(env: Env, settings: Record<string, string>, t: T): string {
   const settingVal = (settings[SETTING_KEYS.decodoAuth] ?? "").trim();
   const envVal = (env.DECODO_AUTH ?? "").trim();
   const source = settingVal ? "panel" : envVal ? "worker (secret)" : "";
@@ -115,53 +116,53 @@ function renderDecodoSection(env: Env, settings: Record<string, string>): string
   return `
     <div class="bg-panel border border-line" style="padding:20px;display:flex;flex-direction:column;gap:14px">
       <div style="display:flex;flex-direction:column;gap:2px">
-        <h3 class="font-display font-semibold text-[13.5px] text-cream">Scraping web — API key de Decodo</h3>
-        <p class="text-dim text-[11.5px]" style="margin:0">Con esto el bot lee tu sitio (Web Sync / inventario). Se saca en <span class="font-mono">decodo.com</span> → Scraper API: usuario y contraseña (o el Basic ya en base64). Decodo cobra por uso.</p>
+        <h3 class="font-display font-semibold text-[13.5px] text-cream">${t("cfg.decodo.title")}</h3>
+        <p class="text-dim text-[11.5px]" style="margin:0">${t("cfg.decodo.help")}</p>
       </div>
       <div class="text-[11.5px]">${
         configured
-          ? `<span style="color:var(--ok)">● Configurada</span> <span class="text-dim">· origen: ${esc(source)} · termina en …${esc(tail)}</span>`
-          : `<span class="text-dim">○ Sin configurar — el scraping queda apagado hasta que la pongas</span>`
+          ? `<span style="color:var(--ok)">● ${t("cfg.decodo.configured")}</span> <span class="text-dim">${t("cfg.decodo.source", { src: esc(source), tail: esc(tail) })}</span>`
+          : `<span class="text-dim">○ ${t("cfg.decodo.notConfigured")}</span>`
       }</div>
       <div style="display:flex;flex-direction:column;gap:6px;max-width:520px">
-        <label class="text-dim text-[11px]" for="decodo_auth">API key (usuario:contraseña o base64)</label>
+        <label class="text-dim text-[11px]" for="decodo_auth">${t("cfg.decodo.apiKeyLabel")}</label>
         <input type="password" id="${SETTING_KEYS.decodoAuth}" name="${SETTING_KEYS.decodoAuth}" value="" autocomplete="off"
-               placeholder="${configured ? "vacío = conservar la actual" : "usuario:contraseña"}" style="${INPUT_STYLE}">
+               placeholder="${configured ? t("cfg.decodo.phKeep") : t("cfg.decodo.phUserPass")}" style="${INPUT_STYLE}">
       </div>
       <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
         ${
           !settingVal && envVal
-            ? `<button type="submit" formaction="/admin/config/decodo-import" class="text-[11.5px] cursor-pointer" style="border:1px solid var(--accent);color:var(--accent);background:none;padding:8px 13px">Usar la del worker</button>`
+            ? `<button type="submit" formaction="/admin/config/decodo-import" class="text-[11.5px] cursor-pointer" style="border:1px solid var(--accent);color:var(--accent);background:none;padding:8px 13px">${t("cfg.decodo.useWorker")}</button>`
             : ""
         }
         ${
           settingVal
-            ? `<label class="text-dim text-[11.5px]" style="display:flex;gap:7px;align-items:center;cursor:pointer"><input type="checkbox" name="decodo_clear" value="1"> Quitar la guardada</label>`
+            ? `<label class="text-dim text-[11.5px]" style="display:flex;gap:7px;align-items:center;cursor:pointer"><input type="checkbox" name="decodo_clear" value="1"> ${t("cfg.decodo.clear")}</label>`
             : ""
         }
       </div>
       <div class="text-[11.5px]" style="border-top:1px solid var(--line);padding-top:11px">
-        <a href="/admin/scraping" style="color:var(--accent);text-decoration:none">Ver registro de scraping →</a>
-        <span class="text-dim">qué entró, salió o cambió en cada corrida (nuevos, vendidos, precios).</span>
+        <a href="/admin/scraping" style="color:var(--accent);text-decoration:none">${t("cfg.decodo.viewLog")} →</a>
+        <span class="text-dim">${t("cfg.decodo.viewLogHint")}</span>
       </div>
     </div>`;
 }
 
 /** Sección "Modelo de IA": proveedor + API key propia + modelo concreto. */
-function renderLlmSection(settings: Record<string, string>, llmTest?: string): string {
+function renderLlmSection(settings: Record<string, string>, t: T, llmTest?: string): string {
   const provider = settings[SETTING_KEYS.llmProvider] ?? "";
   const model = settings[SETTING_KEYS.llmModel] ?? "";
   const hasKey = (settings[SETTING_KEYS.llmApiKey] ?? "").trim() !== "";
   const keyTail = hasKey ? (settings[SETTING_KEYS.llmApiKey] ?? "").trim().slice(-4) : "";
 
   const providerOpts = [
-    { v: "", l: "Automático (recomendado)" },
-    { v: "anthropic", l: "Claude (Anthropic)" },
-    { v: "openai", l: "ChatGPT (OpenAI)" },
-    { v: "aisa", l: "AIsa (gateway)" },
-    { v: "xai", l: "Grok (xAI)" },
-    { v: "minimax", l: "MiniMax" },
-    { v: "google", l: "Google (Gemini)" },
+    { v: "", l: t("cfg.llm.providerAuto") },
+    { v: "anthropic", l: t("cfg.llm.optClaude") },
+    { v: "openai", l: t("cfg.llm.optOpenai") },
+    { v: "aisa", l: t("cfg.llm.optAisa") },
+    { v: "xai", l: t("cfg.llm.optXai") },
+    { v: "minimax", l: t("cfg.llm.optMinimax") },
+    { v: "google", l: t("cfg.llm.optGoogle") },
   ]
     .map((o) => `<option value="${o.v}" ${provider === o.v ? "selected" : ""}>${o.l}</option>`)
     .join("");
@@ -184,50 +185,50 @@ function renderLlmSection(settings: Record<string, string>, llmTest?: string): s
 
   let testBanner = "";
   if (llmTest?.startsWith("ok:")) {
-    testBanner = `<div style="border:1px solid var(--ok);background:var(--ok-soft);color:var(--ok);padding:9px 12px;font-size:12px;font-weight:600">✓ Conexión exitosa — respondió ${esc(llmTest.slice(3))}</div>`;
+    testBanner = `<div style="border:1px solid var(--ok);background:var(--ok-soft);color:var(--ok);padding:9px 12px;font-size:12px;font-weight:600">${t("cfg.llm.testOk", { model: esc(llmTest.slice(3)) })}</div>`;
   } else if (llmTest?.startsWith("err:")) {
-    testBanner = `<div style="border:1px solid var(--bad);background:var(--bad-soft);color:var(--bad);padding:9px 12px;font-size:12px;font-weight:600">✕ Falló la prueba: ${esc(llmTest.slice(4, 200))}</div>`;
+    testBanner = `<div style="border:1px solid var(--bad);background:var(--bad-soft);color:var(--bad);padding:9px 12px;font-size:12px;font-weight:600">${t("cfg.llm.testErr", { msg: esc(llmTest.slice(4, 200)) })}</div>`;
   }
 
   return `
     <div class="bg-panel border border-line" style="padding:20px;display:flex;flex-direction:column;gap:18px">
       <div style="display:flex;flex-direction:column;gap:2px">
-        <h3 class="font-display font-semibold text-[13.5px] text-cream">🧠 Modelo de IA</h3>
-        <p class="text-dim text-[12px]">Elige qué inteligencia artificial usa tu bot. Puedes usar tu propia API key para pagar tú el consumo directamente. Si lo dejas en automático, el bot usa la configuración incluida (rápido para lo simple, inteligente para lo difícil).</p>
+        <h3 class="font-display font-semibold text-[13.5px] text-cream">${t("cfg.llm.title")}</h3>
+        <p class="text-dim text-[12px]">${t("cfg.llm.help")}</p>
       </div>
       ${testBanner}
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
         <div style="display:flex;flex-direction:column;gap:6px">
-          <label class="font-display font-semibold text-[12.5px] text-cream">Proveedor</label>
+          <label class="font-display font-semibold text-[12.5px] text-cream">${t("cfg.llm.provider")}</label>
           <select name="${SETTING_KEYS.llmProvider}" style="${SELECT_STYLE}">${providerOpts}</select>
         </div>
         <div style="display:flex;flex-direction:column;gap:6px">
-          <label class="font-display font-semibold text-[12.5px] text-cream">Modelo</label>
+          <label class="font-display font-semibold text-[12.5px] text-cream">${t("cfg.llm.model")}</label>
           <select name="${SETTING_KEYS.llmModel}" style="${SELECT_STYLE}">
-            <option value="" ${model === "" ? "selected" : ""}>Automático (rápido ⇄ inteligente)</option>
-            <optgroup label="Claude (Anthropic)">${anthropicOpts}</optgroup>
-            <optgroup label="ChatGPT (OpenAI)">${openaiOpts}</optgroup>
-            <optgroup label="Grok (xAI)">${xaiOpts}</optgroup>
-            <optgroup label="MiniMax">${minimaxOpts}</optgroup>
-            <optgroup label="Google (Gemini)">${googleOpts}</optgroup>
+            <option value="" ${model === "" ? "selected" : ""}>${t("cfg.llm.modelAuto")}</option>
+            <optgroup label="${t("cfg.llm.optClaude")}">${anthropicOpts}</optgroup>
+            <optgroup label="${t("cfg.llm.optOpenai")}">${openaiOpts}</optgroup>
+            <optgroup label="${t("cfg.llm.optXai")}">${xaiOpts}</optgroup>
+            <optgroup label="${t("cfg.llm.optMinimax")}">${minimaxOpts}</optgroup>
+            <optgroup label="${t("cfg.llm.optGoogle")}">${googleOpts}</optgroup>
           </select>
         </div>
       </div>
       <div style="display:flex;flex-direction:column;gap:6px">
-        <label class="font-display font-semibold text-[12.5px] text-cream">URL base del gateway (solo si usas AIsa/OpenRouter)</label>
-        <p class="text-dim text-[11px]">Vacío = OpenAI directo o la config del deploy. Para AIsa: https://api.aisa.one/v1 — se cambia aquí sin re-desplegar.</p>
+        <label class="font-display font-semibold text-[12.5px] text-cream">${t("cfg.llm.baseUrlLabel")}</label>
+        <p class="text-dim text-[11px]">${t("cfg.llm.baseUrlHelp")}</p>
         <input type="text" name="${SETTING_KEYS.llmApiBaseUrl}" value="${esc(settings[SETTING_KEYS.llmApiBaseUrl] ?? "")}"
                placeholder="https://api.aisa.one/v1" style="${INPUT_STYLE}">
       </div>
       <div style="display:flex;flex-direction:column;gap:6px">
-        <label class="font-display font-semibold text-[12.5px] text-cream">Tu API key (opcional)</label>
-        <p class="text-dim text-[11px]">${hasKey ? `Hay una key guardada (termina en …${esc(keyTail)}). Escribe una nueva para reemplazarla, o marca la casilla para quitarla.` : "Pégala aquí para que el consumo se cobre a tu cuenta. Vacío = usar la key incluida del sistema."}</p>
+        <label class="font-display font-semibold text-[12.5px] text-cream">${t("cfg.llm.keyLabel")}</label>
+        <p class="text-dim text-[11px]">${hasKey ? t("cfg.llm.keyHelpSaved", { tail: esc(keyTail) }) : t("cfg.llm.keyHelpEmpty")}</p>
         <input type="password" name="${SETTING_KEYS.llmApiKey}" value="" autocomplete="off"
-               placeholder="${hasKey ? "••••••••••••" : "sk-ant-… o sk-…"}" style="${INPUT_STYLE}">
-        ${hasKey ? `<label class="text-dim text-[11.5px]" style="display:flex;align-items:center;gap:7px;cursor:pointer"><input type="checkbox" name="llm_api_key_clear" value="1"> Quitar mi API key y volver a la del sistema</label>` : ""}
+               placeholder="${hasKey ? t("cfg.llm.phMask") : t("cfg.llm.phKey")}" style="${INPUT_STYLE}">
+        ${hasKey ? `<label class="text-dim text-[11.5px]" style="display:flex;align-items:center;gap:7px;cursor:pointer"><input type="checkbox" name="llm_api_key_clear" value="1"> ${t("cfg.llm.clearKey")}</label>` : ""}
       </div>
       <a href="/admin/config/llm-test" class="text-[12px] font-display font-semibold"
-         style="width:fit-content;border:1px solid var(--line);color:var(--cream);padding:9px 14px;text-decoration:none">⚡ Probar mi configuración (guarda primero)</a>
+         style="width:fit-content;border:1px solid var(--line);color:var(--cream);padding:9px 14px;text-decoration:none">${t("cfg.llm.testLink")}</a>
     </div>`;
 }
 
@@ -237,10 +238,10 @@ function renderLlmSection(settings: Record<string, string>, llmTest?: string): s
  * zonas comunes evita typos que romperían los horarios; una zona inválida se
  * ignora y cae al default.
  */
-function renderTimezoneSection(settings: Record<string, string>): string {
+function renderTimezoneSection(settings: Record<string, string>, t: T): string {
   const current = settings[SETTING_KEYS.businessTimezone] ?? "";
   const opts = [
-    { v: "", l: `Por defecto (${DEFAULT_BUSINESS_TZ})` },
+    { v: "", l: t("cfg.tz.default", { tz: DEFAULT_BUSINESS_TZ }) },
     ...COMMON_TIMEZONES.map((tz) => ({ v: tz, l: tz })),
   ]
     .map((o) => `<option value="${esc(o.v)}" ${current === o.v ? "selected" : ""}>${esc(o.l)}</option>`)
@@ -249,11 +250,11 @@ function renderTimezoneSection(settings: Record<string, string>): string {
   return `
     <div class="bg-panel border border-line" style="padding:20px;display:flex;flex-direction:column;gap:14px">
       <div style="display:flex;flex-direction:column;gap:2px">
-        <h3 class="font-display font-semibold text-[13.5px] text-cream">🕐 Zona horaria del negocio</h3>
-        <p class="text-dim text-[12px]">La hora y la fecha que usa tu bot para entender "hoy", "mañana" o "el viernes", y para agendar citas. Poné la zona donde atiende el negocio, no la tuya: si no coincide, las citas se agendan con la hora equivocada.</p>
+        <h3 class="font-display font-semibold text-[13.5px] text-cream">${t("cfg.tz.title")}</h3>
+        <p class="text-dim text-[12px]">${t("cfg.tz.help")}</p>
       </div>
       <div style="display:flex;flex-direction:column;gap:6px">
-        <label class="font-display font-semibold text-[12.5px] text-cream">Zona horaria</label>
+        <label class="font-display font-semibold text-[12.5px] text-cream">${t("cfg.tz.label")}</label>
         <select name="${SETTING_KEYS.businessTimezone}" style="${SELECT_STYLE}">${opts}</select>
       </div>
     </div>`;
@@ -267,20 +268,20 @@ function renderTimezoneSection(settings: Record<string, string>): string {
  * Todo vacío = hereda la configuración del bot (misma API, mismo modelo). Para
  * usar OTRO proveedor hay que dar su API key: heredar la del chat daría 401.
  */
-function renderAnalysisLlmSection(settings: Record<string, string>): string {
+function renderAnalysisLlmSection(settings: Record<string, string>, t: T): string {
   const provider = settings[SETTING_KEYS.analysisLlmProvider] ?? "";
   const model = settings[SETTING_KEYS.analysisLlmModel] ?? "";
   const hasKey = (settings[SETTING_KEYS.analysisLlmApiKey] ?? "").trim() !== "";
   const keyTail = hasKey ? (settings[SETTING_KEYS.analysisLlmApiKey] ?? "").trim().slice(-4) : "";
 
   const providerOpts = [
-    { v: "", l: "Igual que el bot (recomendado)" },
-    { v: "anthropic", l: "Claude (Anthropic)" },
-    { v: "openai", l: "ChatGPT (OpenAI)" },
-    { v: "aisa", l: "AIsa (gateway)" },
-    { v: "xai", l: "Grok (xAI)" },
-    { v: "minimax", l: "MiniMax" },
-    { v: "google", l: "Google (Gemini)" },
+    { v: "", l: t("cfg.llm.providerSameBot") },
+    { v: "anthropic", l: t("cfg.llm.optClaude") },
+    { v: "openai", l: t("cfg.llm.optOpenai") },
+    { v: "aisa", l: t("cfg.llm.optAisa") },
+    { v: "xai", l: t("cfg.llm.optXai") },
+    { v: "minimax", l: t("cfg.llm.optMinimax") },
+    { v: "google", l: t("cfg.llm.optGoogle") },
   ]
     .map((o) => `<option value="${o.v}" ${provider === o.v ? "selected" : ""}>${o.l}</option>`)
     .join("");
@@ -293,38 +294,38 @@ function renderAnalysisLlmSection(settings: Record<string, string>): string {
   return `
     <div class="bg-panel border border-line" style="padding:20px;display:flex;flex-direction:column;gap:18px">
       <div style="display:flex;flex-direction:column;gap:2px">
-        <h3 class="font-display font-semibold text-[13.5px] text-cream">🧪 Modelo de análisis (scraping)</h3>
-        <p class="text-dim text-[12px]">El inventario que se scrapea del sitio se revisa con un modelo para corregir títulos, precios y millas mal parseados. Deja todo vacío para usar la misma configuración del bot, o elige aquí un modelo distinto — por ejemplo Claude Opus para el análisis y un modelo barato para chatear.</p>
+        <h3 class="font-display font-semibold text-[13.5px] text-cream">${t("cfg.analysis.title")}</h3>
+        <p class="text-dim text-[12px]">${t("cfg.analysis.help")}</p>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
         <div style="display:flex;flex-direction:column;gap:6px">
-          <label class="font-display font-semibold text-[12.5px] text-cream">Proveedor</label>
+          <label class="font-display font-semibold text-[12.5px] text-cream">${t("cfg.llm.provider")}</label>
           <select name="${SETTING_KEYS.analysisLlmProvider}" style="${SELECT_STYLE}">${providerOpts}</select>
         </div>
         <div style="display:flex;flex-direction:column;gap:6px">
-          <label class="font-display font-semibold text-[12.5px] text-cream">Modelo</label>
+          <label class="font-display font-semibold text-[12.5px] text-cream">${t("cfg.llm.model")}</label>
           <select name="${SETTING_KEYS.analysisLlmModel}" style="${SELECT_STYLE}">
-            <option value="" ${model === "" ? "selected" : ""}>Igual que el bot</option>
-            <optgroup label="Claude (Anthropic)">${groupOpts("anthropic")}</optgroup>
-            <optgroup label="ChatGPT (OpenAI)">${groupOpts("openai")}</optgroup>
-            <optgroup label="Grok (xAI)">${groupOpts("xai")}</optgroup>
-            <optgroup label="MiniMax">${groupOpts("minimax")}</optgroup>
-            <optgroup label="Google (Gemini)">${groupOpts("google")}</optgroup>
+            <option value="" ${model === "" ? "selected" : ""}>${t("cfg.analysis.sameBot")}</option>
+            <optgroup label="${t("cfg.llm.optClaude")}">${groupOpts("anthropic")}</optgroup>
+            <optgroup label="${t("cfg.llm.optOpenai")}">${groupOpts("openai")}</optgroup>
+            <optgroup label="${t("cfg.llm.optXai")}">${groupOpts("xai")}</optgroup>
+            <optgroup label="${t("cfg.llm.optMinimax")}">${groupOpts("minimax")}</optgroup>
+            <optgroup label="${t("cfg.llm.optGoogle")}">${groupOpts("google")}</optgroup>
           </select>
         </div>
       </div>
       <div style="display:flex;flex-direction:column;gap:6px">
-        <label class="font-display font-semibold text-[12.5px] text-cream">URL base del gateway (opcional)</label>
-        <p class="text-dim text-[11px]">Vacío = la misma del bot. Para AIsa: https://api.aisa.one/v1</p>
+        <label class="font-display font-semibold text-[12.5px] text-cream">${t("cfg.analysis.baseUrlLabel")}</label>
+        <p class="text-dim text-[11px]">${t("cfg.analysis.baseUrlHelp")}</p>
         <input type="text" name="${SETTING_KEYS.analysisLlmApiBaseUrl}" value="${esc(settings[SETTING_KEYS.analysisLlmApiBaseUrl] ?? "")}"
                placeholder="https://api.aisa.one/v1" style="${INPUT_STYLE}">
       </div>
       <div style="display:flex;flex-direction:column;gap:6px">
-        <label class="font-display font-semibold text-[12.5px] text-cream">API key del análisis (opcional)</label>
-        <p class="text-dim text-[11px]">${hasKey ? `Hay una key guardada (termina en …${esc(keyTail)}). Escribe una nueva para reemplazarla.` : "Vacío = usa la misma API del bot. Si eliges OTRO proveedor arriba, pega aquí su key: la del bot no sirve para otro proveedor."}</p>
+        <label class="font-display font-semibold text-[12.5px] text-cream">${t("cfg.analysis.keyLabel")}</label>
+        <p class="text-dim text-[11px]">${hasKey ? t("cfg.analysis.keyHelpSaved", { tail: esc(keyTail) }) : t("cfg.analysis.keyHelpEmpty")}</p>
         <input type="password" name="${SETTING_KEYS.analysisLlmApiKey}" value="" autocomplete="off"
-               placeholder="${hasKey ? "••••••••••••" : "sk-ant-… o sk-…"}" style="${INPUT_STYLE}">
-        ${hasKey ? `<label class="text-dim text-[11.5px]" style="display:flex;align-items:center;gap:7px;cursor:pointer"><input type="checkbox" name="analysis_llm_api_key_clear" value="1"> Quitar esta API key y volver a la del bot</label>` : ""}
+               placeholder="${hasKey ? t("cfg.llm.phMask") : t("cfg.llm.phKey")}" style="${INPUT_STYLE}">
+        ${hasKey ? `<label class="text-dim text-[11.5px]" style="display:flex;align-items:center;gap:7px;cursor:pointer"><input type="checkbox" name="analysis_llm_api_key_clear" value="1"> ${t("cfg.analysis.clearKey")}</label>` : ""}
       </div>
     </div>`;
 }
@@ -340,7 +341,8 @@ export async function renderConfig(
   saved = false,
   llmTest?: string,
 ): Promise<string> {
-  const cardGroups = CONTROL_LIST.map((c) => renderCardGroup(c, settings)).join("");
+  const { t } = await panelI18n(env);
+  const cardGroups = CONTROL_LIST.map((c) => renderCardGroup(c, settings, t)).join("");
 
   // Este campo escribe la MISMA llave que "Prompt del agente" de Mi Agente →
   // Flujo, donde el textarea viene precargado con el prompt efectivo. Aquí llega
@@ -349,7 +351,7 @@ export async function renderConfig(
   const hasPromptOverride = (settings[SETTING_KEYS.systemPromptOverride] ?? "").trim() !== "";
 
   const savedBanner = saved
-    ? `<div style="border:1px solid var(--ok);background:var(--ok-soft);color:var(--ok);padding:10px 14px;font-size:12.5px;font-weight:600">Guardado ✓</div>`
+    ? `<div style="border:1px solid var(--ok);background:var(--ok-soft);color:var(--ok);padding:10px 14px;font-size:12.5px;font-weight:600">${t("cfg.saved")}</div>`
     : "";
 
   // Historial del prompt: las últimas versiones, con "volver".
@@ -359,14 +361,14 @@ export async function renderConfig(
     if (Array.isArray(list) && list.length) {
       promptHistory = `
         <div class="bg-panel border border-line" style="padding:14px 16px;display:flex;flex-direction:column;gap:8px">
-          <div class="font-display font-semibold text-[12.5px] text-cream">Historial del prompt</div>
-          <p class="text-muted text-[11.5px]" style="margin:0">Últimas ${list.length} versiones. "Volver" restaura esa versión.</p>
+          <div class="font-display font-semibold text-[12.5px] text-cream">${t("cfg.history.title")}</div>
+          <p class="text-muted text-[11.5px]" style="margin:0">${t("cfg.history.help", { n: list.length })}</p>
           ${list.map((v) => `
             <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid var(--line);padding:8px 10px">
               <span class="text-muted text-[11.5px] font-mono">${esc(new Date(v.at).toLocaleString("es-MX"))}</span>
               <button type="submit" form="prompt-restore-form" name="at" value="${v.at}"
                       class="text-[11.5px] font-display font-semibold cursor-pointer"
-                      style="border:1px solid var(--line);color:var(--cream);padding:6px 12px;background:var(--panel2)">Volver a esta</button>
+                      style="border:1px solid var(--line);color:var(--cream);padding:6px 12px;background:var(--panel2)">${t("cfg.history.restore")}</button>
             </div>`).join("")}
         </div>`;
     }
@@ -379,8 +381,8 @@ export async function renderConfig(
       ${promptHistory}
 
       <div style="display:flex;flex-direction:column;gap:2px">
-        <h2 class="font-display font-semibold text-[15px] text-cream">Panel de control de ${esc(env.BUSINESS_NAME)}</h2>
-        <p class="text-muted text-[12.5px]">Ajuste cómo se comporta su bot. Los cambios se guardan al presionar el botón de abajo.</p>
+        <h2 class="font-display font-semibold text-[15px] text-cream">${t("cfg.heading", { name: esc(env.BUSINESS_NAME) })}</h2>
+        <p class="text-muted text-[12.5px]">${t("cfg.subtitle")}</p>
       </div>
 
       <!-- Card-based controls (tono, velocidad, estilo, cerebro, estado) -->
@@ -389,108 +391,108 @@ export async function renderConfig(
       </div>
 
       <!-- Zona horaria del negocio (reloj del bot + agenda) -->
-      ${renderTimezoneSection(settings)}
+      ${renderTimezoneSection(settings, t)}
 
       <!-- Modelo de IA (BYO provider/key/model) -->
-      ${renderLlmSection(settings, llmTest)}
+      ${renderLlmSection(settings, t, llmTest)}
 
       <!-- Modelo de análisis (scraping) — separado del chat -->
-      ${renderAnalysisLlmSection(settings)}
+      ${renderAnalysisLlmSection(settings, t)}
 
       <!-- Scraping web (Decodo) -->
-      ${renderDecodoSection(env, settings)}
+      ${renderDecodoSection(env, settings, t)}
 
       <!-- Free-text settings -->
       <div class="bg-panel border border-line" style="padding:20px;display:flex;flex-direction:column;gap:18px">
         ${renderTextField({
           name: SETTING_KEYS.botName,
-          label: "Nombre del bot",
-          help: "Cómo se presenta su asistente con los clientes.",
+          label: t("cfg.botName.label"),
+          help: t("cfg.botName.help"),
           value: settings[SETTING_KEYS.botName] ?? "",
-          placeholder: env.BOT_NAME ?? "Mi asistente",
+          placeholder: env.BOT_NAME ?? t("cfg.botName.ph"),
         })}
 
         <div style="display:flex;flex-direction:column;gap:6px;max-width:420px">
-          <label class="font-display font-semibold text-[12.5px] text-cream" for="${SETTING_KEYS.agentPersona}">¿Quién responde los chats?</label>
-          <p class="text-dim text-[11px]">Por defecto el bot se presenta como asistente del negocio. Si eliges “Tú mismo”, el bot habla en primera persona como el dueño (no dice “soy el asistente”).</p>
+          <label class="font-display font-semibold text-[12.5px] text-cream" for="${SETTING_KEYS.agentPersona}">${t("cfg.persona.label")}</label>
+          <p class="text-dim text-[11px]">${t("cfg.persona.help")}</p>
           <select id="${SETTING_KEYS.agentPersona}" name="${SETTING_KEYS.agentPersona}" style="${SELECT_STYLE}">
-            <option value="" ${(settings[SETTING_KEYS.agentPersona] ?? "") !== "dueño" ? "selected" : ""}>Asistente del negocio</option>
-            <option value="dueño" ${settings[SETTING_KEYS.agentPersona] === "dueño" ? "selected" : ""}>Tú mismo (primera persona)</option>
+            <option value="" ${(settings[SETTING_KEYS.agentPersona] ?? "") !== "dueño" ? "selected" : ""}>${t("cfg.persona.business")}</option>
+            <option value="dueño" ${settings[SETTING_KEYS.agentPersona] === "dueño" ? "selected" : ""}>${t("cfg.persona.you")}</option>
           </select>
         </div>
 
         ${renderTextArea({
           name: SETTING_KEYS.businessContext,
-          label: "Información del negocio",
-          help: "Horarios, servicios, precios, ubicación. El bot responde con esto. Editable en vivo — se aplica al guardar, sin re-desplegar.",
+          label: t("cfg.business.label"),
+          help: t("cfg.business.help"),
           // Pre-llenado: si el panel aún no tiene override, muestra lo que el
           // onboarding cargó en member/config.local (renderBusinessContext) para
           // que el miembro VEA y edite sus horarios aquí desde el día 1.
           value: settings[SETTING_KEYS.businessContext] || renderBusinessContext(),
-          placeholder: "Ej. Abrimos lunes a sábado de 9 a 7. Corte $150, barba $100. Estamos en Av. Reforma 123.",
+          placeholder: t("cfg.business.ph"),
           rows: 6,
         })}
 
         ${renderTextArea({
           name: SETTING_KEYS.systemPromptOverride,
-          label: "Prompt del agente (avanzado)",
+          label: t("cfg.prompt.label"),
           help: hasPromptOverride
-            ? "✍ Modo manual: su bot está usando este texto como prompt completo, en lugar del automático. Para verlo entero o volver al automático: Mi Agente → Flujo → Agente."
-            : "⚠️ Lo que escriba aquí REEMPLAZA el prompt completo del bot — incluida la información del negocio de arriba, su base de conocimiento y sus reglas de seguridad. No agrega instrucciones: las sustituye. Déjelo vacío para usar el prompt automático. Para editar sobre el prompt real, vaya a Mi Agente → Flujo → Agente.",
+            ? t("cfg.prompt.helpManual")
+            : t("cfg.prompt.helpDefault"),
           value: settings[SETTING_KEYS.systemPromptOverride] ?? "",
           placeholder:
-            "Vacío = el bot usa su prompt automático completo: la información del negocio, su base de conocimiento y sus reglas de seguridad.",
+            t("cfg.prompt.ph"),
           rows: 4,
         })}
 
         ${renderTextField({
           name: SETTING_KEYS.escalationKeywords,
-          label: "Palabras que piden un humano",
-          help: "Si el cliente escribe alguna, el bot avisa a una persona. Sepárelas con comas.",
+          label: t("cfg.escalation.label"),
+          help: t("cfg.escalation.help"),
           value: settings[SETTING_KEYS.escalationKeywords] ?? "",
-          placeholder: "queja, reembolso, hablar con alguien",
+          placeholder: t("cfg.escalation.ph"),
         })}
       </div>
 
       <!-- Botones y multimedia (Fase A) -->
       <div class="bg-panel border border-line" style="padding:20px;display:flex;flex-direction:column;gap:18px">
         <div style="display:flex;flex-direction:column;gap:2px">
-          <h3 class="font-display font-semibold text-[14px] text-cream">Botones y multimedia</h3>
-          <p class="text-muted text-[12px]">El bot puede enviar botones, imágenes y audios en los canales que lo soporten (Telegram, Zernio, WhatsApp…). Actívelo aquí.</p>
+          <h3 class="font-display font-semibold text-[14px] text-cream">${t("cfg.media.title")}</h3>
+          <p class="text-muted text-[12px]">${t("cfg.media.help")}</p>
         </div>
 
         <label style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted);cursor:pointer">
           <input type="checkbox" name="${SETTING_KEYS.allowMultimedia}" value="1"
                  ${settings[SETTING_KEYS.allowMultimedia] === "1" ? "checked" : ""}
                  style="accent-color:var(--accent);width:auto">
-          Permitir que el bot envíe botones, imágenes y audios
-          <span class="text-dim text-[11px]">(en los canales que lo soporten; si no, degrada a texto)</span>
+          ${t("cfg.media.allow")}
+          <span class="text-dim text-[11px]">${t("cfg.media.allowHint")}</span>
         </label>
 
         ${renderTextArea({
           name: SETTING_KEYS.menuButtons,
-          label: "Botones del menú (opcional)",
-          help: "Botones que se muestran con cada respuesta de saludo. Formato JSON: [{\"text\":\"💬 Precios\",\"callback\":\"precios\"},{\"text\":\"📅 Agendar\",\"callback\":\"agendar\"}] — usá \"url\" para un link.",
+          label: t("cfg.menu.label"),
+          help: t("cfg.menu.help"),
           value: settings[SETTING_KEYS.menuButtons] ?? "",
-          placeholder: '[{"text":"💬 Precios","callback":"precios"},{"text":"📅 Agendar","callback":"agendar"}]',
+          placeholder: t("cfg.menu.ph"),
           rows: 3,
         })}
 
         ${renderTextArea({
           name: SETTING_KEYS.resourceLibrary,
-          label: "Biblioteca de recursos (opcional)",
-          help: "Imágenes/audios/botones que el bot puede enviar cuando el cliente los pida. Formato JSON: {\"catalogo\":{\"image\":\"https://...\",\"caption\":\"Nuestro catálogo 👇\",\"buttons\":[{\"text\":\"Cotizar\",\"url\":\"https://wa.me/...\"}]},\"bienvenida\":{\"audio\":\"https://...\"}}. El bot los elige por nombre.",
+          label: t("cfg.resources.label"),
+          help: t("cfg.resources.help"),
           value: settings[SETTING_KEYS.resourceLibrary] ?? "",
-          placeholder: '{"catalogo":{"image":"https://...","caption":"Nuestro catálogo 👇","buttons":[{"text":"Cotizar","url":"https://wa.me/..."}]}}',
+          placeholder: t("cfg.resources.ph"),
           rows: 4,
         })}
       </div>
 
       <button type="submit" class="bigbtn font-display font-bold text-[13px] cursor-pointer"
               style="width:fit-content;background:var(--accent);border:1px solid var(--accent);color:var(--on-accent);box-shadow:4px 4px 0 var(--linelit);padding:13px 24px;display:flex;align-items:center;gap:9px">
-        <i data-lucide="check" width="16" height="16"></i> Guardar cambios
+        <i data-lucide="check" width="16" height="16"></i> ${t("cfg.saveChanges")}
       </button>
     </form>`;
 
-  return layout({ title: "Config", activeTab: "config", body, env });
+  return layout({ title: t("cfg.title"), activeTab: "config", body, env });
 }

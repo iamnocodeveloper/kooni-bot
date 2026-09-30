@@ -5,6 +5,7 @@
 // (precio, millas, condición, título, link, desglose). Solo lectura.
 import type { Env } from "../../env";
 import { layout } from "./layout";
+import { panelI18n, type T, type MessageKey } from "../i18n";
 import { Db } from "../../db/client";
 import { loadVehicleStore, listStoredVehicles } from "../../kb/inventory";
 import { ChangeReviewsRepo, type ChangeReview } from "../../db/changeReviews";
@@ -32,26 +33,31 @@ function fmtWhen(at: number): string {
   });
 }
 
-function ago(ms: number): string {
+function ago(t: T, ms: number): string {
   const min = Math.floor((Date.now() - ms) / 60_000);
-  if (min < 1) return "ahora";
-  if (min < 60) return `hace ${min} min`;
+  if (min < 1) return t("scr.now");
+  if (min < 60) return t("scr.agoMin", { min });
   const h = Math.floor(min / 60);
-  if (h < 24) return `hace ${h} h`;
-  return `hace ${Math.floor(h / 24)} d`;
+  if (h < 24) return t("scr.agoH", { h });
+  return t("scr.agoD", { d: Math.floor(h / 24) });
 }
 
-const TRIGGER_LABELS: Record<WebSyncTrigger, string> = {
-  cron: "Automático (cron)",
-  manual: "Manual (panel)",
-  api: "Manual (token)",
-  rebuild: "Reconstrucción de KB",
+const TRIGGER_KEY: Record<WebSyncTrigger, MessageKey> = {
+  cron: "scr.trigger.cron",
+  manual: "scr.trigger.manual",
+  api: "scr.trigger.api",
+  rebuild: "scr.trigger.rebuild",
 };
 
-function triggerBadge(t: string): string {
-  const color = t === "cron" ? "var(--accent2)" : t === "rebuild" ? "var(--dim)" : "var(--muted)";
+function triggerLabel(t: T, trig: string): string {
+  const key = TRIGGER_KEY[trig as WebSyncTrigger];
+  return key ? t(key) : trig;
+}
+
+function triggerBadge(t: T, trig: string): string {
+  const color = trig === "cron" ? "var(--accent2)" : trig === "rebuild" ? "var(--dim)" : "var(--muted)";
   return `<span style="font-size:9.5px;letter-spacing:.08em;color:${color};border:1px solid ${color};padding:2px 7px;font-weight:700;white-space:nowrap">${esc(
-    (TRIGGER_LABELS as Record<string, string>)[t] ?? t,
+    triggerLabel(t, trig),
   )}</span>`;
 }
 
@@ -78,6 +84,7 @@ export interface ScrapingQuery {
 const PAGE = 40;
 
 export async function renderScraping(env: Env, q: ScrapingQuery = {}): Promise<string> {
+  const { t } = await panelI18n(env);
   const db = new Db(env.DB);
   const repo = new WebSyncLogRepo(db);
 
@@ -145,17 +152,17 @@ export async function renderScraping(env: Env, q: ScrapingQuery = {}): Promise<s
   const lastAt = runs[0]?.at;
   const kpis = `
     <div class="xscroll" style="display:flex;gap:10px;flex-wrap:wrap">
-      ${kpi("Autos en inventario", currentVehicles.toLocaleString("es"), "lo que sabe el bot ahora")}
-      ${kpi("Última corrida", lastAt ? ago(lastAt) : "—", lastAt ? fmtWhen(lastAt) : "sin corridas")}
-      ${kpi("Nuevos (7 días)", stats.added.toLocaleString("es"), `${stats.runs} corrida(s)`, "var(--ok)")}
-      ${kpi("Vendidos/salieron (7 d)", stats.removed.toLocaleString("es"), "ya no están en el feed", "var(--warn)")}
-      ${kpi("Cambios (7 días)", stats.changed.toLocaleString("es"), "precio, millas, etc.", "var(--accent2)")}
+      ${kpi(t("scr.kpi.vehicles"), currentVehicles.toLocaleString("es"), t("scr.kpi.vehiclesSub"))}
+      ${kpi(t("scr.kpi.lastRun"), lastAt ? ago(t, lastAt) : "—", lastAt ? fmtWhen(lastAt) : t("scr.kpi.noRuns"))}
+      ${kpi(t("scr.kpi.added"), stats.added.toLocaleString("es"), t("scr.kpi.addedSub", { n: stats.runs }), "var(--ok)")}
+      ${kpi(t("scr.kpi.removed"), stats.removed.toLocaleString("es"), t("scr.kpi.removedSub"), "var(--warn)")}
+      ${kpi(t("scr.kpi.changed"), stats.changed.toLocaleString("es"), t("scr.kpi.changedSub"), "var(--accent2)")}
     </div>`;
 
   const triggerOptions = ["", "cron", "manual", "api", "rebuild"]
     .map(
-      (t) =>
-        `<option value="${t}"${q.trigger === t ? " selected" : ""}>${t === "" ? "Todos los disparadores" : esc((TRIGGER_LABELS as Record<string, string>)[t] ?? t)}</option>`,
+      (trig) =>
+        `<option value="${trig}"${q.trigger === trig ? " selected" : ""}>${trig === "" ? t("scr.triggerAll") : esc(triggerLabel(t, trig))}</option>`,
     )
     .join("");
 
@@ -163,25 +170,25 @@ export async function renderScraping(env: Env, q: ScrapingQuery = {}): Promise<s
     <form method="GET" action="/admin/scraping" class="xscroll"
           style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;background:var(--panel);border:1px solid var(--line);padding:12px 14px">
       <label style="display:flex;flex-direction:column;gap:4px">
-        <span class="text-[10.5px]" style="color:var(--dim);letter-spacing:.08em;text-transform:uppercase">Disparador</span>
+        <span class="text-[10.5px]" style="color:var(--dim);letter-spacing:.08em;text-transform:uppercase">${t("scr.filterTrigger")}</span>
         <select name="trigger" style="background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:7px 10px;font-size:12px;outline:none">${triggerOptions}</select>
       </label>
       ${q.run ? `<input type="hidden" name="run" value="${esc(q.run)}">` : ""}
       <button type="submit" class="text-[12px] font-display font-semibold"
-              style="border:1px solid var(--line);color:var(--cream);padding:8px 14px;cursor:pointer;background:none">Filtrar</button>
+              style="border:1px solid var(--line);color:var(--cream);padding:8px 14px;cursor:pointer;background:none">${t("scr.filter")}</button>
       ${
         q.trigger
-          ? `<a href="/admin/scraping" class="text-[11.5px]" style="color:var(--dim);padding:8px 4px">limpiar</a>`
+          ? `<a href="/admin/scraping" class="text-[11.5px]" style="color:var(--dim);padding:8px 4px">${t("scr.clear")}</a>`
           : ""
       }
       <a href="/admin/scraping/export.csv${qs({})}" class="text-[11.5px] font-display font-semibold"
-         style="border:1px solid var(--line);color:var(--cream);padding:8px 12px;text-decoration:none">Exportar CSV</a>
+         style="border:1px solid var(--line);color:var(--cream);padding:8px 12px;text-decoration:none">${t("scr.exportCsv")}</a>
       <button type="submit" formmethod="POST" formaction="/admin/scraping/run" class="text-[12px] font-display font-semibold"
-              style="margin-left:auto;border:1px solid var(--accent);color:var(--accent);background:none;padding:8px 15px;cursor:pointer">Scrapear ahora</button>
+              style="margin-left:auto;border:1px solid var(--accent);color:var(--accent);background:none;padding:8px 15px;cursor:pointer">${t("scr.scrapeNow")}</button>
     </form>`;
 
-  const th = (t: string, extra = "") =>
-    `<th style="text-align:left;padding:8px 9px;color:var(--dim);font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid var(--line);white-space:nowrap;${extra}">${t}</th>`;
+  const th = (label: string, extra = "") =>
+    `<th style="text-align:left;padding:8px 9px;color:var(--dim);font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid var(--line);white-space:nowrap;${extra}">${label}</th>`;
 
   const runRows = runs.length
     ? runs
@@ -190,7 +197,7 @@ export async function renderScraping(env: Env, q: ScrapingQuery = {}): Promise<s
           const err = r.errors > 0 ? `<span style="color:var(--bad)">${r.errors}</span>` : `<span style="color:var(--dim)">0</span>`;
           return `<tr style="border-bottom:1px solid var(--line);${isSel ? "background:var(--panel2)" : ""}">
             <td style="padding:9px;vertical-align:top"><span class="font-mono text-[10.5px]" style="color:var(--dim);white-space:nowrap">${esc(fmtWhen(r.at))}</span></td>
-            <td style="padding:9px;vertical-align:top">${triggerBadge(r.trigger)}</td>
+            <td style="padding:9px;vertical-align:top">${triggerBadge(t, r.trigger)}</td>
             <td style="padding:9px;vertical-align:top"><span class="font-mono text-[12px] text-cream">${r.vehiclesTotal.toLocaleString("es")}</span></td>
             <td style="padding:9px;vertical-align:top">${num(r.added, "var(--ok)")}</td>
             <td style="padding:9px;vertical-align:top">${num(r.removed, "var(--warn)")}</td>
@@ -198,19 +205,19 @@ export async function renderScraping(env: Env, q: ScrapingQuery = {}): Promise<s
             <td style="padding:9px;vertical-align:top"><span class="font-mono text-[11.5px]">${err}</span></td>
             <td style="padding:9px;vertical-align:top"><span class="font-mono text-[11px]" style="color:var(--muted)">${esc(ms(r.durationMs))}</span></td>
             <td style="padding:9px;vertical-align:top">
-              <a href="/admin/scraping${qs({ run: r.id })}" class="text-[11.5px]" style="color:${isSel ? "var(--accent)" : "var(--muted)"}">${isSel ? "viendo" : "ver"}</a>
+              <a href="/admin/scraping${qs({ run: r.id })}" class="text-[11.5px]" style="color:${isSel ? "var(--accent)" : "var(--muted)"}">${isSel ? t("scr.viewing") : t("scr.view")}</a>
             </td>
           </tr>`;
         })
         .join("")
     : `<tr><td colspan="9" style="text-align:center;color:var(--dim);padding:30px;font-size:13px">
-         Todavía no hay corridas registradas. Se registran solas: el cron nocturno y cada vez que uses “Scrapear ahora” o “Sincronizar sitio ahora”.
+         ${t("scr.runsEmpty")}
        </td></tr>`;
 
   const runTable = `
     <div class="bg-panel border xscroll" style="padding:6px 8px">
       <table style="width:100%;min-width:860px;border-collapse:collapse">
-        <thead><tr>${th("Cuándo")}${th("Disparador")}${th("Autos")}${th("Nuevos")}${th("Salieron")}${th("Cambios")}${th("Errores")}${th("Duración")}${th("")}</tr></thead>
+        <thead><tr>${th(t("scr.th.when"))}${th(t("scr.th.trigger"))}${th(t("scr.th.vehicles"))}${th(t("scr.th.added"))}${th(t("scr.th.removed"))}${th(t("scr.th.changed"))}${th(t("scr.th.errors"))}${th(t("scr.th.duration"))}${th("")}</tr></thead>
         <tbody>${runRows}</tbody>
       </table>
     </div>`;
@@ -238,14 +245,14 @@ export async function renderScraping(env: Env, q: ScrapingQuery = {}): Promise<s
   const addedItems = added.map(
     (c) =>
       `<div style="font-size:12px;border-left:2px solid var(--ok);padding-left:8px">
-         ${carLink(c, c.title ?? "Auto")}
+         ${carLink(c, c.title ?? t("scr.carFallback"))}
          ${c.vin ? `<span class="font-mono text-[10px]" style="color:var(--dim);display:block">VIN ${esc(c.vin)}</span>` : ""}
        </div>`,
   );
   const removedItems = removed.map(
     (c) =>
       `<div style="font-size:12px;border-left:2px solid var(--warn);padding-left:8px">
-         <span style="color:var(--muted);text-decoration:line-through">${esc(c.title ?? "Auto")}</span>
+         <span style="color:var(--muted);text-decoration:line-through">${esc(c.title ?? t("scr.carFallback"))}</span>
          ${c.vin ? `<span class="font-mono text-[10px]" style="color:var(--dim);display:block">VIN ${esc(c.vin)}</span>` : ""}
        </div>`,
   );
@@ -254,7 +261,7 @@ export async function renderScraping(env: Env, q: ScrapingQuery = {}): Promise<s
   const changedByVehicle = new Map<string, { title: string; url?: string; vin?: string; fields: WebSyncChange[] }>();
   for (const c of changedRows) {
     const k = c.vehicleKey ?? c.title ?? c.id;
-    const g = changedByVehicle.get(k) ?? { title: c.title ?? "Auto", url: c.url, vin: c.vin, fields: [] };
+    const g = changedByVehicle.get(k) ?? { title: c.title ?? t("scr.carFallback"), url: c.url, vin: c.vin, fields: [] };
     g.fields.push(c);
     changedByVehicle.set(k, g);
   }
@@ -264,17 +271,17 @@ export async function renderScraping(env: Env, q: ScrapingQuery = {}): Promise<s
         const st = reviewState(f.id);
         const chip =
           st === "confirmed"
-            ? `<span style="color:var(--ok);font-size:10px;border:1px solid var(--ok);padding:0 5px">✓ confirmado</span>`
+            ? `<span style="color:var(--ok);font-size:10px;border:1px solid var(--ok);padding:0 5px">${t("scr.chip.confirmed")}</span>`
             : st === "rejected"
-              ? `<span style="color:var(--bad);font-size:10px;border:1px solid var(--bad);padding:0 5px">✗ descartado</span>`
-              : `<span style="color:var(--dim);font-size:10px;border:1px solid var(--line);padding:0 5px">pendiente</span>`;
+              ? `<span style="color:var(--bad);font-size:10px;border:1px solid var(--bad);padding:0 5px">${t("scr.chip.rejected")}</span>`
+              : `<span style="color:var(--dim);font-size:10px;border:1px solid var(--line);padding:0 5px">${t("scr.chip.pending")}</span>`;
         const btn = (status: string, label: string, color: string) =>
           `<button type="submit" name="status" value="${status}" title="${label}"
              style="border:1px solid ${color};color:${color};background:none;font-size:10px;padding:0 6px;cursor:pointer">${label}</button>`;
         return `<div class="font-mono text-[10.5px]" style="color:var(--muted);display:flex;align-items:center;gap:6px;flex-wrap:wrap">
             <span style="color:var(--dim)">${esc(f.field ?? "")}:</span>
-            <span style="color:var(--dim);text-decoration:line-through">${esc(f.oldValue ?? "(vacío)")}</span>
-            → <span style="color:var(--accent2)">${esc(f.newValue ?? "(vacío)")}</span>
+            <span style="color:var(--dim);text-decoration:line-through">${esc(f.oldValue ?? t("scr.emptyValue"))}</span>
+            → <span style="color:var(--accent2)">${esc(f.newValue ?? t("scr.emptyValue"))}</span>
             <span style="margin-left:auto;display:inline-flex;align-items:center;gap:4px">
               ${chip}
               <form method="POST" action="/admin/scraping/changes/${encodeURIComponent(f.id)}/review" style="display:inline-flex;gap:4px;margin:0">
@@ -302,10 +309,10 @@ export async function renderScraping(env: Env, q: ScrapingQuery = {}): Promise<s
       return `<a href="${href}" style="font-size:11px;color:${color};border:1px solid ${color};padding:3px 9px;text-decoration:none">${esc(label)} ${n}</a>`;
     };
     return `<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-        ${pill("", "Todos", changes.length)}
-        ${pill("pending", "Pendientes", count("pending"))}
-        ${pill("confirmed", "Confirmados", count("confirmed"))}
-        ${pill("rejected", "Descartados", count("rejected"))}
+        ${pill("", t("scr.review.all"), changes.length)}
+        ${pill("pending", t("scr.review.pending"), count("pending"))}
+        ${pill("confirmed", t("scr.review.confirmed"), count("confirmed"))}
+        ${pill("rejected", t("scr.review.rejected"), count("rejected"))}
       </div>`;
   })();
 
@@ -313,27 +320,27 @@ export async function renderScraping(env: Env, q: ScrapingQuery = {}): Promise<s
     ? `
     <div style="display:flex;flex-direction:column;gap:12px">
       <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
-        <h3 class="font-display font-semibold text-[14px] text-cream">Detalle de la corrida</h3>
-        <span class="font-mono text-[11px]" style="color:var(--dim)">${esc(fmtWhen(selected.at))} · ${esc((TRIGGER_LABELS as Record<string, string>)[selected.trigger] ?? selected.trigger)} · ${selected.vehiclesTotal.toLocaleString("es")} autos · ${esc(ms(selected.durationMs))}</span>
+        <h3 class="font-display font-semibold text-[14px] text-cream">${t("scr.detail.title")}</h3>
+        <span class="font-mono text-[11px]" style="color:var(--dim)">${esc(fmtWhen(selected.at))} · ${esc(triggerLabel(t, selected.trigger))} · ${selected.vehiclesTotal.toLocaleString("es")} ${t("scr.detail.autos")} · ${esc(ms(selected.durationMs))}</span>
       </div>
       ${selected.url ? `<p class="font-mono text-[10.5px]" style="color:var(--dim);margin:0;word-break:break-all">${esc(selected.url)}</p>` : ""}
       ${selected.note ? `<p class="text-[11.5px]" style="color:var(--muted);margin:0">${esc(selected.note)}</p>` : ""}
       ${
         selected.errorMsg
-          ? `<div style="border:1px solid var(--bad);background:var(--bad-soft);color:var(--bad);padding:9px 12px;font-size:11.5px;word-break:break-word">Error: ${esc(selected.errorMsg)}</div>`
+          ? `<div style="border:1px solid var(--bad);background:var(--bad-soft);color:var(--bad);padding:9px 12px;font-size:11.5px;word-break:break-word">${t("scr.detail.error")} ${esc(selected.errorMsg)}</div>`
           : ""
       }
       ${
         !selected.errorMsg && changes.length === 0
-          ? `<p class="text-[12px]" style="color:var(--muted);margin:0">Sin cambios: el inventario quedó igual que la corrida anterior${selected.trigger === "rebuild" ? " (la reconstrucción de KB no scrapea el feed)" : ""}.</p>`
+          ? `<p class="text-[12px]" style="color:var(--muted);margin:0">${selected.trigger === "rebuild" ? t("scr.noChangesRebuild") : t("scr.noChanges")}.</p>`
           : `${reviewPills}
              ${
                visibleChanges.length === 0
-                 ? `<p class="text-[12px]" style="color:var(--muted);margin:0">No hay cambios con este filtro.</p>`
+                 ? `<p class="text-[12px]" style="color:var(--muted);margin:0">${t("scr.filterEmpty")}</p>`
                  : `<div style="display:flex;gap:10px;flex-wrap:wrap">
-                      ${listBlock("Nuevos", "var(--ok)", addedItems, "Ninguno.")}
-                      ${listBlock("Salieron / vendidos", "var(--warn)", removedItems, "Ninguno.")}
-                      ${listBlock("Cambios", "var(--accent2)", changedItems, "Ninguno.")}
+                      ${listBlock(t("scr.list.added"), "var(--ok)", addedItems, t("scr.list.none"))}
+                      ${listBlock(t("scr.list.removed"), "var(--warn)", removedItems, t("scr.list.none"))}
+                      ${listBlock(t("scr.list.changed"), "var(--accent2)", changedItems, t("scr.list.none"))}
                     </div>`
              }`
       }
@@ -344,18 +351,16 @@ export async function renderScraping(env: Env, q: ScrapingQuery = {}): Promise<s
     hasMore && oldestAt
       ? `<div style="text-align:center;margin-top:6px">
            <a href="/admin/scraping${qs({ before: oldestAt })}" class="text-[12px] font-display font-semibold"
-              style="border:1px solid var(--line);color:var(--cream);padding:9px 18px;text-decoration:none">Cargar más antiguas</a>
+              style="border:1px solid var(--line);color:var(--cream);padding:9px 18px;text-decoration:none">${t("scr.loadMore")}</a>
          </div>`
       : "";
 
   const body = `
     <div style="display:flex;flex-direction:column;gap:16px">
       <div style="display:flex;flex-direction:column;gap:2px">
-        <h2 class="font-display font-semibold text-[15px] text-cream">Registro de scraping</h2>
+        <h2 class="font-display font-semibold text-[15px] text-cream">${t("scr.title")}</h2>
         <p class="text-muted text-[12.5px]">
-          Qué pasó en cada corrida de <b>Decodo</b> (Web Sync / inventario): cuántos autos hay, cuáles son
-          <b>nuevos</b>, cuáles <b>salieron</b> y qué <b>cambió</b> (precio, millas, condición, título, link). Se registra
-          solo, en el cron nocturno y cada vez que scrapeás a mano. Se conserva 90 días · ${total.toLocaleString("es")} corridas.
+          ${t("scr.subtitle", { runs: total.toLocaleString("es") })}
         </p>
       </div>
       ${flash}
@@ -366,7 +371,7 @@ export async function renderScraping(env: Env, q: ScrapingQuery = {}): Promise<s
       ${detail}
     </div>`;
 
-  return layout({ title: "Scraping", activeTab: "scraping", body, env });
+  return layout({ title: t("scr.pageTitle"), activeTab: "scraping", body, env });
 }
 
 /** CSV del resumen de corridas (respeta el filtro — tope 500). */

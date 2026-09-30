@@ -6,31 +6,36 @@ import type { Env } from "../../env";
 import { layout } from "./layout";
 import { AutoRulesRepo, type AutoRule, type AutoRuleKind } from "../../db/autoRules";
 import { CAMPAIGN_TEMPLATES } from "../../templates/campaigns";
+import { panelI18n, type T } from "../i18n";
 
-const KIND_LABELS: Record<AutoRuleKind, { title: string; desc: string }> = {
-  comment_dm: {
-    title: "Comentario → DM privado",
-    desc: "Alguien comenta una keyword en tu post → le envías un DM privado (+ botón) y opcionalmente respondes su comentario en público.",
-  },
-  comment_dm_public: {
-    title: "Comentario → respuesta pública + DM",
-    desc: "Alguien comenta una keyword → respondes su comentario en público Y le envías un DM privado. Ideal para promocionar y captar a la vez.",
-  },
-  comment_reply: {
-    title: "Comentario → respuesta pública",
-    desc: "Alguien comenta una keyword → respondes su comentario en público (visible para todos). Sin DM privado.",
-  },
-  dm_reply: {
-    title: "DM → respuesta automática",
-    desc: "Alguien te escribe por privado una keyword → le respondes al momento, sin pasar por la IA.",
-  },
-};
+function kindLabels(t: T): Record<AutoRuleKind, { title: string; desc: string }> {
+  return {
+    comment_dm: {
+      title: t("auto.kind.commentDm"),
+      desc: t("auto.kind.commentDmDesc"),
+    },
+    comment_dm_public: {
+      title: t("auto.kind.commentDmPublic"),
+      desc: t("auto.kind.commentDmPublicDesc"),
+    },
+    comment_reply: {
+      title: t("auto.kind.commentReply"),
+      desc: t("auto.kind.commentReplyDesc"),
+    },
+    dm_reply: {
+      title: t("auto.kind.dmReply"),
+      desc: t("auto.kind.dmReplyDesc"),
+    },
+  };
+}
 
-const PLATFORMS = [
-  { value: "all", label: "Todas las plataformas" },
-  { value: "instagram", label: "Instagram" },
-  { value: "facebook", label: "Facebook / Messenger" },
-];
+function platforms(t: T): { value: string; label: string }[] {
+  return [
+    { value: "all", label: t("auto.platform.all") },
+    { value: "instagram", label: "Instagram" },
+    { value: "facebook", label: "Facebook / Messenger" },
+  ];
+}
 
 function esc(s: string): string {
   return s.replace(
@@ -42,17 +47,18 @@ function esc(s: string): string {
 const INPUT_STYLE =
   "background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:10px 12px;font-size:12.5px;outline:none;width:100%";
 
-function ruleCard(rule: AutoRule, clicks: number): string {
-  const kind = KIND_LABELS[rule.kind] ?? KIND_LABELS.comment_dm;
-  const platform = PLATFORMS.find((p) => p.value === rule.platform)?.label ?? rule.platform;
+function ruleCard(t: T, rule: AutoRule, clicks: number): string {
+  const labels = kindLabels(t);
+  const kind = labels[rule.kind] ?? labels.comment_dm;
+  const platform = platforms(t).find((p) => p.value === rule.platform)?.label ?? rule.platform;
   const keywords = rule.keywords.map(esc).join(", ");
   const chip = (label: string, accent: boolean): string =>
     `<span style="font-size:10px;letter-spacing:.12em;padding:3px 9px;border:1px solid ${accent ? "var(--accent)" : "var(--line)"};color:${accent ? "var(--accent2)" : "var(--muted)"};background:${accent ? "rgba(45,212,191,.07)" : "transparent"}">${esc(label)}</span>`;
 
   const actions = [
-    `<a href="/admin/automatizaciones/${esc(rule.id)}/edit" class="text-[11px]" style="border:1px solid var(--line);color:var(--accent2);padding:5px 10px;cursor:pointer;background:none;text-decoration:none">✏️ Editar</a>`,
-    `<button type="submit" form="toggle-${esc(rule.id)}" class="text-[11px]" style="border:1px solid var(--line);color:var(--cream);padding:5px 10px;cursor:pointer;background:none">${rule.isActive ? "⏸ Pausar" : "▶ Activar"}</button>`,
-    `<button type="submit" form="delete-${esc(rule.id)}" class="text-[11px]" style="border:1px solid var(--bad);color:var(--bad);padding:5px 10px;cursor:pointer;background:none">🗑 Eliminar</button>`,
+    `<a href="/admin/automatizaciones/${esc(rule.id)}/edit" class="text-[11px]" style="border:1px solid var(--line);color:var(--accent2);padding:5px 10px;cursor:pointer;background:none;text-decoration:none">${t("auto.edit")}</a>`,
+    `<button type="submit" form="toggle-${esc(rule.id)}" class="text-[11px]" style="border:1px solid var(--line);color:var(--cream);padding:5px 10px;cursor:pointer;background:none">${rule.isActive ? t("auto.pause") : t("auto.activate")}</button>`,
+    `<button type="submit" form="delete-${esc(rule.id)}" class="text-[11px]" style="border:1px solid var(--bad);color:var(--bad);padding:5px 10px;cursor:pointer;background:none">${t("auto.delete")}</button>`,
   ].join("");
 
   return `
@@ -66,13 +72,13 @@ function ruleCard(rule: AutoRule, clicks: number): string {
       </div>
       <p class="text-dim text-[11.5px]" style="margin:0">${esc(kind.desc)}</p>
       <div style="display:flex;flex-wrap:wrap;gap:5px;align-items:center">
-        <span class="text-muted text-[11.5px] font-mono" style="color:var(--dim)">keywords:</span>
+        <span class="text-muted text-[11.5px] font-mono" style="color:var(--dim)">${t("auto.keywords")}</span>
         ${rule.keywords.map((k) => `<span class="font-mono" style="font-size:11px;border:1px solid var(--line);background:var(--panel2);padding:2px 7px;color:var(--accent2)">${esc(k)}</span>`).join("")}
       </div>
       <div class="text-[12px]" style="color:var(--cream);border-left:2px solid var(--accent);padding-left:10px;margin-top:2px">${esc(rule.message)}</div>
-      ${clicks > 0 ? `<div class="text-[11px] font-mono" style="color:var(--accent2)">👆 ${clicks} click${clicks === 1 ? "" : "s"} en los links de esta regla</div>` : ""}
-      ${rule.replyToComment ? `<div class="text-[11.5px]" style="color:var(--muted)">↩ Respuesta pública: <span style="color:var(--cream)">${esc(rule.replyToComment)}</span></div>` : ""}
-      ${rule.requireFollow ? `<div class="text-[11.5px]" style="color:var(--accent2)">🔒 Follow gate: exige follow antes de entregar el link</div>` : ""}
+      ${clicks > 0 ? `<div class="text-[11px] font-mono" style="color:var(--accent2)">${t(clicks === 1 ? "auto.clicks.one" : "auto.clicks.many", { n: clicks })}</div>` : ""}
+      ${rule.replyToComment ? `<div class="text-[11.5px]" style="color:var(--muted)">${t("auto.replyPublic")} <span style="color:var(--cream)">${esc(rule.replyToComment)}</span></div>` : ""}
+      ${rule.requireFollow ? `<div class="text-[11.5px]" style="color:var(--accent2)">${t("auto.followGate")}</div>` : ""}
       ${rule.buttonLabel ? `<div class="text-[11.5px]" style="color:var(--muted)">🔘 <span class="font-mono">${esc(rule.buttonLabel)}</span> → ${esc(rule.buttonUrl ?? "")}</div>` : ""}
       <form id="toggle-${esc(rule.id)}" method="POST" action="/admin/automatizaciones/${esc(rule.id)}/toggle" style="display:none"></form>
       <form id="delete-${esc(rule.id)}" method="POST" action="/admin/automatizaciones/${esc(rule.id)}/delete" style="display:none"></form>
@@ -80,13 +86,14 @@ function ruleCard(rule: AutoRule, clicks: number): string {
 }
 
 export async function renderAutomatizaciones(env: Env, saved?: boolean, error?: string, editRule?: AutoRule | null): Promise<string> {
+  const { t } = await panelI18n(env);
   const { Db } = await import("../../db/client");
   const repo = new AutoRulesRepo(new Db(env.DB));
   let rules: AutoRule[] = [];
   try {
     rules = await repo.list();
   } catch (e) {
-    error = error ?? "No se pudieron cargar las reglas: " + String((e as Error)?.message ?? e);
+    error = error ?? t("auto.loadError", { msg: String((e as Error)?.message ?? e) });
   }
 
   // Clicks por regla (links trackeados) para mostrar en cada card.
@@ -136,139 +143,139 @@ export async function renderAutomatizaciones(env: Env, saved?: boolean, error?: 
       <label style="display:flex;align-items:flex-start;gap:10px;font-size:12.5px;color:var(--cream);cursor:pointer">
         <input type="checkbox" name="ai_enabled" value="1" ${fbAiEnabled ? "checked" : ""} style="accent-color:var(--accent);margin-top:2px">
         <span>
-          <span class="font-display font-semibold">✨ Responder con IA los comentarios sin automatización</span>
-          <span style="display:block;color:var(--dim);font-size:11px;margin-top:2px">El bot genera la respuesta pública con tu modelo (en el idioma del comentario). <b>Tiene prioridad</b> sobre el texto fijo de abajo. <b>Nunca DM.</b> Con tope de seguridad por día.</span>
+          <span class="font-display font-semibold">${t("auto.fallbackAi.title")}</span>
+          <span style="display:block;color:var(--dim);font-size:11px;margin-top:2px">${t("auto.fallbackAi.help")}</span>
         </span>
       </label>
-      <textarea name="ai_prompt" rows="2" placeholder="Instrucciones para la IA (opcional). Ej: responde en tono cercano y ofrece escribir por privado." style="${INPUT_STYLE}">${esc(fbAiPrompt)}</textarea>
+      <textarea name="ai_prompt" rows="2" placeholder="${t("auto.fallbackAi.ph")}" style="${INPUT_STYLE}">${esc(fbAiPrompt)}</textarea>
       <label style="display:flex;align-items:flex-start;gap:10px;font-size:12.5px;color:var(--cream);cursor:pointer">
         <input type="checkbox" name="enabled" value="1" ${fbEnabled ? "checked" : ""} style="accent-color:var(--accent);margin-top:2px">
         <span>
-          <span class="font-display font-semibold">Responder en público con un texto fijo</span>
-          <span style="display:block;color:var(--dim);font-size:11px;margin-top:2px">Si la IA de arriba está apagada, un comentario sin regla recibe esta respuesta pública. <b>Nunca DM.</b> Apágalo y esos comentarios se ignoran.</span>
+          <span class="font-display font-semibold">${t("auto.fallbackFixed.title")}</span>
+          <span style="display:block;color:var(--dim);font-size:11px;margin-top:2px">${t("auto.fallbackFixed.help")}</span>
         </span>
       </label>
-      <textarea name="message" rows="2" placeholder="¡Gracias por tu comentario! 🙌 Te leemos." style="${INPUT_STYLE}">${esc(fbMessage)}</textarea>
-      <div><button type="submit" style="background:var(--accent);color:var(--on-accent);font-weight:700;border:none;padding:8px 16px;font-size:12px;cursor:pointer">Guardar</button></div>
+      <textarea name="message" rows="2" placeholder="${t("auto.fallbackFixed.ph")}" style="${INPUT_STYLE}">${esc(fbMessage)}</textarea>
+      <div><button type="submit" style="background:var(--accent);color:var(--on-accent);font-weight:700;border:none;padding:8px 16px;font-size:12px;cursor:pointer">${t("common.save")}</button></div>
     </form>`;
 
   const cards = rules.length
-    ? rules.map((r) => ruleCard(r, clicksByRule[r.id] ?? 0)).join("")
-    : `<div class="bg-panel border" style="padding:24px;text-align:center;color:var(--dim);font-size:12.5px">Aún no hay automatizaciones. Crea la primera con el formulario de abajo.</div>`;
+    ? rules.map((r) => ruleCard(t, r, clicksByRule[r.id] ?? 0)).join("")
+    : `<div class="bg-panel border" style="padding:24px;text-align:center;color:var(--dim);font-size:12.5px">${t("auto.empty")}</div>`;
 
   const banner = saved
-    ? `<div style="border:1px solid var(--ok);color:var(--ok);padding:10px 14px;font-size:12px;background:rgba(52,211,153,.06)">✓ Guardado</div>`
+    ? `<div style="border:1px solid var(--ok);color:var(--ok);padding:10px 14px;font-size:12px;background:rgba(52,211,153,.06)">${t("auto.saved")}</div>`
     : error
       ? `<div style="border:1px solid var(--bad);color:var(--bad);padding:10px 14px;font-size:12px;background:rgba(248,113,113,.06)">⚠ ${esc(error)}</div>`
       : "";
 
-  const kindOptions = (Object.keys(KIND_LABELS) as AutoRuleKind[])
-    .map((k) => `<option value="${k}">${esc(KIND_LABELS[k].title)}</option>`)
+  const kindOptions = (Object.keys(kindLabels(t)) as AutoRuleKind[])
+    .map((k) => `<option value="${k}">${esc(kindLabels(t)[k].title)}</option>`)
     .join("");
-  const platformOptions = PLATFORMS.map((p) => `<option value="${p.value}">${esc(p.label)}</option>`).join("");
+  const platformOptions = platforms(t).map((p) => `<option value="${p.value}">${esc(p.label)}</option>`).join("");
 
   const body = `
     <div style="display:flex;flex-direction:column;gap:18px">
       <div style="display:flex;flex-direction:column;gap:2px">
-        <h2 class="font-display font-semibold text-[15px] text-cream">Automatizaciones</h2>
-        <p class="text-muted text-[12.5px]">Reglas keyword → respuesta para comentarios y DMs. Cuando una regla matchea, gana ella (la IA no interviene). Se aplican en Instagram, Facebook y más vía Zernio.</p>
+        <h2 class="font-display font-semibold text-[15px] text-cream">${t("auto.heading")}</h2>
+        <p class="text-muted text-[12.5px]">${t("auto.subtitle")}</p>
       </div>
       ${banner}
       ${fallbackCard}
       <div style="display:flex;flex-direction:column;gap:12px">${cards}</div>
       <div class="bg-panel border" style="padding:18px 20px;display:flex;flex-direction:column;gap:14px">
-        <h3 class="font-display font-semibold text-[13.5px] text-cream">${editRule ? `✏️ Editar automatización` : "Nueva automatización"}</h3>
+        <h3 class="font-display font-semibold text-[13.5px] text-cream">${editRule ? t("auto.editTitle") : t("auto.newTitle")}</h3>
         <div style="display:flex;flex-direction:column;gap:6px">
-          <label class="font-display font-semibold text-[12px] text-cream" for="template_picker">O empezar de una plantilla</label>
+          <label class="font-display font-semibold text-[12px] text-cream" for="template_picker">${t("auto.templateLabel")}</label>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             ${CAMPAIGN_TEMPLATES.map(
-              (t) =>
-                `<button type="button" class="tpl-btn" data-tpl="${esc(t.id)}" style="border:1px solid var(--line);background:var(--panel2);color:var(--cream);padding:8px 12px;font-size:11.5px;cursor:pointer">${esc(t.label)}</button>`,
+              (tpl) =>
+                `<button type="button" class="tpl-btn" data-tpl="${esc(tpl.id)}" style="border:1px solid var(--line);background:var(--panel2);color:var(--cream);padding:8px 12px;font-size:11.5px;cursor:pointer">${esc(tpl.label)}</button>`,
             ).join("")}
-            <button type="button" class="tpl-btn" data-tpl="" style="border:1px solid var(--line);background:none;color:var(--dim);padding:8px 12px;font-size:11.5px;cursor:pointer">✕ Vaciar</button>
+            <button type="button" class="tpl-btn" data-tpl="" style="border:1px solid var(--line);background:none;color:var(--dim);padding:8px 12px;font-size:11.5px;cursor:pointer">${t("auto.clear")}</button>
           </div>
-          <span class="text-dim text-[10.5px]">Toca una plantilla y el formulario se rellena solo; ajusta keywords y mensajes a tu negocio.</span>
+          <span class="text-dim text-[10.5px]">${t("auto.templateHint")}</span>
         </div>
         <form method="POST" action="${editRule ? `/admin/automatizaciones/${esc(editRule.id)}/save` : "/admin/automatizaciones/save"}" id="auto-form" style="display:flex;flex-direction:column;gap:14px">
           ${editRule ? `<input type="hidden" name="editing_id" value="${esc(editRule.id)}">` : ""}
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px">
             <div style="display:flex;flex-direction:column;gap:5px">
-              <label class="font-display font-semibold text-[12px] text-cream" for="kind">Tipo de flujo</label>
+              <label class="font-display font-semibold text-[12px] text-cream" for="kind">${t("auto.form.kind")}</label>
               <select id="kind" name="kind" style="${INPUT_STYLE}">${kindOptions.replace(`value="${esc(editRule?.kind ?? "")}"`, `value="${esc(editRule?.kind ?? "")}" selected`)}</select>
             </div>
             <div style="display:flex;flex-direction:column;gap:5px">
-              <label class="font-display font-semibold text-[12px] text-cream" for="platform">Plataforma</label>
+              <label class="font-display font-semibold text-[12px] text-cream" for="platform">${t("auto.form.platform")}</label>
               <select id="platform" name="platform" style="${INPUT_STYLE}">${platformOptions.replace(`value="${esc(editRule?.platform ?? "")}"`, `value="${esc(editRule?.platform ?? "")}" selected`)}</select>
             </div>
           </div>
           <div style="display:flex;flex-direction:column;gap:5px">
-            <label class="font-display font-semibold text-[12px] text-cream" for="keywords">Keywords (separadas por coma)</label>
-            <input id="keywords" name="keywords" required value="${esc(editRule?.keywords.join(", ") ?? "")}" placeholder="precio, cuánto cuesta, cotización" style="${INPUT_STYLE}">
+            <label class="font-display font-semibold text-[12px] text-cream" for="keywords">${t("auto.form.keywords")}</label>
+            <input id="keywords" name="keywords" required value="${esc(editRule?.keywords.join(", ") ?? "")}" placeholder="${t("auto.form.keywordsPh")}" style="${INPUT_STYLE}">
           </div>
           <div style="display:flex;flex-direction:column;gap:5px">
-            <label class="font-display font-semibold text-[12px] text-cream" for="message">Mensaje del DM / respuesta</label>
-            <textarea id="message" name="message" required rows="3" placeholder="¡Hola {username}! 👋 Gracias por tu interés. Te mando el catálogo:" style="${INPUT_STYLE}">${esc(editRule?.message ?? "")}</textarea>
-            <span class="text-dim text-[10.5px]">Puedes usar <span class="font-mono">{"{username}"}</span> para saludar al cliente por su nombre.</span>
+            <label class="font-display font-semibold text-[12px] text-cream" for="message">${t("auto.form.message")}</label>
+            <textarea id="message" name="message" required rows="3" placeholder="${t("auto.form.messagePh")}" style="${INPUT_STYLE}">${esc(editRule?.message ?? "")}</textarea>
+            <span class="text-dim text-[10.5px]">${t("auto.form.usernameHint")}</span>
           </div>
           <div style="display:flex;align-items:center;gap:10px">
             <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);cursor:pointer">
               <input type="checkbox" name="whole_word_match" value="1" ${editRule?.wholeWordMatch !== false ? "checked" : ""} style="accent-color:var(--accent)">
-              La keyword debe ser palabra completa (recomendado). Desmárcalo para matchear también dentro de otras palabras (ej. "link" matchea "linking").
+              ${t("auto.form.wholeWord")}
             </label>
           </div>
           <div style="display:flex;align-items:center;gap:10px">
             <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);cursor:pointer">
               <input type="checkbox" name="require_follow" value="1" ${editRule?.requireFollow ? "checked" : ""} style="accent-color:var(--accent)">
-              Follow gate: exigir que el cliente siga la cuenta antes de entregar el link (hace crecer tu cuenta).
+              ${t("auto.form.requireFollow")}
             </label>
           </div>
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px">
             <div style="display:flex;flex-direction:column;gap:5px">
-              <label class="font-display font-semibold text-[12px] text-cream" for="follow_prompt_message">Mensaje para pedir el follow (opcional)</label>
-              <input id="follow_prompt_message" name="follow_prompt_message" value="${esc(editRule?.followPromptMessage ?? "")}" placeholder="Hola {username}! Sígueme y toca el botón para recibir el link 👇" style="${INPUT_STYLE}">
+              <label class="font-display font-semibold text-[12px] text-cream" for="follow_prompt_message">${t("auto.form.followPrompt")}</label>
+              <input id="follow_prompt_message" name="follow_prompt_message" value="${esc(editRule?.followPromptMessage ?? "")}" placeholder="${t("auto.form.followPromptPh")}" style="${INPUT_STYLE}">
             </div>
             <div style="display:flex;flex-direction:column;gap:5px">
-              <label class="font-display font-semibold text-[12px] text-cream" for="follow_button_label">Texto del botón de confirmación (opcional)</label>
-              <input id="follow_button_label" name="follow_button_label" value="${esc(editRule?.followButtonLabel ?? "")}" placeholder="Ya te sigo" style="${INPUT_STYLE}">
+              <label class="font-display font-semibold text-[12px] text-cream" for="follow_button_label">${t("auto.form.followButton")}</label>
+              <input id="follow_button_label" name="follow_button_label" value="${esc(editRule?.followButtonLabel ?? "")}" placeholder="${t("auto.form.followButtonPh")}" style="${INPUT_STYLE}">
             </div>
           </div>
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px">
             <div style="display:flex;flex-direction:column;gap:5px">
-              <label class="font-display font-semibold text-[12px] text-cream" for="button_label">Texto del botón (opcional)</label>
-              <input id="button_label" name="button_label" value="${esc(editRule?.buttonLabel ?? "")}" placeholder="Ver catálogo" style="${INPUT_STYLE}">
+              <label class="font-display font-semibold text-[12px] text-cream" for="button_label">${t("auto.form.buttonLabel")}</label>
+              <input id="button_label" name="button_label" value="${esc(editRule?.buttonLabel ?? "")}" placeholder="${t("auto.form.buttonLabelPh")}" style="${INPUT_STYLE}">
             </div>
             <div style="display:flex;flex-direction:column;gap:5px">
-              <label class="font-display font-semibold text-[12px] text-cream" for="button_url">Link del botón (opcional)</label>
-              <input id="button_url" name="button_url" value="${esc(editRule?.buttonUrl ?? "")}" placeholder="https://tusitio.com/catalogo" style="${INPUT_STYLE}">
+              <label class="font-display font-semibold text-[12px] text-cream" for="button_url">${t("auto.form.buttonUrl")}</label>
+              <input id="button_url" name="button_url" value="${esc(editRule?.buttonUrl ?? "")}" placeholder="${t("auto.form.buttonUrlPh")}" style="${INPUT_STYLE}">
             </div>
           </div>
           <div style="display:flex;flex-direction:column;gap:5px">
-            <label class="font-display font-semibold text-[12px] text-cream" for="reply_to_comment">Respuesta pública fija (opcional)</label>
-            <input id="reply_to_comment" name="reply_to_comment" value="${esc(editRule?.replyToComment ?? "")}" placeholder="¡Gracias por preguntar! Te escribí por privado ✨" style="${INPUT_STYLE}">
+            <label class="font-display font-semibold text-[12px] text-cream" for="reply_to_comment">${t("auto.form.replyComment")}</label>
+            <input id="reply_to_comment" name="reply_to_comment" value="${esc(editRule?.replyToComment ?? "")}" placeholder="${t("auto.form.replyCommentPh")}" style="${INPUT_STYLE}">
           </div>
           <div style="display:flex;flex-direction:column;gap:5px">
-            <label class="font-display font-semibold text-[12px] text-cream" for="ai_reply_prompt">Respuesta pública con IA (opcional, reemplaza la fija)</label>
-            <textarea id="ai_reply_prompt" name="ai_reply_prompt" rows="2" placeholder="Ej. Responde breve y cálido, en mi tono, agradeciendo el comentario e invitando a escribir por privado. Máximo 2 oraciones." style="${INPUT_STYLE}">${esc(editRule?.aiReplyPrompt ?? "")}</textarea>
-            <span class="text-dim text-[10.5px]">La IA genera la respuesta pública usando la llave/configuración del bot, en tu tono. Si falla, usa la respuesta fija de arriba (si la hay).</span>
+            <label class="font-display font-semibold text-[12px] text-cream" for="ai_reply_prompt">${t("auto.form.aiReply")}</label>
+            <textarea id="ai_reply_prompt" name="ai_reply_prompt" rows="2" placeholder="${t("auto.form.aiReplyPh")}" style="${INPUT_STYLE}">${esc(editRule?.aiReplyPrompt ?? "")}</textarea>
+            <span class="text-dim text-[10.5px]">${t("auto.form.aiReplyHint")}</span>
           </div>
           <div style="display:flex;align-items:center;gap:10px">
-            <button type="submit" style="background:var(--accent);color:var(--on-accent);font-weight:700;border:none;padding:10px 18px;font-size:12.5px;cursor:pointer">${editRule ? "💾 Guardar cambios" : "+ Crear automatización"}</button>
-            ${editRule ? `<a href="/admin/automatizaciones" class="text-[11px]" style="border:1px solid var(--line);color:var(--dim);padding:10px 18px;text-decoration:none">Cancelar</a>` : `<span class="text-dim text-[11px]">La regla queda activa de inmediato.</span>`}
+            <button type="submit" style="background:var(--accent);color:var(--on-accent);font-weight:700;border:none;padding:10px 18px;font-size:12.5px;cursor:pointer">${editRule ? t("auto.form.save") : t("auto.form.create")}</button>
+            ${editRule ? `<a href="/admin/automatizaciones" class="text-[11px]" style="border:1px solid var(--line);color:var(--dim);padding:10px 18px;text-decoration:none">${t("auto.form.cancel")}</a>` : `<span class="text-dim text-[11px]">${t("auto.form.immediate")}</span>`}
           </div>
         </form>
       </div>
 
       <div class="bg-panel border" style="padding:18px 20px;display:flex;flex-direction:column;gap:12px">
-        <h3 class="font-display font-semibold text-[13.5px] text-cream">Historial de envíos</h3>
-        <p class="text-muted text-[12px]" style="margin:0">Cada intento de DM o respuesta pública: quién, qué, estado y motivo. <span class="font-mono">sent</span> = enviado · <span class="font-mono">skipped</span> = omitido (dedup/regla) · <span class="font-mono">failed</span> = falló.</p>
+        <h3 class="font-display font-semibold text-[13.5px] text-cream">${t("auto.logs.title")}</h3>
+        <p class="text-muted text-[12px]" style="margin:0">${t("auto.logs.help")}</p>
         ${recentLogs.length === 0
-          ? `<div class="text-dim text-[12px]" style="padding:10px 0">Aún no hay envíos registrados.</div>`
+          ? `<div class="text-dim text-[12px]" style="padding:10px 0">${t("auto.logs.empty")}</div>`
           : `<div style="display:flex;flex-direction:column;gap:6px">${recentLogs
               .map((l) => {
                 const color =
                   l.status === "sent" ? "var(--ok)" : l.status === "skipped" ? "var(--warn)" : "var(--bad)";
                 const when = new Date(l.createdAt).toLocaleString("es", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
-                const kindLabel = l.kind === "comment_dm" ? "comentario→DM" : l.kind === "comment_reply" ? "comentario→público" : l.kind === "comment_dm_public" ? "comentario→DM+público" : "DM→respuesta";
+                const kindLabel = l.kind === "comment_dm" ? t("auto.logKind.commentDm") : l.kind === "comment_reply" ? t("auto.logKind.commentReply") : l.kind === "comment_dm_public" ? t("auto.logKind.commentDmPublic") : t("auto.logKind.dmReply");
                 return `<div style="display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);background:var(--panel2);padding:8px 10px">
                   <span class="font-mono text-[10px]" style="color:${color};border:1px solid ${color};padding:2px 6px;flex:none">${esc(l.status.toUpperCase())}</span>
                   <span style="flex:1;min-width:0">
@@ -324,5 +331,5 @@ export async function renderAutomatizaciones(env: Env, saved?: boolean, error?: 
     })();
     </script>`;
 
-  return layout({ title: "Automatizaciones", activeTab: "automatizaciones", body, env });
+  return layout({ title: t("auto.title"), activeTab: "automatizaciones", body, env });
 }

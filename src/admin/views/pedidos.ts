@@ -4,6 +4,7 @@
 // entrar un pedido nuevo (poll a /admin/pedidos/feed, sin depender del SO).
 import type { Env } from "../../env";
 import { layout } from "./layout";
+import { panelI18n, type T, type MessageKey } from "../i18n";
 import { Db } from "../../db/client";
 import {
   OrdersRepo,
@@ -22,12 +23,12 @@ const money = (n: number) => {
   const r = Math.round(n * 100) / 100;
   return Number.isInteger(r) ? `$${r}` : `$${r.toFixed(2)}`;
 };
-const timeAgo = (ms: number) => {
+const timeAgo = (t: T, ms: number) => {
   const m = Math.round((Date.now() - ms) / 60000);
-  if (m < 1) return "recién";
-  if (m < 60) return `hace ${m} min`;
+  if (m < 1) return t("ped.ago.now");
+  if (m < 60) return t("ped.ago.min", { m });
   const h = Math.round(m / 60);
-  return h < 24 ? `hace ${h} h` : `hace ${Math.round(h / 24)} d`;
+  return h < 24 ? t("ped.ago.h", { h }) : t("ped.ago.d", { d: Math.round(h / 24) });
 };
 
 const STATUS_COLOR: Record<OrderStatus, string> = {
@@ -39,6 +40,17 @@ const STATUS_COLOR: Record<OrderStatus, string> = {
   cancelado: "var(--dim)",
 };
 
+/** Estado del pedido → clave i18n (las etiquetas visibles viven en el diccionario). */
+const STATUS_KEY: Record<OrderStatus, MessageKey> = {
+  recibido: "ped.status.recibido",
+  confirmado: "ped.status.confirmado",
+  preparacion: "ped.status.preparacion",
+  camino: "ped.status.camino",
+  entregado: "ped.status.entregado",
+  cancelado: "ped.status.cancelado",
+};
+const statusLabel = (t: T, s: OrderStatus) => t(STATUS_KEY[s]);
+
 function nextActions(o: Order): OrderStatus[] {
   const opts: OrderStatus[] = [];
   const idx = ORDER_FLOW.indexOf(o.status);
@@ -47,7 +59,7 @@ function nextActions(o: Order): OrderStatus[] {
   return opts;
 }
 
-function orderCard(o: Order, items: OrderItem[], tv: boolean): string {
+function orderCard(t: T, o: Order, items: OrderItem[], tv: boolean): string {
   const fs = tv ? { code: 20, total: 16, line: 14, btn: 15, btnPad: "12px 18px" } : { code: 14, total: 13, line: 12, btn: 12, btnPad: "7px 13px" };
   const detalle = items
     .map((it) => `${it.qty}× ${esc(it.name)}${it.notes ? ` <span class="text-dim">(${esc(it.notes)})</span>` : ""}`)
@@ -57,7 +69,7 @@ function orderCard(o: Order, items: OrderItem[], tv: boolean): string {
       (to) => `<form method="POST" action="/admin/pedidos/${o.id}/status" style="display:inline">
         <input type="hidden" name="status" value="${to}">
         <button type="submit" style="background:${to === "cancelado" ? "transparent" : "var(--accent)"};color:${to === "cancelado" ? "var(--bad)" : "var(--on-accent)"};border:1px solid ${to === "cancelado" ? "var(--bad)" : "var(--accent)"};padding:${fs.btnPad};font-size:${fs.btn}px;font-weight:700;cursor:pointer">
-          ${to === "cancelado" ? "Cancelar" : `→ ${ORDER_STATUS_LABEL[to]}`}
+          ${to === "cancelado" ? t("ped.cancel") : `→ ${statusLabel(t, to)}`}
         </button>
       </form>`,
     )
@@ -66,19 +78,19 @@ function orderCard(o: Order, items: OrderItem[], tv: boolean): string {
   return `<div data-order-id="${o.id}" class="bg-panel border" style="border-color:${STATUS_COLOR[o.status]};padding:14px 16px;display:flex;flex-direction:column;gap:8px">
     <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap">
       <span class="font-mono text-cream" style="font-weight:700;font-size:${fs.code}px">#${esc(o.track_code ?? o.id.slice(0, 6))}</span>
-      <span style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:${STATUS_COLOR[o.status]};border:1px solid ${STATUS_COLOR[o.status]};padding:2px 8px">${ORDER_STATUS_LABEL[o.status]}</span>
-      <span class="text-dim text-[11px]">${timeAgo(o.created_at)}</span>
+      <span style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:${STATUS_COLOR[o.status]};border:1px solid ${STATUS_COLOR[o.status]};padding:2px 8px">${statusLabel(t, o.status)}</span>
+      <span class="text-dim text-[11px]">${timeAgo(t, o.created_at)}</span>
     </div>
-    <div class="text-cream" style="font-size:${fs.total}px">${money(o.total)} <span class="text-dim text-[11px]">(${money(o.subtotal)} + ${money(o.delivery_fee)} envío) · ${esc(o.payment_method || "—")}</span></div>
-    <div class="text-muted" style="font-size:${fs.line}px">${esc(o.customer_name || "sin nombre")}${o.customer_phone ? ` · ${esc(o.customer_phone)}` : ""}</div>
-    ${o.address ? `<div class="text-muted" style="font-size:${fs.line}px">📍 ${esc(o.address)}${o.delivery_zone ? ` <span class="text-dim">(${esc(o.delivery_zone)})</span>` : ""}</div>` : `<div class="text-dim" style="font-size:${fs.line}px">📍 retiro en local</div>`}
+    <div class="text-cream" style="font-size:${fs.total}px">${money(o.total)} <span class="text-dim text-[11px]">(${money(o.subtotal)} + ${money(o.delivery_fee)} ${t("ped.shipping")}) · ${esc(o.payment_method || "—")}</span></div>
+    <div class="text-muted" style="font-size:${fs.line}px">${esc(o.customer_name || t("ped.noName"))}${o.customer_phone ? ` · ${esc(o.customer_phone)}` : ""}</div>
+    ${o.address ? `<div class="text-muted" style="font-size:${fs.line}px">📍 ${esc(o.address)}${o.delivery_zone ? ` <span class="text-dim">(${esc(o.delivery_zone)})</span>` : ""}</div>` : `<div class="text-dim" style="font-size:${fs.line}px">📍 ${t("ped.pickup")}</div>`}
     <div class="text-muted" style="line-height:1.5;font-size:${fs.line}px">${detalle}</div>
-    ${o.notes ? `<div class="text-dim" style="font-size:${fs.line - 0.5}px">Nota: ${esc(o.notes)}</div>` : ""}
+    ${o.notes ? `<div class="text-dim" style="font-size:${fs.line - 0.5}px">${t("ped.note")} ${esc(o.notes)}</div>` : ""}
     ${acciones ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:2px">${acciones}</div>` : ""}
   </div>`;
 }
 
-const FEED_JS = `
+const feedJs = (t: T) => `
 (function(){
   var seen = new Set(Array.from(document.querySelectorAll('[data-order-id]')).map(function(e){return e.getAttribute('data-order-id')}));
   var soundOn = false, ctx = null;
@@ -103,7 +115,7 @@ const FEED_JS = `
   if(btn){
     btn.addEventListener('click', function(){
       soundOn = !soundOn;
-      btn.textContent = soundOn ? '🔔 Sonido activado' : '🔕 Activar sonido';
+      btn.textContent = soundOn ? '${t("ped.soundOn")}' : '${t("ped.soundOff")}';
       btn.style.borderColor = soundOn ? 'var(--ok)' : 'var(--line)';
       btn.style.color = soundOn ? 'var(--ok)' : 'var(--muted)';
       if(soundOn){ ac(); beep(); }
@@ -121,7 +133,7 @@ const FEED_JS = `
       if(badge) badge.textContent = String(j.count != null ? j.count : ids.length);
       if(fresh){
         beep();
-        document.title = '🍽️ ¡Pedido nuevo!';
+        document.title = '${t("ped.newOrder")}';
         setTimeout(function(){ location.reload(); }, 1400);
       }
     }catch(e){}
@@ -134,6 +146,7 @@ export async function renderPedidos(
   env: Env,
   opts: { filter?: string; err?: string; tv?: boolean } = {},
 ): Promise<string> {
+  const { t } = await panelI18n(env);
   const repo = new OrdersRepo(new Db(env.DB));
   const tv = opts.tv === true;
   const filter = opts.filter && ORDER_FLOW.includes(opts.filter as OrderStatus) ? (opts.filter as OrderStatus) : undefined;
@@ -142,7 +155,7 @@ export async function renderPedidos(
   const recientes = filter ? [] : (await repo.list({ limit: 20 })).filter((o) => o.status === "entregado" || o.status === "cancelado");
 
   const withItems = async (list: Order[]) =>
-    Promise.all(list.map(async (o) => orderCard(o, await repo.items(o.id), tv)));
+    Promise.all(list.map(async (o) => orderCard(t, o, await repo.items(o.id), tv)));
 
   const activeCards = (await withItems(active)).join("");
   const recCards = (await withItems(recientes)).join("");
@@ -156,23 +169,23 @@ export async function renderPedidos(
     <div style="display:flex;flex-direction:column;gap:16px">
       <div style="display:flex;justify-content:space-between;align-items:start;gap:10px;flex-wrap:wrap">
         <div style="display:flex;flex-direction:column;gap:3px">
-          <h2 class="font-display font-semibold text-[15px] text-cream">Pedidos <span id="ped-count" style="color:var(--accent);font-family:'IBM Plex Mono',monospace">${active.length}</span></h2>
-          <p class="text-muted text-[12.5px]">Tocá para avanzar el estado — al cliente le llega el aviso por su chat.</p>
+          <h2 class="font-display font-semibold text-[15px] text-cream">${t("ped.title")} <span id="ped-count" style="color:var(--accent);font-family:'IBM Plex Mono',monospace">${active.length}</span></h2>
+          <p class="text-muted text-[12.5px]">${t("ped.subtitle")}</p>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button id="ped-sound" type="button" style="background:transparent;border:1px solid var(--line);color:var(--muted);padding:8px 13px;font-size:12px;font-weight:600;cursor:pointer">🔕 Activar sonido</button>
-          <a href="/admin/pedidos${tv ? "" : "?tv=1"}" style="border:1px solid var(--line);color:var(--muted);padding:8px 13px;font-size:12px;text-decoration:none">${tv ? "Salir de mostrador" : "Modo mostrador"}</a>
+          <button id="ped-sound" type="button" style="background:transparent;border:1px solid var(--line);color:var(--muted);padding:8px 13px;font-size:12px;font-weight:600;cursor:pointer">${t("ped.soundOff")}</button>
+          <a href="/admin/pedidos${tv ? "" : "?tv=1"}" style="border:1px solid var(--line);color:var(--muted);padding:8px 13px;font-size:12px;text-decoration:none">${tv ? t("ped.exitTv") : t("ped.tv")}</a>
         </div>
       </div>
-      ${opts.err === "transicion" ? `<div class="border" style="border-color:var(--bad);color:var(--bad);padding:9px 12px;font-size:12px;background:var(--panel2)">Ese cambio de estado no aplica a ese pedido.</div>` : ""}
+      ${opts.err === "transicion" ? `<div class="border" style="border-color:var(--bad);color:var(--bad);padding:9px 12px;font-size:12px;background:var(--panel2)">${t("ped.err.transicion")}</div>` : ""}
       <div style="display:flex;gap:6px;flex-wrap:wrap">
-        ${chip(undefined, "Activos")}
-        ${ORDER_FLOW.map((s) => chip(s, ORDER_STATUS_LABEL[s])).join("")}
+        ${chip(undefined, t("ped.filter.active"))}
+        ${ORDER_FLOW.map((s) => chip(s, statusLabel(t, s))).join("")}
       </div>
-      ${active.length ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,${minmax});gap:12px">${activeCards}</div>` : `<div class="text-dim text-[12.5px]" style="padding:24px;text-align:center">No hay pedidos ${filter ? `en "${ORDER_STATUS_LABEL[filter]}"` : "activos"}. La pantalla suena sola cuando entra uno.</div>`}
-      ${recCards ? `<div style="margin-top:8px"><h3 class="font-display font-semibold text-[13px] text-cream">Cerrados recientes</h3></div><div style="display:grid;grid-template-columns:repeat(auto-fill,${minmax});gap:12px">${recCards}</div>` : ""}
+      ${active.length ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,${minmax});gap:12px">${activeCards}</div>` : `<div class="text-dim text-[12.5px]" style="padding:24px;text-align:center">${t("ped.empty", { what: filter ? t("ped.empty.filtered", { s: statusLabel(t, filter) }) : t("ped.empty.active") })}</div>`}
+      ${recCards ? `<div style="margin-top:8px"><h3 class="font-display font-semibold text-[13px] text-cream">${t("ped.closed")}</h3></div><div style="display:grid;grid-template-columns:repeat(auto-fill,${minmax});gap:12px">${recCards}</div>` : ""}
     </div>
-    <script>${FEED_JS}</script>`;
+    <script>${feedJs(t)}</script>`;
 
-  return layout({ title: "Pedidos", activeTab: "pedidos", body, env });
+  return layout({ title: t("ped.title"), activeTab: "pedidos", body, env });
 }
