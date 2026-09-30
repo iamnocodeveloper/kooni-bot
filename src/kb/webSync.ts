@@ -274,21 +274,26 @@ export async function runWebSync(env: Env, opts: WebSyncRunOptions = {}): Promis
     // Sitemaps/XML: se bajan DIRECTO (público y estático) — 0 requests de Decodo.
     // Si el sitio bloquea al Worker, se cae a Decodo. El resto sigue por Decodo.
     let content: string | null = null;
+    let directNote: string | undefined;
     if (looksLikeSitemap(url)) {
       const direct = await fetchSitemapDirect(url, env);
       if (direct.ok && direct.text && direct.text.trim()) {
         content = direct.text;
         summary.direct = (summary.direct ?? 0) + 1;
       } else {
-        console.warn(`[webSync] ${url}: fetch directo no sirvió (${direct.error ?? direct.status}) → Decodo`);
+        directNote = `fetch directo: ${direct.error ?? `HTTP ${direct.status}`}`;
+        console.warn(`[webSync] ${url}: ${directNote} → Decodo`);
       }
     }
 
     if (content === null) {
       const r = await scrapeUrl(env, url);
       if (!r.ok) {
-        console.warn(`[webSync] ${url}: ${r.error}${r.code ? ` [${r.code}]` : ""}`);
-        summary.errors.push({ url, error: r.error });
+        // El motivo del fetch directo se guarda JUNTO al de Decodo: si el sitio
+        // bloquea al Worker, el panel debe decirlo (no solo el log).
+        const err = directNote ? `${directNote}; Decodo: ${r.error}` : r.error;
+        console.warn(`[webSync] ${url}: ${err}${r.code ? ` [${r.code}]` : ""}`);
+        summary.errors.push({ url, error: err });
         // Cuota agotada: no tiene sentido seguir martillando la API.
         if (r.code === "quota") {
           summary.errors.push({

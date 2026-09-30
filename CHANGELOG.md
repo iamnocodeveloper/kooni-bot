@@ -5,6 +5,22 @@ Cambios notables de Kooni. Formato aproximado de
 
 El CLI `kooni-bot` se versiona aparte (npm) — ver la nota de cada versión.
 
+## [1.52.3] — 2026-09-30
+
+### Cambiado — el scraping dice POR QUÉ falló el fetch directo (+ reintento)
+
+Cuando el sitemap no se puede bajar directo, el run caía a Decodo y el panel
+mostraba SOLO el error de Decodo (p. ej. "cuota agotada"): el motivo real del
+fetch directo quedaba escondido en los logs. Ahora:
+
+- El `error_msg` de la corrida guarda los dos motivos:
+  `fetch directo: HTTP 403; Decodo: <motivo>`.
+- `fetchSitemapDirect` reintenta **una vez** (hay WAF que bloquean de forma
+  intermitente) y devuelve el error más informativo.
+
+Así, en **Scraping → detalle de la corrida** se ve si el problema es que el sitio
+bloquea al Worker, que Decodo no tiene cuota, o ambos.
+
 ## [1.52.2] — 2026-09-30
 
 ### Cambiado — pulido visual del panel (misma identidad)

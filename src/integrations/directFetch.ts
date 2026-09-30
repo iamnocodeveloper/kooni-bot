@@ -64,10 +64,20 @@ export function looksLikeXml(text: string): boolean {
 }
 
 /**
- * Baja un sitemap/XML directo. Si el sitio bloquea el datacenter del Worker
- * (403/504/timeout), devuelve `ok:false` para que el llamador caiga a Decodo.
+ * Baja un sitemap/XML directo. Si el sitio bloquea al Worker (403 / WAF /
+ * timeout), devuelve `ok:false` con el motivo para que el llamador caiga a
+ * Decodo **y pueda reportar por qué** (antes el motivo solo iba al log).
+ * Un reintento: algunos WAF bloquean de forma intermitente.
  */
 export async function fetchSitemapDirect(url: string, env?: Env): Promise<FetchTextResult> {
   void env;
-  return fetchText(url, { timeoutMs: 25_000, accept: "application/xml,text/xml,*/*;q=0.8" });
+  const opts = { timeoutMs: 25_000, accept: "application/xml,text/xml,*/*;q=0.8" };
+  const first = await fetchText(url, opts);
+  if (first.ok && first.text && first.text.trim()) return first;
+  await new Promise((r) => setTimeout(r, 700));
+  const second = await fetchText(url, opts);
+  if (second.ok && second.text && second.text.trim()) return second;
+  const status = second.status || first.status;
+  const error = second.error ?? first.error ?? `HTTP ${status}`;
+  return { ok: false, status, error };
 }
