@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import { insforge } from "../lib/insforge";
+import { useI18n } from "../lib/i18n";
 import type { Profile } from "../lib/types";
 import { logAdmin } from "../lib/audit";
 
 export default function AdminEquipo() {
+  const { t } = useI18n();
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(true);
@@ -28,14 +30,14 @@ export default function AdminEquipo() {
     const target = email.trim().toLowerCase();
     const p = profiles.find((x) => (x.email ?? "").toLowerCase() === target);
     if (!p) {
-      setErr("No encontré esa cuenta. La persona debe registrarse primero en el panel.");
+      setErr(t("admin.equipo.errNotFound"));
       return;
     }
     const { error } = await insforge.database.from("profiles").update({ role: "admin" }).eq("id", p.id);
     if (error) setErr((error as any).message);
     else {
       await logAdmin("equipo.promover", target);
-      setFlash(`Ahora es admin: ${target}`);
+      setFlash(t("admin.equipo.promoted", { email: target }));
       setEmail("");
       await load();
     }
@@ -52,9 +54,9 @@ export default function AdminEquipo() {
   return (
     <div className="flex flex-col gap-5">
       <div>
-        <h1 className="font-display text-xl font-semibold">Equipo (admins)</h1>
+        <h1 className="font-display text-xl font-semibold">{t("admin.equipo.title")}</h1>
         <p className="text-sm text-muted">
-          Quién puede entrar a este super admin. Promové a una cuenta ya registrada escribiendo su correo.
+          {t("admin.equipo.subtitle")}
         </p>
       </div>
 
@@ -63,36 +65,36 @@ export default function AdminEquipo() {
 
       <div className="card flex flex-wrap items-end gap-3 p-5">
         <div className="min-w-[260px] flex-1">
-          <label className="label">Correo de la cuenta</label>
-          <input className="input mt-1" type="email" placeholder="alguien@ejemplo.com" value={email} onChange={(e) => setEmail(e.target.value)} />
+          <label className="label">{t("admin.equipo.emailLabel")}</label>
+          <input className="input mt-1" type="email" placeholder={t("admin.equipo.emailPlaceholder")} value={email} onChange={(e) => setEmail(e.target.value)} />
         </div>
-        <button className="btn-primary" onClick={promover}>Hacer admin</button>
+        <button className="btn-primary" onClick={promover}>{t("admin.equipo.makeAdmin")}</button>
       </div>
 
       <div className="card overflow-hidden">
         <table className="tbl">
           <thead>
             <tr>
-              <th>Correo</th>
-              <th>Nombre</th>
-              <th>Rol</th>
+              <th>{t("admin.equipo.colEmail")}</th>
+              <th>{t("admin.equipo.colName")}</th>
+              <th>{t("admin.equipo.colRole")}</th>
               <th></th>
             </tr>
           </thead>
           <tbody>
             {loading && (
-              <tr><td colSpan={4} className="text-muted">Cargando…</td></tr>
+              <tr><td colSpan={4} className="text-muted">{t("common.loading")}</td></tr>
             )}
             {!loading && admins.length === 0 && (
-              <tr><td colSpan={4} className="text-muted">Sin admins (además de vos).</td></tr>
+              <tr><td colSpan={4} className="text-muted">{t("admin.equipo.empty")}</td></tr>
             )}
             {admins.map((p) => (
               <tr key={p.id}>
                 <td className="font-mono text-[12px]">{p.email}</td>
                 <td>{p.display_name ?? "—"}</td>
-                <td><span className="chip bg-accentSoft text-accent">admin</span></td>
+                <td><span className="chip bg-accentSoft text-accent">{t("admin.equipo.badgeAdmin")}</span></td>
                 <td className="text-right">
-                  <button className="btn-danger py-1 text-xs" onClick={() => quitar(p.id, p.email)}>Quitar admin</button>
+                  <button className="btn-danger py-1 text-xs" onClick={() => quitar(p.id, p.email)}>{t("admin.equipo.removeAdmin")}</button>
                 </td>
               </tr>
             ))}

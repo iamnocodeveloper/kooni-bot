@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { insforge } from "../lib/insforge";
+import { useI18n } from "../lib/i18n";
 import type { Licencia, Plan, ProveedorPago } from "../lib/types";
 
 function loadPayphoneSDK(): Promise<void> {
@@ -14,13 +15,14 @@ function loadPayphoneSDK(): Promise<void> {
     script.type = "module";
     script.src = "https://cdn.payphonetodoesposible.com/box/v2.0/payphone-payment-box.js";
     script.onload = () => resolve();
-    script.onerror = () => reject(new Error("No se pudo cargar Payphone"));
+    script.onerror = () => reject(new Error("Payphone"));
     document.head.appendChild(script);
   });
 }
 
 export default function PlanPage() {
   const [params] = useSearchParams();
+  const { t, formatDate } = useI18n();
   const [planes, setPlanes] = useState<Plan[]>([]);
   const [proveedores, setProveedores] = useState<ProveedorPago[]>([]);
   const [lics, setLics] = useState<Licencia[]>([]);
@@ -55,15 +57,15 @@ export default function PlanPage() {
     const clientTransactionId = params.get("clientTransactionId");
     if (!id || !clientTransactionId) return;
     (async () => {
-      setAviso("Confirmando el pago…");
+      setAviso(t("plan.confirming"));
       try {
         const { data, error } = await insforge.functions.invoke("pago-confirmar-payphone", { body: { id: Number(id), clientTxId: clientTransactionId } });
         if (error) throw error;
         if ((data as any)?.error) throw new Error((data as any).error);
-        setAviso("✓ Pago confirmado. Tu plan se activó.");
+        setAviso(t("plan.confirmed"));
       } catch (e: any) {
         setAviso("");
-        setErr(e?.message || "No se pudo confirmar el pago");
+        setErr(e?.message || t("plan.errConfirm"));
       }
     })();
   }, [params]);
@@ -76,8 +78,8 @@ export default function PlanPage() {
         await loadPayphoneSDK();
         const ppb = new (window as any).PPaymentButtonBox({ ...widget, defaultMethod: "card" });
         ppb.render("pp-button");
-      } catch (e: any) {
-        setErr(e?.message || "No se pudo cargar Payphone");
+      } catch {
+        setErr(t("plan.errPayphone"));
       }
     })();
   }, [widget]);
@@ -106,9 +108,9 @@ export default function PlanPage() {
         setManual(j.manual);
         return;
       }
-      throw new Error("No se pudo iniciar el pago.");
+      throw new Error(t("plan.errStart"));
     } catch (e: any) {
-      setErr(e?.message || "No se pudo iniciar el pago");
+      setErr(e?.message || t("plan.errStart"));
     } finally {
       setBusy("");
     }
@@ -117,58 +119,54 @@ export default function PlanPage() {
   return (
     <div className="flex flex-col gap-5">
       <div>
-        <h1 className="font-display text-xl font-semibold">Mi plan</h1>
-        <p className="text-sm text-muted">Tu plan actual y la forma de activar Kooni+.</p>
+        <h1 className="font-display text-xl font-semibold">{t("plan.title")}</h1>
+        <p className="text-sm text-muted">{t("plan.subtitle")}</p>
       </div>
 
       {params.get("pago") === "ok" && (
-        <div className="rounded-lg border border-ok/40 bg-ok/10 px-3 py-2 text-xs text-ok">
-          Pago recibido. Se activa en cuanto el proveedor confirme (unos segundos).
-        </div>
+        <div className="rounded-lg border border-ok/40 bg-ok/10 px-3 py-2 text-xs text-ok">{t("plan.paidReceived")}</div>
       )}
       {params.get("pago") === "cancelado" && (
-        <div className="rounded-lg border border-warn/40 bg-warn/10 px-3 py-2 text-xs text-warn">Pago cancelado.</div>
+        <div className="rounded-lg border border-warn/40 bg-warn/10 px-3 py-2 text-xs text-warn">{t("plan.paidCanceled")}</div>
       )}
       {aviso && <div className="rounded-lg border border-line bg-panel2 px-3 py-2 text-xs text-muted">{aviso}</div>}
       {err && <div className="rounded-lg border border-bad/40 bg-bad/10 px-3 py-2 text-xs text-bad">{err}</div>}
 
       <div className="card p-5">
         {loading ? (
-          <div className="text-muted">Cargando…</div>
+          <div className="text-muted">{t("common.loading")}</div>
         ) : pro ? (
           <div className="flex items-center gap-3">
-            <span className="chip bg-accentSoft text-accent">● PLAN PRO</span>
+            <span className="chip bg-accentSoft text-accent">{t("cuenta.proChip")}</span>
             <span className="text-sm text-muted">
-              {pro.expiry ? `vence el ${new Date(pro.expiry).toLocaleDateString("es")}` : "de por vida"} · {pro.modules?.length ?? 0} módulos activos
+              {pro.expiry ? t("cuenta.expires", { date: formatDate(pro.expiry) }) : t("common.lifetime")} · {t("cuenta.modulesActive", { n: pro.modules?.length ?? 0 })}
             </span>
           </div>
         ) : (
           <div className="flex items-center gap-3">
-            <span className="chip bg-panel2 text-muted">○ PLAN GRATIS</span>
-            <span className="text-sm text-muted">Activá Kooni+ para encender los superpoderes y quitar los límites.</span>
+            <span className="chip bg-panel2 text-muted">{t("cuenta.freeChip")}</span>
+            <span className="text-sm text-muted">{t("plan.freeDesc")}</span>
           </div>
         )}
       </div>
 
       {(widget || manual) && (
         <div className="card p-5">
-          <div className="font-semibold">{widget ? "Pagá con Payphone" : "Pago manual (Binance)"}</div>
+          <div className="font-semibold">{widget ? t("plan.payphoneTitle") : t("plan.manualTitle")}</div>
           {widget ? (
             <>
-              <p className="mt-1 text-sm text-muted">Completá el pago en la cajita. Tenés 10 minutos.</p>
+              <p className="mt-1 text-sm text-muted">{t("plan.payphoneDesc")}</p>
               <div id="pp-button" className="mt-3" />
             </>
           ) : (
             <div className="mt-2 flex flex-col gap-2 text-sm text-muted">
               {manual?.instructions ? <p className="whitespace-pre-wrap">{manual.instructions}</p> : null}
               <div className="rounded-lg border border-line bg-panel2 p-3 font-mono text-[12px]">
-                <div>Monto: {manual?.currency} {Number(manual?.amount).toFixed(2)}</div>
-                {manual?.pay_id ? <div>Destino: {manual.pay_id}</div> : null}
-                <div>Referencia (ponela en la transferencia): {manual?.ref}</div>
+                <div>{t("plan.amount")}: {manual?.currency} {Number(manual?.amount).toFixed(2)}</div>
+                {manual?.pay_id ? <div>{t("plan.destination")}: {manual.pay_id}</div> : null}
+                <div>{t("plan.reference")}: {manual?.ref}</div>
               </div>
-              <p className="text-[12px]">
-                Cuando transferís, el administrador confirma el pago y se activa tu plan. Mandá el comprobante con la referencia.
-              </p>
+              <p className="text-[12px]">{t("plan.manualNote")}</p>
             </div>
           )}
         </div>
@@ -183,9 +181,9 @@ export default function PlanPage() {
             </div>
             <div className="text-right">
               {p.precio != null ? (
-                <div className="font-mono text-lg">${Number(p.precio).toFixed(2)} <span className="text-xs text-muted">/mes</span></div>
+                <div className="font-mono text-lg">${Number(p.precio).toFixed(2)} <span className="text-xs text-muted">{t("plan.perMonth")}</span></div>
               ) : (
-                <div className="text-sm text-muted">Gratis</div>
+                <div className="text-sm text-muted">{t("plan.free")}</div>
               )}
               {p.precio_nota ? <div className="text-[11px] text-muted">{p.precio_nota}</div> : null}
             </div>
@@ -203,10 +201,10 @@ export default function PlanPage() {
             <div className="mt-4 flex flex-wrap gap-2">
               {proveedores.filter((pr) => pr.listo).map((pr) => (
                 <button key={pr.id} className="btn-primary" disabled={busy === pr.id} onClick={() => pagar(p.id, pr.id)}>
-                  {busy === pr.id ? "Abriendo…" : `Pagar con ${pr.nombre}`}
+                  {busy === pr.id ? t("plan.opening") : t("plan.payWith", { provider: pr.nombre })}
                 </button>
               ))}
-              {proveedores.length === 0 ? <span className="text-sm text-muted">No hay formas de pago configuradas todavía.</span> : null}
+              {proveedores.length === 0 ? <span className="text-sm text-muted">{t("plan.noProviders")}</span> : null}
             </div>
           ) : null}
         </div>

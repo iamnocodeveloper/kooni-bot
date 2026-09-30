@@ -220,12 +220,21 @@ describe("SupportAgent.ingest — media (Task 6.3)", () => {
 });
 
 describe("SupportAgent.alarm — multimodal last message (Task 6.3)", () => {
+  let originalFetch: typeof globalThis.fetch;
+
   beforeEach(() => {
     vi.restoreAllMocks();
     stubSettings();
+    // processBuffer ahora descarga la imagen con credenciales del canal
+    // (src/media/fetchRef.ts) antes de adjuntarla: sin este stub pegaría a la red.
+    originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn(
+      async () => new Response(new Uint8Array([1, 2, 3])),
+    ) as any;
   });
 
   afterEach(() => {
+    globalThis.fetch = originalFetch;
     vi.restoreAllMocks();
   });
 
@@ -268,10 +277,12 @@ describe("SupportAgent.alarm — multimodal last message (Task 6.3)", () => {
 
     const last = messages[messages.length - 1];
     expect(Array.isArray(last.content)).toBe(true);
-    expect(last.content).toEqual([
-      { type: "image", image: new URL("https://example.com/pic.png") },
-      { type: "text", text: "describe esto" },
-    ]);
+    // La imagen se adjunta como BYTES (descargados con las credenciales del
+    // canal), no como URL — así funciona en WAHA (X-Api-Key) y Telegram.
+    expect(last.content[0].type).toBe("image");
+    expect(last.content[0].image).toEqual(new Uint8Array([1, 2, 3]));
+    expect(last.content[0].mediaType).toBe("application/octet-stream");
+    expect(last.content[1]).toEqual({ type: "text", text: "describe esto" });
   });
 
   it("free tier: leaves the last message as plain text (no multimodal build)", async () => {

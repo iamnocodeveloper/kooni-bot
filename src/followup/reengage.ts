@@ -23,6 +23,8 @@ import { resolveAgentConfig, loadLlmOverrides } from "../settings-loader";
 import { createModel } from "../llm/provider";
 import { pickAdapter } from "../replies/sender";
 import type { ChannelId } from "../channels/shared";
+import { LANG_LABEL } from "../lang/detect";
+import { conversationLang } from "./language";
 
 /** Ventana del segundo toque medida desde el primer follow-up. */
 export const RE_MIN_MS = 2 * 24 * 60 * 60 * 1000; // 2 días
@@ -107,10 +109,15 @@ export async function runReengagements(
       const transcript = history
         .map((m) => `${m.role === "user" ? "Cliente" : "Tú"}: ${m.content.slice(0, 300)}`)
         .join("\n");
+      // Segundo toque en el idioma de la conversación (antes salía siempre en
+      // español aunque el cliente escribiera en inglés).
+      const lang = conversationLang(env, history);
 
       const result = await generateText({
         model,
-        prompt: `Eres ${env.BOT_NAME}, respondiendo chats de ${env.BUSINESS_NAME} en primera persona: humano, breve, español casual, sin emojis, nunca pushy.
+        prompt: `Eres ${env.BOT_NAME}, respondiendo chats de ${env.BUSINESS_NAME} en primera persona: humano, breve, sin emojis, nunca pushy.
+
+IDIOMA: Escribe el mensaje EXCLUSIVAMENTE en ${LANG_LABEL[lang]}. No mezcles idiomas.
 
 Este cliente mostró interés, recibió un mensaje tuyo hace unos días y no volvió a contestar. Este es el SEGUNDO y ÚLTIMO toque (no insistir más después de esto). Suave, como quien retoma sin presión:
 ${cand.display_name ? `Se llama ${cand.display_name}.` : ""}
@@ -118,7 +125,7 @@ ${cand.display_name ? `Se llama ${cand.display_name}.` : ""}
 Últimos mensajes:
 ${transcript}
 
-Escribe UN solo mensaje MUY breve (máximo 2 líneas): retoma con naturalidad (ej. "solo para avisarte que seguimos con lugar" / "¿te quedó alguna duda?") y cierra sin presionar. NO repitas links que ya le mandaste. Responde SOLO con el mensaje, sin comillas ni explicación.`,
+Escribe UN solo mensaje MUY breve (máximo 2 líneas): retoma con naturalidad lo último que hablaron y cierra sin presionar. NO repitas links que ya le mandaste. Responde SOLO con el mensaje, sin comillas ni explicación.`,
       });
 
       const text = result.text.trim();

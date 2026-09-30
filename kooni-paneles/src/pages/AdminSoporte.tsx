@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { insforge } from "../lib/insforge";
+import { useI18n } from "../lib/i18n";
 import type { Faq, SoporteMensaje } from "../lib/types";
 
 export default function AdminSoporte() {
+  const { t, formatDate } = useI18n();
   const [msgs, setMsgs] = useState<SoporteMensaje[]>([]);
   const [faq, setFaq] = useState<Faq[]>([]);
   const [loading, setLoading] = useState(true);
@@ -41,8 +43,8 @@ export default function AdminSoporte() {
   return (
     <div className="flex flex-col gap-5">
       <div>
-        <h1 className="font-display text-xl font-semibold">Soporte</h1>
-        <p className="text-sm text-muted">Mensajes de los clientes (dudas/bugs) y la FAQ que ven en su panel.</p>
+        <h1 className="font-display text-xl font-semibold">{t("admin.soporte.title")}</h1>
+        <p className="text-sm text-muted">{t("admin.soporte.subtitle")}</p>
       </div>
 
       {err && <div className="rounded-lg border border-bad/40 bg-bad/10 px-3 py-2 text-xs text-bad">{err}</div>}
@@ -51,22 +53,22 @@ export default function AdminSoporte() {
         <table className="tbl">
           <thead>
             <tr>
-              <th>Fecha</th>
-              <th>De</th>
-              <th>Asunto / mensaje</th>
-              <th>Estado</th>
+              <th>{t("admin.soporte.colFecha")}</th>
+              <th>{t("admin.soporte.colDe")}</th>
+              <th>{t("admin.soporte.colAsunto")}</th>
+              <th>{t("admin.soporte.colEstado")}</th>
             </tr>
           </thead>
           <tbody>
             {loading && (
-              <tr><td colSpan={4} className="text-muted">Cargando…</td></tr>
+              <tr><td colSpan={4} className="text-muted">{t("common.loading")}</td></tr>
             )}
             {!loading && msgs.length === 0 && (
-              <tr><td colSpan={4} className="text-muted">Sin mensajes de soporte.</td></tr>
+              <tr><td colSpan={4} className="text-muted">{t("admin.soporte.empty")}</td></tr>
             )}
             {msgs.map((m) => (
               <tr key={m.id}>
-                <td className="font-mono text-[12px] text-muted">{new Date(m.created_at).toLocaleDateString("es")}</td>
+                <td className="font-mono text-[12px] text-muted">{formatDate(m.created_at)}</td>
                 <td className="font-mono text-[12px]">{m.email ?? "—"}</td>
                 <td>
                   <div className="font-medium">{m.asunto}</div>
@@ -74,9 +76,9 @@ export default function AdminSoporte() {
                 </td>
                 <td>
                   <select className="input py-1 text-xs" value={m.estado} onChange={(e) => setEstado(m.id, e.target.value as any)}>
-                    <option value="nuevo">nuevo</option>
-                    <option value="leido">leído</option>
-                    <option value="respondido">respondido</option>
+                    <option value="nuevo">{t("admin.soporte.statusNuevo")}</option>
+                    <option value="leido">{t("admin.soporte.statusLeido")}</option>
+                    <option value="respondido">{t("admin.soporte.statusRespondido")}</option>
                   </select>
                 </td>
               </tr>
@@ -86,7 +88,7 @@ export default function AdminSoporte() {
       </div>
 
       <div className="flex flex-col gap-2">
-        <h3 className="font-display font-semibold text-[13px] text-cream">FAQ</h3>
+        <h3 className="font-display font-semibold text-[13px] text-cream">{t("admin.soporte.faqTitle")}</h3>
         <div className="card flex flex-col gap-3 p-5">
           {faq.map((f) => (
             <div key={f.id} className="flex flex-col gap-2 border-b border-line pb-3 last:border-0 last:pb-0">
@@ -94,7 +96,7 @@ export default function AdminSoporte() {
               <textarea className="input text-[12.5px]" rows={2} value={f.respuesta} onChange={(e) => patchFaq(f.id, { respuesta: e.target.value })} />
               <label className="flex items-center gap-2 text-xs text-muted">
                 <input type="checkbox" checked={f.activo} onChange={(e) => patchFaq(f.id, { activo: e.target.checked })} />
-                Visible
+                {t("admin.soporte.visible")}
               </label>
             </div>
           ))}

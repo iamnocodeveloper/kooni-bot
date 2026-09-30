@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { insforge } from "../lib/insforge";
+import { useI18n } from "../lib/i18n";
 import type { Instalacion, Licencia, Uso } from "../lib/types";
 
 const WEEK_MS = 7 * 86400000;
@@ -17,6 +18,7 @@ function Step({ cmd, note }: { cmd: string; note: string }) {
 }
 
 function BotCard({ inst, uso }: { inst: Instalacion; uso?: Uso }) {
+  const { t, formatDate, formatNumber } = useI18n();
   const active = inst.last_seen && Date.now() - new Date(inst.last_seen).getTime() < WEEK_MS;
   const pro = inst.tier === "pro";
   return (
@@ -27,31 +29,31 @@ function BotCard({ inst, uso }: { inst: Instalacion; uso?: Uso }) {
           <div className="font-mono text-[11px] text-muted">{inst.uid ?? "—"}</div>
         </div>
         <span className={`chip ${active ? "bg-ok/15 text-ok" : "bg-panel2 text-muted"}`}>
-          {active ? "● Activo" : "○ Offline"}
+          {active ? t("cuenta.active") : t("cuenta.offline")}
         </span>
       </div>
 
       <div className="grid grid-cols-3 gap-2 text-center">
         <div className="rounded-lg border border-line bg-panel2 py-2">
-          <div className="text-[10px] uppercase tracking-wide text-muted">Mensajes 30d</div>
-          <div className="font-mono text-sm">{uso?.conteos?.mensajes30?.toLocaleString("es") ?? "—"}</div>
+          <div className="text-[10px] uppercase tracking-wide text-muted">{t("cuenta.kpi.messages")}</div>
+          <div className="font-mono text-sm">{uso?.conteos?.mensajes30 != null ? formatNumber(uso.conteos.mensajes30) : "—"}</div>
         </div>
         <div className="rounded-lg border border-line bg-panel2 py-2">
-          <div className="text-[10px] uppercase tracking-wide text-muted">Leads 30d</div>
-          <div className="font-mono text-sm">{uso?.conteos?.leads30?.toLocaleString("es") ?? "—"}</div>
+          <div className="text-[10px] uppercase tracking-wide text-muted">{t("cuenta.kpi.leads")}</div>
+          <div className="font-mono text-sm">{uso?.conteos?.leads30 != null ? formatNumber(uso.conteos.leads30) : "—"}</div>
         </div>
         <div className="rounded-lg border border-line bg-panel2 py-2">
-          <div className="text-[10px] uppercase tracking-wide text-muted">IA 30d</div>
+          <div className="text-[10px] uppercase tracking-wide text-muted">{t("cuenta.kpi.ai")}</div>
           <div className="font-mono text-sm">{uso?.costos?.ia30 != null ? `$${Number(uso.costos.ia30).toFixed(2)}` : "—"}</div>
         </div>
       </div>
 
       <div className="flex items-center justify-between gap-2 pt-1">
         <span className={`chip ${pro ? "bg-accentSoft text-accent" : "bg-panel2 text-muted"}`}>{inst.tier ?? "free"}</span>
-        <span className="text-[11px] text-muted">{inst.last_seen ? `visto ${new Date(inst.last_seen).toLocaleDateString("es")}` : "—"}</span>
+        <span className="text-[11px] text-muted">{inst.last_seen ? t("cuenta.seen", { date: formatDate(inst.last_seen) }) : "—"}</span>
         {inst.worker_url ? (
           <a className="btn-ghost py-1 text-xs" href={`${inst.worker_url}/admin`} target="_blank" rel="noreferrer">
-            Abrir panel
+            {t("cuenta.openPanel")}
           </a>
         ) : null}
       </div>
@@ -60,6 +62,7 @@ function BotCard({ inst, uso }: { inst: Instalacion; uso?: Uso }) {
 }
 
 export default function Cuenta() {
+  const { t, formatDate } = useI18n();
   const [lics, setLics] = useState<Licencia[]>([]);
   const [insts, setInsts] = useState<Instalacion[]>([]);
   const [uso, setUso] = useState<Map<string, Uso>>(new Map());
@@ -87,24 +90,24 @@ export default function Cuenta() {
   return (
     <div className="flex flex-col gap-5">
       <div>
-        <h1 className="font-display text-xl font-semibold">Mis bots</h1>
-        <p className="text-sm text-muted">Tu plan y tus bots, con sus métricas al día.</p>
+        <h1 className="font-display text-xl font-semibold">{t("cuenta.title")}</h1>
+        <p className="text-sm text-muted">{t("cuenta.subtitle")}</p>
       </div>
 
       <div className="card p-5">
         {loading ? (
-          <div className="text-muted">Cargando…</div>
+          <div className="text-muted">{t("common.loading")}</div>
         ) : pro ? (
           <div className="flex items-center gap-3">
-            <span className="chip bg-accentSoft text-accent">● PLAN PRO</span>
+            <span className="chip bg-accentSoft text-accent">{t("cuenta.proChip")}</span>
             <span className="text-sm text-muted">
-              {pro.expiry ? `vence el ${new Date(pro.expiry).toLocaleDateString("es")}` : "de por vida"} · {pro.modules?.length ?? 0} módulos activos
+              {pro.expiry ? t("cuenta.expires", { date: formatDate(pro.expiry) }) : t("common.lifetime")} · {t("cuenta.modulesActive", { n: pro.modules?.length ?? 0 })}
             </span>
           </div>
         ) : (
           <div className="flex items-center gap-3">
-            <span className="chip bg-panel2 text-muted">○ PLAN GRATIS</span>
-            <span className="text-sm text-muted">Activá Pro para quitar los límites y desbloquear módulos.</span>
+            <span className="chip bg-panel2 text-muted">{t("cuenta.freeChip")}</span>
+            <span className="text-sm text-muted">{t("cuenta.freeDesc")}</span>
           </div>
         )}
       </div>
@@ -118,23 +121,19 @@ export default function Cuenta() {
       ) : (
         <div className="card flex flex-col gap-4 p-6">
           <div>
-            <div className="font-semibold">Sin bots todavía</div>
-            <p className="text-sm text-muted">Conectá tu primer bot en 2 pasos.</p>
+            <div className="font-semibold">{t("cuenta.noBots")}</div>
+            <p className="text-sm text-muted">{t("cuenta.noBotsDesc")}</p>
           </div>
-          <Step cmd="npx kooni-bot init" note="tu agente (Claude Code o Codex) construye y publica el bot" />
-          <Step cmd="npx kooni-bot login" note="entrá con esta misma cuenta — el pairing es automático" />
-          <p className="text-[12.5px] text-muted">
-            Al desplegar con el CLI ya logueado, el bot se registra solo bajo tu cuenta y aparece aquí con sus métricas.
-          </p>
+          <Step cmd="npx kooni-bot init" note={t("cuenta.step1note")} />
+          <Step cmd="npx kooni-bot login" note={t("cuenta.step2note")} />
+          <p className="text-[12.5px] text-muted">{t("cuenta.step3desc")}</p>
         </div>
       )}
 
       {!loading && !pro && (
         <div className="card p-5">
-          <div className="font-semibold">Kooni+</div>
-          <p className="mt-1 text-sm text-muted">
-            Encendé los superpoderes, desbloqueá las plantillas por giro y administrá varios clientes — todo en un plan.
-          </p>
+          <div className="font-semibold">{t("cuenta.kooniPlusTitle")}</div>
+          <p className="mt-1 text-sm text-muted">{t("cuenta.kooniPlusDesc")}</p>
         </div>
       )}
     </div>

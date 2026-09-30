@@ -26,6 +26,8 @@ import { resolveAgentConfig, loadLlmOverrides } from "../settings-loader";
 import { createModel } from "../llm/provider";
 import { pickAdapter } from "../replies/sender";
 import type { ChannelId } from "../channels/shared";
+import { LANG_LABEL } from "../lang/detect";
+import { conversationLang } from "./language";
 
 /** Ventana de elegibilidad medida desde el último mensaje del cliente. */
 export const MIN_IDLE_MS = 3 * 60 * 60 * 1000; // 3 h
@@ -154,10 +156,16 @@ export async function runFollowups(
       const transcript = history
         .map((m) => `${m.role === "user" ? "Cliente" : "Tú"}: ${m.content.slice(0, 300)}`)
         .join("\n");
+      // El seguimiento mantiene el idioma de la conversación (no siempre
+      // español): se detecta de los mensajes del cliente y, si no hay certeza,
+      // se usa el idioma base de la instalación.
+      const lang = conversationLang(env, history);
 
       const result = await generateText({
         model,
-        prompt: `Eres ${env.BOT_NAME}, respondiendo chats de ${env.BUSINESS_NAME} en primera persona: humano, breve, español mexicano casual, sin emojis, nunca pushy.
+        prompt: `Eres ${env.BOT_NAME}, respondiendo chats de ${env.BUSINESS_NAME} en primera persona: humano, breve, sin emojis, nunca pushy.
+
+IDIOMA: Escribe el mensaje EXCLUSIVAMENTE en ${LANG_LABEL[lang]}. No mezcles idiomas.
 
 Este cliente mostró interés y luego dejó de responder. ${REASON_HINT[cand.reason]}
 ${cand.display_name ? `Se llama ${cand.display_name}.` : ""}

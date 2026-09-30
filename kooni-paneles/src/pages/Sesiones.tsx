@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { insforge } from "../lib/insforge";
+import { useI18n } from "../lib/i18n";
 import type { CliToken } from "../lib/types";
 
 export default function Sesiones() {
+  const { t, formatDate } = useI18n();
   const [rows, setRows] = useState<CliToken[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -25,37 +27,37 @@ export default function Sesiones() {
   return (
     <div className="flex flex-col gap-5">
       <div>
-        <h1 className="font-display text-xl font-semibold">Sesiones del CLI</h1>
-        <p className="text-sm text-muted">Máquinas autorizadas a instalar/actualizar tus bots. Revoca las que no reconozcas.</p>
+        <h1 className="font-display text-xl font-semibold">{t("ses.title")}</h1>
+        <p className="text-sm text-muted">{t("ses.subtitle")}</p>
       </div>
       <div className="card overflow-hidden">
         <table className="tbl">
           <thead>
             <tr>
-              <th>Máquina</th>
-              <th>Autorizada</th>
-              <th>Último uso</th>
+              <th>{t("ses.col.machine")}</th>
+              <th>{t("ses.col.authorized")}</th>
+              <th>{t("ses.col.lastUsed")}</th>
               <th></th>
             </tr>
           </thead>
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={4} className="text-muted">Cargando…</td>
+                <td colSpan={4} className="text-muted">{t("common.loading")}</td>
               </tr>
             )}
             {rows.length === 0 && !loading && (
               <tr>
-                <td colSpan={4} className="text-muted">Sin sesiones del CLI.</td>
+                <td colSpan={4} className="text-muted">{t("ses.empty")}</td>
               </tr>
             )}
-            {rows.map((t) => (
-              <tr key={t.id}>
-                <td className="max-w-xs truncate">{t.label ?? "—"}</td>
-                <td className="text-muted">{new Date(t.created_at).toLocaleDateString("es")}</td>
-                <td className="text-muted">{t.last_used_at ? new Date(t.last_used_at).toLocaleDateString("es") : "nunca"}</td>
+            {rows.map((tok) => (
+              <tr key={tok.id}>
+                <td className="max-w-xs truncate">{tok.label ?? "—"}</td>
+                <td className="text-muted">{formatDate(tok.created_at)}</td>
+                <td className="text-muted">{tok.last_used_at ? formatDate(tok.last_used_at) : t("common.never")}</td>
                 <td className="text-right">
-                  <button className="btn-danger py-1" onClick={() => revoke(t.id)}>Revocar</button>
+                  <button className="btn-danger py-1" onClick={() => revoke(tok.id)}>{t("common.revoke")}</button>
                 </td>
               </tr>
             ))}

@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { insforge } from "../lib/insforge";
+import { useI18n } from "../lib/i18n";
 
 export default function Cli() {
   const [params] = useSearchParams();
+  const { t } = useI18n();
   const [code, setCode] = useState(params.get("code") ?? "");
   const [err, setErr] = useState("");
   const [ok, setOk] = useState("");
@@ -19,9 +21,9 @@ export default function Cli() {
       });
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any).error);
-      setOk("Listo. Vuelve a tu terminal: el CLI ya quedó conectado.");
+      setOk(t("cli.ok"));
     } catch (e: any) {
-      setErr(e?.message || "No se pudo aprobar el código");
+      setErr(e?.message || t("cli.err"));
     } finally {
       setBusy(false);
     }
@@ -30,15 +32,15 @@ export default function Cli() {
   return (
     <div className="flex flex-col gap-5">
       <div>
-        <h1 className="font-display text-xl font-semibold">Conectar el CLI</h1>
-        <p className="text-sm text-muted">Pega el código que te mostró la terminal para autorizar esta máquina.</p>
+        <h1 className="font-display text-xl font-semibold">{t("cli.title")}</h1>
+        <p className="text-sm text-muted">{t("cli.subtitle")}</p>
       </div>
 
       <div className="card max-w-md p-5">
         {err && <div className="mb-3 rounded-lg border border-bad/40 bg-bad/10 px-3 py-2 text-xs text-bad">{err}</div>}
         {ok && <div className="mb-3 rounded-lg border border-ok/40 bg-ok/10 px-3 py-2 text-xs text-ok">{ok}</div>}
 
-        <label className="label">Código del dispositivo</label>
+        <label className="label">{t("cli.code")}</label>
         <input
           className="input mt-1 text-center font-mono text-lg tracking-[0.3em]"
           value={code}
@@ -46,7 +48,7 @@ export default function Cli() {
           placeholder="ABC-123"
         />
         <button className="btn-primary mt-4 w-full justify-center" disabled={busy || !code.trim()} onClick={approve}>
-          {busy ? "Autorizando…" : "Autorizar esta máquina"}
+          {busy ? t("cli.authorizing") : t("cli.authorize")}
         </button>
       </div>
     </div>

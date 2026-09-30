@@ -3,6 +3,7 @@ export interface Profile {
   email: string | null;
   display_name: string | null;
   role: "cliente" | "revendedor" | "admin";
+  language: "es" | "en";
   created_at: string;
 }
 

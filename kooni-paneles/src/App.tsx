@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { useAuth } from "./lib/auth";
+import { useI18n } from "./lib/i18n";
 import ClientLayout from "./components/ClientLayout";
 import AdminLayout from "./components/AdminLayout";
 import Login from "./pages/Login";
@@ -34,15 +35,17 @@ import AdminAuditoria from "./pages/AdminAuditoria";
 import AdminEquipo from "./pages/AdminEquipo";
 
 function Spinner() {
-  return <div className="flex h-full items-center justify-center text-muted">Cargando…</div>;
+  const { t } = useI18n();
+  return <div className="flex h-full items-center justify-center text-muted">{t("app.loading")}</div>;
 }
 
 function NoAccess() {
+  const { t } = useI18n();
   return (
     <div className="flex h-full items-center justify-center p-6">
       <div className="card max-w-md p-6 text-center">
-        <div className="text-lg font-semibold">Sin acceso</div>
-        <p className="mt-2 text-sm text-muted">Tu cuenta no tiene rol de super admin.</p>
+        <div className="text-lg font-semibold">{t("app.noAccessTitle")}</div>
+        <p className="mt-2 text-sm text-muted">{t("app.noAccessDesc")}</p>
       </div>
     </div>
   );

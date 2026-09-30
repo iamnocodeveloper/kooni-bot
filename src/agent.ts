@@ -21,24 +21,10 @@ import type { LangCode } from "./lang/detect";
 import { nowInTz } from "./timezone";
 import { costOfUsage } from "./pricing";
 import type { ChannelId, ReplyButton } from "./channels/shared";
-import { maskTelegramToken, unmaskTelegramToken } from "./telegramFiles";
+import { maskTelegramToken } from "./telegramFiles";
+import { refFor } from "./channels/mediaRef";
 
-/**
- * Referencia que se guarda en el marcador `[IMAGE_URL: ...]`/`[AUDIO_URL: ...]`
- * (§ V Fase 2, previsualización en el panel). Para la mayoría de los canales es
- * la URL tal cual llegó — Telegram ya se enmascara aparte (`maskTelegramToken`).
- * WAHA es el único otro canal cuyo archivo necesita credencial propia para
- * volver a descargarse después (self-hosted, protegido con su API key) — se
- * marca con el prefijo `waha:` para que `src/admin/media.ts` sepa proxyarlo.
- */
-export function refFor(channel: string, url: string): string {
-  return channel === "waha" ? `waha:${url}` : url;
-}
-
-/** Inverso de `refFor`: quita el prefijo `waha:` para volver a tener una URL fetcheable. */
-export function stripRef(ref: string): string {
-  return ref.startsWith("waha:") ? ref.slice(5) : ref;
-}
+export { refFor, stripRef } from "./channels/mediaRef";
 
 export interface SupportAgentState {
   conversationId: string | null;
@@ -264,7 +250,7 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
       if (oidoVistaOn) {
         try {
           const { transcribeAudio } = await import("./media/transcribe");
-          const result = await transcribeAudio(payload.audioUrl, this.env);
+          const result = await transcribeAudio(refFor(payload.channel, payload.audioUrl), this.env);
           processedText = result.text || "(audio sin transcripción)";
         } catch (e) {
           console.error("[ingest] transcription failed:", e);
@@ -452,21 +438,28 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
     // Build the LAST user message multimodal-aware: if it carries an
     // [IMAGE_URL: ...] marker, attach the image.
     const lastUserMsg = lastIsUser ? history[history.length - 1] : undefined;
+    let hadImage = false;
     if (lastUserMsg) {
       const imgMatch = lastUserMsg.content.match(/\[IMAGE_URL: (.+?)\]/);
       if (imgMatch) {
-        // The token was masked before storing; it goes back in only here, to
-        // fetch the file. It never leaves this call. `stripRef` undoes the
-        // `waha:` scheme tag (§ V Fase 2) that only the panel's media proxy
-        // needs — the vision call wants a plain fetchable URL.
-        const imageUrl = unmaskTelegramToken(
-          stripRef(imgMatch[1]),
-          this.env.TELEGRAM_BOT_TOKEN,
-        );
+        // La referencia guardada trae el token enmascarado (Telegram) y/o el
+        // prefijo `waha:`. `fetchMediaBytes` repone la credencial del canal y
+        // baja los BYTES acá — el proveedor de IA ya no hace un fetch anónimo
+        // que fallaba en WAHA (X-Api-Key) o con el token equivocado.
         const cleanText = lastUserMsg.content
           .replace(/\n?\[IMAGE_URL: .+?\]/, "")
           .trim();
-        aiMessages.push(buildMultimodalUserMessage(cleanText, imageUrl));
+        try {
+          const { fetchMediaBytes } = await import("./media/fetchRef");
+          const { bytes, contentType } = await fetchMediaBytes(imgMatch[1], this.env);
+          aiMessages.push(
+            buildMultimodalUserMessage(cleanText, { bytes, mediaType: contentType }),
+          );
+          hadImage = true;
+        } catch (e) {
+          console.error("[processBuffer] no se pudo descargar la imagen:", e);
+          aiMessages.push({ role: "user", content: cleanText });
+        }
       } else {
         aiMessages.push({ role: "user", content: lastUserMsg.content });
       }
@@ -533,7 +526,7 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
               toolCallsInLast2Turns: this.state.toolCallsInLast2Turns,
               lastUserText: combined,
               lastUserLang: effectiveLang,
-              hasImage: false,
+              hasImage: hadImage,
               imageRetryCount: this.state.imageRetryCount,
               lastSearchKbScore: this.state.lastSearchKbScore,
             });

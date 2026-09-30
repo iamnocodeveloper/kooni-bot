@@ -5,6 +5,46 @@ Cambios notables de Kooni. Formato aproximado de
 
 El CLI `kooni-bot` se versiona aparte (npm) — ver la nota de cada versión.
 
+## [1.49.0] — 2026-09-29
+
+### Corregido — "Oído y vista": el bot no leía audio ni fotos en canales con credencial
+
+Con el toggle **Oído y vista** encendido, el bot no transcribía notas de voz ni
+"veía" imágenes cuando el canal era WAHA (WhatsApp self-hosted) o Telegram con el
+token configurado desde el panel. Causa: la descarga del archivo se hacía **sin
+las credenciales del canal** — `transcribeAudio` hacía un `fetch` pelado (WAHA
+responde 401/403) y la visión reponía el token con `env.TELEGRAM_BOT_TOKEN` (no
+con el resuelto) y dejaba que el proveedor de IA bajara la URL anónimamente.
+
+- Nuevo `src/media/fetchRef.ts` (`fetchMediaBytes`): descarga con las credenciales
+  del canal (`X-Api-Key` de WAHA, token de Telegram desde settings) y devuelve los
+  bytes.
+- La imagen se adjunta al modelo como **bytes** (no como URL), así no depende de
+  un fetch anónimo y el token no sale del worker.
+- El panel ya usaba este criterio (`/admin/media/*`); ahora el agente también.
+- Regresión: `test/media/fetchRef.test.ts` + `test/media/vision.test.ts`.
+
+### Corregido — los seguimientos salían siempre en español
+
+El Cazador de ventas (`runFollowups`) y el Reenganche (`runReengagements`) tenían
+el prompt **hardcodeado en español**: seguían en español aunque la conversación
+fuera en inglés.
+
+- Nuevo `src/followup/language.ts` (`conversationLang`): detecta el idioma de los
+  mensajes del cliente (`detectLanguage`, es/en/pt) y, si no hay certeza, usa
+  `BOT_LANGUAGE`.
+- Ambos prompts ahora llevan la directiva explícita de idioma, así el seguimiento
+  mantiene el idioma de la conversación.
+
+### Agregado — panel (`kooni-paneles`) en español e inglés
+
+- El panel completo (área cliente + super admin) se puede ver en **español o
+  inglés**, con un **desplegable de bandera** en la barra lateral y en
+  Configuración.
+- La preferencia se guarda **por usuario** en `public.profiles.language`
+  (migración `20260929000000_kooni-profiles-language.sql`) y es **independiente**
+  del idioma del bot (`BOT_LANGUAGE`), que sigue detectando el idioma del cliente.
+
 ## [1.48.0] — 2026-09-23
 
 ### Agregado — sistema de licencias (super admin + panel del cliente) y login del CLI

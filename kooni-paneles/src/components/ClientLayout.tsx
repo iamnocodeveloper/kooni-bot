@@ -2,20 +2,23 @@ import type { ReactNode } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { insforge } from "../lib/insforge";
 import { useAuth } from "../lib/auth";
+import { useI18n, type MessageKey } from "../lib/i18n";
+import LanguageSelect from "./LanguageSelect";
 
-const NAV = [
-  { to: "/", label: "Mis bots", end: true },
-  { to: "/vinculacion", label: "Vinculación" },
-  { to: "/novedades", label: "Novedades" },
-  { to: "/plantillas", label: "Plantillas" },
-  { to: "/cli", label: "Conectar CLI" },
-  { to: "/sesiones", label: "Sesiones del CLI" },
-  { to: "/configuracion", label: "Configuración" },
-  { to: "/plan", label: "Mi plan" },
+const NAV: { to: string; key: MessageKey; end?: boolean }[] = [
+  { to: "/", key: "nav.client.bots", end: true },
+  { to: "/vinculacion", key: "nav.client.vinculacion" },
+  { to: "/novedades", key: "nav.client.novedades" },
+  { to: "/plantillas", key: "nav.client.plantillas" },
+  { to: "/cli", key: "nav.client.cli" },
+  { to: "/sesiones", key: "nav.client.sesiones" },
+  { to: "/configuracion", key: "nav.client.config" },
+  { to: "/plan", key: "nav.client.plan" },
 ];
 
 export default function ClientLayout({ children }: { children: ReactNode }) {
   const { profile, isAdmin } = useAuth();
+  const { t } = useI18n();
   const navigate = useNavigate();
 
   async function logout() {
@@ -41,7 +44,7 @@ export default function ClientLayout({ children }: { children: ReactNode }) {
                 `rounded-lg px-3 py-2 text-sm ${isActive ? "bg-accentSoft text-accent" : "text-muted hover:bg-panel hover:text-cream"}`
               }
             >
-              {n.label}
+              {t(n.key)}
             </NavLink>
           ))}
         </nav>
@@ -49,12 +52,13 @@ export default function ClientLayout({ children }: { children: ReactNode }) {
           <div className="truncate">{profile?.email}</div>
           {isAdmin && (
             <NavLink to="/admin" className="mt-2 block text-accent hover:underline">
-              Ir al super admin
+              {t("nav.toAdmin")}
             </NavLink>
           )}
           <button onClick={logout} className="mt-2 text-bad hover:underline">
-            Cerrar sesión
+            {t("nav.logout")}
           </button>
+          <LanguageSelect className="mt-3 w-full" />
         </div>
       </aside>
       <main className="flex-1 p-6">{children}</main>

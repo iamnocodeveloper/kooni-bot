@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { insforge } from "../lib/insforge";
+import { useI18n } from "../lib/i18n";
 
 function Kpi({ label, value, tone }: { label: string; value: string | number; tone?: string }) {
   return (
@@ -11,6 +12,7 @@ function Kpi({ label, value, tone }: { label: string; value: string | number; to
 }
 
 export default function AdminDashboard() {
+  const { t, formatNumber } = useI18n();
   const [k, setK] = useState({ clientes: 0, pro: 0, free: 0, instalaciones: 0, activas: 0, mensajes30: 0, costo30: 0 });
   const [loading, setLoading] = useState(true);
 
@@ -57,17 +59,17 @@ export default function AdminDashboard() {
   return (
     <div className="flex flex-col gap-5">
       <div>
-        <h1 className="font-display text-xl font-semibold">Resumen</h1>
-        <p className="text-sm text-muted">Estado global del sistema de licencias. Solo estadísticas agregadas.</p>
+        <h1 className="font-display text-xl font-semibold">{t("admin.dashboard.title")}</h1>
+        <p className="text-sm text-muted">{t("admin.dashboard.subtitle")}</p>
       </div>
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <Kpi label="Clientes" value={loading ? "…" : k.clientes} />
-        <Kpi label="Licencias Pro" value={loading ? "…" : k.pro} tone="text-accent" />
-        <Kpi label="Licencias Free" value={loading ? "…" : k.free} />
-        <Kpi label="Instalaciones" value={loading ? "…" : k.instalaciones} />
-        <Kpi label="Activas (7d)" value={loading ? "…" : k.activas} tone="text-ok" />
-        <Kpi label="Mensajes 30d" value={loading ? "…" : k.mensajes30.toLocaleString("es")} />
-        <Kpi label="Costo IA 30d" value={loading ? "…" : `$${k.costo30.toFixed(2)}`} />
+        <Kpi label={t("admin.dashboard.kpiClientes")} value={loading ? "…" : k.clientes} />
+        <Kpi label={t("admin.dashboard.kpiPro")} value={loading ? "…" : k.pro} tone="text-accent" />
+        <Kpi label={t("admin.dashboard.kpiFree")} value={loading ? "…" : k.free} />
+        <Kpi label={t("admin.dashboard.kpiInstalaciones")} value={loading ? "…" : k.instalaciones} />
+        <Kpi label={t("admin.dashboard.kpiActivas")} value={loading ? "…" : k.activas} tone="text-ok" />
+        <Kpi label={t("admin.dashboard.kpiMensajes")} value={loading ? "…" : formatNumber(k.mensajes30)} />
+        <Kpi label={t("admin.dashboard.kpiCosto")} value={loading ? "…" : `$${k.costo30.toFixed(2)}`} />
       </div>
     </div>
   );

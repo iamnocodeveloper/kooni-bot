@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import { insforge } from "../lib/insforge";
+import { useI18n } from "../lib/i18n";
 import type { ConfigItem } from "../lib/types";
 import { logAdmin } from "../lib/audit";
 
 const LARGOS = new Set(["terminos", "privacidad", "aviso_upgrade"]);
 
 export default function AdminConfig() {
+  const { t } = useI18n();
   const [rows, setRows] = useState<ConfigItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState("");
@@ -36,7 +38,7 @@ export default function AdminConfig() {
     if (error) setErr((error as any).message);
     else {
       await logAdmin("config.guardar", r.clave);
-      setFlash("Guardado ✓");
+      setFlash(t("admin.config.saved"));
     }
     setBusy("");
   }
@@ -44,15 +46,15 @@ export default function AdminConfig() {
   return (
     <div className="flex flex-col gap-5">
       <div>
-        <h1 className="font-display text-xl font-semibold">Configuración</h1>
-        <p className="text-sm text-muted">Ajustes generales de la plataforma: URL del sitio, soporte, marca y textos legales.</p>
+        <h1 className="font-display text-xl font-semibold">{t("admin.config.title")}</h1>
+        <p className="text-sm text-muted">{t("admin.config.subtitle")}</p>
       </div>
 
       {err && <div className="rounded-lg border border-bad/40 bg-bad/10 px-3 py-2 text-xs text-bad">{err}</div>}
       {flash && <div className="rounded-lg border border-ok/40 bg-ok/10 px-3 py-2 text-xs text-ok">{flash}</div>}
 
       {loading ? (
-        <div className="text-muted">Cargando…</div>
+        <div className="text-muted">{t("common.loading")}</div>
       ) : (
         rows.map((r) => (
           <div key={r.clave} className="card p-5">
@@ -62,7 +64,7 @@ export default function AdminConfig() {
                 {r.descripcion ? <div className="text-[11.5px] text-muted">{r.descripcion}</div> : null}
               </div>
               <button className="btn-primary" disabled={busy === r.clave} onClick={() => guardar(r)}>
-                {busy === r.clave ? "Guardando…" : "Guardar"}
+                {busy === r.clave ? t("common.saving") : t("common.save")}
               </button>
             </div>
             <div className="mt-3">

@@ -1,24 +1,25 @@
 import { useEffect, useMemo, useState } from "react";
 import { insforge } from "../lib/insforge";
+import { useI18n, type MessageKey } from "../lib/i18n";
 import type { Licencia, Modulo, Profile } from "../lib/types";
 import { logAdmin } from "../lib/audit";
 
-const LIMIT_FIELDS: [string, string][] = [
-  ["maxContacts", "Contactos"],
-  ["maxMessagesPerMonth", "Mensajes IA / mes"],
-  ["maxChannels", "Canales"],
-  ["maxRules", "Reglas"],
-  ["maxAutoDmsPerMonth", "Auto-DMs / mes"],
-  ["maxTrackedLinks", "Links trackeados"],
-  ["maxZernioAccounts", "Cuentas Zernio"],
-  ["logRetentionDays", "Retención de logs (días)"],
+const LIMIT_FIELDS: [string, MessageKey][] = [
+  ["maxContacts", "admin.licencias.limitContacts"],
+  ["maxMessagesPerMonth", "admin.licencias.limitMessages"],
+  ["maxChannels", "admin.licencias.limitChannels"],
+  ["maxRules", "admin.licencias.limitRules"],
+  ["maxAutoDmsPerMonth", "admin.licencias.limitAutoDms"],
+  ["maxTrackedLinks", "admin.licencias.limitTrackedLinks"],
+  ["maxZernioAccounts", "admin.licencias.limitZernio"],
+  ["logRetentionDays", "admin.licencias.limitLogRetention"],
 ];
 
-const BRAND_FIELDS: [string, string][] = [
-  ["name", "Nombre de marca"],
-  ["logo_url", "URL del logo"],
-  ["primary", "Color primario (hex)"],
-  ["bg", "Color de fondo (hex)"],
+const BRAND_FIELDS: [string, MessageKey][] = [
+  ["name", "admin.licencias.brandName"],
+  ["logo_url", "admin.licencias.brandLogo"],
+  ["primary", "admin.licencias.brandPrimary"],
+  ["bg", "admin.licencias.brandBg"],
 ];
 
 interface Form {
@@ -37,6 +38,7 @@ interface Form {
 }
 
 export default function AdminLicencias() {
+  const { t, formatDate } = useI18n();
   const [rows, setRows] = useState<Licencia[]>([]);
   const [emails, setEmails] = useState<Record<string, string>>({});
   const [mods, setMods] = useState<Modulo[]>([]);
@@ -128,11 +130,11 @@ export default function AdminLicencias() {
       if (error) throw error;
 
       await logAdmin("licencia.guardar", `${form.plan} · ${form.modules.length} módulos · ${form.estado}`);
-      setFlash("Licencia guardada. El bot la aplicará en su próximo sync.");
+      setFlash(t("admin.licencias.saved"));
       setForm(null);
       await load();
     } catch (e: any) {
-      setErr(e?.message || "No se pudo guardar");
+      setErr(e?.message || t("admin.licencias.errSave"));
     } finally {
       setBusy(false);
     }
@@ -141,8 +143,8 @@ export default function AdminLicencias() {
   return (
     <div className="flex flex-col gap-5">
       <div>
-        <h1 className="font-display text-xl font-semibold">Licencias</h1>
-        <p className="text-sm text-muted">Plan, módulos activos, límites y marca blanca por licencia.</p>
+        <h1 className="font-display text-xl font-semibold">{t("admin.licencias.title")}</h1>
+        <p className="text-sm text-muted">{t("admin.licencias.subtitle")}</p>
       </div>
 
       {err && <div className="rounded-lg border border-bad/40 bg-bad/10 px-3 py-2 text-xs text-bad">{err}</div>}
@@ -152,30 +154,30 @@ export default function AdminLicencias() {
         <table className="tbl">
           <thead>
             <tr>
-              <th>Cliente</th>
-              <th>Plan</th>
-              <th>Estado</th>
-              <th>Vence</th>
-              <th>Módulos</th>
+              <th>{t("admin.licencias.colClient")}</th>
+              <th>{t("admin.licencias.colPlan")}</th>
+              <th>{t("admin.licencias.colStatus")}</th>
+              <th>{t("admin.licencias.colExpiry")}</th>
+              <th>{t("admin.licencias.colModules")}</th>
               <th></th>
             </tr>
           </thead>
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={6} className="text-muted">Cargando…</td>
+                <td colSpan={6} className="text-muted">{t("common.loading")}</td>
               </tr>
             )}
             {rows.length === 0 && !loading && (
               <tr>
-                <td colSpan={6} className="text-muted">Todavía no hay licencias. Se crean cuando un cliente instala su bot.</td>
+                <td colSpan={6} className="text-muted">{t("admin.licencias.empty")}</td>
               </tr>
             )}
             {rows.map((l) => (
               <tr key={l.id}>
                 <td>
                   <div className="font-mono text-[12px]">{emails[l.user_id] ?? l.user_id.slice(0, 8)}</div>
-                  <div className="text-[11px] text-muted">{l.bot_slug ?? "—"} · {l.inst_uid ?? "sin uid"}</div>
+                  <div className="text-[11px] text-muted">{l.bot_slug ?? "—"} · {l.inst_uid ?? t("admin.licencias.noUid")}</div>
                 </td>
                 <td>
                   <span className={`chip ${l.plan === "pro" ? "bg-accentSoft text-accent" : "bg-panel2 text-muted"}`}>{l.plan}</span>
@@ -183,10 +185,10 @@ export default function AdminLicencias() {
                 <td>
                   <span className={`chip ${l.estado === "activa" ? "bg-ok/15 text-ok" : "bg-bad/15 text-bad"}`}>{l.estado}</span>
                 </td>
-                <td className="text-muted">{l.expiry ? new Date(l.expiry).toLocaleDateString("es") : l.kind === "lifetime" ? "de por vida" : "—"}</td>
+                <td className="text-muted">{l.expiry ? formatDate(l.expiry) : l.kind === "lifetime" ? t("common.lifetime") : "—"}</td>
                 <td className="text-muted">{(l.modules ?? []).length}</td>
                 <td className="text-right">
-                  <button className="btn-ghost py-1" onClick={() => openEdit(l)}>Editar</button>
+                  <button className="btn-ghost py-1" onClick={() => openEdit(l)}>{t("admin.licencias.edit")}</button>
                 </td>
               </tr>
             ))}
@@ -198,20 +200,20 @@ export default function AdminLicencias() {
         <div className="fixed inset-0 z-20 flex items-start justify-center overflow-auto bg-black/60 p-6">
           <div className="card w-full max-w-2xl p-6">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="font-display text-lg font-semibold">Editar licencia</h2>
+              <h2 className="font-display text-lg font-semibold">{t("admin.licencias.editTitle")}</h2>
               <button className="text-muted hover:text-cream" onClick={() => setForm(null)}>✕</button>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="label">Plan</label>
+                <label className="label">{t("admin.licencias.labelPlan")}</label>
                 <select className="input mt-1" value={form.plan} onChange={(e) => setForm({ ...form, plan: e.target.value as any })}>
                   <option value="free">free</option>
                   <option value="pro">pro</option>
                 </select>
               </div>
               <div>
-                <label className="label">Estado</label>
+                <label className="label">{t("admin.licencias.labelStatus")}</label>
                 <select className="input mt-1" value={form.estado} onChange={(e) => setForm({ ...form, estado: e.target.value as any })}>
                   <option value="activa">activa</option>
                   <option value="revocada">revocada</option>
@@ -219,20 +221,20 @@ export default function AdminLicencias() {
                 </select>
               </div>
               <div>
-                <label className="label">Tipo</label>
+                <label className="label">{t("admin.licencias.labelKind")}</label>
                 <select className="input mt-1" value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value as any })}>
-                  <option value="lifetime">de por vida</option>
-                  <option value="monthly">mensual</option>
+                  <option value="lifetime">{t("common.lifetime")}</option>
+                  <option value="monthly">{t("admin.licencias.kindMonthly")}</option>
                 </select>
               </div>
               <div>
-                <label className="label">Vence</label>
+                <label className="label">{t("admin.licencias.labelExpiry")}</label>
                 <input type="date" className="input mt-1" value={form.expiry} disabled={form.kind !== "monthly"} onChange={(e) => setForm({ ...form, expiry: e.target.value })} />
               </div>
             </div>
 
             <div className="mt-5">
-              <label className="label">Módulos activos</label>
+              <label className="label">{t("admin.licencias.labelModules")}</label>
               <div className="mt-2 grid max-h-56 grid-cols-2 gap-2 overflow-auto rounded-lg border border-line bg-panel2 p-3">
                 {mods.map((m) => (
                   <label key={m.id} className="flex items-center gap-2 text-sm">
@@ -242,17 +244,17 @@ export default function AdminLicencias() {
                 ))}
               </div>
               <p className="mt-1 text-[11px] text-muted">
-                {form.modules.length} seleccionados · {form.modules.slice(0, 3).map((id) => modName[id] ?? id).join(", ")}
+                {t("admin.licencias.selected", { n: form.modules.length })} · {form.modules.slice(0, 3).map((id) => modName[id] ?? id).join(", ")}
                 {form.modules.length > 3 ? "…" : ""}
               </p>
             </div>
 
             <div className="mt-5">
-              <label className="label">Límites (vacío = sin límite)</label>
+              <label className="label">{t("admin.licencias.labelLimits")}</label>
               <div className="mt-2 grid grid-cols-2 gap-3">
                 {LIMIT_FIELDS.map(([k, label]) => (
                   <div key={k}>
-                    <div className="text-[11px] text-muted">{label}</div>
+                    <div className="text-[11px] text-muted">{t(label)}</div>
                     <input type="number" className="input mt-1" value={form.limits[k]} placeholder="∞" onChange={(e) => setForm({ ...form, limits: { ...form.limits, [k]: e.target.value } })} />
                   </div>
                 ))}
@@ -260,11 +262,11 @@ export default function AdminLicencias() {
             </div>
 
             <div className="mt-5">
-              <label className="label">Marca blanca</label>
+              <label className="label">{t("admin.licencias.labelBrand")}</label>
               <div className="mt-2 grid grid-cols-2 gap-3">
                 {BRAND_FIELDS.map(([k, label]) => (
                   <div key={k}>
-                    <div className="text-[11px] text-muted">{label}</div>
+                    <div className="text-[11px] text-muted">{t(label)}</div>
                     <input className="input mt-1" value={form.brand[k]} onChange={(e) => setForm({ ...form, brand: { ...form.brand, [k]: e.target.value } })} />
                   </div>
                 ))}
@@ -272,13 +274,13 @@ export default function AdminLicencias() {
             </div>
 
             <div className="mt-5">
-              <label className="label">Notas</label>
+              <label className="label">{t("admin.licencias.labelNotes")}</label>
               <textarea className="input mt-1" rows={2} value={form.notas} onChange={(e) => setForm({ ...form, notas: e.target.value })} />
             </div>
 
             <div className="mt-6 flex justify-end gap-2">
-              <button className="btn-ghost" onClick={() => setForm(null)}>Cancelar</button>
-              <button className="btn-primary" disabled={busy} onClick={save}>{busy ? "Guardando…" : "Guardar y firmar"}</button>
+              <button className="btn-ghost" onClick={() => setForm(null)}>{t("common.cancel")}</button>
+              <button className="btn-primary" disabled={busy} onClick={save}>{busy ? t("common.saving") : t("admin.licencias.saveAndSign")}</button>
             </div>
           </div>
         </div>

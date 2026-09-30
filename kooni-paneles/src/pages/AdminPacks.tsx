@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { insforge } from "../lib/insforge";
+import { useI18n } from "../lib/i18n";
 import type { Pack } from "../lib/types";
 
 export default function AdminPacks() {
+  const { t } = useI18n();
   const [rows, setRows] = useState<Pack[]>([]);
   const [open, setOpen] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -35,16 +37,16 @@ export default function AdminPacks() {
       .update({ nombre: p.nombre, descripcion: p.descripcion, playbook: p.playbook, emoji: p.emoji, version: p.version, activo: p.activo })
       .eq("id", p.id);
     if (error) setErr((error as any).message);
-    else setFlash(`Guardado: ${p.nombre}`);
+    else setFlash(t("admin.packs.saved", { name: p.nombre }));
     setBusy("");
   }
 
   return (
     <div className="flex flex-col gap-5">
       <div>
-        <h1 className="font-display text-xl font-semibold">Plantillas / Packs</h1>
+        <h1 className="font-display text-xl font-semibold">{t("admin.packs.title")}</h1>
         <p className="text-sm text-muted">
-          Packs por giro: el nombre, la descripción y el playbook que el bot usa. Espeja los giros de Kooni; editá acá lo que se distribuye.
+          {t("admin.packs.subtitle")}
         </p>
       </div>
 
@@ -52,7 +54,7 @@ export default function AdminPacks() {
       {flash && <div className="rounded-lg border border-ok/40 bg-ok/10 px-3 py-2 text-xs text-ok">{flash}</div>}
 
       {loading ? (
-        <div className="text-muted">Cargando…</div>
+        <div className="text-muted">{t("common.loading")}</div>
       ) : (
         rows.map((p) => (
           <div key={p.id} className="card p-5">
@@ -67,10 +69,10 @@ export default function AdminPacks() {
               <div className="flex items-center gap-3">
                 <label className="flex items-center gap-2 text-xs text-muted">
                   <input type="checkbox" checked={p.activo} onChange={(e) => setField(p.id, { activo: e.target.checked })} />
-                  Activo
+                  {t("common.active")}
                 </label>
                 <button className="btn-ghost py-1 text-xs" onClick={() => setOpen(open === p.id ? null : p.id)}>
-                  {open === p.id ? "Cerrar" : "Editar"}
+                  {open === p.id ? t("admin.packs.close") : t("admin.packs.edit")}
                 </button>
               </div>
             </div>
@@ -81,31 +83,31 @@ export default function AdminPacks() {
               <div className="mt-4 flex flex-col gap-3">
                 <div className="grid gap-3 md:grid-cols-2">
                   <div>
-                    <label className="label">Nombre</label>
+                    <label className="label">{t("common.name")}</label>
                     <input className="input mt-1" value={p.nombre} onChange={(e) => setField(p.id, { nombre: e.target.value })} />
                   </div>
                   <div>
-                    <label className="label">Emoji</label>
+                    <label className="label">{t("admin.packs.labelEmoji")}</label>
                     <input className="input mt-1" value={p.emoji ?? ""} onChange={(e) => setField(p.id, { emoji: e.target.value })} />
                   </div>
                 </div>
                 <div>
-                  <label className="label">Descripción</label>
+                  <label className="label">{t("admin.packs.labelDescription")}</label>
                   <input className="input mt-1" value={p.descripcion ?? ""} onChange={(e) => setField(p.id, { descripcion: e.target.value })} />
                 </div>
                 <div>
-                  <label className="label">Playbook del giro</label>
+                  <label className="label">{t("admin.packs.labelPlaybook")}</label>
                   <textarea
                     className="input mt-1"
                     rows={5}
                     value={p.playbook ?? ""}
-                    placeholder="Instrucciones del giro que se inyectan al prompt del bot…"
+                    placeholder={t("admin.packs.phPlaybook")}
                     onChange={(e) => setField(p.id, { playbook: e.target.value })}
                   />
                 </div>
                 <div className="flex justify-end">
                   <button className="btn-primary" disabled={busy === p.id} onClick={() => guardar(p)}>
-                    {busy === p.id ? "Guardando…" : "Guardar"}
+                    {busy === p.id ? t("common.saving") : t("common.save")}
                   </button>
                 </div>
               </div>

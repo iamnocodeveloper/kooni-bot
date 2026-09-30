@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { insforge } from "../lib/insforge";
+import { useI18n } from "../lib/i18n";
 import type { IaProveedor } from "../lib/types";
 
 export default function AdminIA() {
+  const { t } = useI18n();
   const [rows, setRows] = useState<IaProveedor[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState("");
@@ -34,16 +36,16 @@ export default function AdminIA() {
     setFlash("");
     const { error } = await insforge.database.from("ia_proveedores").update({ incluido: p.incluido, activo: p.activo, modelos: p.modelos }).eq("id", p.id);
     if (error) setErr((error as any).message);
-    else setFlash(`Guardado: ${p.nombre}`);
+    else setFlash(t("admin.ia.saved", { name: p.nombre }));
     setBusy("");
   }
 
   return (
     <div className="flex flex-col gap-5">
       <div>
-        <h1 className="font-display text-xl font-semibold">Proveedores IA</h1>
+        <h1 className="font-display text-xl font-semibold">{t("admin.ia.title")}</h1>
         <p className="text-sm text-muted">
-          El "cerebro" que el panel del bot ofrece. Marcá uno como <b className="text-cream">incluido</b> para ofrecerlo como cerebro de plataforma; el resto son BYO-LLM (llave del cliente).
+          {t("admin.ia.subtitlePre")}<b className="text-cream">{t("admin.ia.subtitleBold")}</b>{t("admin.ia.subtitlePost")}
         </p>
       </div>
 
@@ -51,7 +53,7 @@ export default function AdminIA() {
       {flash && <div className="rounded-lg border border-ok/40 bg-ok/10 px-3 py-2 text-xs text-ok">{flash}</div>}
 
       {loading ? (
-        <div className="text-muted">Cargando…</div>
+        <div className="text-muted">{t("common.loading")}</div>
       ) : (
         rows.map((p) => (
           <div key={p.id} className="card p-5">
@@ -63,16 +65,16 @@ export default function AdminIA() {
               <div className="flex items-center gap-4">
                 <label className="flex items-center gap-2 text-xs text-muted">
                   <input type="checkbox" checked={p.activo} onChange={(e) => setField(p.id, { activo: e.target.checked })} />
-                  Activo
+                  {t("common.active")}
                 </label>
                 <label className="flex items-center gap-2 text-xs text-muted">
                   <input type="checkbox" checked={p.incluido} onChange={(e) => setField(p.id, { incluido: e.target.checked })} />
-                  Cerebro incluido
+                  {t("admin.ia.includedBrain")}
                 </label>
               </div>
             </div>
             <div className="mt-4">
-              <label className="label">Modelos (uno por línea)</label>
+              <label className="label">{t("admin.ia.labelModels")}</label>
               <textarea
                 className="input mt-1 font-mono text-[12px]"
                 rows={4}
@@ -82,7 +84,7 @@ export default function AdminIA() {
             </div>
             <div className="mt-3 flex justify-end">
               <button className="btn-primary" disabled={busy === p.id} onClick={() => guardar(p)}>
-                {busy === p.id ? "Guardando…" : "Guardar"}
+                {busy === p.id ? t("common.saving") : t("common.save")}
               </button>
             </div>
           </div>

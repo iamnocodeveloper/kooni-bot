@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import { insforge } from "../lib/insforge";
+import { useI18n } from "../lib/i18n";
 import type { Pago, ProveedorPago, Profile } from "../lib/types";
 
 // Host de las edge functions (a donde apuntan los webhooks del proveedor).
 const FUNCTIONS_HOST = "https://t6bferet.function2.insforge.app";
 
 export default function AdminFacturacion() {
+  const { t, formatDate } = useI18n();
   const [pagos, setPagos] = useState<Pago[]>([]);
   const [emails, setEmails] = useState<Record<string, string>>({});
   const [providers, setProviders] = useState<ProveedorPago[]>([]);
@@ -43,9 +45,9 @@ export default function AdminFacturacion() {
   return (
     <div className="flex flex-col gap-5">
       <div>
-        <h1 className="font-display text-xl font-semibold">Facturación</h1>
+        <h1 className="font-display text-xl font-semibold">{t("admin.facturacion.title")}</h1>
         <p className="text-sm text-muted">
-          Pagos de Kooni+ y estado de los proveedores. Cada proveedor se activa solo con poner sus secretos.
+          {t("admin.facturacion.subtitle")}
         </p>
       </div>
 
@@ -55,44 +57,44 @@ export default function AdminFacturacion() {
             <div className="flex items-center justify-between">
               <span className="font-semibold">{p.nombre}</span>
               <span className={`chip ${p.listo ? "bg-ok/15 text-ok" : "bg-panel2 text-muted"}`}>
-                {p.listo ? "listo" : "falta configurar"}
+                {p.listo ? t("admin.facturacion.provReady") : t("admin.facturacion.provMissing")}
               </span>
             </div>
             {!p.listo && p.faltan.length ? (
               <div className="mt-2 font-mono text-[11px] text-muted">{p.faltan.join(" · ")}</div>
             ) : null}
             <div className="mt-3 font-mono text-[11px] text-muted">
-              Webhook:<br />
+              {t("admin.facturacion.webhook")}<br />
               {FUNCTIONS_HOST}/pago-webhook?provider={p.id}
             </div>
           </div>
         ))}
-        {providers.length === 0 && <div className="card p-4 text-sm text-muted">Sin proveedores.</div>}
+        {providers.length === 0 && <div className="card p-4 text-sm text-muted">{t("admin.facturacion.noProviders")}</div>}
       </div>
 
       <div className="card overflow-hidden">
         <table className="tbl">
           <thead>
             <tr>
-              <th>Fecha</th>
-              <th>Cliente</th>
-              <th>Proveedor</th>
-              <th>Plan</th>
-              <th>Monto</th>
-              <th>Estado</th>
+              <th>{t("admin.facturacion.colFecha")}</th>
+              <th>{t("admin.facturacion.colCliente")}</th>
+              <th>{t("admin.facturacion.colProveedor")}</th>
+              <th>{t("admin.facturacion.colPlan")}</th>
+              <th>{t("admin.facturacion.colMonto")}</th>
+              <th>{t("admin.facturacion.colEstado")}</th>
               <th></th>
             </tr>
           </thead>
           <tbody>
             {loading && (
-              <tr><td colSpan={7} className="text-muted">Cargando…</td></tr>
+              <tr><td colSpan={7} className="text-muted">{t("common.loading")}</td></tr>
             )}
             {!loading && pagos.length === 0 && (
-              <tr><td colSpan={7} className="text-muted">Sin pagos todavía.</td></tr>
+              <tr><td colSpan={7} className="text-muted">{t("admin.facturacion.empty")}</td></tr>
             )}
             {pagos.map((p) => (
               <tr key={p.id}>
-                <td className="font-mono text-[12px] text-muted">{new Date(p.created_at).toLocaleDateString("es")}</td>
+                <td className="font-mono text-[12px] text-muted">{formatDate(p.created_at)}</td>
                 <td className="font-mono text-[12px]">{p.user_id ? emails[p.user_id] ?? p.user_id.slice(0, 8) : "—"}</td>
                 <td><span className="chip bg-panel2 text-muted">{p.provider}</span></td>
                 <td className="text-muted">{p.plan_id ?? "—"}</td>
@@ -100,7 +102,7 @@ export default function AdminFacturacion() {
                 <td><span className={`chip ${statusCls(p.status)}`}>{p.status}</span></td>
                 <td className="text-right">
                   {p.status === "pendiente" ? (
-                    <button className="btn-ghost py-1 text-xs" onClick={() => confirmar(p.id)}>Marcar pagado</button>
+                    <button className="btn-ghost py-1 text-xs" onClick={() => confirmar(p.id)}>{t("admin.facturacion.markPaid")}</button>
                   ) : null}
                 </td>
               </tr>

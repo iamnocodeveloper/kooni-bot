@@ -30,7 +30,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const u = (data as any)?.user ?? null;
       setUser(u);
       if (u) {
-        await insforge.database.rpc("ensure_profile", { p_email: u.email ?? null, p_name: null }).catch(() => {});
+        try {
+          await insforge.database.rpc("ensure_profile", { p_email: u.email ?? null, p_name: null });
+        } catch {
+          /* best-effort: el perfil se completa igual en el select de abajo */
+        }
         const { data: p } = await insforge.database.from("profiles").select("*").eq("id", u.id).maybeSingle();
         setProfile((p as Profile) ?? null);
       } else {

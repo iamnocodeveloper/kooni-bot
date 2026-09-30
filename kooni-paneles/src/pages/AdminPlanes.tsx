@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { insforge } from "../lib/insforge";
+import { useI18n } from "../lib/i18n";
 import type { Modulo, Plan } from "../lib/types";
 import { logAdmin } from "../lib/audit";
 
@@ -20,6 +21,7 @@ interface Form {
 }
 
 export default function AdminPlanes() {
+  const { t } = useI18n();
   const [rows, setRows] = useState<Plan[]>([]);
   const [mods, setMods] = useState<Modulo[]>([]);
   const [form, setForm] = useState<Form | null>(null);
@@ -75,7 +77,7 @@ export default function AdminPlanes() {
     if (!form) return;
     setErr("");
     if (!form.id.trim() || !form.nombre.trim()) {
-      setErr("El id y el nombre son obligatorios.");
+      setErr(t("admin.planes.errRequired"));
       return;
     }
     setBusy(true);
@@ -102,7 +104,7 @@ export default function AdminPlanes() {
       setForm(null);
       await load();
     } catch (e: any) {
-      setErr(e?.message || "No se pudo guardar");
+      setErr(e?.message || t("admin.planes.errSave"));
     } finally {
       setBusy(false);
     }
@@ -112,10 +114,10 @@ export default function AdminPlanes() {
     <div className="flex flex-col gap-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="font-display text-xl font-semibold">Planes</h1>
-          <p className="text-sm text-muted">Tiers, precios y qué incluye cada plan. Alimenta la página de upgrade.</p>
+          <h1 className="font-display text-xl font-semibold">{t("admin.planes.title")}</h1>
+          <p className="text-sm text-muted">{t("admin.planes.subtitle")}</p>
         </div>
-        <button className="btn-primary" onClick={openNew}>Nuevo plan</button>
+        <button className="btn-primary" onClick={openNew}>{t("admin.planes.new")}</button>
       </div>
 
       {err && <div className="rounded-lg border border-bad/40 bg-bad/10 px-3 py-2 text-xs text-bad">{err}</div>}
@@ -124,16 +126,16 @@ export default function AdminPlanes() {
         <table className="tbl">
           <thead>
             <tr>
-              <th>Plan</th>
-              <th>Precio</th>
-              <th>Módulos</th>
-              <th>Activo</th>
+              <th>{t("admin.planes.colPlan")}</th>
+              <th>{t("admin.planes.colPrice")}</th>
+              <th>{t("admin.planes.colModules")}</th>
+              <th>{t("admin.planes.colActive")}</th>
               <th></th>
             </tr>
           </thead>
           <tbody>
             {loading && (
-              <tr><td colSpan={5} className="text-muted">Cargando…</td></tr>
+              <tr><td colSpan={5} className="text-muted">{t("common.loading")}</td></tr>
             )}
             {rows.map((p) => (
               <tr key={p.id}>
@@ -142,15 +144,15 @@ export default function AdminPlanes() {
                   <div className="font-mono text-[11px] text-muted">{p.id}</div>
                 </td>
                 <td className="font-mono">
-                  {p.precio != null ? `${p.moneda.toUpperCase()} ${Number(p.precio).toFixed(2)}/mes` : "—"}
+                  {p.precio != null ? `${p.moneda.toUpperCase()} ${Number(p.precio).toFixed(2)}${t("admin.planes.perMonth")}` : "—"}
                   {p.precio_nota ? <span className="ml-2 text-[11px] text-muted">{p.precio_nota}</span> : null}
                 </td>
                 <td className="text-muted">{(p.modulos ?? []).length}</td>
                 <td>
-                  <span className={`chip ${p.activo ? "bg-ok/15 text-ok" : "bg-panel2 text-muted"}`}>{p.activo ? "activo" : "oculto"}</span>
+                  <span className={`chip ${p.activo ? "bg-ok/15 text-ok" : "bg-panel2 text-muted"}`}>{p.activo ? t("admin.planes.statusActive") : t("admin.planes.statusHidden")}</span>
                 </td>
                 <td className="text-right">
-                  <button className="btn-ghost py-1" onClick={() => openEdit(p)}>Editar</button>
+                  <button className="btn-ghost py-1" onClick={() => openEdit(p)}>{t("admin.planes.edit")}</button>
                 </td>
               </tr>
             ))}
@@ -162,49 +164,49 @@ export default function AdminPlanes() {
         <div className="fixed inset-0 z-20 flex items-start justify-center overflow-auto bg-black/60 p-6">
           <div className="card w-full max-w-2xl p-6">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="font-display text-lg font-semibold">{form.nuevo ? "Nuevo plan" : "Editar plan"}</h2>
+              <h2 className="font-display text-lg font-semibold">{form.nuevo ? t("admin.planes.new") : t("admin.planes.editTitle")}</h2>
               <button className="text-muted hover:text-cream" onClick={() => setForm(null)}>✕</button>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="label">ID (slug)</label>
+                <label className="label">{t("admin.planes.labelId")}</label>
                 <input className="input mt-1 font-mono" value={form.id} disabled={!form.nuevo} onChange={(e) => setForm({ ...form, id: e.target.value })} />
               </div>
               <div>
-                <label className="label">Nombre</label>
+                <label className="label">{t("admin.planes.labelName")}</label>
                 <input className="input mt-1" value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} />
               </div>
               <div>
-                <label className="label">Precio / mes</label>
+                <label className="label">{t("admin.planes.labelPrice")}</label>
                 <input className="input mt-1" type="number" value={form.precio} onChange={(e) => setForm({ ...form, precio: e.target.value })} />
               </div>
               <div>
-                <label className="label">Moneda</label>
+                <label className="label">{t("admin.planes.labelCurrency")}</label>
                 <input className="input mt-1" value={form.moneda} onChange={(e) => setForm({ ...form, moneda: e.target.value })} />
               </div>
               <div>
-                <label className="label">Nota del precio</label>
-                <input className="input mt-1" value={form.precio_nota} placeholder="precio de lanzamiento" onChange={(e) => setForm({ ...form, precio_nota: e.target.value })} />
+                <label className="label">{t("admin.planes.labelPriceNote")}</label>
+                <input className="input mt-1" value={form.precio_nota} placeholder={t("admin.planes.phPriceNote")} onChange={(e) => setForm({ ...form, precio_nota: e.target.value })} />
               </div>
               <div>
-                <label className="label">Badge / etapa</label>
+                <label className="label">{t("admin.planes.labelBadge")}</label>
                 <input className="input mt-1" value={form.badge} placeholder="Early" onChange={(e) => setForm({ ...form, badge: e.target.value })} />
               </div>
             </div>
 
             <div className="mt-4">
-              <label className="label">Descripción</label>
+              <label className="label">{t("admin.planes.labelDescription")}</label>
               <textarea className="input mt-1" rows={2} value={form.descripcion} onChange={(e) => setForm({ ...form, descripcion: e.target.value })} />
             </div>
 
             <div className="mt-4">
-              <label className="label">Qué incluye (una por línea)</label>
+              <label className="label">{t("admin.planes.labelIncludes")}</label>
               <textarea className="input mt-1" rows={5} value={form.incluye} onChange={(e) => setForm({ ...form, incluye: e.target.value })} />
             </div>
 
             <div className="mt-4">
-              <label className="label">Módulos incluidos</label>
+              <label className="label">{t("admin.planes.labelModules")}</label>
               <div className="mt-2 grid max-h-48 grid-cols-2 gap-2 overflow-auto rounded-lg border border-line bg-panel2 p-3">
                 {mods.map((m) => (
                   <label key={m.id} className="flex items-center gap-2 text-sm">
@@ -217,18 +219,18 @@ export default function AdminPlanes() {
 
             <div className="mt-4 grid grid-cols-2 gap-4">
               <div>
-                <label className="label">Orden</label>
+                <label className="label">{t("admin.planes.labelOrder")}</label>
                 <input className="input mt-1" type="number" value={form.orden} onChange={(e) => setForm({ ...form, orden: e.target.value })} />
               </div>
               <label className="mt-6 flex items-center gap-2 text-sm">
                 <input type="checkbox" checked={form.activo} onChange={(e) => setForm({ ...form, activo: e.target.checked })} />
-                Activo (visible para clientes)
+                {t("admin.planes.activeVisible")}
               </label>
             </div>
 
             <div className="mt-6 flex justify-end gap-2">
-              <button className="btn-ghost" onClick={() => setForm(null)}>Cancelar</button>
-              <button className="btn-primary" disabled={busy} onClick={save}>{busy ? "Guardando…" : "Guardar"}</button>
+              <button className="btn-ghost" onClick={() => setForm(null)}>{t("common.cancel")}</button>
+              <button className="btn-primary" disabled={busy} onClick={save}>{busy ? t("common.saving") : t("common.save")}</button>
             </div>
           </div>
         </div>

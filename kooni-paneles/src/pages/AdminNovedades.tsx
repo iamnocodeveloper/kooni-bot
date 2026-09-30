@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { insforge } from "../lib/insforge";
+import { useI18n } from "../lib/i18n";
 import type { Novedad } from "../lib/types";
 
 interface Form {
@@ -30,6 +31,7 @@ const EMPTY: Form = {
 };
 
 export default function AdminNovedades() {
+  const { t } = useI18n();
   const [rows, setRows] = useState<Novedad[]>([]);
   const [form, setForm] = useState<Form | null>(null);
   const [loading, setLoading] = useState(true);
@@ -78,7 +80,7 @@ export default function AdminNovedades() {
   async function save() {
     if (!form) return;
     if (!form.titulo.trim()) {
-      setErr("El título es obligatorio.");
+      setErr(t("admin.novedades.errTitleRequired"));
       return;
     }
     setBusy(true);
@@ -103,7 +105,7 @@ export default function AdminNovedades() {
       setForm(null);
       await load();
     } catch (e: any) {
-      setErr(e?.message || "No se pudo guardar");
+      setErr(e?.message || t("admin.novedades.errSave"));
     } finally {
       setBusy(false);
     }
@@ -124,10 +126,10 @@ export default function AdminNovedades() {
     <div className="flex flex-col gap-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="font-display text-xl font-semibold">Novedades</h1>
-          <p className="text-sm text-muted">El changelog que ven los clientes en su hub.</p>
+          <h1 className="font-display text-xl font-semibold">{t("admin.novedades.title")}</h1>
+          <p className="text-sm text-muted">{t("admin.novedades.subtitle")}</p>
         </div>
-        <button className="btn-primary" onClick={openNew}>Nueva novedad</button>
+        <button className="btn-primary" onClick={openNew}>{t("admin.novedades.new")}</button>
       </div>
 
       {err && <div className="rounded-lg border border-bad/40 bg-bad/10 px-3 py-2 text-xs text-bad">{err}</div>}
@@ -136,23 +138,23 @@ export default function AdminNovedades() {
         <table className="tbl">
           <thead>
             <tr>
-              <th>Fecha</th>
-              <th>Título</th>
-              <th>Tipo</th>
-              <th>Origen</th>
-              <th>Visible</th>
+              <th>{t("admin.novedades.colDate")}</th>
+              <th>{t("admin.novedades.colTitle")}</th>
+              <th>{t("admin.novedades.colType")}</th>
+              <th>{t("admin.novedades.colOrigin")}</th>
+              <th>{t("admin.novedades.colVisible")}</th>
               <th></th>
             </tr>
           </thead>
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={6} className="text-muted">Cargando…</td>
+                <td colSpan={6} className="text-muted">{t("common.loading")}</td>
               </tr>
             )}
             {rows.length === 0 && !loading && (
               <tr>
-                <td colSpan={6} className="text-muted">Sin novedades. Creá la primera.</td>
+                <td colSpan={6} className="text-muted">{t("admin.novedades.empty")}</td>
               </tr>
             )}
             {rows.map((n) => (
@@ -163,12 +165,12 @@ export default function AdminNovedades() {
                 <td><span className="chip bg-panel2 text-muted">{n.origen}</span></td>
                 <td>
                   <button className={`chip ${n.visible ? "bg-ok/15 text-ok" : "bg-panel2 text-muted"}`} onClick={() => toggle(n)}>
-                    {n.visible ? "visible" : "borrador"}
+                    {n.visible ? t("admin.novedades.statusVisible") : t("admin.novedades.statusDraft")}
                   </button>
                 </td>
                 <td className="text-right">
-                  <button className="btn-ghost py-1 mr-2" onClick={() => openEdit(n)}>Editar</button>
-                  <button className="btn-danger py-1" onClick={() => remove(n.id)}>Borrar</button>
+                  <button className="btn-ghost py-1 mr-2" onClick={() => openEdit(n)}>{t("admin.novedades.edit")}</button>
+                  <button className="btn-danger py-1" onClick={() => remove(n.id)}>{t("admin.novedades.delete")}</button>
                 </td>
               </tr>
             ))}
@@ -180,29 +182,29 @@ export default function AdminNovedades() {
         <div className="fixed inset-0 z-20 flex items-start justify-center overflow-auto bg-black/60 p-6">
           <div className="card w-full max-w-2xl p-6">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="font-display text-lg font-semibold">{form.id ? "Editar novedad" : "Nueva novedad"}</h2>
+              <h2 className="font-display text-lg font-semibold">{form.id ? t("admin.novedades.editTitle") : t("admin.novedades.new")}</h2>
               <button className="text-muted hover:text-cream" onClick={() => setForm(null)}>✕</button>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="label">Fecha</label>
+                <label className="label">{t("admin.novedades.labelDate")}</label>
                 <input type="date" className="input mt-1" value={form.fecha} onChange={(e) => setForm({ ...form, fecha: e.target.value })} />
               </div>
               <div>
-                <label className="label">Versión (ej. bot 1.48.0)</label>
+                <label className="label">{t("admin.novedades.labelVersion")}</label>
                 <input className="input mt-1" value={form.version} onChange={(e) => setForm({ ...form, version: e.target.value })} />
               </div>
               <div>
-                <label className="label">Tipo</label>
+                <label className="label">{t("admin.novedades.labelType")}</label>
                 <select className="input mt-1" value={form.tipo} onChange={(e) => setForm({ ...form, tipo: e.target.value as any })}>
-                  <option value="nuevo">Nuevo</option>
-                  <option value="mejora">Mejora</option>
-                  <option value="arreglo">Arreglo</option>
+                  <option value="nuevo">{t("admin.novedades.optNuevo")}</option>
+                  <option value="mejora">{t("admin.novedades.optMejora")}</option>
+                  <option value="arreglo">{t("admin.novedades.optArreglo")}</option>
                 </select>
               </div>
               <div>
-                <label className="label">Origen</label>
+                <label className="label">{t("admin.novedades.labelOrigin")}</label>
                 <select className="input mt-1" value={form.origen} onChange={(e) => setForm({ ...form, origen: e.target.value as any })}>
                   <option value="kooni">Kooni</option>
                   <option value="kooni+">Kooni+</option>
@@ -211,36 +213,36 @@ export default function AdminNovedades() {
             </div>
 
             <div className="mt-4">
-              <label className="label">Título</label>
+              <label className="label">{t("admin.novedades.labelTitle")}</label>
               <input className="input mt-1" value={form.titulo} onChange={(e) => setForm({ ...form, titulo: e.target.value })} />
             </div>
             <div className="mt-4">
-              <label className="label">Cuerpo</label>
+              <label className="label">{t("admin.novedades.labelBody")}</label>
               <textarea className="input mt-1" rows={4} value={form.cuerpo} onChange={(e) => setForm({ ...form, cuerpo: e.target.value })} />
             </div>
             <div className="mt-4">
-              <label className="label">Cómo activarlo (opcional)</label>
+              <label className="label">{t("admin.novedades.labelHint")}</label>
               <input className="input mt-1 font-mono text-[12px]" value={form.update_hint} placeholder="npx kooni-bot update" onChange={(e) => setForm({ ...form, update_hint: e.target.value })} />
             </div>
             <div className="mt-4 grid grid-cols-2 gap-4">
               <div>
-                <label className="label">CTA — texto</label>
-                <input className="input mt-1" value={form.cta_label} placeholder="Ver conexiones" onChange={(e) => setForm({ ...form, cta_label: e.target.value })} />
+                <label className="label">{t("admin.novedades.labelCtaText")}</label>
+                <input className="input mt-1" value={form.cta_label} placeholder={t("admin.novedades.phCtaText")} onChange={(e) => setForm({ ...form, cta_label: e.target.value })} />
               </div>
               <div>
-                <label className="label">CTA — URL</label>
+                <label className="label">{t("admin.novedades.labelCtaUrl")}</label>
                 <input className="input mt-1" value={form.cta_url} placeholder="https://…" onChange={(e) => setForm({ ...form, cta_url: e.target.value })} />
               </div>
             </div>
 
             <label className="mt-4 flex items-center gap-2 text-sm">
               <input type="checkbox" checked={form.visible} onChange={(e) => setForm({ ...form, visible: e.target.checked })} />
-              Visible para los clientes
+              {t("admin.novedades.visibleForClients")}
             </label>
 
             <div className="mt-6 flex justify-end gap-2">
-              <button className="btn-ghost" onClick={() => setForm(null)}>Cancelar</button>
-              <button className="btn-primary" disabled={busy} onClick={save}>{busy ? "Guardando…" : "Guardar"}</button>
+              <button className="btn-ghost" onClick={() => setForm(null)}>{t("common.cancel")}</button>
+              <button className="btn-primary" disabled={busy} onClick={save}>{busy ? t("common.saving") : t("common.save")}</button>
             </div>
           </div>
         </div>

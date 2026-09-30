@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { insforge } from "../lib/insforge";
+import { useI18n } from "../lib/i18n";
 import type { Integracion } from "../lib/types";
 
 export default function AdminIntegraciones() {
+  const { t } = useI18n();
   const [rows, setRows] = useState<Integracion[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
@@ -30,10 +32,10 @@ export default function AdminIntegraciones() {
       <table className="tbl">
         <thead>
           <tr>
-            <th>Integración</th>
-            <th>Proveedor</th>
-            <th>Requiere</th>
-            <th>Activa</th>
+            <th>{t("admin.integraciones.colIntegration")}</th>
+            <th>{t("admin.integraciones.colProvider")}</th>
+            <th>{t("admin.integraciones.colRequires")}</th>
+            <th>{t("admin.integraciones.colActive")}</th>
           </tr>
         </thead>
         <tbody>
@@ -59,23 +61,23 @@ export default function AdminIntegraciones() {
   return (
     <div className="flex flex-col gap-5">
       <div>
-        <h1 className="font-display text-xl font-semibold">Integraciones</h1>
+        <h1 className="font-display text-xl font-semibold">{t("admin.integraciones.title")}</h1>
         <p className="text-sm text-muted">
-          Dónde escribe el cliente (canales) y qué apps externas puede usar el bot (Composio). Lo que desactives no se ofrece en el panel del cliente.
+          {t("admin.integraciones.subtitle")}
         </p>
       </div>
 
       {err && <div className="rounded-lg border border-bad/40 bg-bad/10 px-3 py-2 text-xs text-bad">{err}</div>}
       {loading ? (
-        <div className="text-muted">Cargando…</div>
+        <div className="text-muted">{t("common.loading")}</div>
       ) : (
         <>
           <div className="flex flex-col gap-2">
-            <h3 className="font-display font-semibold text-[13px] text-cream">Canales</h3>
+            <h3 className="font-display font-semibold text-[13px] text-cream">{t("admin.integraciones.sectionChannels")}</h3>
             {tabla(canales)}
           </div>
           <div className="flex flex-col gap-2">
-            <h3 className="font-display font-semibold text-[13px] text-cream">Apps externas (Composio)</h3>
+            <h3 className="font-display font-semibold text-[13px] text-cream">{t("admin.integraciones.sectionApps")}</h3>
             {tabla(apps)}
           </div>
         </>

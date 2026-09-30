@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { insforge } from "../lib/insforge";
+import { useI18n } from "../lib/i18n";
 import type { Instalacion, Profile } from "../lib/types";
 
 export default function AdminRevendedores() {
+  const { t } = useI18n();
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [insts, setInsts] = useState<Instalacion[]>([]);
   const [loading, setLoading] = useState(true);
@@ -35,20 +37,19 @@ export default function AdminRevendedores() {
   return (
     <div className="flex flex-col gap-5">
       <div>
-        <h1 className="font-display text-xl font-semibold">Revendedores</h1>
+        <h1 className="font-display text-xl font-semibold">{t("admin.revendedores.title")}</h1>
         <p className="text-sm text-muted">
-          Cuentas marcadas como revendedor (agencias). Promové a alguien desde <b className="text-cream">Clientes</b> (rol
-          revendedor). Acá ves su cartera y podés devolverlos a cliente.
+          {t("admin.revendedores.subtitlePre")}<b className="text-cream">{t("admin.revendedores.subtitleBold")}</b>{t("admin.revendedores.subtitlePost")}
         </p>
       </div>
 
       {err && <div className="rounded-lg border border-bad/40 bg-bad/10 px-3 py-2 text-xs text-bad">{err}</div>}
 
       {loading ? (
-        <div className="text-muted">Cargando…</div>
+        <div className="text-muted">{t("common.loading")}</div>
       ) : resellers.length === 0 ? (
         <div className="card p-6 text-sm text-muted">
-          Todavía no hay revendedores. En <b className="text-cream">Clientes</b> cambiá el rol de una cuenta a «revendedor».
+          {t("admin.revendedores.emptyPre")}<b className="text-cream">{t("admin.revendedores.emptyBold")}</b>{t("admin.revendedores.emptyPost")}
         </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
@@ -61,14 +62,14 @@ export default function AdminRevendedores() {
                     <div className="truncate font-semibold">{r.display_name ?? r.email}</div>
                     <div className="font-mono text-[11px] text-muted">{r.email}</div>
                   </div>
-                  <span className="chip bg-accentSoft text-accent">revendedor</span>
+                  <span className="chip bg-accentSoft text-accent">{t("admin.revendedores.badge")}</span>
                 </div>
                 <div className="mt-3 text-sm text-muted">
-                  {bots.length} instalación{bots.length === 1 ? "" : "es"} propia{bots.length === 1 ? "" : "s"}
+                  {t(bots.length === 1 ? "admin.revendedores.botsOne" : "admin.revendedores.botsMany", { n: bots.length })}
                 </div>
                 <div className="mt-3 flex justify-end">
                   <button className="btn-ghost py-1 text-xs" onClick={() => setRole(r.id, "cliente")}>
-                    Devolver a cliente
+                    {t("admin.revendedores.toClient")}
                   </button>
                 </div>
               </div>

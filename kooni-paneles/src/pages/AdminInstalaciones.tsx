@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { insforge } from "../lib/insforge";
+import { useI18n } from "../lib/i18n";
 import type { Instalacion, Uso } from "../lib/types";
 
 export default function AdminInstalaciones() {
+  const { t, formatDate, formatNumber } = useI18n();
   const [rows, setRows] = useState<Instalacion[]>([]);
   const [uso, setUso] = useState<Map<string, Uso>>(new Map());
   const [loading, setLoading] = useState(true);
@@ -24,31 +26,31 @@ export default function AdminInstalaciones() {
   return (
     <div className="flex flex-col gap-5">
       <div>
-        <h1 className="font-display text-xl font-semibold">Instalaciones</h1>
-        <p className="text-sm text-muted">Bots desplegados y sus últimas métricas agregadas (sin datos personales).</p>
+        <h1 className="font-display text-xl font-semibold">{t("admin.instalaciones.title")}</h1>
+        <p className="text-sm text-muted">{t("admin.instalaciones.subtitle")}</p>
       </div>
       <div className="card overflow-hidden">
         <table className="tbl">
           <thead>
             <tr>
-              <th>Bot</th>
-              <th>UID</th>
-              <th>Plan</th>
-              <th>Mensajes 30d</th>
-              <th>IA 30d</th>
-              <th>Último visto</th>
-              <th>Worker</th>
+              <th>{t("admin.instalaciones.colBot")}</th>
+              <th>{t("admin.instalaciones.colUid")}</th>
+              <th>{t("admin.instalaciones.colPlan")}</th>
+              <th>{t("admin.instalaciones.colMessages")}</th>
+              <th>{t("admin.instalaciones.colAi")}</th>
+              <th>{t("admin.instalaciones.colLastSeen")}</th>
+              <th>{t("admin.instalaciones.colWorker")}</th>
             </tr>
           </thead>
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={7} className="text-muted">Cargando…</td>
+                <td colSpan={7} className="text-muted">{t("common.loading")}</td>
               </tr>
             )}
             {rows.length === 0 && !loading && (
               <tr>
-                <td colSpan={7} className="text-muted">Todavía no hay instalaciones registradas.</td>
+                <td colSpan={7} className="text-muted">{t("admin.instalaciones.empty")}</td>
               </tr>
             )}
             {rows.map((i) => {
@@ -64,15 +66,15 @@ export default function AdminInstalaciones() {
                   <td>
                     <span className={`chip ${i.tier === "pro" ? "bg-accentSoft text-accent" : "bg-panel2 text-muted"}`}>{i.tier ?? "free"}</span>
                   </td>
-                  <td className="font-mono">{u?.conteos?.mensajes30?.toLocaleString("es") ?? "—"}</td>
+                  <td className="font-mono">{u?.conteos?.mensajes30 != null ? formatNumber(u.conteos.mensajes30) : "—"}</td>
                   <td className="font-mono">{u?.costos?.ia30 != null ? `$${Number(u.costos.ia30).toFixed(2)}` : "—"}</td>
                   <td>
-                    <span className={active ? "text-ok" : "text-muted"}>{i.last_seen ? new Date(i.last_seen).toLocaleDateString("es") : "—"}</span>
+                    <span className={active ? "text-ok" : "text-muted"}>{i.last_seen ? formatDate(i.last_seen) : "—"}</span>
                   </td>
                   <td>
                     {i.worker_url ? (
                       <a className="text-accent hover:underline" href={i.worker_url} target="_blank" rel="noreferrer">
-                        abrir
+                        {t("admin.instalaciones.open")}
                       </a>
                     ) : (
                       "—"

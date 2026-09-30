@@ -193,4 +193,21 @@ describe("runFollowups — envío y garantías", () => {
     expect(r.sent).toBe(0);
     expect(sendReplyMock).not.toHaveBeenCalled();
   });
+
+  it("redacta el seguimiento en el idioma de la conversación (inglés)", async () => {
+    const conv = await convs.getOrCreate("manychat", "en1", "Lead en1");
+    const userAt = IDLE_OK;
+    await msgs.append(conv.id, "user", "I am interested in the car, what is the price?", {
+      createdAt: userAt - 1000,
+    });
+    await msgs.append(conv.id, "assistant", "Sure, let me know", { createdAt: userAt + 500 });
+    await convs.touchLastMessage(conv.id, userAt + 500);
+    await markHot(conv.id);
+
+    await runFollowups(env, { now: NOW });
+
+    const prompt = (generateTextMock.mock.calls[0][0] as { prompt: string }).prompt;
+    expect(prompt).toContain("EXCLUSIVAMENTE en inglés");
+    expect(prompt).not.toContain("español mexicano");
+  });
 });

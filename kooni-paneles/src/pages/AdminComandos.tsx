@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { insforge } from "../lib/insforge";
+import { useI18n } from "../lib/i18n";
 import type { Comando } from "../lib/types";
 
 export default function AdminComandos() {
+  const { t } = useI18n();
   const [rows, setRows] = useState<Comando[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
@@ -33,10 +35,10 @@ export default function AdminComandos() {
       <table className="tbl">
         <thead>
           <tr>
-            <th>Comando</th>
-            <th>Descripción</th>
-            <th>Pro</th>
-            <th>Activo</th>
+            <th>{t("admin.comandos.colCommand")}</th>
+            <th>{t("admin.comandos.colDescription")}</th>
+            <th>{t("admin.comandos.colPro")}</th>
+            <th>{t("admin.comandos.colActive")}</th>
           </tr>
         </thead>
         <tbody>
@@ -62,23 +64,23 @@ export default function AdminComandos() {
   return (
     <div className="flex flex-col gap-5">
       <div>
-        <h1 className="font-display text-xl font-semibold">Comandos / Skills</h1>
+        <h1 className="font-display text-xl font-semibold">{t("admin.comandos.title")}</h1>
         <p className="text-sm text-muted">
-          El catálogo que ve el cliente (cheat sheet) y que el CLI distribuye. Marcá <b className="text-cream">Pro</b> para los que van con Kooni+.
+          {t("admin.comandos.subtitlePre")}<b className="text-cream">{t("admin.comandos.subtitleBold")}</b>{t("admin.comandos.subtitlePost")}
         </p>
       </div>
 
       {err && <div className="rounded-lg border border-bad/40 bg-bad/10 px-3 py-2 text-xs text-bad">{err}</div>}
       {loading ? (
-        <div className="text-muted">Cargando…</div>
+        <div className="text-muted">{t("common.loading")}</div>
       ) : (
         <>
           <div className="flex flex-col gap-2">
-            <h3 className="font-display font-semibold text-[13px] text-cream">Terminal · CLI</h3>
+            <h3 className="font-display font-semibold text-[13px] text-cream">{t("admin.comandos.sectionTerminal")}</h3>
             {tabla(terminal)}
           </div>
           <div className="flex flex-col gap-2">
-            <h3 className="font-display font-semibold text-[13px] text-cream">Agente · prompts</h3>
+            <h3 className="font-display font-semibold text-[13px] text-cream">{t("admin.comandos.sectionAgent")}</h3>
             {tabla(agente)}
           </div>
         </>

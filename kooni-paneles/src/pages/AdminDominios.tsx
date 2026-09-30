@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { insforge } from "../lib/insforge";
+import { useI18n } from "../lib/i18n";
 import type { Dominio, Instalacion } from "../lib/types";
 
 export default function AdminDominios() {
+  const { t, formatDate } = useI18n();
   const [rows, setRows] = useState<Dominio[]>([]);
   const [insts, setInsts] = useState<Instalacion[]>([]);
   const [hostname, setHostname] = useState("");
@@ -29,7 +31,7 @@ export default function AdminDominios() {
     setErr("");
     const host = hostname.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "");
     if (!host) {
-      setErr("Poné un dominio (ej. panel.tunegocio.com).");
+      setErr(t("admin.dominios.errDomain"));
       return;
     }
     const inst = insts.find((i) => i.id === instId);
@@ -62,9 +64,9 @@ export default function AdminDominios() {
   return (
     <div className="flex flex-col gap-5">
       <div>
-        <h1 className="font-display text-xl font-semibold">Dominios</h1>
+        <h1 className="font-display text-xl font-semibold">{t("admin.dominios.title")}</h1>
         <p className="text-sm text-muted">
-          Dominios propios por instalación. El deploy del dominio se hace en el Cloudflare del cliente; acá queda el registro.
+          {t("admin.dominios.subtitle")}
         </p>
       </div>
 
@@ -72,11 +74,11 @@ export default function AdminDominios() {
 
       <div className="card flex flex-wrap items-end gap-3 p-5">
         <div className="min-w-[240px] flex-1">
-          <label className="label">Dominio</label>
+          <label className="label">{t("admin.dominios.labelDomain")}</label>
           <input className="input mt-1 font-mono" placeholder="panel.tunegocio.com" value={hostname} onChange={(e) => setHostname(e.target.value)} />
         </div>
         <div className="min-w-[200px]">
-          <label className="label">Instalación</label>
+          <label className="label">{t("admin.dominios.labelInstallation")}</label>
           <select className="input mt-1" value={instId} onChange={(e) => setInstId(e.target.value)}>
             <option value="">—</option>
             {insts.map((i) => (
@@ -84,26 +86,26 @@ export default function AdminDominios() {
             ))}
           </select>
         </div>
-        <button className="btn-primary" onClick={add}>Agregar</button>
+        <button className="btn-primary" onClick={add}>{t("admin.dominios.add")}</button>
       </div>
 
       <div className="card overflow-hidden">
         <table className="tbl">
           <thead>
             <tr>
-              <th>Dominio</th>
-              <th>Instalación</th>
-              <th>Estado</th>
-              <th>Alta</th>
+              <th>{t("admin.dominios.colDomain")}</th>
+              <th>{t("admin.dominios.colInstallation")}</th>
+              <th>{t("admin.dominios.colStatus")}</th>
+              <th>{t("admin.dominios.colCreated")}</th>
               <th></th>
             </tr>
           </thead>
           <tbody>
             {loading && (
-              <tr><td colSpan={5} className="text-muted">Cargando…</td></tr>
+              <tr><td colSpan={5} className="text-muted">{t("common.loading")}</td></tr>
             )}
             {!loading && rows.length === 0 && (
-              <tr><td colSpan={5} className="text-muted">Sin dominios registrados.</td></tr>
+              <tr><td colSpan={5} className="text-muted">{t("admin.dominios.empty")}</td></tr>
             )}
             {rows.map((d) => (
               <tr key={d.id}>
@@ -116,9 +118,9 @@ export default function AdminDominios() {
                     <option value="error">error</option>
                   </select>
                 </td>
-                <td className="text-muted">{new Date(d.created_at).toLocaleDateString("es")}</td>
+                <td className="text-muted">{formatDate(d.created_at)}</td>
                 <td className="text-right">
-                  <button className="btn-danger py-1 text-xs" onClick={() => remove(d.id)}>Borrar</button>
+                  <button className="btn-danger py-1 text-xs" onClick={() => remove(d.id)}>{t("admin.dominios.delete")}</button>
                 </td>
               </tr>
             ))}
