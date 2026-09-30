@@ -1119,12 +1119,17 @@ export interface InventorySummary {
 export function queryInventory(
   store: VehicleStore,
   f: InventoryFilter,
-  limit = 12,
+  limit = 25,
+  offset = 0,
 ): {
   matches: InventoryMatch[];
   total: number;
   marcas: { marca: string; total: number }[];
   resumen: InventorySummary;
+  /** Índice del primer resultado mostrado (para paginar). */
+  offset: number;
+  /** true si quedan más resultados después de esta página. */
+  hasMore: boolean;
 } {
   const all = listStoredVehicles(store);
   const filtered = all.filter((v) => matchesFilter(v, f));
@@ -1144,8 +1149,10 @@ export function queryInventory(
     precioMin: prices.length > 0 ? Math.min(...prices) : null,
     precioMax: prices.length > 0 ? Math.max(...prices) : null,
   };
+  const start = Math.max(0, offset);
+  const page = filtered.slice(start, start + Math.max(1, limit));
   return {
-    matches: filtered.slice(0, limit).map((v) => ({
+    matches: page.map((v) => ({
       key: v.key,
       vin: v.vin,
       title: v.title,
@@ -1160,6 +1167,8 @@ export function queryInventory(
       .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))
       .map(([marca, total]) => ({ marca, total })),
     resumen,
+    offset: start,
+    hasMore: start + page.length < filtered.length,
   };
 }
 

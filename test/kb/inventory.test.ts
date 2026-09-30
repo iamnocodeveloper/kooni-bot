@@ -338,6 +338,23 @@ describe("consulta exacta (anti-alucinación)", () => {
     expect(r2.total).toBe(0);
   });
 
+  it("pagina con limit/offset y marca hasMore", () => {
+    const p1 = queryInventory(store, {}, 2, 0);
+    expect(p1.total).toBe(5);
+    expect(p1.matches).toHaveLength(2);
+    expect(p1.offset).toBe(0);
+    expect(p1.hasMore).toBe(true);
+
+    const p3 = queryInventory(store, {}, 2, 4);
+    expect(p3.matches).toHaveLength(1);
+    expect(p3.offset).toBe(4);
+    expect(p3.hasMore).toBe(false);
+
+    // La última página de un inventario chico no pierde resultados.
+    expect(queryInventory(store, {}, 50, 0).matches).toHaveLength(5);
+    expect(queryInventory(store, {}, 50, 0).hasMore).toBe(false);
+  });
+
   it("filtra por modelo, condición y rango de precio", () => {
     expect(queryInventory(store, { modelo: "Sorento" }).total).toBe(1);
     // "usado" incluye los certificados (un certified es un usado verificado):

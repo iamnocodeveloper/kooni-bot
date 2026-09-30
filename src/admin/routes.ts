@@ -65,6 +65,8 @@ import { CommentsRepo } from "../db/comments";
 import { DmLogsRepo } from "../db/dmLogs";
 import { replyToComment, privateReplyToComment, MAX_PUBLIC_REPLIES_PER_DAY } from "../channels/zernioComments";
 import { generateAiCommentReply } from "../aiReply";
+import { clearPanelLangCache } from "./i18n";
+import { ChangeReviewsRepo } from "../db/changeReviews";
 
 /** Parsea el form de una automatización (crear o editar) a un objeto de regla. */
 function parseRuleForm(form: FormData) {
@@ -553,8 +555,26 @@ adminApp.get("/scraping", async (c) => {
       before: Number.isFinite(beforeRaw) && beforeRaw > 0 ? beforeRaw : undefined,
       ok: c.req.query("ok") || undefined,
       err: c.req.query("err") || undefined,
+      rev: c.req.query("rev") || undefined,
     }),
   );
+});
+
+// Validar un cambio de scraping: confirmado / descartado / pendiente (↺ = limpia).
+adminApp.post("/scraping/changes/:id/review", async (c) => {
+  const id = c.req.param("id");
+  const form = await c.req.formData();
+  const raw = String(form.get("status") ?? "");
+  const repo = new ChangeReviewsRepo(new Db(c.env.DB));
+  if (raw === "confirmed" || raw === "rejected") {
+    await repo.set(id, raw, undefined, undefined).catch(() => {});
+    await audit(c, { action: "scraping.review", target: id, afterVal: raw, result: "ok" });
+  } else {
+    await repo.clear(id).catch(() => {});
+    await audit(c, { action: "scraping.review", target: id, afterVal: "pending", result: "ok" });
+  }
+  const back = String(form.get("back") ?? "");
+  return c.redirect(/^\/admin\//.test(back) ? back : "/admin/scraping");
 });
 
 adminApp.get("/scraping/export.csv", async (c) => {
@@ -1633,6 +1653,18 @@ adminApp.get("/auditoria/export.csv", async (c) => {
       "Content-Disposition": `attachment; filename="auditoria-${Date.now()}.csv"`,
     },
   });
+});
+
+// Idioma del PANEL (es | en). Es una preferencia de la instalación (el panel es
+// mono-usuario). No toca el idioma con el que el bot le habla a los clientes.
+adminApp.post("/config/language", async (c) => {
+  const form = await c.req.formData();
+  const lang = String(form.get("lang") ?? "es") === "en" ? "en" : "es";
+  await new SettingsRepo(new Db(c.env.DB)).set(SETTING_KEYS.panelLanguage, lang);
+  clearPanelLangCache();
+  await audit(c, { action: "config.language", afterVal: lang, result: "ok" });
+  const back = c.req.header("referer") ?? "";
+  return c.redirect(/^\/admin\//.test(back) ? back : "/admin/overview");
 });
 
 // Fallback: respuesta pública a comentarios que no matchean ninguna regla.

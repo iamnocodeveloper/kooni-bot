@@ -25,6 +25,7 @@ import { SettingsRepo, SETTING_KEYS } from "../db/settings";
 import { WebSyncLogRepo, type WebSyncChangeInput } from "../db/webSyncLog";
 import { KbDocsRepo, indexDoc, removeDocVectors, MAX_DOC_CHARS } from "./docs";
 import { scrapeUrl, decodoConfigured } from "../integrations/decodo";
+import { fetchSitemapDirect, looksLikeSitemap } from "../integrations/directFetch";
 import {
   parseInventoryFromAny,
   looksLikeInventory,
@@ -188,6 +189,9 @@ export interface WebSyncSummary {
   changed?: number;
   /** Análisis IA del inventario (solo si el toggle está encendido). */
   analysis?: { analyzed: number; applied: number; skipped?: string; error?: string };
+  /** Cuántas URLs se bajaron directo (sin gastar Decodo) vs por Decodo. */
+  direct?: number;
+  decodo?: number;
 }
 
 export interface WebSyncRunOptions {
@@ -267,15 +271,40 @@ export async function runWebSync(env: Env, opts: WebSyncRunOptions = {}): Promis
   const storeBefore: VehicleStore = await loadVehicleStore(db).catch(() => ({ updatedAt: 0, vehicles: {} }));
 
   for (const url of urls) {
-    const r = await scrapeUrl(env, url);
-    if (!r.ok) {
-      console.warn(`[webSync] ${url}: ${r.error}`);
-      summary.errors.push({ url, error: r.error });
-      continue;
+    // Sitemaps/XML: se bajan DIRECTO (público y estático) — 0 requests de Decodo.
+    // Si el sitio bloquea al Worker, se cae a Decodo. El resto sigue por Decodo.
+    let content: string | null = null;
+    if (looksLikeSitemap(url)) {
+      const direct = await fetchSitemapDirect(url, env);
+      if (direct.ok && direct.text && direct.text.trim()) {
+        content = direct.text;
+        summary.direct = (summary.direct ?? 0) + 1;
+      } else {
+        console.warn(`[webSync] ${url}: fetch directo no sirvió (${direct.error ?? direct.status}) → Decodo`);
+      }
+    }
+
+    if (content === null) {
+      const r = await scrapeUrl(env, url);
+      if (!r.ok) {
+        console.warn(`[webSync] ${url}: ${r.error}${r.code ? ` [${r.code}]` : ""}`);
+        summary.errors.push({ url, error: r.error });
+        // Cuota agotada: no tiene sentido seguir martillando la API.
+        if (r.code === "quota") {
+          summary.errors.push({
+            url,
+            error: "Se detuvo la corrida: la cuota de Decodo está agotada (revisá tu plan de Decodo).",
+          });
+          break;
+        }
+        continue;
+      }
+      content = r.content;
+      summary.decodo = (summary.decodo ?? 0) + 1;
     }
     summary.scraped++;
 
-    const trimmed = trimBoilerplate(r.content);
+    const trimmed = trimBoilerplate(content);
     const parsed = parseInventoryFromAny(trimmed, url);
     // Modo inventario: entra si parsea bien, o si la URL YA estaba en modo
     // inventario y el feed sigue trayendo autos (aunque sean pocos).

@@ -7,6 +7,7 @@ import type { Env } from "../../env";
 import { layout } from "./layout";
 import { Db } from "../../db/client";
 import { loadVehicleStore, listStoredVehicles } from "../../kb/inventory";
+import { ChangeReviewsRepo, type ChangeReview } from "../../db/changeReviews";
 import {
   WebSyncLogRepo,
   type WebSyncChange,
@@ -70,6 +71,8 @@ export interface ScrapingQuery {
   before?: number;
   ok?: string;
   err?: string;
+  /** Filtro de validación: pending | confirmed | rejected. */
+  rev?: string;
 }
 
 const PAGE = 40;
@@ -102,6 +105,17 @@ export async function renderScraping(env: Env, q: ScrapingQuery = {}): Promise<s
   if (!selected && selectedId) selected = await repo.getRun(selectedId).catch(() => null);
   let changes: WebSyncChange[] = [];
   if (selected) changes = await repo.listChanges(selected.id).catch(() => [] as WebSyncChange[]);
+
+  // Validación: estado por cambio (confirmado/descartado) + filtro.
+  let reviews = new Map<string, ChangeReview>();
+  try {
+    reviews = await new ChangeReviewsRepo(db).forChangeIds(changes.map((c) => c.id));
+  } catch (e) {
+    console.warn("[scraping] no se pudieron cargar las validaciones:", e);
+  }
+  const revFilter = q.rev === "confirmed" || q.rev === "rejected" || q.rev === "pending" ? q.rev : "";
+  const reviewState = (id: string): "pending" | "confirmed" | "rejected" => reviews.get(id)?.status ?? "pending";
+  const visibleChanges = revFilter ? changes.filter((c) => reviewState(c.id) === revFilter) : changes;
 
   const qs = (extra: Record<string, string | number | undefined>): string => {
     const p = new URLSearchParams();
@@ -202,9 +216,9 @@ export async function renderScraping(env: Env, q: ScrapingQuery = {}): Promise<s
     </div>`;
 
   // ── Detalle de la corrida seleccionada ─────────────────────────────────────
-  const added = changes.filter((c) => c.kind === "added");
-  const removed = changes.filter((c) => c.kind === "removed");
-  const changedRows = changes.filter((c) => c.kind === "changed");
+  const added = visibleChanges.filter((c) => c.kind === "added");
+  const removed = visibleChanges.filter((c) => c.kind === "removed");
+  const changedRows = visibleChanges.filter((c) => c.kind === "changed");
 
   const carLink = (c: WebSyncChange, label: string) =>
     c.url
@@ -246,19 +260,54 @@ export async function renderScraping(env: Env, q: ScrapingQuery = {}): Promise<s
   }
   const changedItems = [...changedByVehicle.values()].map((g) => {
     const fields = g.fields
-      .map(
-        (f) => `<div class="font-mono text-[10.5px]" style="color:var(--muted)">
+      .map((f) => {
+        const st = reviewState(f.id);
+        const chip =
+          st === "confirmed"
+            ? `<span style="color:var(--ok);font-size:10px;border:1px solid var(--ok);padding:0 5px">✓ confirmado</span>`
+            : st === "rejected"
+              ? `<span style="color:var(--bad);font-size:10px;border:1px solid var(--bad);padding:0 5px">✗ descartado</span>`
+              : `<span style="color:var(--dim);font-size:10px;border:1px solid var(--line);padding:0 5px">pendiente</span>`;
+        const btn = (status: string, label: string, color: string) =>
+          `<button type="submit" name="status" value="${status}" title="${label}"
+             style="border:1px solid ${color};color:${color};background:none;font-size:10px;padding:0 6px;cursor:pointer">${label}</button>`;
+        return `<div class="font-mono text-[10.5px]" style="color:var(--muted);display:flex;align-items:center;gap:6px;flex-wrap:wrap">
             <span style="color:var(--dim)">${esc(f.field ?? "")}:</span>
             <span style="color:var(--dim);text-decoration:line-through">${esc(f.oldValue ?? "(vacío)")}</span>
             → <span style="color:var(--accent2)">${esc(f.newValue ?? "(vacío)")}</span>
-          </div>`,
-      )
+            <span style="margin-left:auto;display:inline-flex;align-items:center;gap:4px">
+              ${chip}
+              <form method="POST" action="/admin/scraping/changes/${encodeURIComponent(f.id)}/review" style="display:inline-flex;gap:4px;margin:0">
+                <input type="hidden" name="back" value="${esc(q.run ? `/admin/scraping?run=${encodeURIComponent(q.run)}` : "/admin/scraping")}">
+                ${btn("confirmed", "✓", "var(--ok)")}
+                ${btn("rejected", "✗", "var(--bad)")}
+                ${st !== "pending" ? btn("pending", "↺", "var(--dim)") : ""}
+              </form>
+            </span>
+          </div>`;
+      })
       .join("");
     return `<div style="font-size:12px;border-left:2px solid var(--accent2);padding-left:8px;display:flex;flex-direction:column;gap:2px">
         ${g.url ? `<a href="${esc(g.url)}" target="_blank" rel="noopener" style="color:var(--cream);text-decoration:none">${esc(g.title)}</a>` : `<span style="color:var(--cream)">${esc(g.title)}</span>`}
         ${fields}
       </div>`;
   });
+
+  const reviewPills = (() => {
+    const count = (s: string) => changes.filter((c) => reviewState(c.id) === (s as never)).length;
+    const pill = (key: string, label: string, n: number) => {
+      const active = revFilter === key;
+      const color = active ? "var(--accent)" : "var(--muted)";
+      const href = `/admin/scraping${qs({ rev: key || undefined })}`;
+      return `<a href="${href}" style="font-size:11px;color:${color};border:1px solid ${color};padding:3px 9px;text-decoration:none">${esc(label)} ${n}</a>`;
+    };
+    return `<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+        ${pill("", "Todos", changes.length)}
+        ${pill("pending", "Pendientes", count("pending"))}
+        ${pill("confirmed", "Confirmados", count("confirmed"))}
+        ${pill("rejected", "Descartados", count("rejected"))}
+      </div>`;
+  })();
 
   const detail = selected
     ? `
@@ -277,11 +326,16 @@ export async function renderScraping(env: Env, q: ScrapingQuery = {}): Promise<s
       ${
         !selected.errorMsg && changes.length === 0
           ? `<p class="text-[12px]" style="color:var(--muted);margin:0">Sin cambios: el inventario quedó igual que la corrida anterior${selected.trigger === "rebuild" ? " (la reconstrucción de KB no scrapea el feed)" : ""}.</p>`
-          : `<div style="display:flex;gap:10px;flex-wrap:wrap">
-               ${listBlock("Nuevos", "var(--ok)", addedItems, "Ninguno.")}
-               ${listBlock("Salieron / vendidos", "var(--warn)", removedItems, "Ninguno.")}
-               ${listBlock("Cambios", "var(--accent2)", changedItems, "Ninguno.")}
-             </div>`
+          : `${reviewPills}
+             ${
+               visibleChanges.length === 0
+                 ? `<p class="text-[12px]" style="color:var(--muted);margin:0">No hay cambios con este filtro.</p>`
+                 : `<div style="display:flex;gap:10px;flex-wrap:wrap">
+                      ${listBlock("Nuevos", "var(--ok)", addedItems, "Ninguno.")}
+                      ${listBlock("Salieron / vendidos", "var(--warn)", removedItems, "Ninguno.")}
+                      ${listBlock("Cambios", "var(--accent2)", changedItems, "Ninguno.")}
+                    </div>`
+             }`
       }
     </div>`
     : "";

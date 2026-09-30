@@ -5,6 +5,52 @@ Cambios notables de Kooni. Formato aproximado de
 
 El CLI `kooni-bot` se versiona aparte (npm) — ver la nota de cada versión.
 
+## [1.51.0] — 2026-09-30
+
+### Corregido — el scraping de inventario ya no depende de la cuota de Decodo
+
+La corrida fallaba con **HTTP 429** de Decodo ("used all requests / subscription
+period ended"), aun con saldo, porque **todo** pasaba por Decodo y `scrapeUrl`
+pedía siempre lo más caro (`proxy_pool: "premium"` + `headless: "html"`) y no
+reintentaba. Ahora:
+
+- **Sitemaps/XML por fetch directo** (`src/integrations/directFetch.ts`): el
+  sitemap es público y estático, se baja sin gastar requests de Decodo (con
+  fallback a Decodo si el sitio bloquea al Worker). El resto sigue por Decodo.
+- **Reintentos con backoff** ante 429/5xx/timeout (respeta `Retry-After`).
+- **Modo barato**: pool `standard` y sin headless por default (el XML no los
+  necesita).
+- **Errores accionables y clasificados** (`quota` / `auth` / `rate_limit` /
+  `server` / `empty` / `timeout`): en vez del cuerpo truncado, un mensaje que dice
+  qué revisar; ante `quota` la corrida se corta en vez de martillar la API.
+- El resumen de la corrida informa cuántas URLs fueron directas y cuántas por Decodo.
+
+### Agregado — validar los cambios del scraping (última vs anterior)
+
+- Nueva tabla `web_sync_change_reviews`: cada cambio de una corrida puede marcarse
+  **confirmado** / **descartado** (o volver a pendiente) desde la pestaña Scraping,
+  con el estado visible y filtros *Pendientes / Confirmados / Descartados*.
+- El detalle de la corrida sigue agrupando por auto con `viejo → nuevo`, ahora con
+  su estado de validación al lado de cada campo.
+
+### Agregado — inventario: el bot lista 25 y pagina
+
+- `queryInventory` pagina (`limit`/`offset`, `hasMore`) y el default sube de **12 a
+  25** autos por consulta (configurable con `inventory_page_size`, clamp 1..50).
+- `inventarioQuery` acepta `pagina` y, con `hayMas`, el bot ofrece "¿querés ver más?"
+  en vez de cortar en silencio.
+
+### Agregado — idioma del panel del bot (ES/EN)
+
+- Infra i18n del panel SSR (`src/admin/i18n.ts` + `src/admin/locales/{es,en}.ts`) y
+  setting `panel_language`. **Español sigue siendo el default** (nada cambia hasta
+  que lo cambies).
+- Selector 🇲🇽/🇺🇸 en el header; navegación, breadcrumb, título, pill "BOT EN LÍNEA",
+  "Cerrar sesión" y el pie del sidebar traducidos. Es independiente del idioma con
+  el que el bot le habla a los clientes (`BOT_LANGUAGE`).
+- Ruta `POST /admin/config/language` (auditada).
+- Las vistas restantes se traducen por fases (el idioma ya funciona en el shell).
+
 ## [1.50.0] — 2026-09-30
 
 ### Agregado — pestaña "Comentarios" tipo inbox (Zernio)

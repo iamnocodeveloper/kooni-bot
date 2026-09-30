@@ -14,9 +14,19 @@ import { isProUnlocked, PRO_ONLY_TABS, isTabAllowed } from "../../config";
 import { readOverlay } from "../../licenseSync";
 import { getNiche } from "../../niches";
 import { pwaHeadTags } from "../pwa";
+import { panelI18n } from "../i18n";
 import type { NichePack } from "../../niches";
 
 const UPGRADE_URL = "/admin/upgrade";
+
+// Secciones del sidebar → sufijo de su clave i18n (`navSec.<sufijo>`).
+const SECTION_NAMES: Record<string, string> = {
+  Inicio: "inicio",
+  Inbox: "inbox",
+  "Mi Agente": "agente",
+  Extras: "extras",
+  "Análisis": "analisis",
+};
 
 interface Item {
   id: string;
@@ -370,7 +380,7 @@ const GLOBAL_SCRIPT = `
   });
 </script>`;
 
-function navItem(item: Item, active: boolean): string {
+function navItem(item: Item, active: boolean, label = item.label): string {
   const base =
     "display:flex;align-items:center;gap:11px;padding:9px 10px;font-size:13px;";
   const style = active
@@ -378,17 +388,17 @@ function navItem(item: Item, active: boolean): string {
     : base + "color:var(--muted);border-left:2px solid transparent";
   const iconColor = active ? "var(--accent)" : "var(--dim)";
   return `<a href="${item.href}" class="navlink" style="${style}">
-    <i data-lucide="${item.icon}" width="17" height="17" style="color:${iconColor}"></i> ${item.label}
+    <i data-lucide="${item.icon}" width="17" height="17" style="color:${iconColor}"></i> ${label}
   </a>`;
 }
 
 // Tier free: los tabs Pro se muestran bloqueados (candado + tag PRO) y llevan a
 // la página de upgrade en vez de a la vista real. Se ven, pero invitan a subir.
-function navItemLocked(item: Item): string {
+function navItemLocked(item: Item, label = item.label): string {
   const base =
     "display:flex;align-items:center;gap:11px;padding:9px 10px;font-size:13px;color:var(--dim);border-left:2px solid transparent";
   return `<a href="${UPGRADE_URL}" class="navlink" style="${base}" title="Disponible en Pro">
-    <i data-lucide="lock" width="15" height="15" style="color:var(--dim)"></i> ${item.label}
+    <i data-lucide="lock" width="15" height="15" style="color:var(--dim)"></i> ${label}
     <span style="margin-left:auto;font-size:8.5px;letter-spacing:.14em;color:var(--accent2);border:1px solid var(--line);padding:1px 5px">PRO</span>
   </a>`;
 }
@@ -435,11 +445,18 @@ function brandOverrides(b: Brand): string {
   return v.length ? `:root,:root[data-theme]{${v.join(";")}}` : "";
 }
 
-function sidebar(activeTab: string, locked: (id: string) => boolean, niche: NichePack | null, tierLabel: string, brand: Brand = { name: "Kooni", logo: "", primary: "", primarySoft: "", accent2: "", bg: "", panel: "" }): string {
+function sidebar(activeTab: string, locked: (id: string) => boolean, niche: NichePack | null, tierLabel: string, brand: Brand = { name: "Kooni", logo: "", primary: "", primarySoft: "", accent2: "", bg: "", panel: "" }, t: (k: string) => string = (k) => k): string {
   // Ítems extra que aporta el niche pack activo (packs "pesados", ver NicheHooks).
   // Se insertan en la sección que declaran (por su label): restaurante → Pedidos
   // en "Inbox", Menú en "Mi Agente", Reportes en "Análisis".
   const navExtra = niche?.hooks?.navExtra ?? [];
+  const SECTION_KEY: Record<string, string> = {
+    Inicio: "navSec.inicio",
+    Inbox: "navSec.inbox",
+    "Mi Agente": "navSec.agente",
+    Extras: "navSec.extras",
+    "Análisis": "navSec.analisis",
+  };
   const sections = NAV.map((sec) => {
     const extraHere = navExtra.filter((e) => e.section === sec.label);
     const secItems = [...sec.items, ...extraHere.map((e) => ({ id: e.id, label: e.label, href: e.href, icon: e.icon }))];
@@ -448,7 +465,10 @@ function sidebar(activeTab: string, locked: (id: string) => boolean, niche: Nich
     const items = secItems
       .map((raw) => {
         const i = applyNiche(raw, niche);
-        return locked(i.id) ? navItemLocked(i) : navItem(i, i.id === activeTab);
+        // El pack de nicho puede re-etiquetar (ej. leads → Reservaciones): si la
+        // etiqueta cruda no es la del NAV, se respeta la del nicho.
+        const label = i.label !== raw.label ? i.label : t(`nav.${i.id}`);
+        return locked(i.id) ? navItemLocked(i, label) : navItem(i, i.id === activeTab, label);
       })
       .join("");
 
@@ -456,17 +476,18 @@ function sidebar(activeTab: string, locked: (id: string) => boolean, niche: Nich
     // items. Abierta si la sección tiene el tab activo o el usuario la abrió.
     if (sec.collapsible) {
       const open = hasActive ? "1" : "";
+      const secLabel = t(SECTION_KEY[sec.label] ?? sec.label);
       return `<div class="sb-sec" style="color:${labelColor}">
         <button type="button" data-acc="${sec.label}" aria-expanded="${open ? "true" : "false"}"
           style="all:unset;cursor:pointer;display:flex;align-items:center;justify-content:space-between;width:100%;padding:9px 10px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:${labelColor}">
-          ${sec.label}
+          ${secLabel}
           <i data-lucide="chevron-down" width="14" height="14" style="transition:transform .18s;${open ? "transform:rotate(180deg)" : ""}"></i>
         </button>
         <div class="acc-body" data-acc-body="${sec.label}" style="display:${open ? "block" : "none"}">${items}</div>
       </div>`;
     }
 
-    return `<div class="sb-sec" style="color:${labelColor}">${sec.label}</div>${items}`;
+    return `<div class="sb-sec" style="color:${labelColor}">${t(SECTION_KEY[sec.label] ?? sec.label)}</div>${items}`;
   }).join("");
 
   return `<aside class="sb">
@@ -488,8 +509,8 @@ function sidebar(activeTab: string, locked: (id: string) => boolean, niche: Nich
           <i data-lucide="bot" width="16" height="16"></i>
         </div>
         <div style="line-height:1.2;overflow:hidden">
-          <div style="font-size:12px;font-weight:600;white-space:nowrap;text-overflow:ellipsis;overflow:hidden">Panel del bot</div>
-          <div style="font-size:10px;color:var(--dim)">sesión activa</div>
+          <div style="font-size:12px;font-weight:600;white-space:nowrap;text-overflow:ellipsis;overflow:hidden">${t("chrome.panelBot")}</div>
+          <div style="font-size:10px;color:var(--dim)">${t("chrome.session")}</div>
         </div>
       </div>
     </div>
@@ -508,13 +529,17 @@ export async function layout(opts: { title: string; activeTab: string; body: str
   const lockedSync = (id: string) => lockedTabs.has(id);
   const tierLabel = opts.env ? ((await isProUnlocked(opts.env)) ? "Pro" : "Free") : "Pro";
   const niche = opts.env ? getNiche(opts.env) : null;
+  // Idioma del panel (es | en). Español por default: sin setting, todo igual que antes.
+  const { lang, t } = await panelI18n(opts.env);
   const section = NAV.find((s) => s.items.some((i) => i.id === opts.activeTab)) ?? NAV[0];
+  const sectionLabel = t(`navSec.${SECTION_NAMES[section.label] ?? ""}` as never) || section.label;
   const item = applyNiche(section.items.find((i) => i.id === opts.activeTab) ?? section.items[0], niche);
+  const itemLabel = item.label !== section.items.find((i) => i.id === opts.activeTab)?.label ? item.label : t(`nav.${item.id}` as never);
   // Marca blanca: la del backend (overlay) manda sobre las vars BRAND_*.
   const brand = opts.env ? resolveBrand(opts.env, (await readOverlay(opts.env))?.brand) : resolveBrand();
 
   return `<!DOCTYPE html>
-<html lang="es">
+<html lang="${lang}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -526,31 +551,38 @@ export async function layout(opts: { title: string; activeTab: string; body: str
 </head>
 <body class="scanlines">
   <div class="shell">
-    ${sidebar(opts.activeTab, lockedSync, niche, tierLabel, brand)}
+    ${sidebar(opts.activeTab, lockedSync, niche, tierLabel, brand, t as (k: string) => string)}
     <div class="nav-backdrop" data-nav-close></div>
     <div style="display:flex;flex-direction:column;min-width:0">
       <header style="position:sticky;top:0;z-index:30;background:var(--panel);border-bottom:1px solid var(--line);padding:14px 26px;display:flex;align-items:center;gap:14px">
-        <button type="button" class="hburger" data-nav-open aria-label="Abrir menú">
+        <button type="button" class="hburger" data-nav-open aria-label="${t("chrome.menu")}">
           <i data-lucide="menu" width="20" height="20"></i>
         </button>
         <div style="min-width:0">
-          <div class="crumb" style="font-size:10px;letter-spacing:.22em;color:var(--dim);text-transform:uppercase">${section.label} / ${item.label}</div>
-          <h1 style="font-family:'Sora';font-weight:700;font-size:22px;margin:2px 0 0;letter-spacing:-.02em">${item.label}</h1>
+          <div class="crumb" style="font-size:10px;letter-spacing:.22em;color:var(--dim);text-transform:uppercase">${sectionLabel} / ${itemLabel}</div>
+          <h1 style="font-family:'Sora';font-weight:700;font-size:22px;margin:2px 0 0;letter-spacing:-.02em">${itemLabel}</h1>
         </div>
         <div id="proj-switcher" class="hide-mobile" style="margin-left:auto"></div>
-        <button type="button" id="kooni-theme" title="Cambiar tema claro/oscuro" aria-label="Cambiar tema"
+        <form method="POST" action="/admin/config/language" class="hide-mobile" style="flex:none">
+          <select name="lang" onchange="this.form.submit()" aria-label="${t("chrome.lang")}" title="${t("chrome.langLabel")}"
+            style="background:var(--panel2);border:1px solid var(--line);color:var(--muted);font-size:12px;padding:8px 10px;border-radius:8px;cursor:pointer">
+            <option value="es" ${lang === "es" ? "selected" : ""}>🇲🇽 Español</option>
+            <option value="en" ${lang === "en" ? "selected" : ""}>🇺🇸 English</option>
+          </select>
+        </form>
+        <button type="button" id="kooni-theme" title="${t("chrome.theme")}" aria-label="${t("chrome.theme")}"
           style="flex:none;width:36px;height:36px;background:var(--panel2);border:1px solid var(--line);color:var(--muted);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;border-radius:8px">
           <i data-lucide="moon-star" width="16" height="16"></i>
         </button>
-        <button type="button" id="kooni-push" hidden title="Avisos en este dispositivo"
+        <button type="button" id="kooni-push" hidden title="${t("chrome.push")}"
           style="flex:none;width:36px;height:36px;background:var(--panel2);border:1px solid var(--line);color:var(--muted);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;border-radius:8px">
           <i data-lucide="bell" width="16" height="16"></i>
         </button>
         <div class="live-pill">
           <span style="width:8px;height:8px;border-radius:50%;background:var(--ok);animation:pulse 1.8s ease-in-out infinite,ring 2s infinite"></span>
-          <span style="font-size:11px;font-weight:600;letter-spacing:.04em">BOT EN LÍNEA</span>
+          <span style="font-size:11px;font-weight:600;letter-spacing:.04em">${t("chrome.online")}</span>
         </div>
-        <a href="/admin/logout" title="Cerrar sesión y volver a la pantalla de ingreso" class="hide-mobile" style="display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600;letter-spacing:.04em;color:var(--dim);border:1px solid var(--line);padding:7px 12px;text-decoration:none">Cerrar sesión</a>
+        <a href="/admin/logout" title="${t("chrome.logoutTitle")}" class="hide-mobile" style="display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600;letter-spacing:.04em;color:var(--dim);border:1px solid var(--line);padding:7px 12px;text-decoration:none">${t("chrome.logout")}</a>
       </header>
       <main style="padding:22px 26px;min-width:0">${opts.body}</main>
     </div>

@@ -117,6 +117,11 @@ export const SETTING_KEYS = {
   // del dueño. Tiene prioridad sobre el texto fijo de commentFallbackMessage.
   commentAiFallbackEnabled: "comment_ai_fallback_enabled", // "0" | "1"
   commentAiFallbackPrompt: "comment_ai_fallback_prompt", // instrucción opcional para la IA
+  // Cuántos autos muestra el bot por consulta de inventario (clamp 1..50).
+  inventoryPageSize: "inventory_page_size", // default 25
+  // Idioma del PANEL (interfaz del dueño): "es" | "en". No afecta el idioma con
+  // el que el bot le habla a los clientes (eso es BOT_LANGUAGE / multi-idioma).
+  panelLanguage: "panel_language", // default "es"
   // Web Sync (módulo web_sync): páginas que se scrapean a la KB del bot.
   webSyncEnabled: "feature_web_sync_enabled", // "0" | "1" — apagado ⇒ no corre (cron, API ni panel)
   // Análisis IA del inventario scrapeado: normaliza/valida los autos con el
@@ -228,6 +233,8 @@ export const SETTING_LABELS: Record<string, string> = {
   [SETTING_KEYS.commentFallbackMessage]: "Texto de la respuesta pública a comentarios",
   [SETTING_KEYS.commentAiFallbackEnabled]: "Respuesta con IA a comentarios sin regla",
   [SETTING_KEYS.commentAiFallbackPrompt]: "Instrucciones para la respuesta con IA a comentarios",
+  [SETTING_KEYS.inventoryPageSize]: "Autos por consulta de inventario (bot)",
+  [SETTING_KEYS.panelLanguage]: "Idioma del panel del bot (es | en)",
   [SETTING_KEYS.webSyncEnabled]: "Web Sync activado",
   [SETTING_KEYS.webSyncAnalysisEnabled]: "Análisis IA del inventario (scraping)",
   [SETTING_KEYS.webSyncUrls]: "URLs de Web Sync",

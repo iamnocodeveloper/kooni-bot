@@ -62,7 +62,8 @@ export function inventarioQueryTool(env: Env) {
       "Devuelve SOLO lo que hay en " +
       "el listado: si una marca o modelo no aparece en los resultados, NO existe en el " +
       "inventario — decilo y ofrecé las marcas disponibles que devuelve la tool. " +
-      "Nunca menciones autos, precios ni marcas que no devuelva esta tool.",
+      "Nunca menciones autos, precios ni marcas que no devuelva esta tool. " +
+      "Si hay muchos resultados, la tool pagina: cuando devuelve `hayMas`, ofrecé al cliente ver la siguiente tanda.",
     inputSchema: z.object({
       marca: z.string().optional().describe("Marca exacta, ej. Kia, Toyota, Chevrolet"),
       modelo: z.string().optional().describe("Modelo o parte del modelo, ej. Sorento, Telluride"),
@@ -77,13 +78,30 @@ export function inventarioQueryTool(env: Env) {
         .string()
         .optional()
         .describe("Términos libres que deben aparecer (ej. 'sorento 2022 usado')"),
+      pagina: z
+        .number()
+        .int()
+        .min(1)
+        .optional()
+        .describe("Página de resultados (1 = primera). Usala cuando el cliente pida 'ver más'."),
     }),
-    execute: async ({ marca, modelo, condicion, precioMin, precioMax, vin, consulta }) => {
+    execute: async ({ marca, modelo, condicion, precioMin, precioMax, vin, consulta, pagina }) => {
       const db = new Db(env.DB);
       const store = await loadVehicleStore(db);
       if (listStoredVehicles(store).length === 0) return noInventoryGuide();
 
-      const res = queryInventory(store, { marca, modelo, condicion, precioMin, precioMax, vin, consulta }, 12);
+      // Tamaño de página configurable (default 25, clamp 1..50).
+      const { SettingsRepo, SETTING_KEYS } = await import("../db/settings");
+      const rawSize = await new SettingsRepo(db).get(SETTING_KEYS.inventoryPageSize).catch(() => null);
+      const size = Math.min(Math.max(Number.parseInt(rawSize ?? "", 10) || 25, 1), 50);
+      const page = Math.max(1, pagina ?? 1);
+
+      const res = queryInventory(
+        store,
+        { marca, modelo, condicion, precioMin, precioMax, vin, consulta },
+        size,
+        (page - 1) * size,
+      );
       const marcasTxt = res.marcas.length
         ? res.marcas.map((m) => `${m.marca} (${m.total})`).join(", ")
         : "";
@@ -100,17 +118,18 @@ export function inventarioQueryTool(env: Env) {
       return {
         encontrados: res.total,
         mostrados: res.matches.length,
-        // Inventarios grandes: el modelo solo ve `limit` autos. En vez de
-        // dejarlo listar todo (o creer que solo hay 12), se le da el panorama
-        // y se le pide acotar con el cliente.
-        ...(res.total > res.matches.length
+        pagina: page,
+        // Cuando hay más de una página, se le da el panorama y la opción de seguir.
+        ...(res.hasMore
           ? {
               hayMas: true,
+              paginaSiguiente: page + 1,
               panorama: res.resumen,
               notaTruncado:
-                `Hay ${res.total} autos que cumplen el filtro y se muestran ${res.matches.length}. ` +
-                "NO los listes todos: ofrecé 2 o 3 que encajen, usá el panorama (años y rango de precio) " +
-                "y pedile al cliente que acote por modelo, año o presupuesto.",
+                `Hay ${res.total} autos que cumplen el filtro; esta página muestra ${res.matches.length} ` +
+                `(página ${page}). Ofrecé 2 o 3 que encajen y, si el cliente quiere más, ` +
+                `decile que podés mostrarle la siguiente tanda y volvé a llamar a esta tool con pagina=${page + 1}. ` +
+                "Usá el panorama (años y rango de precio) para orientar sin inventar.",
             }
           : {}),
         matches: res.matches.map((m) => ({
@@ -124,6 +143,8 @@ export function inventarioQueryTool(env: Env) {
         marcasDisponibles: marcasTxt,
         nota:
           "Ofrecé hasta 3 opciones con nombre, condición, precio, millas y el link (url) de la ficha. " +
+          "Si hay `hayMas`, decile al cliente que hay más y ofrecé mostrarle la siguiente tanda " +
+          "(volvé a llamar a esta tool con pagina = paginaSiguiente). " +
           "Si un precio viene null, decí que se consulta — no lo inventes. " +
           "Si el cliente elige un auto puntual o da un VIN, llamá a fichaAuto para mandarle la ficha completa con foto y link.",
       };

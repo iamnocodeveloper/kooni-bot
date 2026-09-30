@@ -420,6 +420,20 @@ CREATE TABLE IF NOT EXISTS comment_posts (
 );
 CREATE INDEX IF NOT EXISTS idx_comment_posts_fetched ON comment_posts(fetched_at);
 
+-- Validación de los cambios de scraping (pestaña "Scraping"): el dueño marca cada
+-- cambio de una corrida como confirmado o descartado, con una nota. Tabla aparte
+-- (no una columna de web_sync_changes) porque añadir columnas en D1 no es
+-- idempotente con schema.sql. Se purga junto con web_sync_changes (90 días).
+-- status: confirmed | rejected
+CREATE TABLE IF NOT EXISTS web_sync_change_reviews (
+  change_id TEXT PRIMARY KEY,
+  status TEXT NOT NULL,
+  note TEXT,
+  by TEXT,
+  at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_change_reviews_status ON web_sync_change_reviews(status);
+
 -- Contactos: TODOS los que interactúan (DM o comentario), separados de Leads.
 -- Un contacto se crea la primera vez que alguien escribe o comenta. El lead es
 -- el contacto calificado (captura de intención). Un contacto puede tener 0..1 lead.
