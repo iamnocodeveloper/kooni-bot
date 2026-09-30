@@ -774,6 +774,31 @@ export default {
       console.error("webSync:", e);
     }
 
+    // Giro inmobiliaria: refresco nocturno del inventario de propiedades.
+    // (a) completa foto/precio de lo que entró por CSV con un link, y
+    // (b) si hay un sitio configurado, corre la lectura del sitio (descubre
+    // fichas y las actualiza). Acotado: la corrida nocturna no se cuelga.
+    if ((env.BOT_NICHE ?? "").trim().toLowerCase() === "inmobiliaria") {
+      try {
+        const { enrichPendingProperties, runPropertiesSync } = await import("./kb/propertiesScrape");
+        const pdb = new Db(env.DB);
+        const img = await enrichPendingProperties(env, pdb, 15);
+        if (img.done > 0 || img.errors > 0) {
+          console.log(`[propiedades] fotos: ${img.done} ok / ${img.errors} err`);
+        }
+        const site = ((await new SettingsRepo(pdb).get(SETTING_KEYS.webSyncUrls)) ?? "").trim();
+        if (site) {
+          const r = await runPropertiesSync(env, { max: 60 });
+          console.log(
+            `[propiedades] sync: ${r.found} fichas leídas, +${r.added} nuevas, ~${r.updated} cambios, ` +
+              `${r.errors.length} errores (fuente: ${r.source})`,
+          );
+        }
+      } catch (e) {
+        console.error("propiedades:", e);
+      }
+    }
+
     // Uso del sistema → panel de licencias del dueño (si USAGE_PUSH_URL está
     // definida): métricas agregadas + costos de IA. Fire-and-forget.
     const { pushUsage } = await import("./usage");

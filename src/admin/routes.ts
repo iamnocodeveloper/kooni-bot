@@ -634,6 +634,93 @@ adminApp.post("/scraping/run", async (c) => {
   return c.redirect(`/admin/scraping?ok=${encodeURIComponent(msg)}`);
 });
 
+// ── Nicho INMOBILIARIA: propiedades (/admin/propiedades) ─────────────────────
+// El nav solo la muestra si BOT_NICHE=inmobiliaria (hooks.navExtra del pack);
+// igual redirigimos si no es el giro, para no servir una vista vacía por URL
+// directa. La vista tiene dos entradas: pegar/subir un CSV y leer el sitio.
+function isInmobiliaria(c: { env: Env }): boolean {
+  return (c.env.BOT_NICHE ?? "").trim().toLowerCase() === "inmobiliaria";
+}
+
+adminApp.get("/propiedades", async (c) => {
+  if (!isInmobiliaria(c)) return c.redirect("/admin/overview");
+  const { renderPropiedades } = await import("./views/propiedades");
+  const pageRaw = Number.parseInt(c.req.query("page") ?? "", 10);
+  // Igual que las vistas vecinas: el flash llega por `?flash=`; `?saved=1` se
+  // mantiene por compatibilidad con los formularios que ya usan ese estilo.
+  const flash =
+    c.req.query("flash") ||
+    (c.req.query("saved") === "1" ? (await panelI18n(c.env)).t("props.msg.saved") : undefined);
+  return c.html(
+    await renderPropiedades(c.env, {
+      q: c.req.query("q") || undefined,
+      f: c.req.query("f") || undefined,
+      page: Number.isFinite(pageRaw) && pageRaw > 0 ? pageRaw : undefined,
+      flash,
+    }),
+  );
+});
+
+// Importar propiedades: parsea el CSV/TSV pegado (o volcado por FileReader desde
+// el archivo), mezcla con el store —sin pisar la foto/datos ya enriquecidos— y
+// reindexa el doc de resumen que consume el bot.
+adminApp.post("/propiedades/import", async (c) => {
+  if (!isInmobiliaria(c)) return c.redirect("/admin/overview");
+  const { t } = await panelI18n(c.env);
+  const { mapCsvToPropiedades } = await import("../kb/propertiesCsv");
+  const { loadPropiedadStoreFromDb, mergePropiedades, savePropiedadStore } = await import("../kb/properties");
+  const { buildAndIndexPropiedadesResumen } = await import("../kb/propertiesScrape");
+  const form = await c.req.formData();
+  const csv = String(form.get("csv") ?? "");
+  if (!csv.trim()) return c.redirect(`/admin/propiedades?flash=${encodeURIComponent(t("props.msg.importEmpty"))}`);
+  const db = new Db(c.env.DB);
+  const { props, errors } = mapCsvToPropiedades(csv);
+  const store = await loadPropiedadStoreFromDb(db);
+  const res = mergePropiedades(store, props);
+  await savePropiedadStore(db, res.store);
+  // El store ya quedó guardado: si falta el índice (Vectorize/AI sin configurar)
+  // no se pierde la importación — se avisa y se sigue.
+  await buildAndIndexPropiedadesResumen(c.env, db, res.store).catch((e) =>
+    console.warn("[propiedades] no se pudo indexar el resumen:", e),
+  );
+  await audit(c, {
+    action: "propiedades.import",
+    target: "settings:web_sync_properties",
+    targetLabel: "Inventario de propiedades",
+    afterVal: `${res.added} nuevas, ${res.updated} actualizadas, ${errors.length} con error`,
+  });
+  const msg = t("props.msg.importOk", { n: res.added, updated: res.updated, errors: errors.length });
+  return c.redirect(`/admin/propiedades?flash=${encodeURIComponent(msg)}`);
+});
+
+// Leer el sitio de la inmobiliaria: descubre las fichas, las scrapea con el
+// proveedor configurado (AIsa/Decodo) y actualiza el store. Es una acción manual
+// (puede tardar: recorre varias fichas), por eso va por su propio POST.
+adminApp.post("/propiedades/sync", async (c) => {
+  if (!isInmobiliaria(c)) return c.redirect("/admin/overview");
+  const { t } = await panelI18n(c.env);
+  const { runPropertiesSync } = await import("../kb/propertiesScrape");
+  const form = await c.req.formData();
+  const site = String(form.get("site") ?? "").trim();
+  const r = await runPropertiesSync(c.env, { siteUrl: site || undefined });
+  await audit(c, {
+    action: "propiedades.sync",
+    target: "settings:web_sync_properties",
+    targetLabel: "Lectura del sitio (propiedades)",
+    afterVal: `${r.found} fichas, ${r.added} nuevas, ${r.updated} actualizadas, ${r.errors.length} errores`,
+  });
+  const msg = !r.found && !r.scraped
+    ? t("props.msg.syncEmpty")
+    : t("props.msg.syncOk", {
+        scraped: r.scraped,
+        added: r.added,
+        updated: r.updated,
+        errors: r.errors.length,
+        source: r.source,
+      });
+  return c.redirect(`/admin/propiedades?flash=${encodeURIComponent(msg)}`);
+});
+
 // --- Handoff: plantilla HSM del aviso al dueño ---------------------------------
 
 // Setup one-shot: crea la plantilla en la Content API de Twilio, la somete a

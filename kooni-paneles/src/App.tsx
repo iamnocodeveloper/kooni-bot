@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { useAuth } from "./lib/auth";
 import { useI18n } from "./lib/i18n";
 import ClientLayout from "./components/ClientLayout";
@@ -11,6 +11,8 @@ import Plantillas from "./pages/Plantillas";
 import Configuracion from "./pages/Configuracion";
 import PlanPage from "./pages/Plan";
 import Invitacion from "./pages/Invitacion";
+import GirosPublico from "./pages/GirosPublico";
+import GiroPublico from "./pages/GiroPublico";
 import Cli from "./pages/Cli";
 import Sesiones from "./pages/Sesiones";
 import AdminDashboard from "./pages/AdminDashboard";
@@ -53,6 +55,21 @@ function NoAccess() {
 
 export default function App() {
   const { loading, user, isAdmin } = useAuth();
+  const { pathname } = useLocation();
+
+  // Landing pública por giro. Va FUERA de los dos layouts autenticados (igual
+  // que /login y /invitacion) y, además, fuera del gate de sesión: un visitante
+  // sin cuenta —o con la API lenta— tiene que ver /giros ya, no un spinner.
+  // Un :id que no es un giro conocido redirige a /giros desde la propia página.
+  if (pathname === "/giros" || pathname.startsWith("/giros/")) {
+    return (
+      <Routes>
+        <Route path="/giros" element={<GirosPublico />} />
+        <Route path="/giros/:id" element={<GiroPublico />} />
+        <Route path="*" element={<Navigate to="/giros" replace />} />
+      </Routes>
+    );
+  }
 
   if (loading) return <Spinner />;
 

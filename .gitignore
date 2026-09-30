@@ -42,6 +42,11 @@ insforge.toml
 # Landing web (va a su propio repo web-kooni-bot)
 web/
 
+# Kit de ventas por giro (packs comerciales + guías de venta) — PRIVADO.
+# NOTICE.md: los "packs por rubro, plantillas verticales y guías de venta" se
+# distribuyen aparte y NO forman parte del repo MIT.
+ventas/
+
 # InsForge & AI agent skills
 .insforge
 .agent

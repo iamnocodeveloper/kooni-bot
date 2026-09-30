@@ -5,6 +5,7 @@ import { configEn } from "./config";
 import { analisisEn } from "./analisis";
 import { agenteEn } from "./agente";
 import { restoEn } from "./resto";
+import { propiedadesEn } from "./propiedades";
 
 /** El EN debe cubrir TODAS las claves del ES (lo garantiza el tipo). */
 export const en: Record<keyof typeof esMerged, string> = {
@@ -14,4 +15,5 @@ export const en: Record<keyof typeof esMerged, string> = {
   ...analisisEn,
   ...agenteEn,
   ...restoEn,
+  ...propiedadesEn,
 };

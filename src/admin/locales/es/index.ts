@@ -4,6 +4,7 @@ import { configEs } from "./config";
 import { analisisEs } from "./analisis";
 import { agenteEs } from "./agente";
 import { restoEs } from "./resto";
+import { propiedadesEs } from "./propiedades";
 
 /** Diccionario ES completo = core + cada área. El español es la fuente de verdad.
  *  La anotación por intersección preserva las CLAVES literales (si no, el spread
@@ -13,4 +14,5 @@ export const es: typeof coreEs &
   typeof configEs &
   typeof analisisEs &
   typeof agenteEs &
-  typeof restoEs = { ...coreEs, ...inboxEs, ...configEs, ...analisisEs, ...agenteEs, ...restoEs };
+  typeof restoEs &
+  typeof propiedadesEs = { ...coreEs, ...inboxEs, ...configEs, ...analisisEs, ...agenteEs, ...restoEs, ...propiedadesEs };

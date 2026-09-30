@@ -102,5 +102,13 @@ export async function buildTools(ctx: ToolContext) {
     if (extraTools.includes("llamarDeudor")) tools.llamarDeudor = llamarDeudorTool(ctx.env, ctx.getConversationId);
   }
 
+  // Nicho inmobiliaria: inventario de propiedades (CSV del panel + lectura del
+  // sitio). Consulta exacta con filtros y ficha con foto por el canal.
+  if (extraTools.includes("buscarPropiedad") || extraTools.includes("fichaPropiedad")) {
+    const { buscarPropiedadTool, fichaPropiedadTool } = await import("./propiedades");
+    if (extraTools.includes("buscarPropiedad")) tools.buscarPropiedad = buscarPropiedadTool(ctx.env);
+    if (extraTools.includes("fichaPropiedad")) tools.fichaPropiedad = fichaPropiedadTool(ctx.env, getRecursoCtx);
+  }
+
   return tools;
 }

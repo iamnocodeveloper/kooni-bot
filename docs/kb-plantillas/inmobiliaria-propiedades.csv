@@ -1,0 +1,4 @@
+titulo,operacion,tipo,zona,precio,moneda,recamaras,banos,estacionamiento,m2,m2terreno,estatus,referencia,link,imagen,extras,requisitos
+"Casa en Las Lomas con jardín",venta,casa,Las Lomas,"$4,200,000",MXN,4,3,2,320,450,disponible,LN-1024,https://www.ejemplo.com/propiedades/casa-las-lomas,LN-1024.jpg,"Jardin, alberca, cuarto de servicio","Enganche 20%, comprobante de ingresos"
+"Departamento en el Centro",renta,departamento,Centro,"$12,500",MXN,2,2,1,95,,disponible,LN-1058,,,"Amueblado, gimnasio en el edificio","Aval o fiador, contrato por 12 meses"
+"Terreno en el Sur",venta,terreno,Sur,"$1,800,000",MXN,,,,500,,,,LN-1077,https://www.ejemplo.com/propiedades/terreno-sur,,"Uso de suelo habitacional, servicios en la calle","Escrituras al corriente"

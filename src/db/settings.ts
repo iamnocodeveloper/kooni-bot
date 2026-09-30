@@ -135,6 +135,12 @@ export const SETTING_KEYS = {
   // parseados (VIN, precio, ficha URL, foto) para las tools inventarioQuery y
   // fichaAuto. Sin esto, el bot contestaría solo con el blob de texto de la KB.
   webSyncVehicles: "web_sync_vehicles", // JSON { updatedAt, vehicles: { [key]: VehicleStored } }
+  // Inventario de PROPIEDADES (giro inmobiliaria): mismo patrón que los autos —
+  // JSON en settings, sin tabla nueva. Lo llenan el importador CSV del panel y la
+  // lectura del sitio (`runPropertiesSync`); lo leen las tools buscarPropiedad /
+  // fichaPropiedad.
+  webSyncProperties: "web_sync_properties", // JSON { updatedAt, props: { [key]: PropiedadStored } }
+  propertiesPageSize: "properties_page_size", // default 12
   // API key de Decodo (scraping para Web Sync / inventario). Editable desde el
   // panel (Configuración → Scraping); si está vacía, cae al secret DECODO_AUTH.
   decodoAuth: "decodo_auth",
@@ -247,6 +253,8 @@ export const SETTING_LABELS: Record<string, string> = {
   [SETTING_KEYS.webSyncAnalysisEnabled]: "Análisis IA del inventario (scraping)",
   [SETTING_KEYS.webSyncUrls]: "URLs de Web Sync",
   [SETTING_KEYS.webSyncVehicles]: "Inventario Web Sync (autos parseados)",
+  [SETTING_KEYS.webSyncProperties]: "Inventario de propiedades (giro inmobiliaria)",
+  [SETTING_KEYS.propertiesPageSize]: "Propiedades por consulta del bot",
   [SETTING_KEYS.decodoAuth]: "Decodo — API key (scraping)",
   [SETTING_KEYS.scrapeProvider]: "Proveedor de scraping (auto | aisa | decodo)",
   [SETTING_KEYS.aisaApiKey]: "AIsa — API key (scraping)",

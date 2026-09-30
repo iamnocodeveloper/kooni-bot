@@ -1,18 +1,8 @@
 import { useState } from "react";
-import { useI18n, type MessageKey } from "../lib/i18n";
-
-// Giros (packs de nicho) que trae Kooni. El que elijas se instala con
-// `npx kooni-bot install <giro>` y re-etiqueta el panel del bot.
-const GIROS: { id: string; emoji: string }[] = [
-  { id: "generico", emoji: "🤖" },
-  { id: "agencia-ia", emoji: "🚀" },
-  { id: "restaurante", emoji: "🍽️" },
-  { id: "inmobiliaria", emoji: "🏠" },
-  { id: "clinica", emoji: "🩺" },
-  { id: "barberia", emoji: "💈" },
-  { id: "cartera", emoji: "💰" },
-  { id: "taxis", emoji: "🚕" },
-];
+import { useI18n } from "../lib/i18n";
+// Los giros viven en `lib/giros.ts` (fuente única): el mismo listado lo usa la
+// landing pública (/giros). Acá solo cambia la presentación.
+import { GIROS, giroDescKey, giroNameKey, installCommand } from "../lib/giros";
 
 export default function Plantillas() {
   const { t } = useI18n();
@@ -20,7 +10,7 @@ export default function Plantillas() {
 
   async function copiar(id: string) {
     try {
-      await navigator.clipboard.writeText(`npx kooni-bot install ${id}`);
+      await navigator.clipboard.writeText(installCommand(id));
       setCopied(id);
       setTimeout(() => setCopied(null), 1800);
     } catch {
@@ -37,14 +27,14 @@ export default function Plantillas() {
 
       <div className="grid gap-4 md:grid-cols-2">
         {GIROS.map((g) => {
-          const cmd = `npx kooni-bot install ${g.id}`;
+          const cmd = installCommand(g.id);
           return (
             <div key={g.id} className="card flex flex-col gap-3 p-4">
               <div className="flex items-start gap-3">
                 <span className="text-2xl">{g.emoji}</span>
                 <div>
-                  <div className="font-semibold">{t(`pla.giro.${g.id}.name` as MessageKey)}</div>
-                  <p className="mt-0.5 text-sm text-muted">{t(`pla.giro.${g.id}.desc` as MessageKey)}</p>
+                  <div className="font-semibold">{t(giroNameKey(g.id))}</div>
+                  <p className="mt-0.5 text-sm text-muted">{t(giroDescKey(g.id))}</p>
                 </div>
               </div>
               <div className="flex items-center justify-between gap-2">

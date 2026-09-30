@@ -96,6 +96,26 @@ describe("cableado del playbook al prompt", () => {
   });
 });
 
+describe("hooks del pack (inmobiliaria)", () => {
+  it("declara las tools de propiedades y la sección del panel", () => {
+    const n = getNiche(envWith("inmobiliaria"));
+    expect(n.hooks?.extraTools).toContain("buscarPropiedad");
+    expect(n.hooks?.extraTools).toContain("fichaPropiedad");
+    const nav = n.hooks?.navExtra ?? [];
+    expect(nav.map((x) => x.id)).toContain("propiedades");
+    expect(nav.find((x) => x.id === "propiedades")?.href).toBe("/admin/propiedades");
+  });
+
+  it("el playbook consulta el inventario real y prohíbe inventar", () => {
+    const n = getNiche(envWith("inmobiliaria"));
+    expect(n.playbook).toContain("buscarPropiedad");
+    expect(n.playbook).toContain("fichaPropiedad");
+    expect(n.playbook).toContain("Nunca inventes propiedades");
+    // Ya no manda a resolver el listado con searchKb a secas.
+    expect(n.playbook).toContain("del INVENTARIO");
+  });
+});
+
 describe("hooks del pack (restaurante)", () => {
   it("declara el motor de pedidos, la tool tomarPedido y las secciones extra", () => {
     const n = getNiche(envWith("restaurante"));

@@ -5,6 +5,49 @@ Cambios notables de Kooni. Formato aproximado de
 
 El CLI `kooni-bot` se versiona aparte (npm) — ver la nota de cada versión.
 
+## [1.54.0] — 2026-09-30
+
+### Agregado — el giro **inmobiliaria** pasa a ser un producto vendible
+
+**Inventario de propiedades** (gemelo del de autos: JSON en `settings.web_sync_properties`,
+sin tabla nueva, así que sigue valiendo el guard `NICHE_TABLES`):
+
+- **Importador CSV/Excel** (`src/kb/propertiesCsv.ts`): parser propio **sin dependencias**,
+  quote-aware (comas y saltos de línea dentro de comillas), autodetecta `,` `;` y tab, mapea
+  por **encabezados es/en** y cae al **orden canónico** si no los hay; normaliza precios de
+  todos los formatos (`$4,200,000`, `1.250.000`, `12,500 MXN`, `2,500.50`) y reporta la fila
+  mala **sin abortar** la importación. Plantilla para el cliente:
+  `docs/kb-plantillas/inmobiliaria-propiedades.csv`.
+- **Lectura del sitio** (`src/kb/propertiesScrape.ts`): descubre fichas
+  (`/propiedades/`, `/inmuebles/`, `/venta/`, `/renta/`…, excluyendo blog/contacto), lee
+  **JSON-LD** (`RealEstateListing`, `Product`/`Place`/`Apartment` + `offers`) y el markdown
+  que devuelve AIsa; usa el proveedor de `scrape_provider` (directo → AIsa → Decodo).
+  **Precio propio para inmuebles**: el extractor de autos topa en 500.000, así que un precio
+  de millones se perdía (`priceFromPropertyText`).
+- **Panel `/admin/propiedades`** (solo si `BOT_NICHE=inmobiliaria`): KPIs, tabla, filtros
+  (venta/renta/sin precio/sin foto), búsqueda, paginación 50, y dos bloques de carga:
+  **Importar** (pegar el CSV o subir el archivo con `FileReader`) y **Leer el sitio ahora**.
+- **Doc `propiedades-resumen`** en la KB (panorama por zona/operación/rango de precio) y
+  corrida registrada en Scraping. **Tick nocturno** que completa foto/precio de lo que entró
+  por CSV con link y, si hay sitio configurado, lee las fichas.
+- **Tools del bot**: `buscarPropiedad` (filtros exactos: operación, tipo, zona, precio,
+  recámaras + paginación con `hayMas`; 0 resultados ⇒ dice que no hay y ofrece las zonas
+  disponibles, nunca inventa) y `fichaPropiedad` (ficha + foto + link por el canal). Se
+  registran **solo en el giro** (vía `hooks.extraTools`), y `buscarPropiedad` entra en
+  "Probar el bot". Playbook del giro reescrito para consultar el inventario real.
+- Nuevas claves `web_sync_properties` / `properties_page_size` en settings (+ etiquetas).
+
+**Landing pública por giro** (hub `kooni-paneles`): rutas públicas `/giros` y `/giros/:id`
+(antes del gate de sesión: un visitante no espera al login) con la marca de Kooni (fucsia),
+**demo simulado** por giro (guion propio, sin backend, sin número real y sin costo),
+comando de instalación copiable, los 3 pasos de instalación y un CTA de contacto. i18n es/en
+completo (~85 claves). `Plantillas.tsx` comparte ahora la lista de giros (`src/lib/giros.ts`).
+
+**Tests**: `test/kb/properties.test.ts` (store, filtros, anti-invento con precio null,
+paginación, merge que conserva la foto, CSV con comillas/tabs/precio de millones),
+`test/kb/propertiesScrape.test.ts` (JSON-LD, markdown de AIsa, descubrimiento) y asserts de
+los hooks del pack inmobiliaria en `test/niches.test.ts`.
+
 ## [1.53.0] — 2026-09-30
 
 ### Agregado — elegir el proveedor de scraping: **AIsa (Firecrawl)** o Decodo
