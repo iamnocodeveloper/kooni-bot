@@ -112,6 +112,11 @@ export const SETTING_KEYS = {
   // con el texto de commentFallbackMessage. Default "" (apagado = no hace nada).
   commentFallbackEnabled: "comment_fallback_enabled", // "0" | "1"
   commentFallbackMessage: "comment_fallback_message", // texto de la respuesta pública
+  // Comentarios que NO matchean ninguna regla, respondidos con IA (fallback
+  // global): si está en "1", el bot genera la respuesta pública con el modelo
+  // del dueño. Tiene prioridad sobre el texto fijo de commentFallbackMessage.
+  commentAiFallbackEnabled: "comment_ai_fallback_enabled", // "0" | "1"
+  commentAiFallbackPrompt: "comment_ai_fallback_prompt", // instrucción opcional para la IA
   // Web Sync (módulo web_sync): páginas que se scrapean a la KB del bot.
   webSyncEnabled: "feature_web_sync_enabled", // "0" | "1" — apagado ⇒ no corre (cron, API ni panel)
   // Análisis IA del inventario scrapeado: normaliza/valida los autos con el
@@ -221,6 +226,8 @@ export const SETTING_LABELS: Record<string, string> = {
   [SETTING_KEYS.paymentLink]: "Link de pago",
   [SETTING_KEYS.commentFallbackEnabled]: "Respuesta pública a comentarios sin regla",
   [SETTING_KEYS.commentFallbackMessage]: "Texto de la respuesta pública a comentarios",
+  [SETTING_KEYS.commentAiFallbackEnabled]: "Respuesta con IA a comentarios sin regla",
+  [SETTING_KEYS.commentAiFallbackPrompt]: "Instrucciones para la respuesta con IA a comentarios",
   [SETTING_KEYS.webSyncEnabled]: "Web Sync activado",
   [SETTING_KEYS.webSyncAnalysisEnabled]: "Análisis IA del inventario (scraping)",
   [SETTING_KEYS.webSyncUrls]: "URLs de Web Sync",

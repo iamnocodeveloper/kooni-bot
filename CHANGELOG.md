@@ -5,6 +5,44 @@ Cambios notables de Kooni. Formato aproximado de
 
 El CLI `kooni-bot` se versiona aparte (npm) — ver la nota de cada versión.
 
+## [1.50.0] — 2026-09-30
+
+### Agregado — pestaña "Comentarios" tipo inbox (Zernio)
+
+La pestaña existía como una tabla plana; ahora es un inbox de dos paneles como
+Conversaciones, con lo que faltaba para operarla:
+
+- **Publicación a la que pertenece** cada comentario: nueva tabla `comment_posts`
+  (caption + permalink + imagen), que se rellena desde el bloque `post` del
+  webhook `comment.received` y, si falta, se completa bajo demanda con
+  `GET /v1/inbox/comments/{postId}` (con TTL de 6 h).
+- **En qué automatización entró**: regla que disparó (`comments.rule_id` → kind +
+  keywords), fallback público, o "sin automatización", más el detalle por pata
+  (`dm_logs`: enviado / omitido / fallido con el motivo).
+- **Hilo completo**: raíz + respuestas (incluidas nuestras respuestas públicas),
+  pedido on demand a Zernio al abrir el detalle.
+- Lista con pills (Con regla / Fallback / Sin regla / DM enviado / Resp. pública),
+  búsqueda, plataforma y rango de días; polling HTMX.
+
+### Agregado — responder en público y mandar DM desde el panel
+
+- Nuevo `src/channels/zernioComments.ts`: `fetchCommentThread`, `replyToComment`
+  y `privateReplyToComment` (con `Idempotency-Key`, timeout y detección de la
+  private reply ya consumida de Meta).
+- Acciones desde el detalle: "Responder en público", "Enviar DM" y
+  "✨ Generar con IA" (borrador). Auditadas (`comment.reply`, `comment.dm`) y con
+  el tope diario de respuestas públicas compartido con el bot.
+
+### Agregado — respuesta dinámica con IA a comentarios
+
+- Nuevo fallback global (`comment_ai_fallback_enabled` + `comment_ai_fallback_prompt`):
+  los comentarios que no matchean ninguna regla reciben una respuesta pública
+  generada por el modelo del dueño (en el idioma del comentario). Tiene prioridad
+  sobre el texto fijo (`commentFallbackMessage`). Se configura en
+  `/admin/automatizaciones`.
+- `src/aiReply.ts`: `generateAiCommentReply` acepta el caption de la publicación y
+  el hilo como contexto (`generateAiPublicReply` delega en ella).
+
 ## [1.49.0] — 2026-09-29
 
 ### Corregido — "Oído y vista": el bot no leía audio ni fotos en canales con credencial

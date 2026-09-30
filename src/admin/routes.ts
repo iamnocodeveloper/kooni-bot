@@ -55,12 +55,16 @@ import { renderTickets } from "./views/tickets";
 import { renderConfig } from "./views/config";
 import { renderExtras } from "./views/extras";
 import { renderAutomatizaciones } from "./views/automatizaciones";
-import { renderComentarios } from "./views/comentarios";
+import { renderComentarios, renderComentariosList, renderComentarioThread, renderComposeBox, commentsParamsFrom } from "./views/comentarios";
 import { renderContactos } from "./views/contactos";
 import { renderLicencia } from "./views/licencia";
 import { renderComandos } from "./views/comandos";
 import { renderEquipo } from "./views/equipo";
 import { AutoRulesRepo, type AutoRuleKind } from "../db/autoRules";
+import { CommentsRepo } from "../db/comments";
+import { DmLogsRepo } from "../db/dmLogs";
+import { replyToComment, privateReplyToComment, MAX_PUBLIC_REPLIES_PER_DAY } from "../channels/zernioComments";
+import { generateAiCommentReply } from "../aiReply";
 
 /** Parsea el form de una automatización (crear o editar) a un objeto de regla. */
 function parseRuleForm(form: FormData) {
@@ -1455,8 +1459,152 @@ adminApp.get("/automatizaciones", async (c) =>
   ),
 );
 
-// Comentarios: bandeja de comentarios recibidos (como Zernio).
-adminApp.get("/comentarios", async (c) => c.html(await renderComentarios(c.env)));
+// Comentarios: bandeja de comentarios recibidos (como Zernio). Dos paneles como
+// Conversaciones: ?c=<commentId> selecciona; ?f/?q/?p/?d filtran la lista.
+adminApp.get("/comentarios", async (c) =>
+  c.html(await renderComentarios(c.env, commentsParamsFrom((k) => c.req.query(k)))),
+);
+
+// Fragmentos HTMX (polled): lista cada 10s, detalle cada 30s. Registrados antes
+// de cualquier /comentarios/:id para que los segmentos estáticos ganen.
+adminApp.get("/comentarios/list-fragment", async (c) =>
+  c.html(await renderComentariosList(c.env, commentsParamsFrom((k) => c.req.query(k)))),
+);
+
+adminApp.get("/comentarios/thread/:id", async (c) =>
+  c.html(await renderComentarioThread(c.env, c.req.param("id"))),
+);
+
+/** Cuenta cuántas respuestas públicas salieron por esa cuenta en 24h (tope). */
+async function publicRepliesLast24h(env: Env, accountId: string | undefined): Promise<number> {
+  try {
+    const row = await new Db(env.DB).first<{ n: number }>(
+      "SELECT COUNT(*) as n FROM comments WHERE account_id = ? AND public_reply_sent = 1 AND created_at > ?",
+      [accountId ?? "", Date.now() - 24 * 3600_000],
+    );
+    return row?.n ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
+// Responde EN PÚBLICO un comentario desde el panel (respeta el tope diario).
+adminApp.post("/comentarios/:id/reply", async (c) => {
+  const id = c.req.param("id");
+  const form = await c.req.parseBody();
+  const text = String(form.text ?? "").trim();
+  const repo = new CommentsRepo(new Db(c.env.DB));
+  const comment = await repo.getById(id).catch(() => null);
+  if (!comment?.postId || !text) {
+    return c.html(await renderComentarioThread(c.env, id, { type: "error", text: "Faltan datos para responder." }));
+  }
+  const sent = await publicRepliesLast24h(c.env, comment.accountId);
+  if (sent >= MAX_PUBLIC_REPLIES_PER_DAY) {
+    return c.html(
+      await renderComentarioThread(c.env, id, {
+        type: "error",
+        text: `Tope diario de respuestas públicas alcanzado (${sent}/24h). Se omite para no inundar el público.`,
+      }),
+    );
+  }
+  const res = await replyToComment(c.env, {
+    accountId: comment.accountId,
+    postId: comment.postId,
+    commentId: id,
+    message: text,
+  });
+  await repo.markPublicReply(id, text, res.ok).catch(() => {});
+  await new DmLogsRepo(new Db(c.env.DB))
+    .log({
+      ruleId: comment.ruleId,
+      kind: "comment_reply",
+      platform: comment.platform,
+      target: id,
+      username: comment.authorUsername ?? comment.authorName,
+      message: text,
+      status: res.ok ? "sent" : "failed",
+      error: res.ok ? undefined : res.error,
+    })
+    .catch(() => {});
+  await audit(c, {
+    action: "comment.reply",
+    target: id,
+    targetLabel: comment.authorUsername ?? comment.authorName ?? undefined,
+    afterVal: text.slice(0, 200),
+    result: res.ok ? "ok" : "error",
+  });
+  return c.html(
+    await renderComentarioThread(
+      c.env,
+      id,
+      res.ok
+        ? { type: "ok", text: "Respuesta pública enviada." }
+        : { type: "error", text: `No se pudo responder: ${res.error ?? res.status}` },
+    ),
+  );
+});
+
+// Manda el DM (private reply) al comentarista desde el panel.
+adminApp.post("/comentarios/:id/dm", async (c) => {
+  const id = c.req.param("id");
+  const form = await c.req.parseBody();
+  const text = String(form.text ?? "").trim();
+  const repo = new CommentsRepo(new Db(c.env.DB));
+  const comment = await repo.getById(id).catch(() => null);
+  if (!comment?.postId || !text) {
+    return c.html(await renderComentarioThread(c.env, id, { type: "error", text: "Faltan datos para enviar el DM." }));
+  }
+  const res = await privateReplyToComment(c.env, {
+    accountId: comment.accountId,
+    postId: comment.postId,
+    commentId: id,
+    message: text,
+  });
+  await repo.markDmSent(id, res.ok).catch(() => {});
+  await new DmLogsRepo(new Db(c.env.DB))
+    .log({
+      ruleId: comment.ruleId,
+      kind: "comment_dm",
+      platform: comment.platform,
+      target: id,
+      username: comment.authorUsername ?? comment.authorName,
+      message: text,
+      status: res.ok ? "sent" : res.consumed ? "skipped" : "failed",
+      error: res.ok ? undefined : res.error,
+    })
+    .catch(() => {});
+  await audit(c, {
+    action: "comment.dm",
+    target: id,
+    targetLabel: comment.authorUsername ?? comment.authorName ?? undefined,
+    afterVal: text.slice(0, 200),
+    result: res.ok ? "ok" : "error",
+  });
+  const notice = res.ok
+    ? { type: "ok" as const, text: "DM enviado." }
+    : res.consumed
+      ? { type: "error" as const, text: "Instagram ya había usado la respuesta privada de ese comentario (solo se permite una)." }
+      : { type: "error" as const, text: `No se pudo enviar el DM: ${res.error ?? res.status}` };
+  return c.html(await renderComentarioThread(c.env, id, notice));
+});
+
+// Borrador con IA para responder el comentario (el dueño lo revisa y envía).
+adminApp.post("/comentarios/:id/suggest", async (c) => {
+  const id = c.req.param("id");
+  const comment = await new CommentsRepo(new Db(c.env.DB)).getById(id).catch(() => null);
+  if (!comment) return c.html(renderComposeBox(id));
+  const draft = await generateAiCommentReply(c.env, {
+    commentText: comment.text,
+    commenterName: comment.authorName ?? comment.authorUsername,
+    businessName: c.env.BUSINESS_NAME,
+  });
+  return c.html(
+    renderComposeBox(
+      id,
+      draft ?? "No se pudo generar una sugerencia. Escribí la respuesta a mano.",
+    ),
+  );
+});
 
 // Contactos: todos los que interactúan (separados de Leads).
 adminApp.get("/contactos", async (c) => c.html(await renderContactos(c.env)));
@@ -1494,6 +1642,8 @@ adminApp.post("/automatizaciones/fallback", async (c) => {
   const repo = new SettingsRepo(new Db(c.env.DB));
   await repo.set(SETTING_KEYS.commentFallbackEnabled, form.get("enabled") === "1" ? "1" : "0");
   await repo.set(SETTING_KEYS.commentFallbackMessage, String(form.get("message") ?? "").trim());
+  await repo.set(SETTING_KEYS.commentAiFallbackEnabled, form.get("ai_enabled") === "1" ? "1" : "0");
+  await repo.set(SETTING_KEYS.commentAiFallbackPrompt, String(form.get("ai_prompt") ?? "").trim());
   return c.redirect("/admin/automatizaciones?saved=1");
 });
 

@@ -6,26 +6,33 @@ import { llmOverridesFrom } from "./settings-loader";
 import { detectLanguage, baseLangCode, LANG_LABEL } from "./lang/detect";
 import { generateText } from "ai";
 
+export interface AiCommentReplyOpts {
+  /** Instrucción del dueño (regla `ai_reply_prompt` o el prompt del fallback IA). */
+  prompt?: string;
+  commentText?: string;
+  commenterName?: string | null;
+  businessName?: string;
+  keyword?: string;
+  /** Caption de la publicación comentada (contexto). */
+  postCaption?: string;
+  /** Hilo previo (raíz + respuestas) para no repetir lo ya dicho. */
+  thread?: { author?: string; text: string; isOwner?: boolean }[];
+}
+
 /**
- * Genera respuestas públicas a comentarios con IA, en el tono del dueño.
+ * Genera una respuesta pública a un comentario con IA, en el tono del dueño.
  *
  * Reusa el MISMO proveedor/llave/modelo configurado en el panel (BYO-LLM):
- * Anthropic / OpenAI / xAI, con las overrides de settings si existen.
- * El prompt de la regla (aiReplyPrompt) define el tono/instrucciones; si está
- * vacío, se usa un default en el tono del negocio.
+ * Anthropic / OpenAI / xAI, con las overrides de settings si existen. La usa el
+ * camino de automatización (reglas con `ai_reply_prompt` y el fallback global) y
+ * el panel ("Generar con IA").
  *
- * Fail-open: si la IA falla o no hay llave, devuelve null (el flujo usa el
- * replyToComment fijo o se salta la respuesta pública).
+ * Fail-open: si la IA falla o no hay llave, devuelve null (el flujo usa el texto
+ * fijo o se salta la respuesta).
  */
-export async function generateAiPublicReply(
+export async function generateAiCommentReply(
   env: Env,
-  opts: {
-    prompt?: string;
-    commentText?: string;
-    commenterName?: string | null;
-    businessName?: string;
-    keyword?: string;
-  },
+  opts: AiCommentReplyOpts,
 ): Promise<string | null> {
   try {
     const repo = new SettingsRepo(new Db(env.DB));
@@ -53,6 +60,18 @@ export async function generateAiPublicReply(
       "Máximo 2 oraciones. No uses emojis excesivos."
     );
 
+    const contextoPublicacion = opts.postCaption?.trim()
+      ? `Publicación comentada: "${opts.postCaption.trim().slice(0, 400)}". `
+      : "";
+    const hilo =
+      opts.thread && opts.thread.length > 0
+        ? `\nHilo previo (no repitas lo ya dicho):\n` +
+          opts.thread
+            .slice(-6)
+            .map((m) => `${m.isOwner ? "Nosotros" : m.author || "Cliente"}: ${m.text.slice(0, 300)}`)
+            .join("\n")
+        : "";
+
     const { text } = await generateText({
       model: model.model,
       system:
@@ -63,8 +82,9 @@ export async function generateAiPublicReply(
         `Nunca inventes precios ni datos que no conozcas. Si el comentario pide algo que no sabes, ` +
         `invítalo a escribir por privado.`,
       prompt:
-        `El cliente ${opts.commenterName || "alguien"} comentó${opts.keyword ? ` (mencionó: ${opts.keyword})` : ""}: ` +
-        `"${opts.commentText || "..."}"\n\n` +
+        `${contextoPublicacion}El cliente ${opts.commenterName || "alguien"} comentó` +
+        `${opts.keyword ? ` (mencionó: ${opts.keyword})` : ""}: ` +
+        `"${opts.commentText || "..."}"${hilo}\n\n` +
         `Escribe SOLO la respuesta pública (sin comillas, sin prefijos).`,
       maxOutputTokens: 80,
     });
@@ -72,7 +92,26 @@ export async function generateAiPublicReply(
     const reply = (text ?? "").trim();
     return reply.length > 0 ? reply.slice(0, 300) : null;
   } catch (e) {
-    console.warn("[aiReply] generación falló — fallback a replyToComment:", e);
+    console.warn("[aiReply] generación falló — fallback a texto fijo:", e);
     return null;
   }
+}
+
+/**
+ * Compatibilidad: la firma histórica de la respuesta pública a comentarios.
+ * Delega en `generateAiCommentReply`.
+ */
+export async function generateAiPublicReply(
+  env: Env,
+  opts: {
+    prompt?: string;
+    commentText?: string;
+    commenterName?: string | null;
+    businessName?: string;
+    keyword?: string;
+    postCaption?: string;
+    thread?: { author?: string; text: string; isOwner?: boolean }[];
+  },
+): Promise<string | null> {
+  return generateAiCommentReply(env, opts);
 }

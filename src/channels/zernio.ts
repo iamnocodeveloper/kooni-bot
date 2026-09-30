@@ -24,16 +24,10 @@ import type { DmLogsRepo } from "../db/dmLogs";
 import { matchKeywords, renderUsername } from "../utils/keyword-matcher";
 import { commentFingerprint } from "../db/fingerprints";
 import { resolveZernioCredentials } from "./zernioCredentials";
+import { extractPostContext, MAX_PUBLIC_REPLIES_PER_DAY } from "./zernioComments";
 import { toPlainLinks } from "../replies/format";
 
 const DEFAULT_BASE = "https://zernio.com/api";
-
-/**
- * Tope de seguridad: máximo de respuestas públicas por cuenta en 24h (rolling).
- * La regla puede matchear muchos comentarios; este tope garantiza que el bot
- * nunca vuelva a inundar el público aunque algo dispare en bucle.
- */
-const MAX_PUBLIC_REPLIES_PER_DAY = 200;
 
 // ─── Firma del webhook ───────────────────────────────────────────────────────
 // Zernio firma el body crudo con HMAC-SHA256 y manda el digest hex en
@@ -95,6 +89,8 @@ interface ZernioWebhookBody {
   conversation?: { id?: string; platformConversationId?: string; participantName?: string; participantUsername?: string };
   account?: { id?: string; accountId?: string; profileId?: string; platform?: string; username?: string; displayName?: string };
   comment?: ZernioComment;
+  /** Publicación comentada (caption/permalink/imagen) — la trae comment.received. */
+  post?: Record<string, unknown>;
 }
 
 function firstUrl(body: { attachments?: { type?: string; url?: string }[] }): { audio?: string; image?: string } {
@@ -744,6 +740,26 @@ async function recordZernioComment(body: ZernioWebhookBody, env: Env): Promise<v
         username: comment.author.username,
       });
     }
+    // Contexto de la publicación (caption + permalink) para la pestaña
+    // Comentarios: el payload de comment.received trae `post`; si falta, el
+    // detalle del panel lo completa bajo demanda (GET /v1/inbox/comments/{postId}).
+    try {
+      const ctx = extractPostContext(body.post, comment.postId ?? comment.platformPostId);
+      if (ctx) {
+        const { CommentPostsRepo } = await import("../db/commentPosts");
+        await new CommentPostsRepo(new Db(env.DB)).upsert({
+          postId: ctx.postId,
+          platformPostId: ctx.platformPostId ?? comment.platformPostId,
+          platform: ctx.platform ?? comment.platform ?? account?.platform,
+          accountId: account?.accountId,
+          caption: ctx.caption,
+          permalink: ctx.permalink,
+          picture: ctx.picture,
+        });
+      }
+    } catch (e) {
+      console.warn("[zernio] no se pudo guardar el contexto del post:", e);
+    }
   } catch (e) {
     console.warn("[zernio] no se pudo guardar el comentario:", e);
   }
@@ -751,15 +767,34 @@ async function recordZernioComment(body: ZernioWebhookBody, env: Env): Promise<v
 
 /**
  * "Regla" sintética para los comentarios que NO matchean ninguna automatización.
- * Si el dueño activó `commentFallbackEnabled`, respondemos EN PÚBLICO (kind
- * comment_reply → nunca DM) con `commentFallbackMessage`. Default: apagado
- * (devuelve undefined y el comentario se ignora, como siempre).
+ * Dos modos (el orden importa):
+ *  1) IA (`comment_ai_fallback_enabled`): responde CUALQUIER comentario sin regla
+ *     con una respuesta pública generada por el modelo del dueño (kind
+ *     comment_reply + aiReplyPrompt; el texto lo produce `sendCommentActions`).
+ *  2) Texto fijo (`commentFallbackEnabled`): respuesta pública genérica con
+ *     `commentFallbackMessage`, como antes.
+ * Default (ninguno activo): devuelve undefined y el comentario se ignora.
  */
 async function buildCommentFallbackRule(env: Env): Promise<AutoDmRule | undefined> {
   try {
     const { Db } = await import("../db/client");
     const { SettingsRepo, SETTING_KEYS } = await import("../db/settings");
     const repo = new SettingsRepo(new Db(env.DB));
+
+    if ((await repo.get(SETTING_KEYS.commentAiFallbackEnabled)) === "1") {
+      const prompt = (await repo.get(SETTING_KEYS.commentAiFallbackPrompt))?.trim();
+      return {
+        keywords: [],
+        message: "",
+        kind: "comment_reply",
+        // No vacío: sendCommentActions solo genera con IA si hay un prompt.
+        aiReplyPrompt:
+          prompt ||
+          "Responde al comentario de forma breve y cálida, en el tono del negocio. " +
+            "Si piden algo que no sabes, invítalos a escribir por privado.",
+      };
+    }
+
     if ((await repo.get(SETTING_KEYS.commentFallbackEnabled)) !== "1") return undefined;
     const message = (await repo.get(SETTING_KEYS.commentFallbackMessage))?.trim();
     if (!message) return undefined;

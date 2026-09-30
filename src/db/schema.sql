@@ -401,6 +401,24 @@ CREATE TABLE IF NOT EXISTS comments (
 CREATE INDEX IF NOT EXISTS idx_comments_created ON comments(created_at);
 CREATE INDEX IF NOT EXISTS idx_comments_platform ON comments(platform);
 CREATE INDEX IF NOT EXISTS idx_comments_dm ON comments(dm_sent);
+CREATE INDEX IF NOT EXISTS idx_comments_post ON comments(post_id);
+
+-- Contexto de la publicación de un comentario (pestaña "Comentarios" tipo inbox):
+-- caption + permalink + imagen, para mostrar A QUÉ publicación pertenece cada
+-- comentario. Se rellena desde el bloque `post` del webhook comment.received y,
+-- si falta, se completa bajo demanda con GET /v1/inbox/comments/{postId}.
+-- post_id: id de Zernio de la publicación (único por post).
+CREATE TABLE IF NOT EXISTS comment_posts (
+  post_id TEXT PRIMARY KEY,
+  platform_post_id TEXT,
+  platform TEXT,
+  account_id TEXT,
+  caption TEXT,
+  permalink TEXT,
+  picture TEXT,
+  fetched_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_comment_posts_fetched ON comment_posts(fetched_at);
 
 -- Contactos: TODOS los que interactúan (DM o comentario), separados de Leads.
 -- Un contacto se crea la primera vez que alguien escribe o comenta. El lead es

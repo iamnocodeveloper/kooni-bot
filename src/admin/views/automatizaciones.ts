@@ -118,11 +118,15 @@ export async function renderAutomatizaciones(env: Env, saved?: boolean, error?: 
   // Fallback: respuesta pública a comentarios que NO matchean ninguna regla.
   let fbEnabled = false;
   let fbMessage = "";
+  let fbAiEnabled = false;
+  let fbAiPrompt = "";
   try {
     const { SettingsRepo, SETTING_KEYS } = await import("../../db/settings");
     const s = new SettingsRepo(new Db(env.DB));
     fbEnabled = (await s.get(SETTING_KEYS.commentFallbackEnabled)) === "1";
     fbMessage = (await s.get(SETTING_KEYS.commentFallbackMessage)) ?? "";
+    fbAiEnabled = (await s.get(SETTING_KEYS.commentAiFallbackEnabled)) === "1";
+    fbAiPrompt = (await s.get(SETTING_KEYS.commentAiFallbackPrompt)) ?? "";
   } catch {
     // sin settings: fallback apagado
   }
@@ -130,10 +134,18 @@ export async function renderAutomatizaciones(env: Env, saved?: boolean, error?: 
   const fallbackCard = `
     <form method="POST" action="/admin/automatizaciones/fallback" class="bg-panel border" style="padding:16px 18px;display:flex;flex-direction:column;gap:10px">
       <label style="display:flex;align-items:flex-start;gap:10px;font-size:12.5px;color:var(--cream);cursor:pointer">
+        <input type="checkbox" name="ai_enabled" value="1" ${fbAiEnabled ? "checked" : ""} style="accent-color:var(--accent);margin-top:2px">
+        <span>
+          <span class="font-display font-semibold">✨ Responder con IA los comentarios sin automatización</span>
+          <span style="display:block;color:var(--dim);font-size:11px;margin-top:2px">El bot genera la respuesta pública con tu modelo (en el idioma del comentario). <b>Tiene prioridad</b> sobre el texto fijo de abajo. <b>Nunca DM.</b> Con tope de seguridad por día.</span>
+        </span>
+      </label>
+      <textarea name="ai_prompt" rows="2" placeholder="Instrucciones para la IA (opcional). Ej: responde en tono cercano y ofrece escribir por privado." style="${INPUT_STYLE}">${esc(fbAiPrompt)}</textarea>
+      <label style="display:flex;align-items:flex-start;gap:10px;font-size:12.5px;color:var(--cream);cursor:pointer">
         <input type="checkbox" name="enabled" value="1" ${fbEnabled ? "checked" : ""} style="accent-color:var(--accent);margin-top:2px">
         <span>
-          <span class="font-display font-semibold">Responder en público los comentarios sin automatización</span>
-          <span style="display:block;color:var(--dim);font-size:11px;margin-top:2px">Un comentario de primer nivel que no matchea ninguna regla de arriba recibe esta respuesta pública. <b>Nunca DM.</b> Con tope de seguridad por día. Apágalo y esos comentarios se ignoran (comportamiento normal).</span>
+          <span class="font-display font-semibold">Responder en público con un texto fijo</span>
+          <span style="display:block;color:var(--dim);font-size:11px;margin-top:2px">Si la IA de arriba está apagada, un comentario sin regla recibe esta respuesta pública. <b>Nunca DM.</b> Apágalo y esos comentarios se ignoran.</span>
         </span>
       </label>
       <textarea name="message" rows="2" placeholder="¡Gracias por tu comentario! 🙌 Te leemos." style="${INPUT_STYLE}">${esc(fbMessage)}</textarea>
