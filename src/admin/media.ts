@@ -8,7 +8,7 @@
 import type { Env } from "../env";
 import { unmaskTelegramToken } from "../telegramFiles";
 import { resolveTelegramToken } from "../channels/telegramCredentials";
-import { resolveWahaConfig } from "../channels/wahaCredentials";
+import { resolveWahaConfig, resolveWahaMediaUrl } from "../channels/wahaCredentials";
 
 async function streamUpstream(url: string, headers: Record<string, string> = {}): Promise<Response> {
   let upstream: Response;
@@ -51,8 +51,12 @@ export async function serveWahaMedia(fileUrl: string, env: Env): Promise<Respons
   if (!fileUrl) return new Response("falta el parámetro u", { status: 400 });
   const cfg = await resolveWahaConfig(env);
   if (!cfg.base) return new Response("WAHA no configurado", { status: 404 });
-  if (fileUrl !== cfg.base && !fileUrl.startsWith(`${cfg.base}/`)) {
+  // WAHA puede anunciar el archivo con su propio `http://localhost:80/…`: se
+  // reescribe al host configurado y RECIÉN ahí se valida que quede dentro de él
+  // (si no, esta ruta sería un proxy abierto — SSRF).
+  const resolved = resolveWahaMediaUrl(fileUrl, cfg.base);
+  if (resolved !== cfg.base && !resolved.startsWith(`${cfg.base}/`)) {
     return new Response("origen de media no permitido", { status: 400 });
   }
-  return streamUpstream(fileUrl, cfg.apiKey ? { "X-Api-Key": cfg.apiKey } : {});
+  return streamUpstream(resolved, cfg.apiKey ? { "X-Api-Key": cfg.apiKey } : {});
 }

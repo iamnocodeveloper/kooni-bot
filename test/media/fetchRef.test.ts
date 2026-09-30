@@ -40,6 +40,26 @@ describe("fetchMediaBytes — credenciales por canal", () => {
     expect(contentType).toBe("application/octet-stream");
   });
 
+  it("WAHA: reescribe el origen local (localhost) al base configurado", async () => {
+    const fn = stubFetch();
+    const env: any = { WAHA_API_URL: "http://waha.host:3000", WAHA_API_KEY: "secreto" };
+
+    await fetchMediaBytes("waha:http://localhost:80/api/files/cars/x.oga", env);
+
+    // El host local de WAHA no existe desde el Worker → se usa el base configurado.
+    expect(fn.mock.calls[0][0]).toBe("http://waha.host:3000/api/files/cars/x.oga");
+    expect(fn.mock.calls[0][1].headers["X-Api-Key"]).toBe("secreto");
+  });
+
+  it("WAHA: deja intacta una URL con host real", async () => {
+    const fn = stubFetch();
+    const env: any = { WAHA_API_URL: "http://waha.host:3000" };
+
+    await fetchMediaBytes("waha:http://otro.host/api/files/x.jpg", env);
+
+    expect(fn.mock.calls[0][0]).toBe("http://otro.host/api/files/x.jpg");
+  });
+
   it("Telegram: repone el token enmascarado antes del fetch", async () => {
     const fn = stubFetch();
     const env: any = { TELEGRAM_BOT_TOKEN: "123:ABC" };

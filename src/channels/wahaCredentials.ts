@@ -41,3 +41,30 @@ export async function resolveWahaConfig(env: Env): Promise<WahaConfig> {
 
   return { base: base.replace(/\/+$/, ""), session, apiKey, webhookToken };
 }
+
+/**
+ * Normaliza la URL de un archivo de WAHA.
+ *
+ * WAHA anuncia sus archivos con su PROPIO origen cuando no tiene
+ * `WAHA_PUBLIC_URL` configurada: el webhook trae `http://localhost:80/api/files/…`.
+ * Desde el Worker (y desde el navegador del dueño) ese origen no existe, así que
+ * la descarga fallaba y el bot "no podía escuchar ni ver" el archivo. Acá se
+ * reemplaza el origen local/relativo por el `base` configurado, conservando el
+ * path. Una URL con host real se devuelve intacta.
+ */
+export function resolveWahaMediaUrl(rawUrl: string, base: string): string {
+  const b = (base || "").replace(/\/+$/, "");
+  const u = (rawUrl || "").trim();
+  if (!u || !b) return u;
+  try {
+    const parsed = new URL(u);
+    const host = parsed.hostname.toLowerCase();
+    const localHost =
+      host === "localhost" || host === "127.0.0.1" || host === "0.0.0.0" || host === "::1" || host === "[::1]";
+    if (localHost) return `${b}${parsed.pathname}${parsed.search}`;
+    return u;
+  } catch {
+    // URL relativa (p. ej. "/api/files/x.jpg") → se le pone el base delante.
+    return `${b}${u.startsWith("/") ? "" : "/"}${u}`;
+  }
+}

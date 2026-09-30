@@ -2,7 +2,7 @@ import type { Env } from "../env";
 import { stripRef } from "../channels/mediaRef";
 import { TELEGRAM_TOKEN_MASK, unmaskTelegramToken } from "../telegramFiles";
 import { resolveTelegramToken } from "../channels/telegramCredentials";
-import { resolveWahaConfig } from "../channels/wahaCredentials";
+import { resolveWahaConfig, resolveWahaMediaUrl } from "../channels/wahaCredentials";
 
 export interface FetchedMedia {
   bytes: Uint8Array;
@@ -23,11 +23,14 @@ export async function fetchMediaBytes(ref: string, env: Env): Promise<FetchedMed
   const token = stored.includes(TELEGRAM_TOKEN_MASK)
     ? await resolveTelegramToken(env)
     : undefined;
-  const url = unmaskTelegramToken(stored, token);
+  let url = unmaskTelegramToken(stored, token);
 
   const headers: Record<string, string> = {};
   if (isWaha) {
     const cfg = await resolveWahaConfig(env);
+    // WAHA anuncia sus archivos con `http://localhost:80/…` → hay que reescribir
+    // el origen al base configurado, si no el Worker no puede descargarlos.
+    url = resolveWahaMediaUrl(url, cfg.base);
     if (cfg.apiKey) headers["X-Api-Key"] = cfg.apiKey;
   }
 

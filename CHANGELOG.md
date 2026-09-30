@@ -5,6 +5,31 @@ Cambios notables de Kooni. Formato aproximado de
 
 El CLI `kooni-bot` se versiona aparte (npm) — ver la nota de cada versión.
 
+## [1.52.1] — 2026-09-30
+
+### Corregido — "Oído y vista" en WAHA: el archivo se anunciaba con `localhost`
+
+Diagnóstico real en cardaniel: el toggle estaba encendido y WAHA configurado, pero
+los marcadores guardados eran `waha:http://localhost:80/api/files/…` — WAHA
+anuncia sus archivos con su **propio** origen cuando no tiene `WAHA_PUBLIC_URL`.
+Desde el Worker ese origen no existe, así que la descarga fallaba y el audio
+quedaba como "(no pude entender el audio)" y la foto nunca llegaba al modelo.
+
+- `resolveWahaMediaUrl()` (`src/channels/wahaCredentials.ts`): si la URL de WAHA
+  viene con host local (`localhost`/`127.0.0.1`/`0.0.0.0`) o relativa, se
+  reescribe el origen al **`base` configurado**, conservando el path. Una URL con
+  host real se deja intacta.
+- Se aplica tanto al **bot** (`src/media/fetchRef.ts`: transcripción y visión) como
+  al **proxy del panel** (`src/admin/media.ts`), que además sigue validando que la
+  URL resuelta pertenezca al host configurado (no abre un proxy SSRF).
+- Regresión: `test/media/fetchRef.test.ts`.
+
+> Nota operativa: en esta instalación `module_unlocks` estaba en `["web_sync"]`,
+> lo que **apagaba** las funciones de Extras aunque sus toggles estuvieran en `1`
+> (oído/vista, multi-idioma, blindaje, cazador, reenganche, vigilante, voz de
+> marca). Se quitó esa clave para volver al default "todos los módulos", dejando
+> que los toggles manden. (`[]` NO sirve: "presente ⇒ exactamente esos ids".)
+
 ## [1.52.0] — 2026-09-30
 
 ### Agregado — el panel del bot quedó 100% bilingüe (ES/EN)
