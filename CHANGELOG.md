@@ -5,6 +5,26 @@ Cambios notables de Kooni. Formato aproximado de
 
 El CLI `kooni-bot` se versiona aparte (npm) — ver la nota de cada versión.
 
+## [1.52.2] — 2026-09-30
+
+### Cambiado — pulido visual del panel (misma identidad)
+
+Primer paso de unificación: se agregan **primitivas compartidas** para los
+patrones que cada vista armaba a mano con estilos inline distintos.
+
+- Nuevas clases (aditivas, nada se renombra): `.pill` (+ `-ok/-warn/-bad/-accent/-dim`),
+  `.alert` (+ `-ok/-warn/-bad`), `.empty`, `.iconbtn` (+ `-ok/-bad`), `.tblwrap`.
+- Nuevo `src/admin/views/ui.ts`: `emptyState()`, `alertBox()`, `pill()`,
+  `iconSubmit()`.
+- **Scraping**: los chips de validación pasan a `.pill` y los botones ✓/✗/↺ usan
+  **íconos lucide** (antes eran glifos de texto), con el aviso de error y el estado
+  vacío unificados.
+- `docs/design-system.md`: estado real del documento + sección de primitivas y la
+  regla de i18n de las vistas.
+
+> Sigue pendiente el barrido completo de las ~34 vistas (unificar el resto de los
+> estilos inline, íconos y estados vacíos) — es incremental y sin cambios de lógica.
+
 ## [1.52.1] — 2026-09-30
 
 ### Corregido — "Oído y vista" en WAHA: el archivo se anunciaba con `localhost`

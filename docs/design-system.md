@@ -1,13 +1,28 @@
 # Kooni Admin — Design System
 
-> ⚠️ **Rediseño 2026 (v1.17–v1.18):** este documento describe el sistema VIEJO
-> (teal/menta, solo oscuro, look terminal). La identidad actual es **morado/fucsia,
-> tema claro + oscuro, fuente Sora**. La fuente de verdad de la paleta y las
-> fuentes es `src/admin/views/layout.ts` (`GLOBAL_STYLE`) y `docs/IDENTIDAD-KOONI.md`.
-> Lo que sigue vigente de este doc: **los nombres de las clases de componentes**
-> (`.card`, `.chip`, `.bigbtn`, `.node`, filas, etc.) y la regla de que las vistas
-> usan tokens (`var(--x)`), nunca colores literales. Reescribir este doc entero
-> es tarea pendiente de la Fase 2 del rediseño.
+> ⚠️ **Estado del doc (2026-09):** la identidad vigente es **morado/fucsia, tema
+> claro + oscuro, fuente Sora**. La fuente de verdad de **tokens y tipografía** es
+> `src/admin/views/layout.ts` (`GLOBAL_STYLE`) + [`IDENTIDAD-KOONI.md`](./IDENTIDAD-KOONI.md);
+> la tabla de hex de más abajo es del tema viejo (teal) — **usá las variables
+> `var(--x)`, no los hex de este doc**.
+>
+> Lo que sigue vigente: **los nombres de las clases de componentes** (`.card`,
+> `.chip`, `.bigbtn`, `.node`, filas…) y la regla de que las vistas usan tokens,
+> nunca colores literales.
+>
+> ### Primitivas compartidas (usar SIEMPRE estas, no estilos ad-hoc)
+>
+> Clases definidas en `GLOBAL_STYLE`: `.pill` / `.pill-ok|warn|bad|accent|dim`,
+> `.alert` / `.alert-ok|warn|bad`, `.empty`, `.iconbtn` (`-ok`/`-bad`), `.tblwrap`.
+>
+> Helpers en **`src/admin/views/ui.ts`** (devuelven el HTML ya armado):
+> `emptyState(msg, icon?)`, `alertBox(msg, kind, icon?)`,
+> `pill(text, kind, icon?)` e `iconSubmit(icon, value, title, kind)` (botón-ícono
+> con `name="status"` dentro de un form existente).
+>
+> **Regla de i18n de las vistas:** todo texto visible va por `t()` —
+> `const { t } = await panelI18n(env)`; los helpers que renderizan reciben `t: T`.
+> Nunca agregues literales nuevos: sumalos a `src/admin/locales/{es,en}/`.
 
 Contrato para cada vista bajo `src/admin/views/`. El shell (`layout.ts`) ya carga
 las fuentes, la config de Tailwind, los tokens, lucide y htmx, más las clases de

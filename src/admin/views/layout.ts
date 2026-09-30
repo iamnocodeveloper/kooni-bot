@@ -223,6 +223,31 @@ const GLOBAL_STYLE = `
   .chip:hover{border-color:var(--accent);color:var(--accent)}
   .cfgcard{transition:all .12s ease;cursor:pointer}
   .cfgcard:hover{border-color:var(--linelit)}
+
+  /* ── Primitivas compartidas (pulido 2026-09) ──────────────────────────────
+     Estados vacíos, avisos, pills e íconos-botón: antes cada vista los armaba
+     con estilos inline distintos. Son ADITIVAS: no renombran nada existente. */
+  .pill{display:inline-flex;align-items:center;gap:4px;font-size:10px;letter-spacing:.03em;
+    padding:2px 8px;border-radius:999px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
+  .pill-ok{color:var(--ok);border-color:var(--ok);background:var(--ok-soft)}
+  .pill-warn{color:var(--warn);border-color:var(--warn);background:var(--warn-soft)}
+  .pill-bad{color:var(--bad);border-color:var(--bad);background:var(--bad-soft)}
+  .pill-accent{color:var(--accent);border-color:var(--accent);background:var(--accent-soft)}
+  .pill-dim{color:var(--dim)}
+  .alert{display:flex;align-items:flex-start;gap:8px;font-size:12px;line-height:1.45;
+    padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--muted)}
+  .alert [data-lucide]{flex:none;margin-top:1px}
+  .alert-ok{border-color:var(--ok);background:var(--ok-soft);color:var(--ok)}
+  .alert-warn{border-color:var(--warn);background:var(--warn-soft);color:var(--warn)}
+  .alert-bad{border-color:var(--bad);background:var(--bad-soft);color:var(--bad)}
+  .empty{display:flex;flex-direction:column;align-items:center;gap:8px;padding:34px 18px;text-align:center;color:var(--dim);font-size:12.5px}
+  .empty [data-lucide]{opacity:.6}
+  .iconbtn{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;
+    border:1px solid var(--line);border-radius:8px;background:none;color:var(--muted);cursor:pointer;transition:all .12s ease}
+  .iconbtn:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+  .iconbtn-ok:hover{border-color:var(--ok);color:var(--ok);background:var(--ok-soft)}
+  .iconbtn-bad:hover{border-color:var(--bad);color:var(--bad);background:var(--bad-soft)}
+  .tblwrap{overflow-x:auto;background:var(--panel);border:1px solid var(--line);border-radius:12px}
   .bar{transition:transform .5s cubic-bezier(.16,1,.3,1)}
   .bargrp:hover .bar{background:var(--accent) !important}
 

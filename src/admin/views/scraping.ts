@@ -9,6 +9,7 @@ import { panelI18n, type T, type MessageKey } from "../i18n";
 import { Db } from "../../db/client";
 import { loadVehicleStore, listStoredVehicles } from "../../kb/inventory";
 import { ChangeReviewsRepo, type ChangeReview } from "../../db/changeReviews";
+import { emptyState, alertBox, pill as uiPill, iconSubmit } from "./ui";
 import {
   WebSyncLogRepo,
   type WebSyncChange,
@@ -271,13 +272,10 @@ export async function renderScraping(env: Env, q: ScrapingQuery = {}): Promise<s
         const st = reviewState(f.id);
         const chip =
           st === "confirmed"
-            ? `<span style="color:var(--ok);font-size:10px;border:1px solid var(--ok);padding:0 5px">${t("scr.chip.confirmed")}</span>`
+            ? uiPill(t("scr.chip.confirmed"), "ok")
             : st === "rejected"
-              ? `<span style="color:var(--bad);font-size:10px;border:1px solid var(--bad);padding:0 5px">${t("scr.chip.rejected")}</span>`
-              : `<span style="color:var(--dim);font-size:10px;border:1px solid var(--line);padding:0 5px">${t("scr.chip.pending")}</span>`;
-        const btn = (status: string, label: string, color: string) =>
-          `<button type="submit" name="status" value="${status}" title="${label}"
-             style="border:1px solid ${color};color:${color};background:none;font-size:10px;padding:0 6px;cursor:pointer">${label}</button>`;
+              ? uiPill(t("scr.chip.rejected"), "bad")
+              : uiPill(t("scr.chip.pending"), "dim");
         return `<div class="font-mono text-[10.5px]" style="color:var(--muted);display:flex;align-items:center;gap:6px;flex-wrap:wrap">
             <span style="color:var(--dim)">${esc(f.field ?? "")}:</span>
             <span style="color:var(--dim);text-decoration:line-through">${esc(f.oldValue ?? t("scr.emptyValue"))}</span>
@@ -286,9 +284,9 @@ export async function renderScraping(env: Env, q: ScrapingQuery = {}): Promise<s
               ${chip}
               <form method="POST" action="/admin/scraping/changes/${encodeURIComponent(f.id)}/review" style="display:inline-flex;gap:4px;margin:0">
                 <input type="hidden" name="back" value="${esc(q.run ? `/admin/scraping?run=${encodeURIComponent(q.run)}` : "/admin/scraping")}">
-                ${btn("confirmed", "✓", "var(--ok)")}
-                ${btn("rejected", "✗", "var(--bad)")}
-                ${st !== "pending" ? btn("pending", "↺", "var(--dim)") : ""}
+                ${iconSubmit("check", "confirmed", t("scr.chip.confirmed"), "ok")}
+                ${iconSubmit("x", "rejected", t("scr.chip.rejected"), "bad")}
+                ${st !== "pending" ? iconSubmit("rotate-ccw", "pending", t("scr.chip.pending")) : ""}
               </form>
             </span>
           </div>`;
@@ -327,12 +325,12 @@ export async function renderScraping(env: Env, q: ScrapingQuery = {}): Promise<s
       ${selected.note ? `<p class="text-[11.5px]" style="color:var(--muted);margin:0">${esc(selected.note)}</p>` : ""}
       ${
         selected.errorMsg
-          ? `<div style="border:1px solid var(--bad);background:var(--bad-soft);color:var(--bad);padding:9px 12px;font-size:11.5px;word-break:break-word">${t("scr.detail.error")} ${esc(selected.errorMsg)}</div>`
+          ? alertBox(`${t("scr.detail.error")} ${esc(selected.errorMsg)}`, "bad")
           : ""
       }
       ${
         !selected.errorMsg && changes.length === 0
-          ? `<p class="text-[12px]" style="color:var(--muted);margin:0">${selected.trigger === "rebuild" ? t("scr.noChangesRebuild") : t("scr.noChanges")}.</p>`
+          ? emptyState(`${selected.trigger === "rebuild" ? t("scr.noChangesRebuild") : t("scr.noChanges")}.`, "check-circle-2")
           : `${reviewPills}
              ${
                visibleChanges.length === 0
