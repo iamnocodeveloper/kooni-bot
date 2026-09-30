@@ -16,7 +16,7 @@ import { emitKeypressEvents } from "node:readline";
 import { stdin as input, stdout as output } from "node:process";
 import { mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, readdirSync, statSync, cpSync } from "node:fs";
 import { realpathSync } from "node:fs";
-import { join, basename, dirname } from "node:path";
+import { join, basename, dirname, isAbsolute } from "node:path";
 import { homedir } from "node:os";
 import { execFileSync, spawnSync } from "node:child_process";
 import { randomUUID, createPublicKey, verify as edVerify } from "node:crypto";
@@ -836,6 +836,26 @@ export const catalog: { name: string; price: number; description?: string; sku?:
 `;
 }
 
+// ── Contraseña del panel, por instalación ───────────────────────────────────
+// ANTES todas las instalaciones nacían con `kooni-local-password`: una constante
+// pública en el repo, o sea que cualquiera con la URL del panel entraba. Ahora se
+// genera una por instalación y se muestra UNA sola vez al terminar.
+let DASH_PASS = "";
+function dashboardPassword() {
+  if (!DASH_PASS) DASH_PASS = randomUUID().replace(/-/g, "").slice(0, 24);
+  return DASH_PASS;
+}
+
+/** Lee una clave de `.dev.vars` (para no rotar la contraseña en cada deploy). */
+function readDevVar(dir, key) {
+  try {
+    const dv = readFileSync(join(dir, ".dev.vars"), "utf8");
+    return (dv.match(new RegExp(`^${key}=(.+)$`, "m")) || [])[1]?.trim() || "";
+  } catch {
+    return "";
+  }
+}
+
 function writeDevVars(dir, answers, kbToken) {
   const lines = [
     "# KOONI — secrets locales (generados por kooni-bot init · NUNCA commitees)",
@@ -844,7 +864,7 @@ function writeDevVars(dir, answers, kbToken) {
   if (answers.baseUrl) lines.push(`OPENAI_API_BASE_URL=${answers.baseUrl}`);
   // La API key NO se escribe en disco por defecto: se guarda como secret remoto.
   lines.push("# " + answers.secret + "=<tu-api-key>  ← para wrangler dev local, pégalo aquí (o usa el panel)");
-  lines.push(`DASHBOARD_PASSWORD=${answers.dashPassword || "kooni-local-password"}`);
+  lines.push(`DASHBOARD_PASSWORD=${answers.dashPassword || dashboardPassword()}`);
   lines.push(`KB_REINDEX_TOKEN=${kbToken}`);
   // (v2) Ya NO se escribe ninguna llave de licencias: el bot verifica con la
   // clave pública que trae embebida y no necesita ningún secret para eso.
@@ -1293,9 +1313,11 @@ async function deployBot(dir, { flags = {}, rl } = {}) {
     console.log("  " + C.yellow("⚠") + " " + m("sin API key — el bot no responderá hasta que la pongas desde el panel (Configuración → Modelo de IA).", "no API key — the bot won't reply until you set it from the panel (Settings → AI Model)."));
   }
 
-  let dash = "";
-  if (interactive()) dash = await promptSecret(rl, m("Elige una contraseña para el panel /admin (usuario: admin):", "Choose a password for the /admin dashboard (user: admin):"));
-  if (!dash) dash = "kooni-local-password";
+  // La contraseña del panel NO se rota en cada deploy: se reusa la de .dev.vars
+  // (o la del prompt). Solo si no existe ninguna se genera una nueva.
+  let dash = readDevVar(dir, "DASHBOARD_PASSWORD");
+  if (!dash && interactive()) dash = await promptSecret(rl, m("Elige una contraseña para el panel /admin (usuario: admin):", "Choose a password for the /admin dashboard (user: admin):"));
+  if (!dash) dash = dashboardPassword();
   wrangler(dir, ["secret", "put", "DASHBOARD_PASSWORD"], { input: dash, capture: true });
   console.log("  " + C.green("✓") + " " + t().secretOk("DASHBOARD_PASSWORD"));
 
@@ -1741,10 +1763,10 @@ async function cmdInit(flags, rest) {
     console.log(C.dim("  " + t().tagline + "\n"));
 
     // directorio destino
-    let dir = rest[0] ? join(process.cwd(), rest[0]) : process.cwd();
+    let dir = rest[0] ? (isAbsolute(rest[0]) ? rest[0] : join(process.cwd(), rest[0])) : process.cwd();
     if (!rest[0]) {
       const ans = await ask(rl, t().whichDir, flags.dir);
-      if (ans) dir = join(process.cwd(), ans);
+      if (ans) dir = isAbsolute(ans) ? ans : join(process.cwd(), ans);
     }
     mkdirSync(dir, { recursive: true });
     if (!isKooni(dir) && existsSync(join(dir, "package.json"))) {
@@ -1830,6 +1852,7 @@ async function cmdInit(flags, rest) {
       if (url) {
         console.log("\n  " + C.green(C.b(m("🎉 BOT EN LÍNEA", "🎉 BOT LIVE"))));
         console.log("  " + C.cyan(t().panel) + " " + C.b(url + "/admin"));
+        console.log("  " + C.dim(m("usuario: admin · contraseña: ", "user: admin · password: ")) + C.b(readDevVar(dir, "DASHBOARD_PASSWORD") || dashboardPassword()) + C.dim(m("  (guardala: no se vuelve a mostrar)", "  (save it: it won't be shown again)")));
         console.log("\n  " + C.b(m("Lo que sigue (tu agente de Claude Code lo hace por ti):", "Next steps (your Claude Code agent does them for you):")));
         console.log("  1. " + C.dim(m("abre tu panel en el link de arriba (usuario admin + tu contraseña)", "open your panel at the link above (user admin + your password)")));
         console.log("  2. " + C.dim(m("Conexiones → pega tu token de Telegram: lo valida y registra el webhook solo", "Connections → paste your Telegram token: it validates and registers the webhook automatically")));
@@ -1839,7 +1862,8 @@ async function cmdInit(flags, rest) {
       } else {
         console.log("\n  " + C.yellow(m("No desplegaste todavía. Cuando quieras:", "You haven't deployed yet. When you're ready:")));
         console.log("  " + C.cyan("npx kooni-bot deploy"));
-        console.log("  " + C.dim(m("levanta el bot en TU Cloudflare y te da la URL del panel /admin.", "it deploys the bot on YOUR Cloudflare and gives you the /admin panel URL.")) + "\n");
+        console.log("  " + C.dim(m("levanta el bot en TU Cloudflare y te da la URL del panel /admin.", "it deploys the bot on YOUR Cloudflare and gives you the /admin panel URL.")));
+        console.log("  " + C.dim(m("usuario: admin · contraseña: ", "user: admin · password: ")) + C.b(readDevVar(dir, "DASHBOARD_PASSWORD") || dashboardPassword()) + C.dim(m("  (guardala: no se vuelve a mostrar)", "  (save it: it won't be shown again)")) + "\n");
       }
     }
 
