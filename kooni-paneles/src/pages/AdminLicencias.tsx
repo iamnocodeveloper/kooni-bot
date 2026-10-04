@@ -140,6 +140,12 @@ export default function AdminLicencias() {
       }).eq("id", form.id);
       if (error) throw error;
 
+      // Refleja el plan en la instalación para que el panel del cliente lo
+      // muestre al instante (antes quedaba en "free" hasta el próximo reporte).
+      if (form.inst_uid) {
+        await insforge.database.from("instalaciones").update({ tier: form.plan }).eq("uid", form.inst_uid);
+      }
+
       await logAdmin("licencia.guardar", `${form.plan} · ${form.modules.length} módulos · ${form.estado}`);
       setFlash(t("admin.licencias.saved"));
       setLastCode(form.plan === "pro" && code ? code : null);

@@ -89,6 +89,10 @@ export default async function (req: Request): Promise<Response> {
   const expired = lic?.expiry ? new Date(lic.expiry).getTime() < Date.now() : false;
   const plan = !revoked && !expired && lic?.plan === "pro" ? "pro" : "free";
 
+  // Refleja el plan de la licencia en la instalación para que el panel del
+  // cliente lo muestre al instante (el worker lo refina con su reporte real).
+  await admin.database.from("instalaciones").update({ tier: plan }).eq("id", instId);
+
   return json({
     inst_token: token,
     plan,

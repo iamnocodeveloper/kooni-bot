@@ -29,6 +29,9 @@ El CLI `kooni-bot` se versiona aparte (npm) — ver la nota de cada versión.
   pudo sincronizar su licencia (HTTP 401 = token de instalación desincronizado).
   Antes fallaba en silencio, que es justo lo que dejaba al bot en Free sin señal
   alguna.
+- **El plan se refleja al instante en el panel del cliente**: `licencia-emitir` y
+  el guardado de licencia en el super admin escriben `instalaciones.tier` con el
+  plan de la licencia (antes quedaba en `free` hasta que el worker reportara uso).
 
 ## [1.55.1] — 2026-10-04
 
