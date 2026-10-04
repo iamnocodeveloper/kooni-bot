@@ -5,6 +5,26 @@ Cambios notables de Kooni. Formato aproximado de
 
 El CLI `kooni-bot` se versiona aparte (npm) — ver la nota de cada versión.
 
+## [1.55.1] — 2026-10-04
+
+### Corregido — el login del CLI es obligatorio para registrar y licenciar
+
+- **`init` y `deploy` ahora exigen sesión del CLI** (`npx kooni-bot login`): sin
+  ella no se instala/despliega (en agente/CI se delega con `login --wait`).
+  Antes solo se avisaba al final, así que era fácil quedar con una instalación
+  **no registrada** en el panel ni licenciable. `--no-login` queda solo como
+  salida explícita para instalaciones anónimas/offline.
+- **La instalación se registra y se vincula al panel en el deploy**: se re-emite
+  la licencia con la **URL real del worker** y se guarda el **token por
+  instalación** (`KOONI_INSTALL_TOKEN`), con el que el worker sincroniza su plan
+  y reporta uso (`registrar-uso`) — el enlace instalación ↔ licencia del panel.
+  Arregla el caso `init --no-deploy` seguido de `deploy` (procesos distintos): el
+  token pendiente se perdía y la instalación no aparecía ni trackeaba.
+- El correo del onboarding ya no dice que "registra la instalación" (es solo el
+  contacto del dueño); el registro lo hace el login. Guía del agente, `--help` y
+  `docs/DESPLIEGUE.md` actualizados.
+- CLI `kooni-bot` sube a **0.7.0**.
+
 ## [1.55.0] — 2026-10-02
 
 ### Agregado — giro **concesionario** (venta de autos)

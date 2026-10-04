@@ -196,13 +196,26 @@ npx wrangler secret bulk secrets.json
 **Dev local:** los secrets locales viven en `.dev.vars` (fuera de git). El valor
 que pongas ahí es el que usa `wrangler dev` — el remoto manda en producción.
 
-### 4.2 Licencia Pro en el instalador (correo + código)
+### 4.2 Login del CLI + registro y licencia en el instalador
 
-Desde `kooni-bot` v0.2.16, `init` **pide siempre el correo del dueño** (registra
-la instalación en el panel de licencias — gratis o paga — y es el canal de
-contacto/renovación) y pregunta si el bot será **Pro con licencia**: si el usuario
-pega un código `KOONI-PRO-…`, se valida localmente (HMAC) y se activa al terminar
-la instalación (se guarda en `settings → pro_license`, igual que pegarlo en el
+Desde `kooni-bot` v0.7.0, `init` y `deploy` **exigen conectar el CLI a tu cuenta
+Kooni** (`npx kooni-bot login` — abre el navegador y aprueba un código; en
+agente/CI: `npx kooni-bot login --wait`). Esa sesión es la que **registra la
+instalación en el panel de licencias** (super admin), le crea su **licencia free
+vinculada** (`inst_uid`) y guarda el **token por instalación**
+(`KOONI_INSTALL_TOKEN`) con el que el worker sincroniza su plan y **reporta uso**
+(`registrar-uso`). Sin login **no** se instala/despliega; `--no-login` es la
+salida explícita para instalaciones anónimas/offline (no aparecen en el panel ni
+se pueden licenciar).
+
+Tras registrarse, el dueño abre el panel de licencias y activa el plan **Pro**
+(módulos, límites y marca) para esa instalación; el bot lo aplica en su próximo
+sync, sin redeploy.
+
+`init` también pide el **correo del dueño** (canal de contacto/renovación, no el
+registro) y pregunta si el bot será **Pro con licencia**: si se pega un código
+`KOONI-PRO-V2-…`, se valida localmente (Ed25519 con la clave pública) y se activa
+al terminar (se guarda en `settings → pro_license`, igual que pegarlo en el
 panel). Con `--yes` para agentes/CI: `--email <correo> --license <código>`.
 
 ### 4.3 Métricas del sistema (panel de licencias)

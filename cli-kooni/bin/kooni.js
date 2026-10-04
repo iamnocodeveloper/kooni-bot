@@ -39,8 +39,6 @@ const REPO = process.env.KOONI_REPO || "iamnocodeveloper/kooni-bot";
 const BRANCH = process.env.KOONI_BRANCH || "main";
 const TARBALL = `https://codeload.github.com/${REPO}/tar.gz/refs/heads/${BRANCH}`;
 const RAW_VERSION_URL = `https://raw.githubusercontent.com/${REPO}/${BRANCH}/package.json`;
-// Control del dueño: check-in al instalar (no bloquea; solo registra quién).
-const CHECKIN_URL = process.env.KOONI_CHECKIN_URL || "https://f5gacw7g.function2.insforge.app/registrar-instalacion";
 
 const CFG_DIR = join(homedir(), ".kooni");
 const CFG_FILE = join(CFG_DIR, "config.json");
@@ -152,7 +150,7 @@ const DICT = {
     ok: "✓", err: "✗",
     noInstallable: "Tu licencia está lista y guardada. El bot Starter llega en breve — te avisamos en la comunidad.",
     // check-in
-    qEmail: "¿Tu email? (opcional, para soporte)",
+    qEmail: "¿Tu email? (contacto del dueño)",
     // error
     templateMissing: "no encontré el instalador en el template.",
     deployFailed: "el deploy falló. Revisa los mensajes de arriba.",
@@ -224,7 +222,7 @@ const DICT = {
     okTag: "✓", warnTag: "⚠", badTag: "✗",
     ok: "✓", err: "✗",
     noInstallable: "Your license is ready and saved. The Starter bot ships shortly.",
-    qEmail: "Your email? (optional, for support)",
+    qEmail: "Your email? (owner contact)",
     templateMissing: "installer not found in template.",
     deployFailed: "deploy failed. Check the messages above.",
     noSubdomain: "your Cloudflare account has no workers.dev subdomain yet — creating it automatically…",
@@ -1005,14 +1003,14 @@ async function onboarding(rl, answers, defaultDir, flags = {}) {
   ], { value: answers.tone, default: 0 });
   answers.tone = ["cercano", "formal", "divertido"][toneIdx] || "cercano";
 
-  // Correo del dueño: se pide SIEMPRE (registra la instalación en el panel de
-  // licencias y es el canal de contacto/renovación). En interactivo se exige un
-  // valor (con reintento); en modo agente/CI viene por --email.
+  // Correo del dueño: se pide para contacto/renovación (el registro de la
+  // instalación lo hace el login del CLI, no el correo). En interactivo se exige
+  // un valor (con reintento); en modo agente/CI viene por --email.
   if (!answers.email) {
     while (interactive()) {
       const em = (await ask(rl, t().qEmail, undefined)).trim();
       if (em) { answers.email = em; break; }
-      console.log("  " + C.yellow("⚠") + " " + m("el correo es obligatorio para registrar tu instalación.", "email is required to register your install."));
+      console.log("  " + C.yellow("⚠") + " " + m("necesitamos un correo de contacto del dueño.", "we need the owner's contact email."));
     }
   }
 
@@ -1416,10 +1414,17 @@ async function deployBot(dir, { flags = {}, rl } = {}) {
     console.log(C.yellow("  ⚠ " + m("no se detectó la URL del worker — revisa la salida del deploy", "couldn't detect the worker URL — check the deploy output")));
   }
 
-  // Token por instalación + sync de licencia (si el usuario está logueado).
-  if (PENDING_INST_TOKEN) {
+  // Registro/actualización en el panel + token POR INSTALACIÓN. Con sesión, se
+  // re-emite con la URL real del worker (queda vinculada y lista para licenciar);
+  // sin sesión, se usa el token pendiente del init (si lo hubo).
+  let instToken = PENDING_INST_TOKEN;
+  try {
+    const lic = await registerInstall(dir, { workerUrl: url, version: readPkgVersion(dir) || undefined });
+    if (lic && lic.inst_token) instToken = lic.inst_token;
+  } catch { /* sin red: se reintenta en el próximo deploy/noche */ }
+  if (instToken) {
     try {
-      wrangler(dir, ["secret", "put", "KOONI_INSTALL_TOKEN"], { input: PENDING_INST_TOKEN, capture: true });
+      wrangler(dir, ["secret", "put", "KOONI_INSTALL_TOKEN"], { input: instToken, capture: true });
       console.log("  " + C.green("✓") + " " + m("token de instalación guardado", "install token saved"));
     } catch { /* el sync nocturno lo tomará igual */ }
   }
@@ -1428,14 +1433,6 @@ async function deployBot(dir, { flags = {}, rl } = {}) {
   // Persistir identidad de Cloudflare en el marker (para update/doctor/selector).
   writeMarker(dir, { databaseId: d1Id, workerUrl: url || undefined, dbName, kbName });
   return url;
-}
-
-// ── check-in (no bloqueante) ─────────────────────────────────────────────────
-// Ya no se hace check-in anónimo: la instalación se registra al hacer
-// `licencia-emitir` (con la cuenta logueada). Se conserva la función para no
-// romper los llamadores; respeta KOONI_NO_CHECKIN.
-async function checkin(_dir, _answers, _version) {
-  return;
 }
 
 // ── skill de agente ─────────────────────────────────────────────────────────
@@ -1487,11 +1484,14 @@ constructor. No hay licencia ni servidor de Horizontes: el tier free/pro se cont
 Si dudas: **member/ es sagrado, src/ se actualiza.**
 
 ## Instalación de cero (resumen)
-1. \`npx kooni-bot init\` (o \`init --yes --slug <slug> --negocio "…" --cerebro claude\` para agentes/CI).
-2. \`npx kooni-bot deploy\` (login de Cloudflare, D1/Vectorize/R2, secrets, migraciones, deploy).
-   - El CLI hace el login LIMPIO: quita \`CLOUDFLARE_API_TOKEN\`/\`CLOUDFLARE_API_KEY\` del entorno, cierra la sesión previa (\`wrangler logout\`) y abre el navegador para OAuth con la cuenta correcta. No hay que hacer nada manual.
-3. Abrir el panel en \`https://<worker>.workers.dev/admin\` (usuario \`admin\` + \`DASHBOARD_PASSWORD\`).
-4. Conectar canales DESPUÉS del primer deploy (Telegram primero, ~5 min) desde \`/admin/conexiones\`.
+1. \`npx kooni-bot login\` — conecta el CLI a la cuenta Kooni del usuario (abre el navegador y aprueba un código). **OBLIGATORIO**: sin esta sesión la instalación NO se registra en el panel ni se puede licenciar. En agente/CI: \`npx kooni-bot login --wait\` (el usuario aprueba el código).
+2. \`npx kooni-bot init\` (o \`init --yes --slug <slug> --negocio "…" --cerebro claude\` para agentes/CI). Init exige la sesión del paso 1; registra la instalación y le crea su licencia free (vinculada al panel).
+3. \`npx kooni-bot deploy\` (login de Cloudflare, D1/Vectorize/R2, secrets, migraciones, deploy). Re-emite con la URL real y guarda el token por instalación (reporte de uso + sync de licencia).
+   - El CLI hace el login LIMPIO de Cloudflare: quita \`CLOUDFLARE_API_TOKEN\`/\`CLOUDFLARE_API_KEY\` del entorno, cierra la sesión previa (\`wrangler logout\`) y abre el navegador para OAuth con la cuenta correcta. No hay que hacer nada manual.
+4. Abrir el panel del bot en \`https://<worker>.workers.dev/admin\` (usuario \`admin\` + \`DASHBOARD_PASSWORD\`).
+5. Conectar canales DESPUÉS del primer deploy (Telegram primero, ~5 min) desde \`/admin/conexiones\`.
+
+> La instalación queda en el panel de licencias del dueño (super admin) en cuanto se hace \`login\` + \`init\`/\`deploy\`; ahí se le activa el plan Pro y sus módulos. Nada de esto ocurre sin \`login\`.
 
 ## Subdominio workers.dev (error 10063)
 - Si el deploy falla con \`[code: 10063]\` ("You need a workers.dev subdomain"), el CLI **lo crea solo** usando la sesión OAuth de wrangler y reintenta el deploy automáticamente — no hay que hacer nada manual.
@@ -1550,12 +1550,10 @@ async function apiPost(path, body, token) {
 
 // Login por dispositivo (device flow, estilo Forja/GitHub): el CLI pide un
 // código, el usuario lo aprueba logueado en el sitio de Kooni, y el CLI recibe
-// su token de sesión.
-async function cmdLogin(flags) {
-  const cfg = loadCfg();
-  if (flags.lang === "en" || cfg.lang === "en") L = "en";
-  banner();
-
+// su token de sesión. Reutilizable por `login`, `init` y `deploy`.
+// Devuelve { ok, token, delegated }: `delegated` es true cuando no hay TTY
+// (agente/CI) y hay que reintentar con `npx kooni-bot login --wait`.
+async function runDeviceLogin(flags = {}) {
   let j = {};
   try {
     const res = await apiPost("/cli-device-start", {});
@@ -1563,7 +1561,7 @@ async function cmdLogin(flags) {
   } catch { /* red */ }
   if (!j.code) {
     console.log("\n  " + C.red("✗ ") + m("no pude iniciar el login (revisa tu internet).", "couldn't start login (check your internet).") + "\n");
-    process.exit(1);
+    return { ok: false, delegated: false };
   }
 
   console.log("\n  " + C.b(m("Abre este link y aprueba el código:", "Open this link and approve the code:")));
@@ -1575,7 +1573,7 @@ async function cmdLogin(flags) {
     console.log(C.yellow("  ── PARA EL AGENTE ──  [E-INPUT-REQUIRED]"));
     console.log("  " + m("Pídele al usuario que abra el link y apruebe el código; luego corre:", "Ask the user to open the link and approve the code; then run:"));
     console.log("  " + C.cyan("npx kooni-bot login --wait") + "\n");
-    process.exit(0);
+    return { ok: false, delegated: true };
   }
 
   process.stdout.write(C.dim("  " + m("Esperando aprobación…", "Waiting for approval…")) + "\n");
@@ -1587,15 +1585,45 @@ async function cmdLogin(flags) {
     if (pj.status === "approved" && pj.token) {
       saveCreds({ token: pj.token, at: new Date().toISOString() });
       console.log("  " + C.green("✓") + " " + m("CLI conectado a tu cuenta Kooni.", "CLI connected to your Kooni account.") + "\n");
-      return;
+      return { ok: true, token: pj.token };
     }
     if (pj.status === "expired" || pj.status === "denied") {
       console.log("  " + C.red("✗") + " " + m(`el código quedó ${pj.status}. Repite: npx kooni-bot login`, `code ${pj.status}. Retry: npx kooni-bot login`) + "\n");
-      process.exit(1);
+      return { ok: false, delegated: false };
     }
   }
   console.log("  " + C.yellow("⚠") + " " + m("se agotó el tiempo del código.", "the code timed out.") + "\n");
-  process.exit(1);
+  return { ok: false, delegated: false };
+}
+
+async function cmdLogin(flags) {
+  const cfg = loadCfg();
+  if (flags.lang === "en" || cfg.lang === "en") L = "en";
+  banner();
+  const r = await runDeviceLogin(flags);
+  if (r.ok) return;
+  process.exit(r.delegated ? 0 : 1);
+}
+
+// ¿El token de sesión sigue siendo válido? Un 401 significa sesión muerta. Sin
+// red se asume válido (no bloquear; el registro lo validará de nuevo).
+async function sessionTokenValid(token) {
+  try {
+    const r = await apiPost("/cli-whoami", {}, token);
+    return r.status !== 401;
+  } catch {
+    return true;
+  }
+}
+
+// Garantiza una sesión del CLI (login por dispositivo). Obligatorio para
+// registrar y licenciar la instalación. Devuelve { token, delegated }.
+async function ensureSession(flags = {}) {
+  const existing = loadCreds().token;
+  if (existing && (await sessionTokenValid(existing))) return { token: existing, delegated: false };
+  if (existing) console.log("  " + C.yellow("⚠") + " " + m("tu sesión de Kooni expiró — hay que reconectar el CLI.", "your Kooni session expired — reconnecting the CLI."));
+  console.log("  " + C.b(m("Para registrar y licenciar tu bot, conecta el CLI a tu cuenta Kooni:", "To register and license your bot, connect the CLI to your Kooni account:")));
+  return await runDeviceLogin(flags);
 }
 
 // Registra la instalación en el backend y devuelve su token por instalación.
@@ -1610,15 +1638,31 @@ async function emitirLicencia(dir, answers, meta) {
       bot_name: answers.botName,
       db_name: meta && meta.dbName,
       kb_name: meta && meta.kbName,
+      worker_url: (meta && meta.worker_url) || undefined,
       provider: answers.provider,
       platform: process.platform,
       cli_version: CLI_VERSION,
-      bot_version: readPkgVersion(dir) || undefined,
+      bot_version: (meta && meta.bot_version) || readPkgVersion(dir) || undefined,
     }, creds.token);
     const j = await res.json().catch(() => ({}));
     if (!res.ok || !j.inst_token) return null;
     return j;
   } catch { return null; }
+}
+
+// Registra (o re-registra) la instalación en el panel con la sesión del CLI y
+// devuelve su token por instalación. Toma la identidad del marker/wrangler.toml,
+// así sirve igual para `init` (sin URL aún) y para `deploy`/`pair` (con URL).
+// Sin sesión devuelve null.
+async function registerInstall(dir, { workerUrl, version } = {}) {
+  if (!loadCreds().token) return null;
+  const id = readInstallIdentity(dir);
+  if (!id.uid) return null;
+  return await emitirLicencia(
+    dir,
+    { slug: id.slug, botName: id.botName, provider: id.provider },
+    { uid: id.uid, dbName: id.dbName, kbName: id.kbName, worker_url: workerUrl, bot_version: version },
+  );
 }
 
 // Pide al worker que re-sincronice su licencia (aplica plan, módulos, límites y
@@ -1776,6 +1820,21 @@ async function cmdInit(flags, rest) {
       process.exit(1);
     }
 
+    // Login de Kooni OBLIGATORIO: sin sesión no se puede registrar la instalación
+    // ni vincularla al panel para licenciarla. `--no-login` es la salida explícita
+    // (instalación anónima/offline: NO aparecerá en el panel ni podrá licenciarse).
+    if (flags["no-login"]) {
+      console.log("  " + C.yellow("⚠") + " " + m("modo --no-login: la instalación NO se registrará ni podrá licenciarse.", "--no-login mode: the install will NOT be registered or licenseable."));
+    } else {
+      const sess = await ensureSession(flags);
+      if (!sess.token) {
+        // Sin sesión: no creamos una instalación a medias.
+        console.log("  " + C.yellow("⚠") + " " + m("conecta el CLI a tu cuenta Kooni (arriba) y vuelve a correr init.", "connect the CLI to your Kooni account first (above) and re-run init."));
+        if (sess.delegated) console.log("  " + C.cyan("npx kooni-bot login --wait") + "\n");
+        process.exit(1);
+      }
+    }
+
     // descargar + extraer
     const tgz = join(dir, ".kooni-template.tgz");
     process.stdout.write(C.dim("  " + t().download + "\n"));
@@ -1821,31 +1880,21 @@ async function cmdInit(flags, rest) {
       kbName: meta && meta.kbName,
     });
 
-    // Registro en el backend de licencias (si hay sesión de CLI): guarda el
-    // token por instalación con el que el worker hablará con el panel.
+    // Registro en el backend de licencias: crea/actualiza la instalación y su
+    // licencia free, y devuelve el token POR INSTALACIÓN con el que el worker
+    // reportará uso y sincronizará su plan. Requiere la sesión del CLI (arriba).
     if (!flags["no-login"]) {
-      const lic = await emitirLicencia(dir, answers, meta);
-      if (lic) {
+      const lic = await registerInstall(dir, { version });
+      if (lic && lic.inst_token) {
         PENDING_INST_TOKEN = lic.inst_token;
-        console.log("  " + C.green("✓") + " " + m("instalación registrada en tu cuenta Kooni", "install registered in your Kooni account"));
-      } else if (!loadCreds().token) {
-        // Sin sesión del CLI no se emite licencia y la instalación NO aparece en
-        // el panel del super admin. Antes esto era una línea gris que se perdía:
-        // ahora es un aviso imposible de ignorar con el remedio exacto.
+        console.log("  " + C.green("✓") + " " + m(`instalación registrada y vinculada a tu panel (plan ${lic.plan || "free"})`, `install registered and linked to your panel (plan ${lic.plan || "free"})`));
+      } else {
         console.log("");
-        console.log("  " + C.yellow("⚠  " + C.b(m("NO se registró en tu panel de Kooni", "NOT registered in your Kooni panel"))));
-        console.log("  " + m(
-          "El bot quedó instalado, pero el panel no lo verá (no había sesión del CLI).",
-          "The bot is installed, but the panel won't see it (there was no CLI session).",
-        ));
-        console.log("  " + m("Para registrarlo, corré:", "To register it, run:"));
+        console.log("  " + C.yellow("⚠  " + C.b(m("NO se pudo registrar en tu panel de Kooni", "couldn't register in your Kooni panel"))));
+        console.log("  " + m("Corré:", "Run:"));
         console.log("  " + C.cyan(`npx kooni-bot login && npx kooni-bot pair ${basename(dir)}`) + "\n");
       }
     }
-
-    // Check-in al panel de licencias ANTES del deploy: así TODAS las instalaciones
-    // (gratis o pagas) quedan registradas aunque el deploy falle (ej. error 10063).
-    await checkin(dir, answers, version);
 
     // deploy (si no lo deshabilitan)
     if (!flags["no-deploy"] && !process.env.KOONI_NO_DEPLOY) {
@@ -1868,8 +1917,6 @@ async function cmdInit(flags, rest) {
         console.log("  " + C.dim(m("usuario: admin · contraseña: ", "user: admin · password: ")) + C.b(readDevVar(dir, "DASHBOARD_PASSWORD") || dashboardPassword()) + C.dim(m("  (guardala: no se vuelve a mostrar)", "  (save it: it won't be shown again)")) + "\n");
       }
     }
-
-    await checkin(dir, answers, version);
   } catch (e) {
     console.log("\n  " + C.red("✗ " + (e.message || e)) + "\n");
     process.exit(1);
@@ -1898,9 +1945,17 @@ async function cmdDeploy(flags, rest) {
       brainKey = ({ anthropic: "claude", openai: "chatgpt", aisa: "aisa", xai: "grok", minimax: "minimax" })[p] || "claude";
     } catch {}
     flags.brainKey = brainKey;
+    // Login de Kooni OBLIGATORIO: el deploy registra y vincula la instalación al
+    // panel (token por instalación → licencia + reporte de uso).
+    if (!flags["no-login"]) {
+      const sess = await ensureSession(flags);
+      if (!sess.token) {
+        console.log("  " + C.red("✗") + " " + m("conecta el CLI a tu cuenta Kooni antes de desplegar (npx kooni-bot login).", "connect the CLI to your Kooni account before deploying (npx kooni-bot login).") + "\n");
+        if (sess.delegated) console.log("  " + C.cyan("npx kooni-bot login --wait") + "\n");
+        process.exit(1);
+      }
+    }
     await deployBot(dir, { flags, rl });
-    // Re-registrar tras un deploy exitoso (URL real del worker + tier/provider).
-    try { await checkin(dir, {}, readPkgVersion(dir) || "0.0.0"); } catch {}
   } catch (e) {
     console.log("\n  " + C.red("✗ " + (e.message || e)) + "\n");
     process.exit(1);
@@ -2106,11 +2161,15 @@ ${C.cyan("kooni-bot")} — ${t().helpIntro}
 
 ${C.dim("  Subdominio workers.dev: si tu cuenta no lo tiene, el deploy lo crea solo y reintenta.")}
 
+${C.dim("  " + m("Login de Kooni: `init` y `deploy` exigen conectar el CLI a tu cuenta", "Kooni login: `init` and `deploy` require connecting the CLI to your account"))}
+${C.dim("  " + m("(`npx kooni-bot login`). Sin esa sesión la instalación no se registra en el panel", "(`npx kooni-bot login`). Without that session the install isn't registered in the panel"))}
+${C.dim("  " + m("ni se puede licenciar. `deploy` guarda el token por instalación (uso + licencia).", "and can't be licensed. `deploy` saves the per-install token (usage + license)."))}
+
 ${C.dim("  Flags de init (modo no-interactivo, para agentes):")}
 ${C.dim("    --yes  --slug <slug>  --negocio <nombre>  --bot-name <nombre>  --lang es-MX|es-ES|en|pt-BR")}
 ${C.dim("    --tier free|pro  --cerebro claude|chatgpt|grok|gateway  --base-url <url>")}
 ${C.dim("    --que --ofrece --horario --ubicacion --telefono --web --pagos --faq --reglas --tono")}
-${C.dim("    --no-deploy  --no-agent-skill  --email <correo>  --license <codigo-KOONI-PRO-V2>")}
+${C.dim("    --email <correo>  --no-deploy  --no-agent-skill  --no-login  --license <codigo-KOONI-PRO-V2>")}
 `);
 }
 
