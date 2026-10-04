@@ -25,6 +25,10 @@ El CLI `kooni-bot` se versiona aparte (npm) — ver la nota de cada versión.
   `kooni.click` (sitio de marketing) porque faltaba el secret `SITE_URL`; se
   configuró al hub (`https://t6bferet.insforge.site`), así que el link correcto
   sale solo.
+- **CLI `kooni-bot` 0.7.1**: `pair`/`deploy` ahora **avisan** cuando el bot no
+  pudo sincronizar su licencia (HTTP 401 = token de instalación desincronizado).
+  Antes fallaba en silencio, que es justo lo que dejaba al bot en Free sin señal
+  alguna.
 
 ## [1.55.1] — 2026-10-04
 

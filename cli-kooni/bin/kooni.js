@@ -1674,7 +1674,15 @@ async function syncWorkerLicense(dir, workerUrl) {
     const tok = (dv.match(/^KB_REINDEX_TOKEN=(.+)$/m) || [])[1];
     if (!tok) return;
     const res = await fetchTimeout(`${workerUrl.replace(/\/+$/, "")}/license/sync`, { method: "POST", headers: { "X-Reindex-Token": tok } }, 15000);
-    if (res.ok) console.log("  " + C.green("✓") + " " + m("licencia sincronizada con el panel", "license synced with the panel"));
+    if (res.ok) {
+      console.log("  " + C.green("✓") + " " + m("licencia sincronizada con el panel", "license synced with the panel"));
+    } else {
+      const body = await res.text().catch(() => "");
+      console.log("  " + C.yellow("⚠") + " " + m(
+        `el bot NO pudo sincronizar su licencia (HTTP ${res.status}${body ? ": " + body.slice(0, 120) : ""}). Suele ser el token de instalación desincronizado — re-vincula con: npx kooni-bot pair`,
+        `the bot couldn't sync its license (HTTP ${res.status}${body ? ": " + body.slice(0, 120) : ""}). Usually a stale install token — re-link with: npx kooni-bot pair`,
+      ));
+    }
   } catch { /* best-effort */ }
 }
 
