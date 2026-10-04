@@ -443,7 +443,7 @@ export async function runWebSync(env: Env, opts: WebSyncRunOptions = {}): Promis
     // vacío borró los 449 autos).
     const store = await loadVehicleStore(db).catch(() => ({ updatedAt: 0, vehicles: {} }));
     const all = listStoredVehicles(store);
-    const keep = all.filter((v) => urls.includes(v.feedUrl));
+    const keep = all.filter((v) => v.source === "csv" || urls.includes(v.feedUrl));
     if (keep.length !== all.length) {
       const vehicles: Record<string, (typeof all)[number]> = {};
       for (const v of keep) vehicles[v.key] = v;
@@ -539,6 +539,8 @@ export async function rebuildInventoryKb(
 
   const byFeed = new Map<string, StoredVehicle[]>();
   for (const v of all) {
+    // Los autos del CSV no vienen de un feed: su doc de KB lo maneja vehiclesCsv.
+    if (v.source === "csv") continue;
     const f = v.feedUrl || "";
     if (!f) continue;
     const list = byFeed.get(f) ?? [];

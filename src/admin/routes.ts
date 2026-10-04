@@ -594,8 +594,43 @@ adminApp.get("/scraping/inventario", async (c) => {
       q: c.req.query("q") || undefined,
       f: c.req.query("f") || undefined,
       page: Number.isFinite(pageRaw) && pageRaw > 0 ? pageRaw : undefined,
+      flash: c.req.query("flash") || undefined,
     }),
   );
+});
+
+// Importar autos desde CSV/Excel (giro concesionario, pero sirve a cualquier
+// instalación con inventario): los autos entran al MISMO store que Web Sync con
+// `source: "csv"`, así el scraping nocturno no los borra. El resumen en la KB
+// se reindexa aparte: si Vectorize/AI no están listos no se pierde la carga.
+adminApp.post("/scraping/inventario/import", async (c) => {
+  const { t } = await panelI18n(c.env);
+  const { mapCsvToVehicles, mergeCsvVehicles, buildAndIndexAutosResumen } = await import("../kb/vehiclesCsv");
+  const { loadVehicleStore, saveVehicleStore } = await import("../kb/inventory");
+  const form = await c.req.formData();
+  const csv = String(form.get("csv") ?? "");
+  const back = (msg: string) => c.redirect(`/admin/scraping/inventario?flash=${encodeURIComponent(msg)}`);
+  if (!csv.trim()) return back(t("inv.msg.importEmpty"));
+  const { vehicles, errors } = mapCsvToVehicles(csv);
+  const firstErr = errors[0] ? t("inv.msg.line", { line: errors[0].line, motivo: errors[0].motivo }) : "";
+  if (vehicles.length === 0) return back(t("inv.msg.importNone", { detail: firstErr }).trim());
+  const db = new Db(c.env.DB);
+  const store = await loadVehicleStore(db);
+  const res = mergeCsvVehicles(store, vehicles, { replace: form.get("replace") === "1" });
+  await saveVehicleStore(db, res.store);
+  await buildAndIndexAutosResumen(c.env, db, res.store).catch((e) =>
+    console.warn("[inventario] no se pudo indexar el resumen:", e),
+  );
+  await audit(c, {
+    action: "inventario.import",
+    target: "settings:web_sync_vehicles",
+    targetLabel: "Inventario de autos (CSV)",
+    afterVal: `${res.added} nuevos, ${res.updated} actualizados, ${errors.length} con problema`,
+  });
+  const msg =
+    t("inv.msg.importOk", { n: res.added, updated: res.updated, errors: errors.length }) +
+    (firstErr ? ` · ${firstErr}` : "");
+  return back(msg);
 });
 
 adminApp.get("/scraping/export.csv", async (c) => {

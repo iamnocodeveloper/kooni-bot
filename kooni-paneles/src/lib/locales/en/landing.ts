@@ -101,7 +101,7 @@ export const landingEn: Record<keyof typeof landingEs, string> = {
     "Takes pickup or delivery orders, with address and notes.",
   "lp.giro.restaurante.b3": "Books the table: day, time and how many people.",
   "lp.giro.restaurante.b4":
-    "Confirms and reminds the reservation so no-shows drop.",
+    "Confirms the reservation with day, time and party size, and puts it in your panel.",
 
   "lp.giro.inmobiliaria.pain":
     "Out of 20 messages, 3 are real. Kooni screens them, books the visit and hands you the prospect with area and budget spelled out.",
@@ -115,9 +115,9 @@ export const landingEn: Record<keyof typeof landingEs, string> = {
     "Never quotes a price or a date that isn't in your inventory.",
 
   "lp.giro.clinica.pain":
-    "The appointment gets booked, the reminder goes out on its own, and your front desk tends to the patient standing in front of it.",
+    "The appointment gets booked without picking up the phone, and your front desk tends to the patient standing in front of it.",
   "lp.giro.clinica.b1": "Books the appointment with day, time and reason, and confirms the slot.",
-  "lp.giro.clinica.b2": "Reminds the patient and cuts down on no-shows.",
+  "lp.giro.clinica.b2": "Books the appointment at any hour, even outside front-desk hours.",
   "lp.giro.clinica.b3":
     "Answers hours, location, consultation price and what to bring to a first visit.",
   "lp.giro.clinica.b4":
@@ -127,7 +127,7 @@ export const landingEn: Record<keyof typeof landingEs, string> = {
     "An empty chair never comes back. The bot fills your calendar between cuts, without you putting the clippers down.",
   "lp.giro.barberia.b1": "Shows services, prices and how long each one takes.",
   "lp.giro.barberia.b2": "Books by barber and by time slot, keeping appointments from overlapping.",
-  "lp.giro.barberia.b3": "Reminds the client a day ahead: no-shows drop.",
+  "lp.giro.barberia.b3": "Books the appointment at any hour, even when you have the clippers in hand.",
   "lp.giro.barberia.b4":
     "Offers the next open slot when someone asks last minute.",
 
@@ -138,6 +138,14 @@ export const landingEn: Record<keyof typeof landingEs, string> = {
   "lp.giro.eventos.b3": "Leaves every quote in the panel with event, date, gear and people.",
   "lp.giro.eventos.b4":
     "Never promises a date on its own: it holds a pre-booking and a person confirms the deposit.",
+
+  "lp.giro.concesionario.pain":
+    "A car someone asks about at 11 pm goes cold by morning. The bot answers from your real inventory and leaves the test drive booked.",
+  "lp.giro.concesionario.b1": "Searches your inventory by make, model, condition and price, and sends the listing with photo and link.",
+  "lp.giro.concesionario.b2": "If a car isn't on your list it says so: it never invents makes, prices or mileage.",
+  "lp.giro.concesionario.b3": "Qualifies the lead: what they want, budget, whether they finance and whether they have a trade-in.",
+  "lp.giro.concesionario.b4":
+    "It never promises credit or appraises a trade-in: it books the test drive and hands the close to your salesperson.",
 
   "lp.giro.cartera.pain":
     "Collecting late is expensive. The bot reminds every customer with a firm, kind tone, and brings you payment promises.",

@@ -7,7 +7,9 @@ import { layout } from "./layout";
 import { Db } from "../../db/client";
 import { loadVehicleStore, listStoredVehicles, filterStoredVehicles, paginate, lacksPhoto, type StoreFilter } from "../../kb/inventory";
 import { panelI18n } from "../i18n";
-import { emptyState, pill as uiPill } from "./ui";
+import { emptyState, alertBox, pill as uiPill } from "./ui";
+import { getNiche } from "../../niches";
+import { vehicleCsvHeader } from "../../kb/vehiclesCsv";
 
 const PAGE_SIZE = 50;
 const FILTERS: StoreFilter[] = ["all", "sinprecio", "sinfoto", "nuevo", "usado"];
@@ -16,6 +18,8 @@ export interface InventarioQuery {
   q?: string;
   f?: string;
   page?: number;
+  /** Mensaje de la última acción (importar CSV), viene por `?flash=`. */
+  flash?: string;
 }
 
 function esc(s: string): string {
@@ -102,7 +106,7 @@ export async function renderInventario(env: Env, q: InventarioQuery = {}): Promi
          </tr></thead>
          <tbody>${rows}</tbody>
        </table></div>`
-    : emptyState(esc(t("inv.empty")), "car");
+    : emptyState(esc(all.length ? t("inv.empty") : t("inv.empty.none")), "car");
 
   const pager = pages > 1
     ? `<div style="display:flex;align-items:center;gap:10px;justify-content:center">
@@ -111,6 +115,44 @@ export async function renderInventario(env: Env, q: InventarioQuery = {}): Promi
          ${page < pages ? `<a class="ghostbtn" style="font-size:11.5px;padding:6px 12px;text-decoration:none" href="${link({ page: page + 1 })}">${esc(t("inv.page.next"))}</a>` : ""}
        </div>`
     : "";
+
+  const importForm = `
+    <form id="importar" method="POST" action="/admin/scraping/inventario/import" class="bg-panel border border-line" style="padding:14px 16px;display:flex;flex-direction:column;gap:8px">
+      <div class="text-dim text-[10px] font-mono" style="letter-spacing:.12em">${esc(t("inv.import.title"))}</div>
+      <div class="text-dim text-[11px]" style="line-height:1.55">${esc(t("inv.import.help"))}</div>
+      <div class="text-dim text-[11px]">${esc(t("inv.import.headerLabel"))} <span class="font-mono" style="color:var(--muted);word-break:break-all">${esc(vehicleCsvHeader())}</span></div>
+      <textarea name="csv" rows="8" placeholder="${esc(t("inv.import.placeholder"))}"
+        style="width:100%;background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:9px 11px;font-size:12px;resize:vertical;font-family:monospace"></textarea>
+      <label class="text-dim text-[11px]" style="display:flex;gap:6px;align-items:center;cursor:pointer">
+        <input type="checkbox" name="replace" value="1"> ${esc(t("inv.import.replace"))}
+      </label>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <label class="ghostbtn" style="font-size:11.5px;padding:7px 12px;cursor:pointer;border:1px solid var(--line);background:var(--panel2);color:var(--muted);display:inline-flex;align-items:center;gap:6px">
+          <i data-lucide="paperclip" width="13" height="13"></i> ${esc(t("inv.import.file"))}
+          <input type="file" id="csvfile" accept=".csv,.tsv,.txt" style="display:none">
+        </label>
+        <button type="submit" class="font-display font-semibold text-[12px] cursor-pointer" style="background:var(--accent);color:var(--on-accent);border:none;padding:9px 16px;border-radius:9px">${esc(t("inv.import.submit"))}</button>
+      </div>
+    </form>
+    <script>
+      // Vuelca el archivo elegido dentro del textarea: el server solo lee el
+      // campo "csv" del form, asi no hace falta multipart ni endpoint aparte.
+      (function(){
+        var input = document.getElementById("csvfile");
+        if (!input) return;
+        input.addEventListener("change", function(){
+          var file = input.files && input.files[0];
+          if (!file) return;
+          var ta = document.querySelector('textarea[name="csv"]');
+          if (!ta) return;
+          var reader = new FileReader();
+          reader.onload = function(){ ta.value = String(reader.result || ""); };
+          reader.readAsText(file);
+        });
+      })();
+    </script>`;
+
+  const flashBox = q.flash ? alertBox(esc(q.flash), q.flash.startsWith("✓") ? "ok" : "bad") : "";
 
   const body = `
     <div style="display:flex;flex-direction:column;gap:14px">
@@ -140,9 +182,14 @@ export async function renderInventario(env: Env, q: InventarioQuery = {}): Promi
         </form>
       </div>
 
+      ${flashBox}
       ${table}
       ${pager}
+
+      ${importForm}
     </div>`;
 
-  return layout({ title: t("inv.title"), activeTab: "scraping", body, env });
+  // El giro concesionario trae el Inventario en su menú (navExtra id "inventario").
+  const activeTab = getNiche(env).hooks?.navExtra?.some((e) => e.id === "inventario") ? "inventario" : "scraping";
+  return layout({ title: t("inv.title"), activeTab, body, env });
 }

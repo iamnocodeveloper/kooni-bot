@@ -58,7 +58,7 @@ para responder con tus propios documentos.
 | `src/kb/` | Documentos de la base de conocimiento (chunking + indexado a Vectorize). |
 | `src/db/` | Cliente D1 y capas por tabla (conversations, messages, leads, tickets, settings, insights, magicLinks, adminEmails, suggestions…). |
 | `src/admin/` | Panel: auth (magic links + Basic Auth), rutas y vistas (`layout.ts` = shell + tema). |
-| `src/niches/` | Packs por giro (`types.ts`, `index.ts`, `generico`, `agencia-ia`, `restaurante`, `inmobiliaria`, `clinica`, `barberia`). Re-etiquetan el panel y aportan playbook. |
+| `src/niches/` | Packs por giro (`types.ts`, `index.ts`, `generico`, `agencia-ia`, `restaurante`, `inmobiliaria`, `clinica`, `barberia`, `eventos`, `concesionario`, `cartera`, `taxis`). Re-etiquetan el panel y aportan playbook. |
 | `src/crons/` | Trabajos nocturnos (purga de mensajes >90 días, insights, flywheel, reporte al dueño). |
 | `src/flywheel/` | Mejora automática: detecta huecos de conocimiento y propone entradas de KB/lecciones. |
 | `src/insights/` | Analizador de conversaciones (Haiku): sentimiento, resolución, oportunidad de venta. |
@@ -173,7 +173,7 @@ enum), `columns` (leídas de `lead.metadata` JSON), `playbook` (rellena
 `{{NICHO_PLAYBOOK}}` en el system prompt), `defaultTone` y `kbDocs`.
 
 **Packs incluidos:** `generico` (Starter), `agencia-ia` (venta conversacional),
-`restaurante`, `inmobiliaria`, `clinica`, `barberia`, `cartera` (cobros) y
+`restaurante`, `inmobiliaria`, `clinica`, `barberia`, `eventos`, `concesionario`, `cartera` (cobros) y
 `taxis` (central de despacho).
 
 **Pack de referencia: `src/niches/restaurante.ts`** — cópialo tal cual y ajusta

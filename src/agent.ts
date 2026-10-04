@@ -631,37 +631,19 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
       console.warn("[SupportAgent] lead stage lookup failed:", e);
     }
 
-    // Inventario web sincronizado (Web Sync "modo inventario"): si la
-    // instalación tiene inventario, el bot DEBE contestar con él — nunca de
-    // memoria ni con el texto de la KB. Si está configurada para sincronizar
-    // pero el store está vacío, se le prohíbe inventar marcas/autos.
+    // Inventario de autos (Web Sync "modo inventario" o CSV del panel): si hay
+    // autos cargados, el bot DEBE contestar con ellos — nunca de memoria ni con
+    // el texto de la KB. Si se espera inventario (URLs de Web Sync o giro
+    // concesionario) pero el listado está vacío, se le prohíbe inventar.
     try {
       const { SettingsRepo, SETTING_KEYS } = await import("./db/settings");
       const { loadVehicleStore, listStoredVehicles } = await import("./kb/inventory");
+      const { inventoryHintBlock } = await import("./kb/inventoryHint");
       const wsUrls = (await new SettingsRepo(db).get(SETTING_KEYS.webSyncUrls)) ?? "";
-      if (wsUrls.trim()) {
-        const store = await loadVehicleStore(db);
-        const vehicles = listStoredVehicles(store);
-        if (vehicles.length > 0) {
-          const marcas = [...new Set(vehicles.map((v) => v.make).filter(Boolean))] as string[];
-          system.push({
-            role: "system",
-            content:
-              `<inventario>\nTenés inventario sincronizado: ${vehicles.length} autos. Marcas: ${marcas.join(", ") || "—"}.\n` +
-              `REGLA: para CUALQUIER pregunta sobre autos, disponibilidad, marcas, modelos, precios, condición (nuevo/usado) o VIN usá SIEMPRE la tool inventarioQuery. Nunca contestes con conocimiento general ni cites la KB para inventario.\n` +
-              `Cuando el cliente pida ver, consultar o mandar UN auto concreto (por nombre, modelo, año o VIN) usá SIEMPRE fichaAuto — no inventarioQuery (ej. "muestrame la RAV4", "cuánto cuesta la Sorento", "mandame la foto"). fichaAuto trae el link real de la ficha, la foto, precio, millas y VIN.\n` +
-              `En cualquier respuesta con autos incluí el link (url) de la ficha. Si un dato viene null, decí que se consulta — no lo inventes.\n` +
-              `Si inventarioQuery devuelve 0 resultados, decí claramente que ese auto/marca no está y ofrecé las marcas disponibles.\n</inventario>`,
-          });
-        } else {
-          system.push({
-            role: "system",
-            content:
-              `<inventario_vacio>\nLa instalación está configurada para sincronizar inventario pero el listado está vacío ahora mismo. ` +
-              `Si preguntan por autos, NO recites marcas ni modelos ni afirmes que tenés algo: decí que el listado todavía no está disponible y ofrecé tomar sus datos.\n</inventario_vacio>`,
-          });
-        }
-      }
+      const concesionario = (this.env.BOT_NICHE ?? "").trim().toLowerCase() === "concesionario";
+      const vehicles = listStoredVehicles(await loadVehicleStore(db));
+      const hint = inventoryHintBlock({ vehicles, expectsInventory: Boolean(wsUrls.trim()) || concesionario });
+      if (hint) system.push({ role: "system", content: hint });
     } catch (e) {
       console.warn("[SupportAgent] inventory hint lookup failed:", e);
     }

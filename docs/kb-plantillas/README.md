@@ -23,6 +23,10 @@ negocio y pégalo. La KB del panel vive en D1 (tabla `kb_docs`), se edita desde
 | `clinica-faq.md` | Preguntas frecuentes de una clínica (citas, seguros, urgencias…). El bot no diagnostica. |
 | `barberia-servicios-ejemplo.md` | Servicios, barberos y precios de ejemplo (giro `barberia`). |
 | `barberia-faq.md` | Preguntas frecuentes de una barbería (citas, precios, grupos…). |
+| `inmobiliaria-propiedades.csv` | CSV de ejemplo para importar propiedades desde `/admin/propiedades` (giro `inmobiliaria`). |
+| `concesionario-financiamiento-ejemplo.md` | Dirección, horario, pruebas de manejo, formas de pago, financiamiento y autos a cuenta (giro `concesionario`). |
+| `concesionario-faq.md` | Preguntas frecuentes de un concesionario (disponibilidad, prueba de manejo, crédito, auto a cuenta…). El bot no promete créditos. |
+| `concesionario-inventario.csv` | CSV de ejemplo para importar autos desde `/admin` → Inventario (columnas: vin, anio, marca, modelo, version, condicion, precio, millas, link, imagen). El kilometraje va en **millas**. |
 | `taxis-faq.md` | Preguntas frecuentes de una central de taxis (zonas, tarifas, seguridad, viajes especiales…). |
 | `taxis-tarifas.md` | Tarifa base, tarifa por zona y zonas cubiertas por base (giro `taxis`). |
 | `taxis-casos-limite.md` | Sin conductor, zona no cubierta, ubicación ambigua, reclamos y viajes especiales. |

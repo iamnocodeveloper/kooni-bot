@@ -374,4 +374,19 @@ export const analisisEn: Record<keyof typeof analisisEs, string> = {
   "inv.page.prev": "← Previous",
   "inv.page.next": "Next →",
   "inv.page.info": "Page {page} of {pages}",
+
+  "nav.inventario": "Inventory",
+
+  "inv.empty.none": "No cars loaded yet. Paste your CSV below (or connect your site under Scraping) and the bot starts offering them.",
+  "inv.import.title": "Import cars from CSV or Excel",
+  "inv.import.help": "One row per car. Paste your CSV, paste straight from Excel or pick a file. If you repeat a car (same VIN or same title) it is updated instead of duplicated. Mileage goes in miles and prices in whatever currency you want the bot to say.",
+  "inv.import.headerLabel": "Expected header:",
+  "inv.import.placeholder": "vin,anio,marca,modelo,version,condicion,precio,millas,link,imagen",
+  "inv.import.file": "Choose file",
+  "inv.import.replace": "Replace the cars loaded earlier with this CSV (drops the sold ones)",
+  "inv.import.submit": "Import",
+  "inv.msg.importOk": "✓ {n} new cars, {updated} updated, {errors} rows with problems",
+  "inv.msg.importEmpty": "You pasted nothing: paste your CSV or pick a file.",
+  "inv.msg.importNone": "No row could be imported. {detail}",
+  "inv.msg.line": "line {line}: {motivo}",
 };

@@ -25,6 +25,7 @@ export const GIROS: Giro[] = [
   { id: "clinica", emoji: "🩺" },
   { id: "barberia", emoji: "💈" },
   { id: "eventos", emoji: "🎉" },
+  { id: "concesionario", emoji: "🚗" },
   { id: "cartera", emoji: "💰" },
   { id: "taxis", emoji: "🚕" },
 ];

@@ -376,4 +376,21 @@ export const analisisEs = {
   "inv.page.prev": "← Anterior",
   "inv.page.next": "Siguiente →",
   "inv.page.info": "Página {page} de {pages}",
+
+  // ── Ítem del sidebar (navExtra del giro concesionario) ─────────────────────
+  "nav.inventario": "Inventario",
+
+  // ── Importar autos (CSV / Excel) ───────────────────────────────────────────
+  "inv.empty.none": "Todavía no hay autos cargados. Pega tu CSV abajo (o conecta tu sitio en Scraping) y el bot empieza a ofrecerlos.",
+  "inv.import.title": "Importar autos desde CSV o Excel",
+  "inv.import.help": "Una fila por auto. Pega tu CSV, pega directo desde Excel o elige un archivo. Si repites un auto (mismo VIN o mismo título), se actualiza en vez de duplicarse. El kilometraje va en millas y los precios, en la moneda que quieras que el bot diga.",
+  "inv.import.headerLabel": "Encabezado esperado:",
+  "inv.import.placeholder": "vin,anio,marca,modelo,version,condicion,precio,millas,link,imagen",
+  "inv.import.file": "Elegir archivo",
+  "inv.import.replace": "Reemplazar los autos cargados antes por este CSV (quita los vendidos)",
+  "inv.import.submit": "Importar",
+  "inv.msg.importOk": "✓ {n} autos nuevos, {updated} actualizados, {errors} filas con problema",
+  "inv.msg.importEmpty": "No pegaste nada: pega tu CSV o elige un archivo.",
+  "inv.msg.importNone": "No se pudo importar ninguna fila. {detail}",
+  "inv.msg.line": "línea {line}: {motivo}",
 } as const;

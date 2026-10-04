@@ -105,7 +105,7 @@ export function buscarPropiedadTool(env: Env) {
           zonasDisponibles: zonasTxt,
           mensaje:
             "No hay propiedades que cumplan ese filtro. No digas que sí hay: informá que no está " +
-            "disponible con esas condiciones, ofrecé las zonas que sí hay y proponé avisarle cuando entre algo así.",
+            "disponible con esas condiciones, ofrecé las zonas que sí hay y que un asesor le busque opciones parecidas (no prometas avisarle después: no puedes escribirle por tu cuenta).",
         };
       }
 

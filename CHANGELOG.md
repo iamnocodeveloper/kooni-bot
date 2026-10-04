@@ -5,6 +5,40 @@ Cambios notables de Kooni. Formato aproximado de
 
 El CLI `kooni-bot` se versiona aparte (npm) — ver la nota de cada versión.
 
+## [1.55.0] — 2026-10-02
+
+### Agregado — giro **concesionario** (venta de autos)
+
+- **Pack `concesionario`** (`src/niches/concesionario.ts`): panel "Prospectos" con columnas
+  auto de interés / interés (contado, financiamiento, auto a cuenta) / presupuesto / prueba de
+  manejo, y playbook de venta consultiva sobre el **inventario real** (`inventarioQuery` +
+  `fichaAuto`). Reglas duras: no promete aprobación de crédito, tasa ni mensualidad, no valúa
+  autos a cuenta, no pide datos sensibles por el chat y no aparta ni cobra. Deriva a un asesor
+  en financiamiento, trade-in, negociación y posventa. Acceso "Inventario" en el menú.
+- **Importador CSV/Excel de autos** (`src/kb/vehiclesCsv.ts`, formulario en
+  `/admin/scraping/inventario`): sirve a quien no tiene sitio legible ni cuenta de scraping.
+  Mapea por encabezados es/en o por orden canónico, reporta filas malas sin abortar, reimportar
+  actualiza por VIN/título y "reemplazar" quita los vendidos. Los autos quedan marcados
+  `source: "csv"`: **el scraping nocturno ya no los borra** (`mergeVehicleStore`, limpieza de
+  `webSync` y `rebuildInventoryKb`). Doc `inventario-autos-resumen` en la KB.
+- Registrado en CLI, hub (giros, demo simulado, landing es/en, panel de packs vía migración),
+  plantillas de KB y CSV de ejemplo, y tests (`niches`, `niches-tables`, `vehiclesCsv`).
+
+### Corregido — giros con cita (clínica, barbería, eventos, inmobiliaria)
+
+- Con Cal.com conectado el bot **nunca reservaba**: los playbooks solo llamaban a
+  `captureLead` y el prompt base no explica `scheduleAppointment`. Nuevo bloque compartido
+  `AGENDA REAL` (`src/prompt/agenda.ts`): consulta horarios reales, pide correo para reservar y,
+  si no hay agenda (`booking_unavailable`), no confirma nada y captura el lead.
+- Inmobiliaria: ya no promete "avisarle cuando entre algo así" (el bot no puede escribir por su
+  cuenta) y el playbook pasa a tuteo.
+
+### Corregido — promesas de recordatorios que no existen
+
+- La landing, los demos y `ventas/giros.md` de restaurante, clínica y barbería decían que el
+  bot recuerda la cita/reserva. No hay motor de recordatorios (solo cobranza lo tiene): se
+  quitó esa promesa. El CLI `kooni-bot` sube a **0.6.0** (nuevo giro `concesionario`).
+
 ## [1.54.0] — 2026-09-30
 
 ### Agregado — el giro **inmobiliaria** pasa a ser un producto vendible

@@ -1,4 +1,5 @@
 import type { NichePack } from "./types";
+import { agendaRealBlock } from "../prompt/agenda";
 
 // Niche pack: EVENTOS — renta de equipo para fiestas (máquinas de fotos
 // /photobooth, audio, iluminación, mobiliario, inflables, carpas…). Aporta un
@@ -45,7 +46,7 @@ CÓMO CONVERSAR
 - Paquetes, precios, qué incluye cada equipo y la zona de cobertura salen de
   searchKb. No los inventes; si no está, dilo y ofrece que una persona confirme.
 - NUNCA confirmes disponibilidad de una fecha por tu cuenta: se confirma con el
-  equipo (salvo que puedas apartarla con el calendario, ver abajo).
+  equipo (salvo que puedas apartarla con la agenda real, ver abajo).
 
 FLUJO DE COTIZACIÓN (cuando pregunta por un equipo, un paquete o precios)
 1. ¿Qué se celebra? (cumpleaños, boda, XV años, bautizo, evento de empresa…)
@@ -62,10 +63,12 @@ FLUJO DE COTIZACIÓN (cuando pregunta por un equipo, un paquete o precios)
 10. Con nombre + evento + fecha + contacto (y equipo, horas, zona si los dio),
     guarda la cotización con captureLead.
     metadata: { evento, fecha, equipo, personas }.
-11. Si el negocio trabaja con agenda, ofrece apartar la fecha (scheduleAppointment)
-    y aclara que queda como PRE-reserva hasta que el equipo la confirme.
+11. Ofrece apartar la fecha con la agenda real (ver AGENDA REAL abajo) y aclara
+    que queda como PRE-reserva hasta que el equipo la confirme.
 12. Cierra: "Te mando la cotización por [contacto] y [nombre del equipo/una
     persona] te confirma la fecha."
+
+${agendaRealBlock({ cita: "la fecha", preReserva: true })}
 
 CUÁNDO DERIVAR A UNA PERSONA (handoffHuman + comparte el WhatsApp del negocio)
 - Quiere confirmar o apartar la fecha en firme, o pagar el anticipo.

@@ -23,6 +23,7 @@ const GIROS: {
   { id: "clinica", navLabel: "Citas", recordPlural: "Citas", statusNew: "Solicitada", playbookTag: "playbook_clinica", columns: ["especialidad", "fecha", "hora", "motivo"] },
   { id: "barberia", navLabel: "Citas", recordPlural: "Citas", statusNew: "Solicitada", playbookTag: "playbook_barberia", columns: ["servicio", "barbero", "fecha", "hora"] },
   { id: "eventos", navLabel: "Cotizaciones", recordPlural: "Cotizaciones", statusNew: "Solicitada", playbookTag: "playbook_eventos", columns: ["evento", "fecha", "equipo", "personas"] },
+  { id: "concesionario", navLabel: "Prospectos", recordPlural: "Prospectos", statusNew: "Nuevo", playbookTag: "playbook_concesionario", columns: ["vehiculo", "interes", "presupuesto", "fecha"] },
   { id: "taxis", navLabel: "Solicitudes", recordPlural: "Solicitudes", statusNew: "Solicitada", playbookTag: "playbook_taxis", columns: ["base", "zona", "conductor", "destino"] },
 ];
 
@@ -114,6 +115,61 @@ describe("hooks del pack (inmobiliaria)", () => {
     expect(n.playbook).toContain("Nunca inventes propiedades");
     // Ya no manda a resolver el listado con searchKb a secas.
     expect(n.playbook).toContain("del INVENTARIO");
+  });
+});
+
+describe("pack concesionario", () => {
+  const n = getNiche(envWith("concesionario"));
+
+  it("usa el inventario de autos ya registrado y suma el acceso en el menú", () => {
+    // inventarioQuery / fichaAuto se registran para todos los giros: no son extraTools.
+    expect(n.hooks?.extraTools).toBeUndefined();
+    const nav = n.hooks?.navExtra ?? [];
+    expect(nav.map((x) => x.id)).toEqual(["inventario"]);
+    expect(nav[0]?.href).toBe("/admin/scraping/inventario");
+  });
+
+  it("el playbook consulta el inventario real y prohíbe prometer crédito o inventar", () => {
+    expect(n.playbook).toContain("inventarioQuery");
+    expect(n.playbook).toContain("fichaAuto");
+    expect(n.playbook).toContain("Nunca inventes autos");
+    expect(n.playbook).toMatch(/NUNCA prometas ni insinúes aprobación de crédito/);
+    expect(n.playbook).toMatch(/NUNCA pidas por el chat número de seguro social/);
+    expect(n.playbook).toContain("AGENDA REAL");
+  });
+
+  it("trae preguntas de entrevista y plantillas de KB", () => {
+    expect(n.interviewQuestions && n.interviewQuestions.length).toBeGreaterThan(3);
+    expect(n.kbDocs).toEqual(["concesionario-financiamiento-ejemplo", "concesionario-faq"]);
+  });
+
+  it("el menú lateral muestra Inventario y marca la pestaña activa", async () => {
+    const html = await layout({ title: "T", activeTab: "inventario", body: "x", env: envWith("concesionario") });
+    expect(html).toContain('href="/admin/scraping/inventario"');
+    expect(html).toContain("Inventario");
+  });
+});
+
+describe("giros con cita: guía de agenda real", () => {
+  it.each(["clinica", "barberia", "eventos", "inmobiliaria", "concesionario"])(
+    "%s explica cómo usar scheduleAppointment y qué hacer sin agenda",
+    (id) => {
+      const p = getNiche(envWith(id)).playbook;
+      expect(p).toContain("AGENDA REAL (scheduleAppointment)");
+      expect(p).toContain("booking_unavailable");
+      expect(p).toContain("captureLead");
+    },
+  );
+
+  it("eventos aclara que es PRE-reserva; los demás, no", () => {
+    expect(getNiche(envWith("eventos")).playbook).toContain("PRE-reserva hasta que el equipo la confirme");
+    expect(getNiche(envWith("clinica")).playbook).toContain("queda registrada en el calendario del negocio");
+  });
+
+  it("inmobiliaria no promete avisar después y habla de tú", () => {
+    const p = getNiche(envWith("inmobiliaria")).playbook;
+    expect(p).not.toContain("ofrecé avisarle");
+    expect(p).not.toMatch(/(llamá|mostrá|mandá)/);
   });
 });
 

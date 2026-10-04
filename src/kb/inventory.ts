@@ -55,6 +55,12 @@ export interface StoredVehicle extends Vehicle {
   pricing?: VehiclePricing | null;
   /** Epoch ms en que el auto entró o cambió por última vez. */
   changedAt: number;
+  /**
+   * "csv" = lo cargó el dueño a mano (src/kb/vehiclesCsv.ts). Estos autos NO
+   * dependen de un feed: el scraping no los borra ni los pisa al desaparecer de
+   * la URL configurada.
+   */
+  source?: "csv";
 }
 
 export interface VehicleStore {
@@ -568,7 +574,8 @@ export function paginate<T>(
  * Fusiona el inventario recién scrapeado con el store previo: agrega/cambia los
  * autos actuales, marca pendientes de foto los nuevos (o los que cambiaron de
  * ficha/título — un cambio de precio no invalida la foto), y elimina los que ya
- * no están en el feed (vendidos o fuera de la URL configurada).
+ * no están en el feed (vendidos o fuera de la URL configurada), salvo los que el
+ * dueño cargó a mano (`source: "csv"`).
  */
 export function mergeVehicleStore(prev: VehicleStore, current: Vehicle[]): VehicleStore {
   const now = Date.now();
@@ -603,7 +610,12 @@ export function mergeVehicleStore(prev: VehicleStore, current: Vehicle[]): Vehic
       imgStatus: old && !photoInvalid ? old.imgStatus : "pendiente",
       imgAt: old && !photoInvalid ? old.imgAt : null,
       changedAt: changed ? now : old.changedAt,
+      ...(old?.source ? { source: old.source } : {}),
     };
+  }
+  // Los autos cargados a mano (CSV) sobreviven aunque no estén en el feed.
+  for (const [key, old] of Object.entries(prev.vehicles)) {
+    if (old.source === "csv" && !vehicles[key]) vehicles[key] = old;
   }
   return { updatedAt: prev.updatedAt, vehicles };
 }

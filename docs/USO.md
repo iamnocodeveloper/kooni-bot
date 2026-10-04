@@ -161,6 +161,31 @@ El pedido se guarda en su propia tabla (`orders`), no en Leads. La pestaña
 "Consultas" (Leads re-etiquetado) queda para catering, eventos y reclamos que el
 bot escala a una persona.
 
+### `BOT_NICHE=concesionario` — venta de autos
+
+El panel muestra **Prospectos** (auto de interés, interés, presupuesto y día de la
+prueba de manejo) y suma **Inventario** en el menú (`/admin/scraping/inventario`).
+
+- **Cargar el inventario** — dos caminos, y se pueden combinar:
+  - **CSV o Excel**: en Inventario, pega el archivo o elígelo y pulsa
+    **Importar**. Plantilla: `docs/kb-plantillas/concesionario-inventario.csv`
+    (columnas `vin, anio, marca, modelo, version, condicion, precio, millas, link,
+    imagen`). El kilometraje va en **millas**. Reimportar actualiza por VIN (o por
+    título si no hay VIN); marca "Reemplazar" para quitar los autos vendidos.
+  - **Leer tu sitio** (Scraping): si tienes cuenta de scraping, el bot lee tu
+    inventario web cada noche. Los autos cargados por CSV **no se borran** con la
+    lectura del sitio.
+- **El bot nunca inventa autos**: responde solo con lo que está en el inventario
+  (`inventarioQuery`) y manda la ficha con foto y link (`fichaAuto`). Si algo no
+  está, lo dice.
+- **Qué NO hace**: no aprueba crédito ni da tasas o mensualidades, no valúa el
+  auto a cuenta, no aparta ni cobra, y no pide por el chat datos como seguro
+  social o documentos de crédito. En esos casos avisa a un asesor.
+- **Pruebas de manejo**: con Cal.com conectado ofrece horarios reales; sin él,
+  toma la solicitud y tu equipo la confirma por mensaje.
+- Plantillas de conocimiento: `concesionario-financiamiento-ejemplo.md` y
+  `concesionario-faq.md` (en `docs/kb-plantillas/`) — llénalas con tus datos.
+
 ---
 
 ## 7. Comandos útiles (mantenimiento)

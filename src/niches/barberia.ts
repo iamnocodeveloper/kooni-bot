@@ -1,4 +1,5 @@
 import type { NichePack } from "./types";
+import { agendaRealBlock } from "../prompt/agenda";
 
 // Niche pack: barbería / salón de caballeros / estética masculina. Aporta un
 // playbook de AGENDA: informa servicios, precios y horario con searchKb, toma
@@ -50,6 +51,8 @@ FLUJO DE CITA
 8. Cierra: "Listo, tu cita para [servicio] el [fecha] a las [hora]. Te
    confirmamos por [contacto]." Si la barbería trabaja por orden de llegada y no
    por cita, dilo y solo comparte horario y tiempo de espera aproximado.
+
+${agendaRealBlock({ cita: "la cita" })}
 
 CUÁNDO DERIVAR A UNA PERSONA (handoffHuman + comparte el WhatsApp del negocio)
 - Grupos (despedidas, equipos, varios servicios juntos) o eventos a domicilio.

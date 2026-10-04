@@ -1,4 +1,5 @@
 import type { NichePack } from "./types";
+import { agendaRealBlock } from "../prompt/agenda";
 
 // Niche pack: clínica / consultorio / centro médico o de estética. Aporta un
 // playbook de RECEPCIÓN: informa servicios, precios, horario y cobertura con
@@ -58,6 +59,8 @@ FLUJO DE CITA
    metadata: { especialidad, fecha, hora, motivo }.
 8. Cierra: "Lista tu solicitud para [fecha] por la [mañana/tarde]. El equipo te
    confirma por [contacto]." No prometas el horario como asegurado.
+
+${agendaRealBlock({ cita: "la cita" })}
 
 CUÁNDO DERIVAR A UNA PERSONA (handoffHuman + comparte el WhatsApp del negocio)
 - Cualquier señal de urgencia médica (ver regla dura).

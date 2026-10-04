@@ -101,7 +101,7 @@ export const landingEs = {
     "Toma pedidos para recoger o a domicilio, con dirección y notas.",
   "lp.giro.restaurante.b3": "Reserva mesa: día, hora y cuántas personas.",
   "lp.giro.restaurante.b4":
-    "Confirma y recuerda la reserva para que bajen los plantones.",
+    "Confirma la reserva con día, hora y personas, y la deja en tu panel.",
 
   "lp.giro.inmobiliaria.pain":
     "De 20 mensajes, 3 son reales. Kooni filtra, agenda la visita y te entrega al prospecto con zona y presupuesto claros.",
@@ -115,9 +115,9 @@ export const landingEs = {
     "No suelta un precio ni una fecha que no esté en tu inventario.",
 
   "lp.giro.clinica.pain":
-    "La cita queda agendada, el recordatorio sale solo y tu recepción se dedica al paciente que está enfrente.",
+    "La cita queda agendada sin descolgar el teléfono y tu recepción se dedica al paciente que está enfrente.",
   "lp.giro.clinica.b1": "Toma la cita con día, hora y motivo, y confirma el espacio.",
-  "lp.giro.clinica.b2": "Recuerda la cita y baja los pacientes que no llegan.",
+  "lp.giro.clinica.b2": "Toma la cita a cualquier hora, incluso fuera del horario de la recepción.",
   "lp.giro.clinica.b3":
     "Contesta horarios, ubicación, precio de la consulta y qué llevar a la primera visita.",
   "lp.giro.clinica.b4":
@@ -127,7 +127,7 @@ export const landingEs = {
     "Una silla vacía no se recupera. El bot llena tu agenda entre corte y corte, sin que sueltes la máquina.",
   "lp.giro.barberia.b1": "Muestra servicios, precios y cuánto dura cada uno.",
   "lp.giro.barberia.b2": "Agenda por barbero y por hora, y evita citas encimadas.",
-  "lp.giro.barberia.b3": "Recuerda la cita un día antes: los no-shows bajan.",
+  "lp.giro.barberia.b3": "Toma la cita a cualquier hora, también cuando tienes la máquina en la mano.",
   "lp.giro.barberia.b4":
     "Ofrece el siguiente espacio libre cuando te piden a última hora.",
 
@@ -138,6 +138,14 @@ export const landingEs = {
   "lp.giro.eventos.b3": "Deja cada cotización en el panel con evento, fecha, equipo y personas.",
   "lp.giro.eventos.b4":
     "Nunca promete una fecha por su cuenta: aparta la pre-reserva y una persona confirma el anticipo.",
+
+  "lp.giro.concesionario.pain":
+    "Un auto que pregunta alguien a las 11 de la noche se enfría para la mañana. El bot responde con tu inventario real y deja la prueba de manejo agendada.",
+  "lp.giro.concesionario.b1": "Busca en tu inventario por marca, modelo, condición y precio, y manda la ficha con foto y link.",
+  "lp.giro.concesionario.b2": "Si un auto no está en tu lista, lo dice: nunca inventa marcas, precios ni millas.",
+  "lp.giro.concesionario.b3": "Califica al prospecto: qué busca, presupuesto, si financia y si entrega un auto a cuenta.",
+  "lp.giro.concesionario.b4":
+    "No promete créditos ni valúa tu auto: agenda la prueba de manejo y pasa el cierre a tu asesor.",
 
   "lp.giro.cartera.pain":
     "Cobrar tarde cuesta caro. El bot le recuerda a cada cliente con voz firme y amable, y te trae promesas de pago.",
