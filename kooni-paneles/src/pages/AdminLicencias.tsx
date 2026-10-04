@@ -47,6 +47,7 @@ export default function AdminLicencias() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [flash, setFlash] = useState("");
+  const [lastCode, setLastCode] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
@@ -73,6 +74,16 @@ export default function AdminLicencias() {
   }, []);
 
   const modName = useMemo(() => Object.fromEntries(mods.map((m) => [m.id, m.nombre])), [mods]);
+
+  async function copyCode(code: string) {
+    try {
+      await navigator.clipboard.writeText(code);
+      setErr("");
+      setFlash(t("admin.licencias.copied"));
+    } catch {
+      setErr(t("admin.licencias.copyErr"));
+    }
+  }
 
   function openEdit(l: Licencia) {
     setErr("");
@@ -131,6 +142,7 @@ export default function AdminLicencias() {
 
       await logAdmin("licencia.guardar", `${form.plan} · ${form.modules.length} módulos · ${form.estado}`);
       setFlash(t("admin.licencias.saved"));
+      setLastCode(form.plan === "pro" && code ? code : null);
       setForm(null);
       await load();
     } catch (e: any) {
@@ -150,6 +162,16 @@ export default function AdminLicencias() {
       {err && <div className="rounded-lg border border-bad/40 bg-bad/10 px-3 py-2 text-xs text-bad">{err}</div>}
       {flash && <div className="rounded-lg border border-ok/40 bg-ok/10 px-3 py-2 text-xs text-ok">{flash}</div>}
 
+      {lastCode && (
+        <div className="card p-4">
+          <div className="mb-1 text-xs text-muted">{t("admin.licencias.codeForClient")}</div>
+          <div className="flex items-center gap-2">
+            <code className="flex-1 break-all rounded-lg border border-line bg-bg px-3 py-2 font-mono text-[11px]">{lastCode}</code>
+            <button className="btn-ghost" onClick={() => copyCode(lastCode)}>{t("admin.licencias.copy")}</button>
+          </div>
+        </div>
+      )}
+
       <div className="card overflow-hidden">
         <table className="tbl">
           <thead>
@@ -159,18 +181,19 @@ export default function AdminLicencias() {
               <th>{t("admin.licencias.colStatus")}</th>
               <th>{t("admin.licencias.colExpiry")}</th>
               <th>{t("admin.licencias.colModules")}</th>
+              <th>{t("admin.licencias.colCode")}</th>
               <th></th>
             </tr>
           </thead>
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={6} className="text-muted">{t("common.loading")}</td>
+                <td colSpan={7} className="text-muted">{t("common.loading")}</td>
               </tr>
             )}
             {rows.length === 0 && !loading && (
               <tr>
-                <td colSpan={6} className="text-muted">{t("admin.licencias.empty")}</td>
+                <td colSpan={7} className="text-muted">{t("admin.licencias.empty")}</td>
               </tr>
             )}
             {rows.map((l) => (
@@ -187,6 +210,15 @@ export default function AdminLicencias() {
                 </td>
                 <td className="text-muted">{l.expiry ? formatDate(l.expiry) : l.kind === "lifetime" ? t("common.lifetime") : "—"}</td>
                 <td className="text-muted">{(l.modules ?? []).length}</td>
+                <td>
+                  {l.plan === "pro" && l.code ? (
+                    <button className="btn-ghost py-1" onClick={() => copyCode(l.code!)} title={l.code}>
+                      {t("admin.licencias.copy")}
+                    </button>
+                  ) : (
+                    <span className="text-muted">—</span>
+                  )}
+                </td>
                 <td className="text-right">
                   <button className="btn-ghost py-1" onClick={() => openEdit(l)}>{t("admin.licencias.edit")}</button>
                 </td>
@@ -203,6 +235,16 @@ export default function AdminLicencias() {
               <h2 className="font-display text-lg font-semibold">{t("admin.licencias.editTitle")}</h2>
               <button className="text-muted hover:text-cream" onClick={() => setForm(null)}>✕</button>
             </div>
+
+            {form.code && (
+              <div className="mb-4">
+                <label className="label">{t("admin.licencias.colCode")}</label>
+                <div className="mt-1 flex items-center gap-2">
+                  <code className="flex-1 break-all rounded-lg border border-line bg-bg px-3 py-2 font-mono text-[11px]">{form.code}</code>
+                  <button className="btn-ghost" onClick={() => copyCode(form.code!)}>{t("admin.licencias.copy")}</button>
+                </div>
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-4">
               <div>

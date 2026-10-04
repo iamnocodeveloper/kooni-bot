@@ -419,6 +419,7 @@ export const configEs = {
   "lic.overlay.info": "plan {plan} · {state} · {modules} módulos",
   "lic.overlay.lastSync":
     "Última sincronización: {date}. El super admin controla plan, módulos, límites y marca; se aplica solo en el próximo sync.",
+  "lic.overlay.none": "Este bot todavía no sincronizó con el panel. Si te asignaron Pro, tocá Sincronizar ahora.",
   "lic.overlay.sync": "Sincronizar ahora",
   "lic.code.active": "Tu código activo",
   "lic.code.activate": "Activar Pro con un código",

@@ -417,6 +417,7 @@ export const configEn: Record<keyof typeof configEs, string> = {
   "lic.overlay.info": "plan {plan} · {state} · {modules} modules",
   "lic.overlay.lastSync":
     "Last sync: {date}. The super admin controls plan, modules, limits and branding; it applies on the next sync.",
+  "lic.overlay.none": "This bot hasn't synced with the panel yet. If you were assigned Pro, tap Sync now.",
   "lic.overlay.sync": "Sync now",
   "lic.code.active": "Your active code",
   "lic.code.activate": "Activate Pro with a code",

@@ -5,6 +5,27 @@ Cambios notables de Kooni. Formato aproximado de
 
 El CLI `kooni-bot` se versiona aparte (npm) — ver la nota de cada versión.
 
+## [1.55.2] — 2026-10-04
+
+### Corregido — licencias Pro (el bot seguía en Free)
+
+- **Clave pública equivocada en `src/license.ts`**: verificaba con otra clave
+  (`…qpP9…`) distinta a la que firma el panel (`…Lxrjpy…`). Los códigos del super
+  admin **no validaban** y el bot quedaba en Free cuando la instalación no traía
+  la var `LICENSE_PUBLIC_KEY`. Ahora coincide con el firmador, el CLI y
+  `wrangler.toml.example`. (Se confirmó validando la firma de un código real.)
+- **Super admin → Licencias: ahora muestra y copia el código firmado.** El panel
+  lo generaba pero no lo enseñaba, así que no se podía enviar al cliente para
+  activarlo a mano. Se agregó la columna "Código" con botón **Copiar** y una
+  tarjeta con el código recién firmado.
+- **Panel del bot → Licencia: «Sincronizar ahora» siempre visible**, con aviso
+  cuando el bot todavía no sincronizó con el panel. La activación del super admin
+  se aplica en el próximo sync (botón manual o cron nocturno).
+- **Hub (`kooni.click/cli`)**: la aprobación del login del CLI apuntaba a
+  `kooni.click` (sitio de marketing) porque faltaba el secret `SITE_URL`; se
+  configuró al hub (`https://t6bferet.insforge.site`), así que el link correcto
+  sale solo.
+
 ## [1.55.1] — 2026-10-04
 
 ### Corregido — el login del CLI es obligatorio para registrar y licenciar

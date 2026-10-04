@@ -27,8 +27,12 @@ export interface LicensePayload {
 }
 
 // Clave PÚBLICA Ed25519 (DER SPKI, base64) — pública por diseño: solo verifica.
+// DEBE coincidir con la privada que firma en el panel (secret LICENSE_PRIVATE_KEY
+// de InsForge) y con la var LICENSE_PUBLIC_KEY del template/CLI. Estaba con OTRO
+// valor (…qpP9…) que no correspondía al firmador → los códigos del panel no
+// validaban y el bot quedaba en free si la instalación no traía la var.
 // Los tests pueden inyectar otra vía env.LICENSE_PUBLIC_KEY.
-const LICENSE_PUBLIC_KEY_B64 = "MCowBQYDK2VwAyEAqpP9OBrju8ebMWjQM4uYLsUV5yqWG8k8ieozT8Me8EQ=";
+const LICENSE_PUBLIC_KEY_B64 = "MCowBQYDK2VwAyEALxrjpy7pkyHSqlCcObUfMygNXNznd9/YXhamO17e4tc=";
 
 /** Genera un código v2 firmado con la clave PRIVADA (solo el dueño la tiene). */
 export function generateLicenseV2(privB64: string, payload: LicensePayload): string {

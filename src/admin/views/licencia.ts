@@ -103,7 +103,12 @@ export async function renderLicencia(env: Env, msg?: string, isError?: boolean):
                  <button type="submit" style="background:none;border:1px solid var(--line);color:var(--cream);padding:9px 14px;font-size:12.5px;cursor:pointer">${t("lic.overlay.sync")}</button>
                </form>
              </div>`
-          : ""
+          : `<div class="bg-panel border" style="padding:16px 20px;display:flex;flex-direction:column;gap:10px">
+               <p class="text-muted text-[12px]" style="margin:0">${t("lic.overlay.none")}</p>
+               <form method="POST" action="/admin/licencia/sync" style="margin:0">
+                 <button type="submit" style="background:none;border:1px solid var(--line);color:var(--cream);padding:9px 14px;font-size:12.5px;cursor:pointer">${t("lic.overlay.sync")}</button>
+               </form>
+             </div>`
       }
       <div class="bg-panel border" style="padding:18px 20px;display:flex;flex-direction:column;gap:14px">
         <h3 class="font-display font-semibold text-[13.5px] text-cream">${isPro ? t("lic.code.active") : t("lic.code.activate")}</h3>
