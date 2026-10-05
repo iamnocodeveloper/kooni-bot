@@ -403,6 +403,85 @@ const GLOBAL_SCRIPT = `
       if (icon) icon.style.transform = isOpen ? "" : "rotate(180deg)";
     });
   });
+
+  // ── Insertar etiquetas/herramientas en el prompt manual (chips + "/") ──────
+  // Delegación global: los chips llevan data-pt-insert y, al escribir "/" en un
+  // textarea con menú (data-pt-menu), aparece el selector. Los datos de cada
+  // textarea viven en window.__ptData[id] (los emite prompt-tokens.ts).
+  (function(){
+    window.__ptData = window.__ptData || {};
+    var menu = null, menuTa = null, items = [], idx = 0;
+    function esc(s){ return String(s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+    function menuFor(ta){ return document.querySelector('[data-pt-menu="' + ta.id + '"]'); }
+    function hide(){ if (menu) menu.hidden = true; menu = null; menuTa = null; items = []; }
+    function insert(ta, text){
+      if (!ta) return;
+      ta.focus();
+      if (ta.setRangeText) { ta.setRangeText(text, ta.selectionStart, ta.selectionEnd, 'end'); }
+      else {
+        var s = ta.selectionStart, e = ta.selectionEnd;
+        ta.value = ta.value.slice(0, s) + text + ta.value.slice(e);
+        ta.selectionStart = ta.selectionEnd = s + text.length;
+      }
+      ta.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    function paint(){
+      var html = '';
+      for (var i = 0; i < items.length; i++){
+        html += '<button type="button" data-pt-pick="' + i + '" style="display:flex;flex-direction:column;gap:2px;' +
+          'width:100%;text-align:left;border:none;border-bottom:1px solid var(--line);padding:7px 10px;cursor:pointer;' +
+          'background:' + (i === idx ? 'var(--accent-soft)' : 'transparent') + '">' +
+          '<span style="font-family:IBM Plex Mono,monospace;font-size:11px;color:var(--accent2)">' + esc(items[i].v) + '</span>' +
+          '<span style="font-size:10.5px;color:var(--dim)">' + esc(items[i].d || '') + '</span>' +
+          '</button>';
+      }
+      if (menu) menu.innerHTML = html;
+    }
+    function show(ta, query){
+      menu = menuFor(ta);
+      if (!menu) return;
+      var q = (query || '').toLowerCase();
+      var all = window.__ptData[ta.id] || [];
+      items = [];
+      for (var i = 0; i < all.length; i++){
+        var it = all[i];
+        if (!q || it.v.toLowerCase().indexOf(q) >= 0 || (it.d || '').toLowerCase().indexOf(q) >= 0) items.push(it);
+      }
+      if (!items.length){ hide(); return; }
+      menuTa = ta; idx = 0; paint(); menu.hidden = false;
+    }
+    function pick(i){
+      if (!menuTa || !items[i]) return;
+      var ta = menuTa;
+      var pos = ta.selectionStart;
+      var m = /(^|\\s)\\/([^\\s/]*)$/.exec(ta.value.slice(0, pos));
+      if (m) ta.setSelectionRange(pos - m[2].length - 1, pos);
+      insert(ta, items[i].v + ' ');
+      hide();
+    }
+    document.addEventListener('click', function(ev){
+      var t = ev.target;
+      if (!t || !t.closest) return;
+      var c = t.closest('[data-pt-insert]');
+      if (c){ insert(document.getElementById(c.getAttribute('data-pt-insert')), c.getAttribute('data-pt-token')); hide(); return; }
+      var p = t.closest('[data-pt-pick]');
+      if (p){ pick(parseInt(p.getAttribute('data-pt-pick'), 10)); return; }
+      if (menu && !menu.hidden && !menu.contains(t)) hide();
+    });
+    document.addEventListener('input', function(ev){
+      var ta = ev.target;
+      if (!ta || ta.tagName !== 'TEXTAREA') return;
+      var m = /(^|\\s)\\/([^\\s/]*)$/.exec(ta.value.slice(0, ta.selectionStart));
+      if (m) show(ta, m[2]); else if (menuTa === ta) hide();
+    });
+    document.addEventListener('keydown', function(ev){
+      if (!menu || menu.hidden || !menuTa) return;
+      if (ev.key === 'ArrowDown'){ idx = (idx + 1) % items.length; paint(); ev.preventDefault(); }
+      else if (ev.key === 'ArrowUp'){ idx = (idx - 1 + items.length) % items.length; paint(); ev.preventDefault(); }
+      else if (ev.key === 'Enter' || ev.key === 'Tab'){ pick(idx); ev.preventDefault(); }
+      else if (ev.key === 'Escape'){ hide(); ev.stopPropagation(); ev.preventDefault(); }
+    }, true);
+  })();
 </script>`;
 
 function navItem(item: Item, active: boolean, label = item.label): string {

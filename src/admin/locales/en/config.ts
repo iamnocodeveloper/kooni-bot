@@ -32,6 +32,21 @@ export const configEn: Record<keyof typeof configEs, string> = {
     "⚠️ What you write here REPLACES the bot's full prompt — including the business information above, its knowledge base and its safety rules. It doesn't add instructions: it replaces them. Leave it empty to use the automatic prompt. To edit on top of the real prompt, go to My Agent → Flow → Agent.",
   "cfg.prompt.ph":
     "Empty = the bot uses its full automatic prompt: the business information, its knowledge base and its safety rules.",
+  // Insert bar for the manual prompt (chips + "/"): see prompt-tokens.ts.
+  "pt.tokensHelp":
+    "You can insert these tags: they get replaced with their real content when you save.",
+  "pt.tokensLabel": "Prompt tags:",
+  "pt.toolsLabel": "Tools:",
+  "pt.slashHint": "Tip: type / in the field to insert a tag or tool.",
+  "pt.tok.business": "All your business information (hours, prices, location).",
+  "pt.tok.tools": "List of the bot's available tools.",
+  "pt.tok.playbook": "Industry playbook (diagnostics and best practices).",
+  "pt.tok.lessons": "Lessons learned from how the owner handles cases.",
+  "pt.tok.instr": "Your additional instructions (My Agent → Flow → Brain).",
+  "pt.tok.botName": "Name the bot introduces itself with.",
+  "pt.tok.bizName": "Business name.",
+  "pt.tok.lang": "The bot's base language.",
+  "pt.tok.tool": "Bot tool (the model calls it by name).",
   "cfg.escalation.label": "Words that ask for a human",
   "cfg.escalation.help":
     "If the customer writes any of these, the bot notifies a person. Separate them with commas.",

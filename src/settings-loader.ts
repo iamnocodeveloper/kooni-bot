@@ -1,7 +1,7 @@
 import type { Env } from "./env";
 import { Db } from "./db/client";
 import { SettingsRepo, SETTING_KEYS } from "./db/settings";
-import { systemPromptFromEnv } from "./system-prompt";
+import { systemPromptFromEnv, systemPromptFromOverride, type SystemPromptOverrides } from "./system-prompt";
 import { resolveBusinessTimezone } from "./timezone";
 import { renderBusinessContext } from "./businessContext";
 import { getBufferMs } from "./config";
@@ -236,18 +236,36 @@ export async function resolveAgentConfig(env: Env, toolNames: string[]): Promise
   // ¿El bot se presenta como el DUEÑO (primera persona) o como asistente?
   const persona: "dueño" | "asistente" = get(SETTING_KEYS.agentPersona) === "dueño" ? "dueño" : "asistente";
 
-  const systemPrompt =
-    systemPromptOverride ??
-    systemPromptFromEnv(env, enabledToolNames, businessContext, niche.playbook || undefined, {
-      tone,
-      extraEscalationKeywords: escalationKeywords,
-      botName,
-      lessons,
-      customInstructions: finalInstructions,
-      multiIdioma: extras.multiIdiomaEnabled,
-      persona,
-      timezone,
-    });
+  // Overrides comunes al prompt automático y al manual. Un prompt manual NO es
+  // "texto muerto": se le aplican los tokens `{{...}}` (systemPromptFromOverride)
+  // para que el dueño pueda re-inyectar info del negocio, herramientas, etc.
+  const promptOverrides: SystemPromptOverrides = {
+    tone,
+    extraEscalationKeywords: escalationKeywords,
+    botName,
+    lessons,
+    customInstructions: finalInstructions,
+    multiIdioma: extras.multiIdiomaEnabled,
+    persona,
+    timezone,
+  };
+
+  const systemPrompt = systemPromptOverride
+    ? systemPromptFromOverride(
+        systemPromptOverride,
+        env,
+        enabledToolNames,
+        businessContext,
+        niche.playbook || undefined,
+        promptOverrides,
+      )
+    : systemPromptFromEnv(
+        env,
+        enabledToolNames,
+        businessContext,
+        niche.playbook || undefined,
+        promptOverrides,
+      );
 
   const bufferSecondsRaw = get(SETTING_KEYS.bufferSeconds);
   const bufferMs =

@@ -33,6 +33,21 @@ export const configEs = {
     "⚠️ Lo que escriba aquí REEMPLAZA el prompt completo del bot — incluida la información del negocio de arriba, su base de conocimiento y sus reglas de seguridad. No agrega instrucciones: las sustituye. Déjelo vacío para usar el prompt automático. Para editar sobre el prompt real, vaya a Mi Agente → Flujo → Agente.",
   "cfg.prompt.ph":
     "Vacío = el bot usa su prompt automático completo: la información del negocio, su base de conocimiento y sus reglas de seguridad.",
+  // Barra de inserción del prompt manual (chips + "/"): ver prompt-tokens.ts.
+  "pt.tokensHelp":
+    "Puede insertar estas etiquetas: se sustituyen por su contenido real al guardar.",
+  "pt.tokensLabel": "Etiquetas del prompt:",
+  "pt.toolsLabel": "Herramientas:",
+  "pt.slashHint": "Tip: escriba / en el campo para insertar una etiqueta o herramienta.",
+  "pt.tok.business": "Toda su información del negocio (horarios, precios, ubicación).",
+  "pt.tok.tools": "Lista de herramientas disponibles del bot.",
+  "pt.tok.playbook": "Playbook del giro (diagnóstico y buenas prácticas).",
+  "pt.tok.lessons": "Lecciones aprendidas de cómo atiende el dueño.",
+  "pt.tok.instr": "Sus instrucciones adicionales (Mi Agente → Flujo → Cerebro).",
+  "pt.tok.botName": "Nombre con el que se presenta el bot.",
+  "pt.tok.bizName": "Nombre del negocio.",
+  "pt.tok.lang": "Idioma base del bot.",
+  "pt.tok.tool": "Herramienta del bot (el modelo la llama por su nombre).",
   "cfg.escalation.label": "Palabras que piden un humano",
   "cfg.escalation.help":
     "Si el cliente escribe alguna, el bot avisa a una persona. Sepárelas con comas.",

@@ -5,6 +5,33 @@ Cambios notables de Kooni. Formato aproximado de
 
 El CLI `kooni-bot` se versiona aparte (npm) — ver la nota de cada versión.
 
+## [1.56.0] — 2026-10-05
+
+### Agregado — el prompt manual acepta etiquetas `{{...}}` (con barra para insertarlas)
+
+El "Prompt del agente (avanzado)" dejó de ser texto muerto: ahora puede reutilizar
+piezas del prompt automático con etiquetas `{{...}}`, y el panel trae una barra para
+insertarlas sin memorizarlas.
+
+- **Sustitución real de etiquetas** (`applyPromptTokens` en `src/system-prompt.ts`):
+  un prompt manual se procesa con los mismos tokens que el automático
+  (`{{BUSINESS_CONTEXT}}`, `{{TOOL_LIST}}`, `{{NICHO_PLAYBOOK}}`, `{{LECCIONES}}`,
+  `{{INSTRUCCIONES}}`, `{{BOT_NAME}}`, `{{BUSINESS_NAME}}`, `{{LANGUAGE}}`… y el
+  resto del template) al construir el prompt. Un texto sin etiquetas queda idéntico.
+- **Barra de inserción** (`src/admin/views/prompt-tokens.ts` + el motor en
+  `layout.ts`): chips de **etiquetas** y de **herramientas**, más un menú que aparece
+  al escribir **`/`** en el campo (filtra, navega con ↑/↓ y se inserta con Enter).
+  Disponible en **Configuración → Prompt del agente (avanzado)** y en **Mi Agente →
+  Flujo → Agente (Cerebro)**; las herramientas ofrecidas son las activas de esa
+  instalación (respeta las apagadas con `disabled_tools`).
+- **Bilingüe** es/en (claves `pt.*` en los diccionarios del panel).
+- Tests: `test/admin/prompt-tokens.test.ts` + casos nuevos en
+  `test/system-prompt.test.ts` y `test/settings-loader.test.ts`.
+
+> El prompt manual **sigue sustituyendo** al automático (no se suma): lo que cambia
+> es que ahora puede **re-inyectar** sus piezas con etiquetas. El CLI `kooni-bot`
+> (npm) no cambia.
+
 ## [1.55.2] — 2026-10-04
 
 ### Corregido — licencias Pro (el bot seguía en Free)

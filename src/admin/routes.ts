@@ -2020,7 +2020,15 @@ adminApp.post("/prompt/restore", async (c) => {
 adminApp.get("/config", async (c) => {
   const settings = await new SettingsRepo(new Db(c.env.DB)).all();
   const saved = c.req.query("saved") === "1";
-  return c.html(await renderConfig(c.env, settings, saved, c.req.query("llmtest")));
+  // Nombres de herramientas (las que el modelo puede llamar) para la barra de
+  // inserción del prompt manual. Best-effort: sin tools, la barra igual muestra
+  // las etiquetas {{...}}.
+  let toolNames: string[] = [];
+  try {
+    const { buildTools } = await import("../tools");
+    toolNames = Object.keys(await buildTools({ env: c.env, getConversationId: () => null }));
+  } catch { /* sin registro de tools */ }
+  return c.html(await renderConfig(c.env, settings, saved, c.req.query("llmtest"), toolNames));
 });
 
 // Botón "Enviar prueba ahora" del Reporte nocturno: manda el resumen del día

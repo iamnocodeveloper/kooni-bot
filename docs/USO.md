@@ -86,6 +86,18 @@ El panel está en español, tema oscuro Kooni (tinta + teal). De izquierda a der
 - Diagrama de cómo piensa el bot: tools activas, pasos, handoff.
 - Ver `src/agent.ts` y `src/tools/`.
 
+### Prompt del agente (manual)
+- Por defecto el bot arma su prompt automático (información del negocio + KB +
+  reglas de seguridad). **Configuración → Prompt del agente (avanzado)** lo
+  reemplaza por el tuyo (el automático sigue disponible por si vuelves).
+- Puedes **insertar etiquetas `{{...}}`** con los chips del panel o escribiendo
+  **`/`** en el campo (se abre un menú con las etiquetas y las herramientas): se
+  sustituyen por su contenido real al construir el prompt. Ej.:
+  `Negocio: {{BUSINESS_CONTEXT}}` + `Herramientas: {{TOOL_LIST}}`.
+- Las herramientas que se ofrecen son las **activas** de la instalación (respeta
+  las que apagues en Extras). Lo mismo aplica al editor del **Cerebro**
+  (Mi Agente → Flujo → Agente).
+
 ### Conocimiento (KB)
 - **Agregar documento** → se indexa solo en Vectorize al instante (búsqueda semántica).
 - Editar/borrar documentos existentes.

@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   renderSystemPrompt,
   systemPromptFromEnv,
+  applyPromptTokens,
   type SystemPromptInput,
 } from "../src/system-prompt";
 
@@ -122,5 +123,29 @@ describe("systemPromptFromEnv", () => {
     expect(prompt).toContain("en");
     expect(prompt).toContain("- searchKb");
     expect(prompt).toContain("ctx here");
+  });
+});
+
+describe("applyPromptTokens (prompt manual)", () => {
+  it("sustituye las etiquetas {{...}} por su contenido real", () => {
+    const out = applyPromptTokens(
+      "Bot: {{BOT_NAME}}\nNegocio: {{BUSINESS_NAME}}\nInfo: {{BUSINESS_CONTEXT}}\nTools:\n{{TOOL_LIST}}",
+      input,
+    );
+    expect(out).toContain("Bot: Asistente");
+    expect(out).toContain("Negocio: Barbería Centro");
+    expect(out).toContain("Info: Horarios: Lun-Sáb 10am-8pm");
+    expect(out).toContain("- searchKb");
+    expect(out).toContain("- pauseBot");
+    expect(out).not.toContain("{{");
+  });
+
+  it("un texto sin etiquetas queda intacto", () => {
+    expect(applyPromptTokens("Solo texto plano.", input)).toBe("Solo texto plano.");
+  });
+
+  it("omite el bloque de instrucciones cuando no hay customInstructions", () => {
+    const out = applyPromptTokens("A{{INSTRUCCIONES}}B", input);
+    expect(out).toBe("AB");
   });
 });

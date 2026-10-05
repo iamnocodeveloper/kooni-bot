@@ -6,6 +6,7 @@
 import type { Env } from "../../env";
 import { SETTING_KEYS } from "../../db/settings";
 import { renderBusinessContext } from "../../businessContext";
+import { renderPromptInsertBar } from "./prompt-tokens";
 import { CURATED_MODELS } from "../../llm/provider";
 import { COMMON_TIMEZONES, DEFAULT_BUSINESS_TZ } from "../../timezone";
 import {
@@ -80,7 +81,8 @@ function renderTextField(opts: {
     </div>`;
 }
 
-/** Render a labeled multi-line textarea. */
+/** Render a labeled multi-line textarea. `extra` se inserta tras el textarea
+ *  (p. ej. la barra de etiquetas del prompt manual). */
 function renderTextArea(opts: {
   name: string;
   label: string;
@@ -88,6 +90,7 @@ function renderTextArea(opts: {
   value: string;
   placeholder?: string;
   rows?: number;
+  extra?: string;
 }): string {
   return `
     <div style="display:flex;flex-direction:column;gap:6px">
@@ -96,6 +99,7 @@ function renderTextArea(opts: {
       <textarea id="${esc(opts.name)}" name="${esc(opts.name)}" rows="${opts.rows ?? 4}"
                 placeholder="${esc(opts.placeholder ?? "")}"
                 style="${INPUT_STYLE};resize:vertical">${esc(opts.value)}</textarea>
+      ${opts.extra ?? ""}
     </div>`;
 }
 
@@ -372,9 +376,20 @@ export async function renderConfig(
   settings: Record<string, string>,
   saved = false,
   llmTest?: string,
+  toolNames: string[] = [],
 ): Promise<string> {
   const { t } = await panelI18n(env);
   const cardGroups = CONTROL_LIST.map((c) => renderCardGroup(c, settings, t)).join("");
+
+  // Herramientas activas (excluye las desactivadas en el panel): son las que el
+  // modelo puede llamar, así que son las que se ofrecen para insertar.
+  const disabledTools = new Set(
+    (settings[SETTING_KEYS.disabledTools] ?? "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
+  );
+  const enabledToolNames = toolNames.filter((n) => !disabledTools.has(n));
 
   // Este campo escribe la MISMA llave que "Prompt del agente" de Mi Agente →
   // Flujo, donde el textarea viene precargado con el prompt efectivo. Aquí llega
@@ -475,6 +490,7 @@ export async function renderConfig(
           placeholder:
             t("cfg.prompt.ph"),
           rows: 4,
+          extra: renderPromptInsertBar(t, SETTING_KEYS.systemPromptOverride, enabledToolNames),
         })}
 
         ${renderTextField({

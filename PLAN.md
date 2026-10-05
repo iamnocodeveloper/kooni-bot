@@ -2424,3 +2424,64 @@ está activo en esa instalación).
   `SITE_URL` puesto.
 - Instalaciones **nuevas** ya salen bien de fábrica; las **existentes** necesitan
   una vez `npx kooni-bot update` + deploy (y `pair` si el token quedó desfasado).
+
+---
+
+## 🏁 CIERRE DE ETAPA — Prompt manual con etiquetas `{{...}}` (2026-10-05, v1.56.0)
+
+> **Etapa:** que el "Prompt del agente (avanzado)" deje de ser texto muerto. Ahora
+> reutiliza piezas del prompt automático con etiquetas `{{...}}`, con una barra para
+> insertarlas (chips + `/`) tanto en Configuración como en el editor del Cerebro.
+
+### ✅ Entregado
+
+**Bot `src/` (template `1.56.0`)**
+- **`applyPromptTokens` / `systemPromptFromOverride`** (`src/system-prompt.ts`): el
+  prompt manual se procesa con los MISMOS tokens que el automático
+  (`{{BUSINESS_CONTEXT}}`, `{{TOOL_LIST}}`, `{{NICHO_PLAYBOOK}}`, `{{LECCIONES}}`,
+  `{{INSTRUCCIONES}}`, `{{BOT_NAME}}`, `{{BUSINESS_NAME}}`, `{{LANGUAGE}}`… y el
+  resto del template). Orden de sustitución con los contenedores ANTES
+  (`OUTPUT_LANGUAGE` incluye `{{LANGUAGE}}`); `promptInputFromEnv` comparte los
+  valores entre el prompt automático y el manual. Un texto sin tokens queda igual.
+- **`resolveAgentConfig`** (`src/settings-loader.ts`): un `system_prompt_override`
+  ya no descarta tokens; se le aplican.
+- **Barra de inserción** (`src/admin/views/prompt-tokens.ts` + motor de eventos en
+  `layout.ts` vía `window.__ptData`): chips de etiquetas + herramientas y menú `/`
+  (filtra, navega con ↑/↓, inserta con Enter/Tab, cierra con Escape). En
+  **Configuración → Prompt del agente (avanzado)** y en **Mi Agente → Flujo →
+  Agente (Cerebro)**. Las herramientas salen de `buildTools` filtrando las apagadas
+  (`disabled_tools`).
+- **i18n** es/en (claves `pt.*`).
+
+**Tests**
+- `test/admin/prompt-tokens.test.ts` (nuevo): chips, menú y paridad de etiquetas con
+  `SUPPORTED_PROMPT_TOKENS`.
+- Casos nuevos en `test/system-prompt.test.ts` y `test/settings-loader.test.ts`.
+
+### 🐞 Regresión detectada y corregida en esta etapa
+- El motor de la barra vive dentro de un **template literal** (`GLOBAL_SCRIPT`), donde
+  las regex perdían las barras invertidas (`\s`→`s`, `\/`→`/`): el script emitido no
+  parseaba (`Unexpected token '^'`). Se doblaron (`\\s`, `\\/`) y
+  `layout-scripts`/`login-page` vuelven a verde.
+
+### ⚠️ Estado de la suite (heredado — NO de esta etapa)
+- `pnpm test`: **12 fallos preexistentes en `main`**, ajenos a este cambio
+  (reproducidos con el working tree en `git stash` sobre `HEAD` limpio):
+  `admin/comentarios` (5 — las rutas del inbox dan **404**), `tools/solicitarTaxi`
+  (4 — `FOREIGN KEY` de `taxi_trips`), `reports/taxis` (1 — el CSV ya usa el
+  encabezado `REPORTE,métrica,valor`), `audit/context` (1 — `aisa_api_key` no está en
+  `AUDIT_SENSITIVE_KEYS`) e `integrations/decodo` (1 — espera `headless:"html"`, que
+  ya no se manda desde el modo barato). **Backlog de saneamiento aparte.**
+
+### 🚀 Deploy de esta etapa
+- **Git**: commit + push a `main` (template `1.56.0`).
+- **npm**: **sin cambios** — el CLI `kooni-bot@0.7.1` no se toca en esta etapa.
+- **Worker de cardaniel**: **PENDIENTE de login**. La sesión local de `wrangler` quedó
+  en la cuenta equivocada (`joeldavidar@gmail.com`, donde el worker
+  `kooni-bot-cardealer-daniel2-948b8b` **no existe**: error `10007`); cardaniel vive
+  en `Info@dmezzadri.com`. Para desplegar: `npx wrangler login` con la cuenta correcta
+  y `pnpm run deploy` (o `npx kooni-bot update` en la máquina del dueño).
+
+### 📌 Estado para retomar
+- **Template**: `main` = **1.56.0**. **CLI**: `kooni-bot@0.7.1` en npm (sin cambios).
+- El prompt manual ya admite `{{...}}`; documentado en `docs/USO.md §4`.

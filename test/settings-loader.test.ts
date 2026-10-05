@@ -61,6 +61,20 @@ describe("resolveAgentConfig", () => {
     expect(cfg.systemPrompt).toContain("MI CONTEXTO DE NEGOCIO");
   });
 
+  it("sustituye las etiquetas {{...}} dentro del prompt manual", async () => {
+    await repo.set(SETTING_KEYS.businessContext, "Abrimos 9-7. Corte $150.");
+    await repo.set(
+      SETTING_KEYS.systemPromptOverride,
+      "NEGOCIO: {{BUSINESS_CONTEXT}}\nTOOLS:\n{{TOOL_LIST}}\nHola {{BOT_NAME}}",
+    );
+    const cfg = await resolveAgentConfig(env, TOOLS);
+    expect(cfg.systemPrompt).toContain("NEGOCIO: Abrimos 9-7. Corte $150.");
+    expect(cfg.systemPrompt).toContain("- searchKb");
+    expect(cfg.systemPrompt).toContain("- handoffHuman");
+    expect(cfg.systemPrompt).toContain("Hola Asistente");
+    expect(cfg.systemPrompt).not.toContain("{{");
+  });
+
   it("buffer_seconds overrides env and enforces a 1000ms floor", async () => {
     await repo.set(SETTING_KEYS.bufferSeconds, "5");
     let cfg = await resolveAgentConfig(env, TOOLS);

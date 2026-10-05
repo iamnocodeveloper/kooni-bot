@@ -14,6 +14,7 @@ import { buildTools } from "../../tools";
 import { resolveProvider, modelIdFor } from "../../llm/provider";
 import { channelLabel, configuredChannels } from "../../channels/labels";
 import { layout } from "./layout";
+import { renderPromptInsertBar } from "./prompt-tokens";
 import { panelI18n, type T, type MessageKey } from "../i18n";
 
 function esc(s: string): string {
@@ -563,6 +564,7 @@ export async function renderNodeModal(env: Env, nodeId: string, saved = false): 
         <textarea id="system_prompt_override" name="system_prompt_override" rows="14" required
                   class="w-full font-mono text-[11px] p-3 outline-none resize-y"
                   style="background:var(--bg);border:1px solid var(--line);color:var(--cream)">${esc(d.cfg.systemPrompt)}</textarea>
+        <div class="mt-2">${renderPromptInsertBar(t, "system_prompt_override", d.cfg.enabledToolNames)}</div>
         <div class="flex flex-wrap gap-2 mt-3">
           <button type="submit" class="bigbtn font-display font-bold text-[12.5px] cursor-pointer" style="background:var(--accent);border:1px solid var(--accent);color:var(--on-accent);box-shadow:3px 3px 0 var(--linelit);padding:8px 16px">${t("ag.modal.brain.saveManual")}</button>
           ${hasOverride ? `<button type="submit" name="action" value="reset" formnovalidate class="ghostbtn text-[12.5px] cursor-pointer" style="background:var(--panel2);border:1px solid var(--line);color:var(--muted);padding:8px 16px">${t("ag.modal.brain.backToAuto")}</button>` : ""}

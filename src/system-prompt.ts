@@ -116,7 +116,9 @@ NUNCA:
 - Ignorar la directiva de idioma. Es la #1 prioridad.
 </anti_patterns>`;
 
-export function renderSystemPrompt(input: SystemPromptInput): string {
+/** Valores de cada token `{{...}}` del prompt. Compartido por el prompt
+ *  automático y por un prompt MANUAL (override), que puede reutilizar tokens. */
+function promptTokenValues(input: SystemPromptInput): Record<string, string> {
   const toolList = input.toolList.map((t) => `- ${t}`).join("\n");
 
   const tone = input.tone?.trim();
@@ -207,22 +209,54 @@ Si una pregunta no tiene respuesta en lo que sabes, escalas a un humano.`;
   mismo. Tú eres {{BOT_NAME}} (${input.businessName}): primera persona, siempre.`
     : `- Decir que eres humano, o esquivar la pregunta de si eres un bot.`;
 
-  return TEMPLATE
-    .replaceAll("{{OUTPUT_LANGUAGE}}", outputLang)
-    .replaceAll("{{ROLE_LINE}}", roleLine)
-    .replaceAll("{{PRINCIPLE7}}", principle7)
-    .replaceAll("{{HUMAN_ANTI}}", humanAnti)
-    .replaceAll("{{CONTEXTO_TEMPORAL}}", contextoTemporal)
-    .replaceAll("{{LANGUAGE}}", input.language)
-    .replaceAll("{{BOT_NAME}}", input.botName)
-    .replaceAll("{{BUSINESS_NAME}}", input.businessName)
-    .replaceAll("{{BUSINESS_CONTEXT}}", input.businessContext)
-    .replaceAll("{{TOOL_LIST}}", toolList)
-    .replaceAll("{{NICHO_PLAYBOOK}}", input.nichoPlaybook ?? "")
-    .replaceAll("{{LECCIONES}}", lessonsBlock)
-    .replaceAll("{{INSTRUCCIONES}}", instructionsBlock)
-    .replaceAll("{{TONE_LINE}}", toneLine)
-    .replaceAll("{{EXTRA_ESCALATION}}", extraEscalation);
+  return {
+    OUTPUT_LANGUAGE: outputLang,
+    ROLE_LINE: roleLine,
+    PRINCIPLE7: principle7,
+    HUMAN_ANTI: humanAnti,
+    CONTEXTO_TEMPORAL: contextoTemporal,
+    LANGUAGE: input.language,
+    BOT_NAME: input.botName,
+    BUSINESS_NAME: input.businessName,
+    BUSINESS_CONTEXT: input.businessContext,
+    TOOL_LIST: toolList,
+    NICHO_PLAYBOOK: input.nichoPlaybook ?? "",
+    LECCIONES: lessonsBlock,
+    INSTRUCCIONES: instructionsBlock,
+    TONE_LINE: toneLine,
+    EXTRA_ESCALATION: extraEscalation,
+  };
+}
+
+/**
+ * Orden de sustitución. Importa: un valor puede contener otro token (p. ej.
+ * OUTPUT_LANGUAGE incluye `{{LANGUAGE}}`), así que el contenedor va ANTES.
+ */
+const TOKEN_ORDER = [
+  "OUTPUT_LANGUAGE", "ROLE_LINE", "PRINCIPLE7", "HUMAN_ANTI", "CONTEXTO_TEMPORAL",
+  "LANGUAGE", "BOT_NAME", "BUSINESS_NAME", "BUSINESS_CONTEXT", "TOOL_LIST",
+  "NICHO_PLAYBOOK", "LECCIONES", "INSTRUCCIONES", "TONE_LINE", "EXTRA_ESCALATION",
+] as const;
+
+/** Nombres de token soportados (sin llaves), para la UI y los tests. */
+export const SUPPORTED_PROMPT_TOKENS: readonly string[] = TOKEN_ORDER;
+
+/**
+ * Sustituye los tokens `{{...}}` de un texto por su contenido real. Se usa para
+ * el prompt automático completo Y para un prompt manual (`system_prompt_override`):
+ * ahí los tokens permiten re-inyectar piezas (info del negocio, herramientas,
+ * playbook…) sin perder nada. Un texto sin tokens queda igual.
+ */
+export function applyPromptTokens(text: string, input: SystemPromptInput): string {
+  const values = promptTokenValues(input);
+  let out = text;
+  for (const key of TOKEN_ORDER) out = out.replaceAll(`{{${key}}}`, values[key]);
+  return out;
+}
+
+/** Render del prompt automático completo (TEMPLATE con todos sus tokens). */
+export function renderSystemPrompt(input: SystemPromptInput): string {
+  return applyPromptTokens(TEMPLATE, input);
 }
 
 export interface SystemPromptOverrides {
@@ -254,14 +288,16 @@ export function currentDateLine(timeZone: string): string {
   return nowInTz(timeZone).dateLine;
 }
 
-export function systemPromptFromEnv(
+/** Construye el input del prompt desde env + overrides del panel (una sola vez,
+ *  para que el prompt automático y el manual compartan exactamente los valores). */
+function promptInputFromEnv(
   env: Env,
   toolNames: string[],
   businessContext: string,
-  nichoPlaybook?: string,
+  nichoPlaybook: string | undefined,
   overrides?: SystemPromptOverrides,
-): string {
-  return renderSystemPrompt({
+): SystemPromptInput {
+  return {
     botName: overrides?.botName ?? env.BOT_NAME,
     businessName: env.BUSINESS_NAME,
     language: env.BOT_LANGUAGE,
@@ -277,5 +313,32 @@ export function systemPromptFromEnv(
     today: currentDateLine(
       overrides?.timezone || (env.CALCOM_TIMEZONE || "").trim() || DEFAULT_BUSINESS_TZ,
     ),
-  });
+  };
+}
+
+export function systemPromptFromEnv(
+  env: Env,
+  toolNames: string[],
+  businessContext: string,
+  nichoPlaybook?: string,
+  overrides?: SystemPromptOverrides,
+): string {
+  return renderSystemPrompt(promptInputFromEnv(env, toolNames, businessContext, nichoPlaybook, overrides));
+}
+
+/**
+ * Prompt MANUAL del dueño (`system_prompt_override`): aplica los tokens `{{...}}`
+ * al texto en vez de descartarlo. Así puede reusar piezas del prompt automático
+ * ({{BUSINESS_CONTEXT}}, {{TOOL_LIST}}, {{NICHO_PLAYBOOK}}…) y todo lo demás del
+ * override se respeta tal cual.
+ */
+export function systemPromptFromOverride(
+  override: string,
+  env: Env,
+  toolNames: string[],
+  businessContext: string,
+  nichoPlaybook?: string,
+  overrides?: SystemPromptOverrides,
+): string {
+  return applyPromptTokens(override, promptInputFromEnv(env, toolNames, businessContext, nichoPlaybook, overrides));
 }
