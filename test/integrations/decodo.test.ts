@@ -55,7 +55,9 @@ describe("scrapeUrl", () => {
     const init = fetchMock.mock.calls[0][1] as RequestInit & { headers: Record<string, string> };
     expect(init.method).toBe("POST");
     const body = JSON.parse(String(init.body));
-    expect(body).toMatchObject({ url: "https://x.com/llm/inventory/", markdown: true, headless: "html" });
+    expect(body).toMatchObject({ url: "https://x.com/llm/inventory/", markdown: true });
+    // Modo barato (v1.51): sin `headless` por default.
+    expect(body.headless).toBeUndefined();
     expect(init.headers.Authorization).toMatch(/^Basic /);
   });
 

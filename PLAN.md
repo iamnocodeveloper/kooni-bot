@@ -2464,14 +2464,21 @@ está activo en esa instalación).
   parseaba (`Unexpected token '^'`). Se doblaron (`\\s`, `\\/`) y
   `layout-scripts`/`login-page` vuelven a verde.
 
-### ⚠️ Estado de la suite (heredado — NO de esta etapa)
-- `pnpm test`: **12 fallos preexistentes en `main`**, ajenos a este cambio
-  (reproducidos con el working tree en `git stash` sobre `HEAD` limpio):
-  `admin/comentarios` (5 — las rutas del inbox dan **404**), `tools/solicitarTaxi`
-  (4 — `FOREIGN KEY` de `taxi_trips`), `reports/taxis` (1 — el CSV ya usa el
-  encabezado `REPORTE,métrica,valor`), `audit/context` (1 — `aisa_api_key` no está en
-  `AUDIT_SENSITIVE_KEYS`) e `integrations/decodo` (1 — espera `headless:"html"`, que
-  ya no se manda desde el modo barato). **Backlog de saneamiento aparte.**
+### ✅ Saneamiento de la suite (12 tests rojos heredados)
+- Los 12 fallos preexistentes de `main` quedaron **arreglados** en esta etapa:
+  - `admin/comentarios` (5): el test llamaba a `adminApp` con el prefijo `/admin`
+    (la app registra rutas **relativas** y `index.ts` la monta en `/admin`) → 404;
+    y el detalle ligaba el comentario a un id de regla ficticio. Alineado con
+    `inbox.test.ts`.
+  - `tools/solicitarTaxi` (4): la semilla no creaba la conversación que exige el
+    `FOREIGN KEY` de `taxi_trips.conversation_id`.
+  - `reports/taxis` (1): el CSV usa `REPORTE,métrica,valor`.
+  - `audit/context` (1): `aisa_api_key` agregada a `AUDIT_SENSITIVE_KEYS`
+    (**seguridad** — se guardaba en claro en la auditoría).
+  - `integrations/decodo` (1): el modo barato ya no manda `headless:"html"`.
+- `pnpm test`: **verde** (1199 tests) · `tsc --noEmit`: limpio.
+- ⚠️ Ojo: correr `tsc` **en paralelo** con la suite produce rojos de *timing* bajo
+  carga (no reales) — correr la suite sola.
 
 ### 🚀 Deploy de esta etapa
 - **Git**: commit + push a `main` (template `1.56.0`).
@@ -2484,4 +2491,5 @@ está activo en esa instalación).
 
 ### 📌 Estado para retomar
 - **Template**: `main` = **1.56.0**. **CLI**: `kooni-bot@0.7.1` en npm (sin cambios).
+- `pnpm test` **verde** (1199) y `tsc --noEmit` limpio.
 - El prompt manual ya admite `{{...}}`; documentado en `docs/USO.md §4`.

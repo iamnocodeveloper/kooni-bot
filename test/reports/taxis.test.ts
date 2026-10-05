@@ -46,7 +46,7 @@ describe("buildTaxiReports", () => {
     const now = Date.now();
     const r = await buildTaxiReports(env, { from: now - DAY, to: now + DAY });
     const csv = reportsToCsv(r);
-    expect(csv).toContain("REPORTE,metr");
+    expect(csv).toContain("REPORTE,métrica,valor");
     expect(csv).toContain("Viajes");
     expect(csv).toContain("Salud del bot");
   });

@@ -14,6 +14,12 @@ beforeEach(async () => {
   const d1 = await mf.getD1Database("DB");
   db = new Db(d1 as any);
   env = { DB: d1, DASHBOARD_BASE_URL: "https://bot.example" };
+  // `taxi_trips.conversation_id` referencia `conversations(id)`: la conversación
+  // ya existe cuando corre la tool en producción (la crea el agente al ingerir).
+  await db.run(
+    "INSERT INTO conversations (id, channel, channel_user_id, started_at, last_message_at) VALUES (?, ?, ?, ?, ?)",
+    ["waha:584120000000", "waha", "584120000000", Date.now(), Date.now()],
+  );
   vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 200 })));
 });
 

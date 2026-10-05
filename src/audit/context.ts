@@ -47,6 +47,7 @@ export function currentActor(): AuditActor | undefined {
 export const AUDIT_SENSITIVE_KEYS = new Set<string>([
   "llm_api_key",
   "analysis_llm_api_key",
+  "aisa_api_key",
   "zernio_api_key",
   "zernio_webhook_secret",
   "telegram_bot_token",

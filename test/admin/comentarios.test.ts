@@ -83,7 +83,7 @@ async function seedComment(over: Record<string, unknown> = {}) {
 describe("GET /admin/comentarios — inbox", () => {
   it("renderiza los dos paneles y los pills de filtro", async () => {
     await seedComment();
-    const res = await adminApp.request("/admin/comentarios", { headers: AUTH }, env);
+    const res = await adminApp.request("/comentarios", { headers: AUTH }, env);
     expect(res.status).toBe(200);
     const html = await res.text();
     expect(html).toContain("Comentarios");
@@ -94,16 +94,17 @@ describe("GET /admin/comentarios — inbox", () => {
   });
 
   it("con ?c= muestra el detalle: publicación y automatización", async () => {
-    const id = await seedComment({ ruleId: "r1" });
+    // La regla primero: el comentario se liga a la regla que la disparó (su id real).
+    const rule = await new AutoRulesRepo(db).create({ kind: "comment_dm", keywords: ["precio"], message: "hola" });
+    const id = await seedComment({ ruleId: rule.id });
     await new CommentPostsRepo(db).upsert({
       postId: "post_1",
       caption: "Nuevo modelo 2026",
       permalink: "https://instagram.com/p/abc",
       fetchedAt: Date.now(),
     });
-    const rule = await new AutoRulesRepo(db).create({ kind: "comment_dm", keywords: ["precio"], message: "hola" });
 
-    const res = await adminApp.request(`/admin/comentarios?c=${encodeURIComponent(id)}`, { headers: AUTH }, env);
+    const res = await adminApp.request(`/comentarios?c=${encodeURIComponent(id)}`, { headers: AUTH }, env);
     const html = await res.text();
     expect(html).toContain("Nuevo modelo 2026");
     expect(html).toContain("https://instagram.com/p/abc");
@@ -116,7 +117,7 @@ describe("POST /admin/comentarios/:id/reply y /dm", () => {
   it("responde en público: llama a Zernio, marca el estado y audita", async () => {
     const id = await seedComment();
     const res = await adminApp.request(
-      `/admin/comentarios/${encodeURIComponent(id)}/reply`,
+      `/comentarios/${encodeURIComponent(id)}/reply`,
       { method: "POST", headers: FORM, body: "text=¡Gracias por escribir!&" },
       env,
     );
@@ -139,7 +140,7 @@ describe("POST /admin/comentarios/:id/reply y /dm", () => {
     const id = await seedComment();
     mocks.dm.mockResolvedValueOnce({ ok: false, status: 400, consumed: true, error: "private reply already sent" });
     const res = await adminApp.request(
-      `/admin/comentarios/${encodeURIComponent(id)}/dm`,
+      `/comentarios/${encodeURIComponent(id)}/dm`,
       { method: "POST", headers: FORM, body: "text=Te escribo por privado" },
       env,
     );
@@ -152,7 +153,7 @@ describe("POST /admin/comentarios/:id/reply y /dm", () => {
   it("exige texto para responder", async () => {
     const id = await seedComment();
     const res = await adminApp.request(
-      `/admin/comentarios/${encodeURIComponent(id)}/reply`,
+      `/comentarios/${encodeURIComponent(id)}/reply`,
       { method: "POST", headers: FORM, body: "text=" },
       env,
     );

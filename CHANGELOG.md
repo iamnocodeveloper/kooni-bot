@@ -28,6 +28,23 @@ insertarlas sin memorizarlas.
 - Tests: `test/admin/prompt-tokens.test.ts` + casos nuevos en
   `test/system-prompt.test.ts` y `test/settings-loader.test.ts`.
 
+### Corregido — saneamiento de la suite (12 tests rojos heredados de `main`)
+
+- **Auditoría**: `aisa_api_key` entra a `AUDIT_SENSITIVE_KEYS` — se guardaba **en
+  claro** en `/admin/auditoria` y su export CSV (el test-guarda ya lo vigila).
+- **`test/admin/comentarios`** (5): el inbox llamaba a `adminApp` con el prefijo
+  `/admin`, pero la app registra rutas relativas y `index.ts` la cuelga en
+  `/admin` → daba **404**; además el detalle ligaba el comentario a una regla con
+  **id ficticio** en vez del id real. Alineado con `inbox.test.ts`.
+- **`test/tools/solicitarTaxi`** (4): la semilla no creaba la conversación que
+  exige el `FOREIGN KEY` de `taxi_trips.conversation_id`.
+- **`test/reports/taxis`** (1): el CSV ya usa el encabezado `REPORTE,métrica,valor`.
+- **`test/integrations/decodo`** (1): el modo barato (v1.51) ya no manda
+  `headless:"html"`; el test se alinea.
+
+> `pnpm test` queda en **verde** (1199 tests). Nada de esto cambia el runtime del
+> bot salvo la redacción de `aisa_api_key`.
+
 > El prompt manual **sigue sustituyendo** al automático (no se suma): lo que cambia
 > es que ahora puede **re-inyectar** sus piezas con etiquetas. El CLI `kooni-bot`
 > (npm) no cambia.
