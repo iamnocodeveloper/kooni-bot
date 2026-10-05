@@ -4,6 +4,12 @@ Documento de cierre de etapa. Todo lo de abajo está **commiteado** en
 `github.com/iamnocodeveloper/kooni-bot` y los paneles **desplegados** en
 https://t6bferet.insforge.site.
 
+> **Actualización (2026-10-04):** existe una etapa posterior. Ver `PLAN.md` →
+> **🏁 CIERRE DE ETAPA — Licencias / login del CLI (v1.55.2)**. Estado actual: CLI
+> `kooni-bot@0.7.1` **publicado en npm** (ya no está bloqueado por el OTP), login
+> obligatorio y token por instalación. De los pendientes de abajo, la pieza token
+> de la Fase D (token por instalación para telemetría) quedó **cerrada** ahí.
+
 ---
 
 ## 1. Qué se construyó

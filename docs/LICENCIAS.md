@@ -5,7 +5,7 @@
 > envía un **código de licencia** que el cliente pega en su panel. No hay servidor
 > de licencias en el medio: la validación es local y sin red.
 
-Última revisión: 2026-09-01 · Estado: **implementado, sin desplegar**
+Última revisión: 2026-10-04 · Estado: **implementado y en producción** (código local + overlay del panel; ver §8–§9)
 
 ---
 
@@ -122,3 +122,66 @@ conviene emitirlos ligados a la instalación.
 **¿Y si el cliente no paga y quiere seguir gratis?** No pasa nada: el bot
 funciona completo en Free (responde con IA, capta leads, escala a humano, agenda,
 KB, multicanal). Pro es análisis y crecimiento, no el servicio base.
+
+## 8. Pro en dos capas: código local + overlay del panel
+
+Pro se controla por **dos caminos que se complementan**:
+
+**Capa 1 — el código (offline).** El código `KOONI-PRO-V2-…` vive en el setting
+`pro_license` de la D1. `isProUnlocked()` (`src/config.ts` → `isProLicense` en
+`src/limits.ts`) lo verifica con la clave **pública** (Ed25519, sin red). Funciona
+aunque el bot no tenga conexión al panel. Se pega desde `/admin/licencia` o con
+`init --license`.
+
+**Capa 2 — el overlay (el panel manda en vivo).** `syncLicenseState()`
+(`src/licenseSync.ts`) hace `POST {KOONI_API_URL}/estado-licencia` con el header
+`X-Kooni-Token: {KOONI_INSTALL_TOKEN}` y guarda lo que devuelve el hub (plan,
+estado, `code`, `modules`, `limits`, `brand`) en `settings` → `license_overlay`,
+`pro_license`, `module_unlocks`. Así el super admin cambia plan/módulos/límites/
+marca **sin redeploy**. Corre en cada tick del cron y al terminar un
+`deploy`/`pair` (vía `POST /license/sync`), con caché de 6 h.
+
+**Identidad del bot = token POR INSTALACIÓN.** `licencia-emitir` (el CLI ya
+logueado) emite el token, registra la instalación y la liga a su licencia
+(`instalaciones.licencia_id`); el CLI lo guarda como secret `KOONI_INSTALL_TOKEN`.
+Ese token es con el que el bot pide licencia y reporta uso (`registrar-uso`).
+
+| Quién | Escribe | Efecto |
+|---|---|---|
+| CLI (`init`/`deploy`/`pair`) | `instalaciones` + `licencia free` + token | El bot aparece en el panel y queda ligado |
+| Super admin (Licencias) | `licencias` (plan/módulos/límites/marca/código) + `instalaciones.tier` | El plan se ve al instante en el panel |
+| Bot (`estado-licencia`) | `settings.license_overlay` + `pro_license` | Aplica plan/módulos/límites/marca |
+| Bot (`registrar-uso`) | `uso_instalaciones` + `instalaciones.tier` | Métricas + costo IA en el panel |
+
+**Reglas de oro:**
+- La **clave pública** debe ser la del firmador del panel (`…Lxrjpy…`). La
+  estampan el CLI y `wrangler.toml.example`; la de respaldo en `src/license.ts`
+  **debe** coincidir (estuvo mal: `…qpP9…` — corregido en v1.55.2).
+- El **token por instalación** debe estar sincronizado. Si no, el hub responde
+  `{"error":"token desconocido"}` y el bot **no** trae licencia ni reporta uso
+  (queda en Free, sin métricas). Ver §9.
+- Al activar en el super admin, el bot lo aplica en su **próximo sync** (botón
+  **Sincronizar ahora** en `/admin/licencia`, o el cron nocturno).
+
+## 9. Troubleshooting
+
+**El bot quedó en Free aunque la licencia dice Pro / no aparecen métricas.**
+Casi siempre es el token desincronizado. Diagnóstico: en el panel del bot,
+`Licencia → Sincronizar ahora`; si el sync falla con **401 "token desconocido"**,
+hay que **re-vincular**:
+
+```bash
+cd <carpeta-del-bot>
+npx kooni-bot pair        # re-emite el token, lo guarda como secret y redespliega
+```
+
+El CLI **0.7.1+** avisa solo cuando `pair`/`deploy` no logran sincronizar (antes
+era silencioso).
+
+**El link de aprobación del `login` apunta a `kooni.click` (sitio de marketing).**
+Falta el secret `SITE_URL` en el hub; debe ser el dominio del panel
+(`https://t6bferet.insforge.site`). Se ajusta una vez por proyecto.
+
+**Sospecha de clave pública equivocada.** Tomá un código `KOONI-PRO-V2-…` real y
+verificá su firma contra las dos claves (la buena valida `true`, la mala `false`);
+la buena es la que corresponde a la privada del panel.

@@ -2349,3 +2349,78 @@ está activo en esa instalación).
   al actualizar cardaniel viaja también la limpieza de código ya en `main`.
 - Opcional: registrar también los cambios que hace el batch de **fotos/precios**
   en background (hoy quedan atribuidos a la corrida siguiente).
+
+---
+
+## 🏁 CIERRE DE ETAPA — Licencias / login del CLI (2026-10-04, v1.55.2)
+
+> **Etapa:** que CADA instalación quede registrada, ligada al panel y con su token
+> de instalación (licencia + telemetría), **exigiendo el login del CLI**.
+> Disparada por la instalación de Nocodeveloper (`uid 319c31`), que quedó
+> "vinculada pero en Free y sin métricas".
+
+### ✅ Entregado en esta etapa
+
+**CLI `kooni-bot@0.7.1`** (commits `a1df7af`, `4faf473`)
+- **Login obligatorio**: `init` y `deploy` exigen sesión del CLI; si falta, lanzan
+  el device-login (interactivo) o delegan con `login --wait` (agente/CI). Sin
+  sesión **no** instala/despliega; `--no-login` es la salida explícita (anónimo).
+- **Registro + vínculo en el deploy**: re-emite la licencia con la URL real y
+  guarda el **token por instalación** (`KOONI_INSTALL_TOKEN`). Corrige el caso
+  `init --no-deploy` + `deploy` (procesos distintos → token perdido).
+- **Aviso si el sync falla** (antes silencioso): `pair`/`deploy` muestran el HTTP
+  y sugieren re-vincular. Guía del agente, `--help` y `docs/DESPLIEGUE.md §4.2`
+  actualizados; se quitó el `checkin` no-op.
+
+**Bot `src/` (template `1.55.2`)** (commit `ed8dfa7`)
+- **`src/license.ts`**: clave pública correcta (`…Lxrjpy…`, la del firmador).
+  Estaba con otra (`…qpP9…`) → los códigos del panel no validaban (bot en Free).
+- **`/admin/licencia`**: "Sincronizar ahora" **siempre** visible + aviso cuando el
+  bot aún no sincronizó.
+
+**Hub InsForge / paneles** (commits `ed8dfa7`, `0ea102f`)
+- **Super admin → Licencias**: muestra y **copia** el código firmado (antes se
+  generaba y no se veía) — columna "Código" + tarjeta con el código recién firmado.
+- **Plan al instante**: `licencia-emitir` y el guardado del super admin escriben
+  `instalaciones.tier` desde la licencia (antes quedaba en `free` hasta el reporte).
+- **`SITE_URL`** configurado (`https://t6bferet.insforge.site`): el link de
+  aprobación del `login` ya no cae en `kooni.click` (sitio de marketing).
+
+### 🔎 Diagnóstico de la instalación Nocodeveloper (`319c31`)
+
+- Aparecía **vinculada** (`instalaciones`) pero con `tier=free` y sin métricas.
+- El bot, al pedir licencia, recibía **`401 {"error":"token desconocido"}`**: su
+  `KOONI_INSTALL_TOKEN` estaba desincronizado con el `token_hash` del hub → **no
+  traía licencia ni reportaba uso** (y el fallo era silencioso).
+- **Resolución**: `wrangler login` → `kooni-bot pair` → `POST /license/sync` =
+  `{"ok":true,"detail":"pro"}` y `POST /usage/push` = `{"ok":true}`. Verificado en
+  el hub: `tier=pro` + fila de uso (13 msgs, 5 del bot, 2 leads, canal zernio, IA $0.0011).
+
+### ⏳ SIGUIENTES MEJORAS (backlog para la etapa siguiente)
+
+1. **`doctor`/`whoami` con salud de vinculación**: detectar instalaciones **sin
+   registrar** o con **token inválido** (`estado-licencia` → 401) y decir el
+   remedio (`pair`), sin esperar a que el bot quede en Free.
+2. **`licencia-emitir` idempotente** (`keep_token`): **no rotar** el token en cada
+   llamada. Hoy cada emisión genera uno nuevo; si dos procesos emiten, el secret
+   queda stale — es la causa raíz de este incidente.
+3. **Verificación tras deploy/pair**: si el sync falla, reintentar/`pair`
+   automático o marcarlo como error (hoy solo avisa).
+4. **Licencia al instante (push vs pull)**: hoy el bot **pulla** (cron 6 h +
+   `/license/sync`). Evaluar que el hub avise al worker al guardar una licencia,
+   sin depender del cron ni del botón.
+5. **Migrar instalaciones viejas al hub nuevo**: cardaniel apunta a `f5gacw7g…`
+   (hub previo) en `USAGE_PUSH_URL`/`KOONI_API_URL`; correr `kooni-bot update`/
+   `pair` para re-estamparlos al hub `t6bferet…`.
+6. **Revisar el token compartido legacy** `KOONI_REGISTER_TOKEN` (fallback; con el
+   token por instalación ya es redundante).
+7. **UI cliente**: "Mis bots" lee `instalaciones.tier`; al activar ya se espeja,
+   pero convendría mostrar el `plan` de la licencia (join) como fuente única.
+
+### 📌 Estado para retomar
+
+- **CLI**: `kooni-bot@0.7.1` en npm (`latest`). **Template**: `main` = 1.55.2.
+- **Hub**: desplegado (`733175ec`); función `licencia-emitir` actualizada; secret
+  `SITE_URL` puesto.
+- Instalaciones **nuevas** ya salen bien de fábrica; las **existentes** necesitan
+  una vez `npx kooni-bot update` + deploy (y `pair` si el token quedó desfasado).
