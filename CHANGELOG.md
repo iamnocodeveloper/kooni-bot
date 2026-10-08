@@ -5,6 +5,29 @@ Cambios notables de Kooni. Formato aproximado de
 
 El CLI `kooni-bot` se versiona aparte (npm) — ver la nota de cada versión.
 
+## [1.58.0] — 2026-10-08
+
+### Agregado — canales activables por licencia, pasos de flujo programados e i18n
+
+- **Módulos de canal por super admin**: nuevo módulo `canal_waha` en el catálogo
+  (`src/modules.ts`). El webhook de WAHA ahora exige que el módulo esté desbloqueado
+  (`verifyWahaWebhook`), así el super admin **activa/desactiva el canal por instalación**
+  desde el panel. Retrocompatible: sin `module_unlocks` (instalaciones viejas) queda abierto.
+- **Pasos de `flow` programados** (`delay_minutes`): los pasos con demora se agendan en el
+  Durable Object (`cf_agents_schedules` + `setAlarm`, nueva callback `runFlowStep`); los de
+  demora 0 se siguen mandando al instante. El texto de cada paso (incluidos los `ai:`) se
+  resuelve al disparar.
+- **i18n completo** de las vistas nuevas (Etiquetas, Cotizaciones, Disparadores) es/en.
+- **Hub InsForge**: migración `20261008120000` **aplicada** — 5 módulos en `modulos_catalogo`
+  (incluye `canal_waha`) y 2 novedades publicadas para todos los clientes.
+- Tests: `test/triggers/engine` (+1: `flow` agenda los pasos con demora).
+
+### Nota operativa — instalación `madrigal`
+- Cuenta Kooni creada para **mario.madrigal205@gmail.com** y la instalación `madrigal`
+  (uid `70fb40`, tier pro) + su licencia re-ligadas a esa cuenta (antes pertenecían al
+  usuario admin). El instalador había quedado bajo la cuenta con la que el CLI estaba
+  logueado, no bajo el correo del dueño — el vínculo es por **sesión del CLI**, no por email.
+
 ## [1.57.0] — 2026-10-08
 
 ### Agregado — etiquetas con IA, cotizaciones en PDF, disparadores y migración de cuenta

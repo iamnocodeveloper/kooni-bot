@@ -10,7 +10,7 @@ import { buildTools } from "./tools";
 import { buildMultimodalUserMessage } from "./media/vision";
 import { chunkReply } from "./replies/chunker";
 import { toPlainLinks } from "./replies/format";
-import { pickAdapter } from "./replies/sender";
+import { pickAdapter, sendReplyCapped } from "./replies/sender";
 import { selectModel } from "./upgrade/modelSelector";
 import type { Tier } from "./upgrade/modelSelector";
 import { monthIaCostUsd, applyBudgetGuard } from "./budget";
@@ -324,6 +324,9 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
           channel: payload.channel as ChannelId,
           channelUserId: payload.channelUserId,
           text: processedText,
+          // Los pasos de un `flow` con demora se agendan en el DO (scheduler).
+          scheduleFlow: (steps) =>
+            void this.scheduleFlowSteps(conv.id, payload.channel as ChannelId, payload.channelUserId, steps),
         });
         if (outcome.replied) return { acknowledged: true };
       } catch (e) {
@@ -384,6 +387,52 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
     this.setState({ ...this.state, lastAlarmAt: alarmAt });
 
     return { acknowledged: true };
+  }
+
+  /**
+   * Agenda los pasos diferidos de un `flow` de disparadores (delay_minutes > 0)
+   * con el scheduler del agente (`cf_agents_schedules` + setAlarm). Cada paso es
+   * una fila con callback 'runFlowStep'; el SDK la despacha cuando vence.
+   */
+  private async scheduleFlowSteps(
+    conversationId: string,
+    channel: ChannelId,
+    channelUserId: string,
+    steps: { delayMinutes: number; text: string }[],
+  ): Promise<void> {
+    let earliest = Infinity;
+    for (const step of steps) {
+      const at = Date.now() + Math.max(0, step.delayMinutes) * 60_000;
+      earliest = Math.min(earliest, at);
+      const atSec = Math.floor(at / 1000);
+      const payload = JSON.stringify({ conversationId, channel, channelUserId, text: step.text });
+      const id = `flow-${crypto.randomUUID()}`;
+      this.sql`
+        INSERT INTO cf_agents_schedules (id, callback, payload, type, time, created_at)
+        VALUES (${id}, 'runFlowStep', ${payload}, 'delayed', ${atSec}, unixepoch())
+      `;
+    }
+    if (earliest !== Infinity) {
+      const cur = await this.ctx.storage.getAlarm();
+      if (cur === null || earliest < cur) await this.ctx.storage.setAlarm(earliest);
+    }
+  }
+
+  /** Ejecuta un paso diferido de un `flow`: manda el texto y lo registra en el hilo. */
+  async runFlowStep(payload: unknown): Promise<void> {
+    let p: any = payload;
+    if (typeof p === "string") {
+      try { p = JSON.parse(p); } catch { return; }
+    }
+    if (!p?.channel || !p?.channelUserId || !p?.text) return;
+    try {
+      await sendReplyCapped(p.channel as ChannelId, p.channelUserId, [String(p.text)], this.env);
+      if (p.conversationId) {
+        await new MessagesRepo(new Db(this.env.DB)).append(p.conversationId, "assistant", String(p.text));
+      }
+    } catch (e) {
+      console.warn("[runFlowStep] falló (fail-open):", e);
+    }
   }
 
   /**

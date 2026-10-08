@@ -122,6 +122,15 @@ function headers(cfg: WahaConfig): Record<string, string> {
 export async function verifyWahaWebhook(request: Request, env: Env): Promise<boolean> {
   const cfg = await resolveWahaConfig(env);
   if (!cfg.base) return false; // canal no configurado en esta instalación
+  // Módulo de canal: lo activa el super admin por licencia. Si la instalación
+  // trae una lista de `module_unlocks` y no incluye `canal_waha`, el canal queda
+  // apagado. Sin `module_unlocks` (retrocompat) → todos los módulos abiertos.
+  try {
+    const { isModuleUnlocked } = await import("../modules");
+    if (!(await isModuleUnlocked(env, "canal_waha"))) return false;
+  } catch {
+    // sin D1/módulos → no bloquear (fail-open, igual que el resto de gates)
+  }
   if (!cfg.webhookToken) return true; // sin token configurado, no hay nada que validar
   try {
     return new URL(request.url).searchParams.get("token") === cfg.webhookToken;

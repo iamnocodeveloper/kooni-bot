@@ -85,6 +85,28 @@
 
 ---
 
+## 🏁 ADENDA — v1.58.0 (2026-10-08)
+
+> Encima del cierre v1.57.0. Versiones: bot **1.58.0** · CLI **0.8.0** (sin cambios de CLI).
+
+- **Canales activables desde el super admin**: módulo `canal_waha` en `src/modules.ts`; el
+  webhook de WAHA exige el módulo desbloqueado (`verifyWahaWebhook`). El super admin lo
+  activa por licencia (checkboxes `modules` en AdminLicencias → overlay `module_unlocks`).
+  Retrocompatible (sin `module_unlocks` = abierto). Mismo patrón para futuros canales.
+- **Pasos de `flow` con `delay_minutes` programados**: el DO agenda los pasos diferidos
+  (`scheduleFlowSteps` → `cf_agents_schedules` con callback `runFlowStep` + `setAlarm`); los
+  pasos sin demora se mandan ya. El texto (incluido `ai:`) se resuelve al disparar.
+- **i18n completo** de Etiquetas / Cotizaciones / Disparadores (ES/EN) + claves nuevas.
+- **Hub InsForge aplicado**: migración `20261008120000_…` → 5 módulos (`etiquetas_ia`,
+  `archivos_salientes`, `cotizaciones`, `flujos`, `canal_waha`) + 2 Novedades publicadas.
+- **Instalación `madrigal`**: creada la cuenta **mario.madrigal205@gmail.com** y re-ligadas la
+  instalación (uid `70fb40`, pro) y su licencia a esa cuenta. (El vínculo del hub es por la
+  **sesión del CLI** al registrar, no por el correo del CLI; por eso había quedado en admin.)
+- **Pendiente real**: `kooni-bot migrate` end-to-end con dos cuentas Cloudflare (no ejecutable
+  desde aquí; el comando y su doc están listos). Verificación pendiente en un entorno real.
+
+---
+
 ## 🔎 AUDITORÍA + ESTADO DE LA INSTALACIÓN CARDANIEL (v1.46.0, 2026-09-14)
 
 Trabajo sobre **cardaniel** (Greenway KIA West Palm Beach), desplegada en la cuenta

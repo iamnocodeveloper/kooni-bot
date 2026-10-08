@@ -177,6 +177,12 @@ export const PAID_MODULES: PaidModule[] = [
     descripcion: "Cuando el cliente dice cierta palabra (o la IA detecta una intención), se dispara un flujo: una respuesta fija, una respuesta con IA, etiquetar, capturar lead, pasar a un humano o una secuencia de mensajes.",
     tipo: "membresia",
   },
+  {
+    id: "canal_waha",
+    nombre: "Canal WhatsApp (WAHA)",
+    descripcion: "Habilita el canal de WhatsApp self-hosted (WAHA) en esta instalación. El super admin lo activa por licencia; además hay que configurar la URL/API key del servidor WAHA en Conexiones. Sin este módulo, el webhook de WAHA queda apagado.",
+    tipo: "membresia",
+  },
 ];
 
 const ALL_MODULE_IDS: readonly string[] = PAID_MODULES.map((m) => m.id);

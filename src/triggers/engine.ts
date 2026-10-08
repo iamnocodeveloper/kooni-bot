@@ -19,6 +19,11 @@ export interface TriggerEvalContext {
   channel: ChannelId;
   channelUserId: string;
   text: string;
+  /**
+   * Programa pasos de un `flow` con demora (minutos). Lo aporta el Durable
+   * Object (usa el scheduler del agente); en tests puede ser un espía.
+   */
+  scheduleFlow?: (steps: { delayMinutes: number; text: string }[]) => void;
 }
 
 export interface TriggerOutcome {
@@ -165,13 +170,22 @@ export async function evaluateTriggers(env: Env, ctx: TriggerEvalContext): Promi
         case "flow": {
           if (!outcome.replied) {
             const steps = await repo.steps(trigger.id);
+            // Resolvemos el texto de cada paso ahora (los de IA se generan aquí),
+            // y separamos los inmediatos de los diferidos (delay_minutes > 0).
+            const delayed: { delayMinutes: number; text: string }[] = [];
             for (const step of steps) {
               const content =
                 step.kind === "ai"
                   ? await aiText(env, step.content ?? "Responde al cliente.", text)
                   : step.content;
-              if (content) await sendAndRecord(env, ctx, db, content);
+              if (!content) continue;
+              if ((step.delay_minutes ?? 0) > 0) {
+                delayed.push({ delayMinutes: step.delay_minutes, text: content });
+              } else {
+                await sendAndRecord(env, ctx, db, content);
+              }
             }
+            if (delayed.length) ctx.scheduleFlow?.(delayed);
             if (steps.length) outcome.replied = true;
           }
           break;

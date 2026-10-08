@@ -14,7 +14,8 @@ insert into public.modulos_catalogo (id, nombre, descripcion, tipo, tab, orden) 
   ('etiquetas_ia', 'Etiquetado inteligente', 'Crea tus propias etiquetas y deja que el bot etiquete cada conversación solo: por palabras clave o por IA. Filtra y organiza por etiqueta.', 'membresia', null, 210),
   ('archivos_salientes', 'Enviar archivos y PDF', 'El bot puede enviar imágenes y documentos (PDF) en sus respuestas, no solo texto. El PDF se genera al vuelo por un enlace firmado.', 'membresia', null, 220),
   ('cotizaciones', 'Cotizaciones en PDF', 'El bot arma la cotización con tu formato, se genera el PDF y se envía al cliente en la conversación. Editable y reenviable desde el panel.', 'membresia', null, 230),
-  ('flujos', 'Disparadores por palabra clave con IA', 'Cuando el cliente dice cierta palabra (o la IA detecta una intención) se dispara un flujo: responder fijo/IA, etiquetar, capturar lead, pasar a humano o una secuencia.', 'membresia', null, 240)
+  ('flujos', 'Disparadores por palabra clave con IA', 'Cuando el cliente dice cierta palabra (o la IA detecta una intención) se dispara un flujo: responder fijo/IA, etiquetar, capturar lead, pasar a humano o una secuencia.', 'membresia', null, 240),
+  ('canal_waha', 'Canal WhatsApp (WAHA)', 'Habilita el canal de WhatsApp self-hosted (WAHA) por licencia. Requiere además la URL/API key del servidor WAHA en Conexiones. Sin este módulo, el webhook de WAHA queda apagado.', 'membresia', null, 250)
 on conflict (id) do update set
   nombre = excluded.nombre,
   descripcion = excluded.descripcion,

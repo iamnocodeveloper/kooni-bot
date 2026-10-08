@@ -69,4 +69,23 @@ describe("evaluateTriggers", () => {
     const out = await evaluateTriggers(env, ctx("x"));
     expect(out.replied).toBe(false);
   });
+
+  it("flow: manda los pasos sin demora y AGENDA los demás (delay_minutes)", async () => {
+    const id = await repo.upsert({ name: "Secuencia", matchKind: "keyword", keywords: ["guia"], action: "flow" });
+    await repo.setSteps(id, [
+      { kind: "text", content: "Paso 1", delayMinutes: 0 },
+      { kind: "text", content: "Paso 2", delayMinutes: 5 },
+    ]);
+    const scheduled: { delayMinutes: number; text: string }[][] = [];
+    const out = await evaluateTriggers(env, { ...ctx("quiero la guia"), scheduleFlow: (s) => scheduled.push(s) });
+
+    expect(out.replied).toBe(true);
+    // Paso 1 se manda ya y queda en el hilo.
+    const msgs = await new MessagesRepo(db).lastN(convId, 5);
+    expect(msgs.some((m) => m.role === "assistant" && m.content === "Paso 1")).toBe(true);
+    // Paso 2 se agenda (no se manda aún).
+    expect(scheduled).toHaveLength(1);
+    expect(scheduled[0]).toEqual([{ delayMinutes: 5, text: "Paso 2" }]);
+    expect(msgs.some((m) => m.content === "Paso 2")).toBe(false);
+  });
 });
