@@ -112,6 +112,7 @@ export const clientEn: Record<keyof typeof clientEs, string> = {
   "plan.manualNote":
     "Once you transfer, the administrator confirms the payment and your plan is activated. Send the receipt with the reference.",
   "plan.perMonth": "/mo",
+  "plan.customRate": "your rate",
   "plan.free": "Free",
   "plan.payWith": "Pay with {provider}",
   "plan.opening": "Opening…",

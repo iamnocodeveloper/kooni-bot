@@ -102,6 +102,11 @@
 - **Instalación `madrigal`**: creada la cuenta **mario.madrigal205@gmail.com** y re-ligadas la
   instalación (uid `70fb40`, pro) y su licencia a esa cuenta. (El vínculo del hub es por la
   **sesión del CLI** al registrar, no por el correo del CLI; por eso había quedado en admin.)
+- **Tarifa por cliente**: `licencias.precio` + `moneda` + `plan_ref` (migración
+  `20261008140000`). `functions/pago-crear` usa esa tarifa en vez del precio del plan cuando
+  está seteada (y `plan_ref` es null o coincide); los planes siguen igual para el resto.
+  Editable en **AdminLicencias → Tarifa** y se muestra al cliente en **Plan**. Aplicado a
+  `madrigal` = **USD 40/mes** (`plan_ref=kooni+`). `pago-crear` desplegada y panel publicado.
 - **Pendiente real**: `kooni-bot migrate` end-to-end con dos cuentas Cloudflare (no ejecutable
   desde aquí; el comando y su doc están listos). Verificación pendiente en un entorno real.
 

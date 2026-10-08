@@ -73,3 +73,20 @@ Todo quedó preparado para revertir:
 
 Detalle de despliegue para producción: [`DESPLIEGUE.md`](./DESPLIEGUE.md) ·
 Licencias: [`LICENCIAS.md`](./LICENCIAS.md).
+
+---
+
+## 7. Tarifa personalizada por cliente
+
+Además de los planes (precio global, igual para todos), puedes fijar una **tarifa mensual
+distinta por cliente** desde el panel super admin, sin tocar el catálogo:
+
+- En **Licencias → Editar → Tarifa** pones el monto (`precio`) y la `moneda`. Opcionalmente
+  eliges el plan al que aplica (`plan_ref`); vacío = aplica a cualquier plan que compre.
+- Al iniciar un pago, `functions/pago-crear` usa esa tarifa en vez del precio del plan.
+  Si la licencia no tiene tarifa, se cobra el precio normal del plan (sin cambios).
+- El cliente ve su tarifa en su página **Plan** (con la nota "tu tarifa").
+- El monto efectivo queda guardado en `pagos.amount` (Facturación).
+
+Ejemplo: cliente con `precio=40`, `moneda=usd`, `plan_ref=kooni+` → cualquier checkout suyo
+del plan Kooni+ es de **USD 40/mes**, mientras el resto paga el precio del plan.

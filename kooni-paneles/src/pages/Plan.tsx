@@ -37,7 +37,7 @@ export default function PlanPage() {
     (async () => {
       const [pl, lic] = await Promise.all([
         insforge.database.from("planes").select("*").eq("activo", true).order("orden", { ascending: true }).limit(20),
-        insforge.database.from("licencias").select("id, plan, kind, expiry, estado, modules, bot_slug, inst_uid").order("created_at", { ascending: false }).limit(50),
+        insforge.database.from("licencias").select("id, plan, kind, expiry, estado, modules, bot_slug, inst_uid, precio, moneda, plan_ref").order("created_at", { ascending: false }).limit(50),
       ]);
       setPlanes((pl.data ?? []) as Plan[]);
       setLics((lic.data ?? []) as Licencia[]);
@@ -85,6 +85,13 @@ export default function PlanPage() {
   }, [widget]);
 
   const pro = lics.find((l) => l.plan === "pro" && l.estado !== "revocada");
+
+  // Tarifa personalizada del cliente para un plan (override en la licencia).
+  // El cobro real ya lo aplica `pago-crear`; esto solo lo muestra.
+  const effPrice = (p: Plan): { amount: number; currency: string } | null => {
+    const o = lics.find((l) => l.precio != null && (l.plan_ref == null || l.plan_ref === p.id));
+    return o ? { amount: Number(o.precio), currency: (o.moneda || p.moneda || "usd").toUpperCase() } : null;
+  };
 
   async function pagar(planId: string, provider: string) {
     setErr("");
@@ -172,7 +179,9 @@ export default function PlanPage() {
         </div>
       )}
 
-      {planes.map((p) => (
+      {planes.map((p) => {
+        const eff = effPrice(p);
+        return (
         <div key={p.id} className="card p-5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -181,7 +190,10 @@ export default function PlanPage() {
             </div>
             <div className="text-right">
               {p.precio != null ? (
-                <div className="font-mono text-lg">${Number(p.precio).toFixed(2)} <span className="text-xs text-muted">{t("plan.perMonth")}</span></div>
+                <>
+                  <div className="font-mono text-lg">${Number(eff ? eff.amount : p.precio).toFixed(2)} <span className="text-xs text-muted">{t("plan.perMonth")}</span></div>
+                  {eff ? <div className="text-[11px] text-accent">{t("plan.customRate")}</div> : null}
+                </>
               ) : (
                 <div className="text-sm text-muted">{t("plan.free")}</div>
               )}
@@ -208,7 +220,8 @@ export default function PlanPage() {
             </div>
           ) : null}
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

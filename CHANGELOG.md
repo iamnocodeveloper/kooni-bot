@@ -28,6 +28,13 @@ El CLI `kooni-bot` se versiona aparte (npm) — ver la nota de cada versión.
   usuario admin). El instalador había quedado bajo la cuenta con la que el CLI estaba
   logueado, no bajo el correo del dueño — el vínculo es por **sesión del CLI**, no por email.
 
+### Hub — tarifa mensual por cliente (override de la licencia)
+- `licencias.precio` + `moneda` + `plan_ref` (migración `20261008140000`). Editables en
+  **AdminLicencias → Tarifa**; el cliente la ve en **Plan** ("tu tarifa").
+- `functions/pago-crear` cobra esa tarifa en vez del precio del plan (si `plan_ref` es null o
+  coincide). Sin override, los planes siguen igual. `pago-crear` y el panel ya desplegados.
+- Caso real: `madrigal` = **USD 40/mes** (`plan_ref=kooni+`).
+
 ## [1.57.0] — 2026-10-08
 
 ### Agregado — etiquetas con IA, cotizaciones en PDF, disparadores y migración de cuenta

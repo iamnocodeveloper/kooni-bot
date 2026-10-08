@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { insforge } from "../lib/insforge";
 import { useI18n, type MessageKey } from "../lib/i18n";
-import type { Licencia, Modulo, Profile } from "../lib/types";
+import type { Licencia, Modulo, Plan, Profile } from "../lib/types";
 import { logAdmin } from "../lib/audit";
 
 const LIMIT_FIELDS: [string, MessageKey][] = [
@@ -35,6 +35,9 @@ interface Form {
   code: string | null;
   bot_slug: string | null;
   inst_uid: string | null;
+  precio: string;
+  moneda: string;
+  plan_ref: string;
 }
 
 export default function AdminLicencias() {
@@ -42,6 +45,7 @@ export default function AdminLicencias() {
   const [rows, setRows] = useState<Licencia[]>([]);
   const [emails, setEmails] = useState<Record<string, string>>({});
   const [mods, setMods] = useState<Modulo[]>([]);
+  const [planes, setPlanes] = useState<Plan[]>([]);
   const [form, setForm] = useState<Form | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -58,6 +62,9 @@ export default function AdminLicencias() {
     const licRows = (lic.data ?? []) as Licencia[];
     setRows(licRows);
     setMods((mod.data ?? []) as Modulo[]);
+
+    const { data: planRows } = await insforge.database.from("planes").select("id, nombre, precio, moneda, orden").order("orden", { ascending: true }).limit(50);
+    setPlanes((planRows ?? []) as Plan[]);
 
     const ids = [...new Set(licRows.map((l) => l.user_id))];
     if (ids.length) {
@@ -101,6 +108,9 @@ export default function AdminLicencias() {
       code: l.code,
       bot_slug: l.bot_slug,
       inst_uid: l.inst_uid,
+      precio: l.precio != null ? String(l.precio) : "",
+      moneda: l.moneda ?? "",
+      plan_ref: l.plan_ref ?? "",
     });
   }
 
@@ -137,6 +147,10 @@ export default function AdminLicencias() {
         brand,
         notas: form.notas,
         code,
+        // Tarifa personalizada por cliente (override del precio del plan).
+        precio: form.precio.trim() === "" ? null : Number(form.precio),
+        moneda: form.moneda.trim() || null,
+        plan_ref: form.plan_ref || null,
       }).eq("id", form.id);
       if (error) throw error;
 
@@ -187,6 +201,7 @@ export default function AdminLicencias() {
               <th>{t("admin.licencias.colStatus")}</th>
               <th>{t("admin.licencias.colExpiry")}</th>
               <th>{t("admin.licencias.colModules")}</th>
+              <th>{t("admin.licencias.colTariff")}</th>
               <th>{t("admin.licencias.colCode")}</th>
               <th></th>
             </tr>
@@ -194,12 +209,12 @@ export default function AdminLicencias() {
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={7} className="text-muted">{t("common.loading")}</td>
+                <td colSpan={8} className="text-muted">{t("common.loading")}</td>
               </tr>
             )}
             {rows.length === 0 && !loading && (
               <tr>
-                <td colSpan={7} className="text-muted">{t("admin.licencias.empty")}</td>
+                <td colSpan={8} className="text-muted">{t("admin.licencias.empty")}</td>
               </tr>
             )}
             {rows.map((l) => (
@@ -216,6 +231,11 @@ export default function AdminLicencias() {
                 </td>
                 <td className="text-muted">{l.expiry ? formatDate(l.expiry) : l.kind === "lifetime" ? t("common.lifetime") : "—"}</td>
                 <td className="text-muted">{(l.modules ?? []).length}</td>
+                <td className="text-muted">
+                  {l.precio != null
+                    ? `${(l.moneda ?? "usd").toUpperCase()} ${Number(l.precio).toFixed(2)}${t("admin.licencias.perMonth")}`
+                    : t("admin.licencias.tariffByPlan")}
+                </td>
                 <td>
                   {l.plan === "pro" && l.code ? (
                     <button className="btn-ghost py-1" onClick={() => copyCode(l.code!)} title={l.code}>
@@ -318,6 +338,29 @@ export default function AdminLicencias() {
                     <input className="input mt-1" value={form.brand[k]} onChange={(e) => setForm({ ...form, brand: { ...form.brand, [k]: e.target.value } })} />
                   </div>
                 ))}
+              </div>
+            </div>
+
+            <div className="mt-5">
+              <label className="label">{t("admin.licencias.colTariff")}</label>
+              <div className="mt-2 grid grid-cols-3 gap-3">
+                <div>
+                  <div className="text-[11px] text-muted">{t("admin.licencias.labelPrice")}</div>
+                  <input type="number" step="0.01" min="0" className="input mt-1" value={form.precio} placeholder={t("admin.licencias.pricePh")} onChange={(e) => setForm({ ...form, precio: e.target.value })} />
+                </div>
+                <div>
+                  <div className="text-[11px] text-muted">{t("admin.licencias.labelCurrency")}</div>
+                  <input className="input mt-1" value={form.moneda} placeholder="usd" onChange={(e) => setForm({ ...form, moneda: e.target.value })} />
+                </div>
+                <div>
+                  <div className="text-[11px] text-muted">{t("admin.licencias.labelPlanRef")}</div>
+                  <select className="input mt-1" value={form.plan_ref} onChange={(e) => setForm({ ...form, plan_ref: e.target.value })}>
+                    <option value="">{t("admin.licencias.planRefAny")}</option>
+                    {planes.map((p) => (
+                      <option key={p.id} value={p.id}>{p.nombre}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
             </div>
 

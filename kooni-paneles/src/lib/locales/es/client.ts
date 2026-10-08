@@ -112,6 +112,7 @@ export const clientEs = {
   "plan.manualNote":
     "Cuando transferís, el administrador confirma el pago y se activa tu plan. Mandá el comprobante con la referencia.",
   "plan.perMonth": "/mes",
+  "plan.customRate": "tu tarifa",
   "plan.free": "Gratis",
   "plan.payWith": "Pagar con {provider}",
   "plan.opening": "Abriendo…",

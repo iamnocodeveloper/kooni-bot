@@ -59,8 +59,22 @@ export default async function (req: Request): Promise<Response> {
   if (plan.precio == null) return json({ error: "ese plan no tiene precio (es gratis)" }, 400);
   if (!prov) return json({ error: `proveedor desconocido: ${provider}` }, 400);
 
-  const amount = Number(plan.precio);
-  const currency = String(plan.moneda || "usd").toUpperCase();
+  // Tarifa personalizada por cliente: si la licencia del usuario tiene `precio`
+  // seteado (y `plan_ref` es null o coincide con el plan), se usa ese monto en
+  // vez del precio global del plan. Si no, comportamiento idéntico al de antes.
+  const { data: licRows } = await admin.database
+    .from("licencias")
+    .select("precio, moneda, plan_ref, created_at")
+    .eq("user_id", uid)
+    .order("created_at", { ascending: false })
+    .limit(50);
+  const licList = Array.isArray(licRows) ? licRows : licRows ? [licRows] : [];
+  const override = licList.find(
+    (l: any) => l.precio != null && (l.plan_ref == null || l.plan_ref === planId),
+  );
+
+  const amount = override ? Number(override.precio) : Number(plan.precio);
+  const currency = String(override?.moneda || plan.moneda || "usd").toUpperCase();
   const ref = randomUUID();
 
   const { data: ins } = await admin.database.from("pagos").insert([{

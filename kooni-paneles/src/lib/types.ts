@@ -18,6 +18,12 @@ export interface Licencia {
   modules: string[];
   limits: Record<string, number | null>;
   brand: Record<string, string>;
+  /** Tarifa mensual personalizada del cliente (override; null = precio del plan). */
+  precio: number | null;
+  /** Moneda de esa tarifa (null = la del plan). */
+  moneda: string | null;
+  /** Plan comercial al que aplica el override (null = cualquier plan). */
+  plan_ref: string | null;
   bot_slug: string | null;
   inst_uid: string | null;
   notas: string | null;
