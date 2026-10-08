@@ -5,6 +5,86 @@
 
 ---
 
+## 🏁 CIERRE DE ETAPA — v1.57.0 (2026-10-08)
+
+> **Estado: CERRADA.** `pnpm typecheck` limpio · tests nuevos y afectados en verde ·
+> `main` empujado a GitHub (commit `4b0af4d`) · CLI `kooni-bot@0.8.0` **publicado en npm**.
+> Alcance: 3 motores nuevos (etiquetas+IA, cotizaciones PDF, disparadores), migración
+> entre cuentas de Cloudflare, y una tanda de mejoras que reutilizan lo existente.
+
+### Versiones
+
+| Pieza | Versión | Estado |
+|---|---|---|
+| Bot (`package.json`) | **1.57.0** | En `main` |
+| CLI (`cli-kooni/package.json`) | **0.8.0** | **Publicado en npm** (`latest`) |
+| Esquema D1 | +7 tablas | `schema.sql` (idempotente) |
+| Hub InsForge | migración `20261008120000_*` | Novedades + 4 módulos (pendiente de aplicar el dueño) |
+
+### 1. Etiquetas + IA — módulo `etiquetas_ia`
+- Tablas `labels` (catálogo del usuario) y `label_rules` (`kind`: `keyword`|`ai`).
+- `src/db/labels.ts` (repo) + `src/labels/engine.ts` (motor): keyword **en tiempo real**
+  en `agent.ts::ingest`; IA en el **análisis nocturno** (`src/insights/analyzer.ts`).
+- Tool `etiquetarConversacion` (el modelo etiqueta si reconoce la condición).
+- Panel `/admin/etiquetas` (CRUD etiquetas + reglas + **etiqueta automática al capturar lead**).
+- Bandeja: chips por etiqueta, **filtro `?label=`**; kanban: badges por etiqueta.
+- **Etiquetas → campañas**: cada etiqueta crea el segmento `label:<id>` (`src/segments.ts`).
+
+### 2. Cotizaciones en PDF — módulos `cotizaciones` + `archivos_salientes`
+- Tablas `quotes`, `quote_items`, `quote_events`. Catálogo de precios = `products`.
+- `src/db/quotes.ts`; plantilla HTML editable (`src/quotes/template.ts`); PDF vía
+  **Cloudflare Browser Rendering** (`src/quotes/pdf.ts`, binding `BROWSER`, opcional).
+- **Sin R2**: se sirve por **enlace firmado** `GET /q/:token`; documento saliente en
+  `OutgoingReply.documentUrl` (Telegram `sendDocument`, WAHA, Zernio).
+- Tool `crearCotizacion` (nicho eventos); auto-envío opcional (`quote_auto_send`).
+- Panel: `/admin/cotizaciones` + editor; **tarjeta en el hilo** con Editar/Enviar/Reenviar.
+- La cotización queda ligada al **lead** (`quotes.lead_id`) y se ve como **chip en el kanban**.
+
+### 3. Disparadores keyword→flujo — módulo `flujos`
+- Tablas `triggers` + `trigger_steps`. Motor `src/triggers/engine.ts` (**multi-canal**,
+  corre en `ingest` antes del buffer; si responde, el agente no vuelve a responder).
+- `match_kind`: keyword | ai | any · `scope` por canal · `run_once` (dedup por conversación).
+- Acciones: responder texto, responder con IA, etiquetar, capturar lead, handoff, secuencia.
+- Panel `/admin/disparadores` (incluye `scope` y pasos que redacta la IA con prefijo `ai:`).
+
+### 4. Migración entre cuentas de Cloudflare
+- Comando **`npx kooni-bot migrate [dir] --to-token <t> --to-account <id>`** (copiar
+  íntegro: D1 + esquema + re-index KB + secrets + deploy + re-vinculación de licencia).
+- Doc `docs/MIGRACION.md`. Novedad publicada a todos en el hub (migración + funciones).
+
+### 5. Mejoras sobre lo existente (sin motores nuevos)
+- **Catálogo genérico**: `products` pasa a "Catálogo" para **todos** los giros que venden
+  (`/admin/menu` sin gate por nicho). `NichePack.seedCatalog` + botón "Cargar ejemplo"
+  (eventos ya trae sus paquetes). Lo usan `catalogQuery`, `tomarPedido`, `crearCotizacion`.
+- **`enviarRecurso`** acepta documentos (PDF) de la biblioteca.
+- **Auditoría** en las rutas nuevas (etiquetas, cotizaciones, disparadores, seed).
+- Disparadores: UI de `scope` y pasos IA. `captureLead` acepta etiqueta automática.
+- Docs: `FLUJOS.md §9`, `USO.md §9`, `MIGRACION.md`; `migrate` en el skill del CLI.
+
+### Tests
+- Nuevos: `test/db/labels`, `test/labels/engine`, `test/tools/etiquetarConversacion`,
+  `test/db/quotes`, `test/quotes/{template,link}`, `test/tools/crearCotizacion`,
+  `test/db/triggers`, `test/triggers/engine`. Actualizados: `test/niches`,
+  `test/admin/pedidos-menu`, `test/campaigns`.
+- Verificación: typecheck limpio; set afectado **94/94** verde; suite completa con la
+  flakiness conocida de `miniflare` en paralelo (deuda **#16**, ajena a estos cambios).
+
+### Pendiente / reservado (NO en esta etapa)
+- **Pasos programados** de un `flow` con `delay_minutes`: hoy la secuencia se manda
+  seguida; el envío diferido queda reservado.
+- **Migración**: probar el comando end-to-end con dos cuentas reales (no ejecutado aquí).
+- **i18n**: varias vistas nuevas usan literales en español (no salen en inglés).
+- **Hub InsForge**: aplicar la migración `20261008120000_*` (Novedades + módulos).
+- **Deuda heredada**: migraciones D1 numeradas (**#33**), `mf.dispose()` en tests (**#16**).
+
+### Operativo
+- **Browser Rendering**: para PDF real, habilitarlo en la cuenta y descomentar
+  `[browser] binding = "BROWSER"` en `wrangler.toml` (si no, cotización = texto + enlace).
+- Instalaciones vivas: `pnpm db:apply:remote` (o `npx kooni-bot update`) para crear las
+  tablas nuevas (idempotente). Instalar/actualizar bots: `npx kooni-bot init` / `update`.
+
+---
+
 ## 🔎 AUDITORÍA + ESTADO DE LA INSTALACIÓN CARDANIEL (v1.46.0, 2026-09-14)
 
 Trabajo sobre **cardaniel** (Greenway KIA West Palm Beach), desplegada en la cuenta

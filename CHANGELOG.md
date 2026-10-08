@@ -26,8 +26,8 @@ El CLI `kooni-bot` se versiona aparte (npm) — ver la nota de cada versión.
   `src/triggers/engine.ts` que corre en `ingest` (todos los canales). Acciones:
   responder texto, responder con IA, etiquetar, capturar lead, pasar a humano o
   secuencia de mensajes. Panel `/admin/disparadores`.
-- **`npx kooni-bot migrate`** (CLI 0.8.0): migra una instalación **íntegra** a otra
-  cuenta de Cloudflare (D1 + esquema + re-index de la KB + secrets + deploy +
+- **`npx kooni-bot migrate`** (CLI 0.8.0, **publicado en npm**): migra una instalación **íntegra**
+  a otra cuenta de Cloudflare (D1 + esquema + re-index de la KB + secrets + deploy +
   re-vinculación de licencia). Solo copia; la cuenta de origen no se toca. Doc:
   `docs/MIGRACION.md`.
 - **Novedades** (hub InsForge, migración `20261008120000`): publica la migración y las
