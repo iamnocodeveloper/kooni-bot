@@ -14,6 +14,7 @@ import type { WahaConfig } from "../../channels/wahaCredentials";
 import type { WahaSessionInfo } from "../../channels/wahaApi";
 import { vapiConfigured, retellConfigured, type VoiceConfig } from "../../integrations/voiceProviders";
 import { getNiche } from "../../niches";
+import { isModuleUnlocked } from "../../modules";
 
 interface ChannelStatus {
   id: string;
@@ -38,6 +39,7 @@ function channelStatuses(
   telegramToken?: string,
   mlCreds?: MlCredentials,
   wahaCfg?: WahaConfig,
+  showWaha?: boolean,
 ): ChannelStatus[] {
   const has = (v?: string) => Boolean(v && v.trim() !== "");
 
@@ -186,9 +188,11 @@ function channelStatuses(
       howTo: t("cx.webchat.howTo"),
     },
   ];
-  // WAHA NO es parte de las instalaciones normales: la card solo se muestra si
-  // ESA instalación lo configuró (WAHA_API_URL). Sin él, el canal está apagado.
-  return channels.filter((ch) => ch.id !== "waha" || has(waha.base));
+  // WAHA NO es parte de las instalaciones normales: la card se muestra si ESA
+  // instalación lo configuró (WAHA_API_URL) O si el módulo de canal está
+  // desbloqueado por el super admin — así el dueño puede cargar los datos.
+  const wahaVisible = showWaha ?? has(waha.base);
+  return channels.filter((ch) => ch.id !== "waha" || wahaVisible);
 }
 
 function esc(s: string): string {
@@ -238,7 +242,12 @@ export async function renderConexiones(
   // Nicho taxis: solo se ofrecen canales de WhatsApp (oficial + WAHA). El resto
   // sigue en el código, pero no se muestra en esta instalación.
   const taxiOnly = getNiche(env).hooks?.taxiEngine === true;
-  const allChannels = channelStatuses(env, zernioCreds, t, telegramToken, mlCreds, wahaCfg);
+  // Tarjeta de WAHA: se muestra si ya está configurado o si el super admin
+  // desbloqueó el módulo `canal_waha` (fail-open: sin poder leer módulos, visible
+  // solo si ya está configurado, como antes).
+  const wahaUnlocked = await isModuleUnlocked(env, "canal_waha").catch(() => false);
+  const showWaha = Boolean((wahaCfg.base ?? "").trim()) || wahaUnlocked;
+  const allChannels = channelStatuses(env, zernioCreds, t, telegramToken, mlCreds, wahaCfg, showWaha);
   const channels = taxiOnly ? allChannels.filter((ch) => ch.id === "whatsapp" || ch.id === "waha") : allChannels;
   const connected = channels.filter((ch) => ch.ok).length;
   // Fallback de base: la ruta GET pasa el origin real si DASHBOARD_BASE_URL está

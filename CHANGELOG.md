@@ -5,6 +5,16 @@ Cambios notables de Kooni. Formato aproximado de
 
 El CLI `kooni-bot` se versiona aparte (npm) — ver la nota de cada versión.
 
+## [1.58.1] — 2026-10-08
+
+### Arreglado — la tarjeta de WAHA ahora se muestra cuando el módulo está activo
+
+- Antes, `/admin/conexiones` ocultaba la tarjeta de WAHA salvo que ya existiera
+  `WAHA_API_URL`, así que con el módulo `canal_waha` activado en el super admin el dueño
+  **no podía cargar los datos** (huevo y gallina). Ahora la tarjeta se muestra si el módulo
+  está desbloqueado (o si ya está configurado), por lo que se pueden pegar URL/API key/sesión.
+- Las instalaciones existentes solo necesitan `npx kooni-bot update`.
+
 ## [1.58.0] — 2026-10-08
 
 ### Agregado — canales activables por licencia, pasos de flujo programados e i18n
