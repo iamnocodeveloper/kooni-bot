@@ -38,6 +38,10 @@ export interface OutgoingReply {
   imageUrl?: string;
   /** URL de audio para adjuntar (si el canal lo soporta). */
   audioUrl?: string;
+  /** URL de un documento (PDF) para adjuntar al primer chunk (si el canal lo soporta). */
+  documentUrl?: string;
+  /** Nombre visible del archivo (ej. "Cotización-1234.pdf"). */
+  documentName?: string;
   /** Para responder EN el hilo (Telegram grupos): message_id del mensaje entrante. */
   replyToMessageId?: number;
 }
@@ -50,19 +54,19 @@ export interface ReplyButton {
 }
 
 /** Qué soporta cada canal para el envío (para degradar con gracia). */
-export const CHANNEL_CAPABILITIES: Record<ChannelId, { buttons: boolean; image: boolean; audio: boolean }> = {
-  telegram: { buttons: true, image: true, audio: true },
-  zernio: { buttons: true, image: true, audio: true },
-  manychat: { buttons: true, image: true, audio: false },
-  twilio: { buttons: false, image: true, audio: true },
-  whatsapp: { buttons: true, image: true, audio: true },
-  messenger: { buttons: true, image: true, audio: true },
-  instagram: { buttons: true, image: true, audio: true },
-  waha: { buttons: false, image: true, audio: true },
+export const CHANNEL_CAPABILITIES: Record<ChannelId, { buttons: boolean; image: boolean; audio: boolean; document: boolean }> = {
+  telegram: { buttons: true, image: true, audio: true, document: true },
+  zernio: { buttons: true, image: true, audio: true, document: true },
+  manychat: { buttons: true, image: true, audio: false, document: false },
+  twilio: { buttons: false, image: true, audio: true, document: false },
+  whatsapp: { buttons: true, image: true, audio: true, document: false },
+  messenger: { buttons: true, image: true, audio: true, document: false },
+  instagram: { buttons: true, image: true, audio: true, document: false },
+  waha: { buttons: false, image: true, audio: true, document: true },
   // MercadoLibre: preguntas y mensajería post-venta son texto plano. Sin
   // botones ni adjuntos por esta vía.
-  mercadolibre: { buttons: false, image: false, audio: false },
-  webchat: { buttons: false, image: false, audio: false },
+  mercadolibre: { buttons: false, image: false, audio: false, document: false },
+  webchat: { buttons: false, image: false, audio: false, document: false },
 };
 
 export interface ChannelAdapter {

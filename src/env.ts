@@ -1,4 +1,4 @@
-import type { D1Database, DurableObjectNamespace, R2Bucket, VectorizeIndex, Ai } from "@cloudflare/workers-types";
+import type { D1Database, DurableObjectNamespace, R2Bucket, VectorizeIndex, Ai, Fetcher } from "@cloudflare/workers-types";
 import type { SupportAgent } from "./agent";
 
 export interface Env {
@@ -8,6 +8,11 @@ export interface Env {
   DB: D1Database;
   KB: VectorizeIndex;
   AI: Ai;
+  // Browser Rendering (Cloudflare) — render HTML→PDF de las cotizaciones
+  // (src/quotes/pdf.ts). Opcional: sin este binding, la cotización se envía
+  // como texto + enlace (degradación limpia). Requiere habilitar Browser
+  // Rendering en la cuenta y `[browser] binding = "BROWSER"` en wrangler.toml.
+  BROWSER?: Fetcher;
 
   // Vars (member-set)
   BOT_NAME: string;
@@ -183,6 +188,10 @@ export interface Env {
   // Token guarding POST /kb/reindex (header: X-Reindex-Token). Secret.
   // Set via `wrangler secret put KB_REINDEX_TOKEN`.
   KB_REINDEX_TOKEN: string;
+
+  // Secret con el que se firman los enlaces públicos de cotización
+  // (GET /q/:token → PDF). Sin él, cae a DASHBOARD_PASSWORD. Ver src/quotes/link.ts.
+  QUOTE_URL_SECRET?: string;
 
   // Control plane (hosted): glue para que un plano de control externo lea este
   // bot self-hosted vía los endpoints /api/*. Ambos opcionales; sin el token,

@@ -125,7 +125,7 @@ describe("pack concesionario", () => {
     // inventarioQuery / fichaAuto se registran para todos los giros: no son extraTools.
     expect(n.hooks?.extraTools).toBeUndefined();
     const nav = n.hooks?.navExtra ?? [];
-    expect(nav.map((x) => x.id)).toEqual(["inventario"]);
+    expect(nav.map((x) => x.id)).toEqual(["inventario", "catalogo"]);
     expect(nav[0]?.href).toBe("/admin/scraping/inventario");
   });
 
@@ -182,10 +182,21 @@ describe("hooks del pack (restaurante)", () => {
     expect(n.interviewQuestions && n.interviewQuestions.length).toBeGreaterThan(3);
   });
 
-  it("los packs livianos no traen hooks", () => {
-    for (const id of ["generico", "clinica", "barberia"]) {
-      expect(getNiche(envWith(id)).hooks).toBeUndefined();
+  it("los packs de venta traen el Catálogo (products) en el nav", () => {
+    // Desde la mejora "catálogo genérico", todo giro que vende expone el editor
+    // de precios; antes solo restaurante tenía "Menú".
+    for (const id of ["generico", "clinica", "barberia", "agencia-ia", "eventos", "inmobiliaria"]) {
+      const nav = getNiche(envWith(id)).hooks?.navExtra?.map((x) => x.id) ?? [];
+      expect(nav, id).toContain("catalogo");
     }
+    // restaurante conserva su "Menú" propio (no duplica Catálogo).
+    expect(getNiche(envWith("restaurante")).hooks?.navExtra?.map((x) => x.id)).not.toContain("catalogo");
+  });
+
+  it("eventos trae un catálogo de ejemplo para cargar de un clic", () => {
+    const seed = getNiche(envWith("eventos")).seedCatalog ?? [];
+    expect(seed.length).toBeGreaterThan(2);
+    expect(seed.some((p) => /Photobooth/i.test(p.name))).toBe(true);
   });
 
   it("taxis declara el motor de despacho, la tool solicitarTaxi y sus secciones", () => {

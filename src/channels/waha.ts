@@ -191,7 +191,19 @@ export const wahaAdapter: ChannelAdapter = {
     const first = reply.chunks[0] ?? "";
     const rest = reply.chunks.slice(1);
 
-    if (reply.imageUrl) {
+    if (reply.documentUrl) {
+      await fetch(`${cfg.base}/api/sendFile`, {
+        method: "POST",
+        headers: h,
+        signal: AbortSignal.timeout(20_000),
+        body: JSON.stringify({
+          session: cfg.session,
+          chatId,
+          file: { url: reply.documentUrl, filename: reply.documentName ?? "documento.pdf", mimetype: "application/pdf" },
+          caption: first.slice(0, 1024) || undefined,
+        }),
+      }).catch((e) => console.error("waha sendFile (documento) error:", e));
+    } else if (reply.imageUrl) {
       await fetch(`${cfg.base}/api/sendFile`, {
         method: "POST",
         headers: h,
@@ -208,7 +220,8 @@ export const wahaAdapter: ChannelAdapter = {
       }).catch((e) => console.error("waha sendFile error:", e));
     }
 
-    const textChunks = reply.imageUrl || reply.audioUrl ? rest : reply.chunks;
+    const hasAttachment = Boolean(reply.documentUrl || reply.imageUrl || reply.audioUrl);
+    const textChunks = hasAttachment ? rest : reply.chunks;
     for (const chunk of textChunks) {
       const res = await fetch(`${cfg.base}/api/sendText`, {
         method: "POST",

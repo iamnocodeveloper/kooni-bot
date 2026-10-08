@@ -51,7 +51,7 @@ export function enviarRecursoTool(
         const raw = await repo.get(SETTING_KEYS.resourceLibrary);
         if (!raw) return { error: "sin_biblioteca" as const, mensaje: "El dueño aún no configuró recursos multimedia." };
 
-        let lib: Record<string, { image?: string; audio?: string; caption?: string; buttons?: ReplyButton[] }> = {};
+        let lib: Record<string, { image?: string; audio?: string; document?: string; caption?: string; buttons?: ReplyButton[] }> = {};
         try {
           lib = JSON.parse(raw);
         } catch {
@@ -77,6 +77,7 @@ export function enviarRecursoTool(
           {
             imageUrl: res.image,
             audioUrl: res.audio,
+            ...(res.document ? { documentUrl: res.document, documentName: `${key}.pdf` } : {}),
             buttons: res.buttons,
           },
         );

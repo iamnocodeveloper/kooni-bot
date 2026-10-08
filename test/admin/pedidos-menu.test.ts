@@ -43,13 +43,16 @@ describe("rutas del nicho restaurante", () => {
     }
   });
 
-  it("sin el nicho, esas rutas redirigen a /admin/overview", async () => {
+  it("sin el nicho, Pedidos y Reportes redirigen; el Catálogo sí está abierto", async () => {
     const other = { ...env, BOT_NICHE: "generico" } as Env;
-    for (const path of ["/pedidos", "/menu", "/reportes"]) {
+    for (const path of ["/pedidos", "/reportes"]) {
       const res = await adminApp.request(path, { headers: authHeader() }, other);
       expect(res.status).toBe(302);
       expect(res.headers.get("location")).toBe("/admin/overview");
     }
+    // El catálogo (products) es para TODOS los giros: no redirige.
+    const menu = await adminApp.request("/menu", { headers: authHeader() }, other);
+    expect(menu.status).toBe(200);
   });
 
   it("menú: crear, editar precio, marcar agotado, borrar", async () => {

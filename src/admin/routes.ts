@@ -55,6 +55,9 @@ import { renderTickets } from "./views/tickets";
 import { renderConfig } from "./views/config";
 import { renderExtras } from "./views/extras";
 import { renderAutomatizaciones } from "./views/automatizaciones";
+import { renderEtiquetas } from "./views/etiquetas";
+import { renderCotizaciones, renderCotizacionEditor } from "./views/cotizaciones";
+import { renderDisparadores } from "./views/disparadores";
 import { renderComentarios, renderComentariosList, renderComentarioThread, renderComposeBox, commentsParamsFrom } from "./views/comentarios";
 import { renderContactos } from "./views/contactos";
 import { renderLicencia } from "./views/licencia";
@@ -1001,6 +1004,274 @@ adminApp.get("/leads", async (c) =>
 );
 
 adminApp.get("/tickets", async (c) => c.html(await renderTickets(c.env)));
+
+// ── Etiquetas (módulo etiquetas_ia) ─────────────────────────────────────────
+// Catálogo del usuario + reglas que las aplican solas (palabra clave o IA).
+adminApp.get("/etiquetas", async (c) => c.html(await renderEtiquetas(c.env, c.req.query("saved") === "1")));
+
+adminApp.post("/etiquetas/save", async (c) => {
+  const form = await c.req.formData().catch(() => null);
+  const name = String(form?.get("name") ?? "").trim();
+  if (name) {
+    const { LabelsRepo } = await import("../db/labels");
+    const { Db } = await import("../db/client");
+    const id = await new LabelsRepo(new Db(c.env.DB)).upsert({
+      name,
+      color: String(form?.get("color") ?? "").trim() || null,
+      icon: String(form?.get("icon") ?? "").trim() || null,
+      description: String(form?.get("description") ?? "").trim() || null,
+    });
+    await audit(c, { action: "label.create", target: `label:${id}`, targetLabel: name });
+  }
+  return c.redirect("/admin/etiquetas?saved=1");
+});
+
+adminApp.post("/etiquetas/:id/save", async (c) => {
+  const id = c.req.param("id");
+  const form = await c.req.formData().catch(() => null);
+  const name = String(form?.get("name") ?? "").trim();
+  if (name) {
+    const { LabelsRepo } = await import("../db/labels");
+    const { Db } = await import("../db/client");
+    await new LabelsRepo(new Db(c.env.DB)).upsert({
+      id,
+      name,
+      color: String(form?.get("color") ?? "").trim() || null,
+      icon: String(form?.get("icon") ?? "").trim() || null,
+      description: String(form?.get("description") ?? "").trim() || null,
+    });
+  }
+  return c.redirect("/admin/etiquetas?saved=1");
+});
+
+adminApp.post("/etiquetas/:id/toggle", async (c) => {
+  const id = c.req.param("id");
+  const { LabelsRepo } = await import("../db/labels");
+  const { Db } = await import("../db/client");
+  const repo = new LabelsRepo(new Db(c.env.DB));
+  const row = await repo.get(id);
+  if (row) await repo.setEnabled(id, row.enabled === 0);
+  return c.redirect("/admin/etiquetas?saved=1");
+});
+
+adminApp.post("/etiquetas/:id/delete", async (c) => {
+  const { LabelsRepo } = await import("../db/labels");
+  const { Db } = await import("../db/client");
+  const labelId = c.req.param("id");
+  await new LabelsRepo(new Db(c.env.DB)).remove(labelId);
+  await audit(c, { action: "label.delete", target: `label:${labelId}` });
+  return c.redirect("/admin/etiquetas?saved=1");
+});
+
+adminApp.post("/etiquetas/:id/rules/save", async (c) => {
+  const labelId = c.req.param("id");
+  const form = await c.req.formData().catch(() => null);
+  const kind = String(form?.get("kind") ?? "keyword") === "ai" ? "ai" : "keyword";
+  const keywords = String(form?.get("keywords") ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const instruction = String(form?.get("instruction") ?? "").trim() || null;
+  const hasContent = kind === "ai" ? !!instruction : keywords.length > 0;
+  if (hasContent) {
+    const { LabelsRepo } = await import("../db/labels");
+    const { Db } = await import("../db/client");
+    await new LabelsRepo(new Db(c.env.DB)).upsertRule({ labelId, kind, keywords, aiInstruction: instruction });
+    await audit(c, { action: "label.rule.save", target: `label:${labelId}`, afterVal: kind });
+  }
+  return c.redirect("/admin/etiquetas?saved=1");
+});
+
+adminApp.post("/etiquetas/rules/:ruleId/delete", async (c) => {
+  const { LabelsRepo } = await import("../db/labels");
+  const { Db } = await import("../db/client");
+  await new LabelsRepo(new Db(c.env.DB)).removeRule(c.req.param("ruleId"));
+  return c.redirect("/admin/etiquetas?saved=1");
+});
+
+// Etiqueta automática al capturar un lead (captureLead). Vacío = ninguna.
+adminApp.post("/etiquetas/capture-label", async (c) => {
+  const form = await c.req.formData().catch(() => null);
+  const label = String(form?.get("label") ?? "").trim();
+  const { SettingsRepo, SETTING_KEYS } = await import("../db/settings");
+  const { Db } = await import("../db/client");
+  await new SettingsRepo(new Db(c.env.DB)).set(SETTING_KEYS.captureAutoLabel, label);
+  await audit(c, { action: "label.capture_auto", target: "settings", afterVal: label || "(ninguna)" });
+  return c.redirect("/admin/etiquetas?saved=1");
+});
+
+// ── Cotizaciones (nicho eventos y otros) ────────────────────────────────────
+adminApp.get("/cotizaciones", async (c) => c.html(await renderCotizaciones(c.env)));
+
+adminApp.get("/cotizaciones/:id", async (c) => c.html(await renderCotizacionEditor(c.env, c.req.param("id"))));
+
+adminApp.post("/cotizaciones/:id/save", async (c) => {
+  const id = c.req.param("id");
+  const form = await c.req.formData().catch(() => null);
+  const get = (k: string) => String(form?.get(k) ?? "").trim();
+  const { QuotesRepo } = await import("../db/quotes");
+  const { Db } = await import("../db/client");
+  const repo = new QuotesRepo(new Db(c.env.DB));
+  const names = form?.getAll("item_name") ?? [];
+  const descs = form?.getAll("item_desc") ?? [];
+  const qtys = form?.getAll("item_qty") ?? [];
+  const prices = form?.getAll("item_price") ?? [];
+  const items = names
+    .map((n, i) => ({
+      name: String(n).trim(),
+      description: String(descs[i] ?? "").trim() || null,
+      qty: Number(qtys[i] ?? 0) || 0,
+      unitPrice: Number(prices[i] ?? 0) || 0,
+    }))
+    .filter((it) => it.name);
+  await repo.update(id, {
+    clientName: get("client_name") || null,
+    clientContact: get("client_contact") || null,
+    eventType: get("event_type") || null,
+    eventDate: get("event_date") || null,
+    eventPlace: get("event_place") || null,
+    guests: Number(get("guests")) || null,
+    currency: get("currency") || "USD",
+    validUntil: get("valid_until") || null,
+    discount: Number(get("discount")) || 0,
+    tax: Number(get("tax")) || 0,
+    deposit: Number(get("deposit")) || 0,
+    notes: get("notes") || null,
+  });
+  if (items.length) await repo.setItems(id, items);
+  await audit(c, { action: "quote.save", target: `quote:${id}`, afterVal: `${items.length} ítems` });
+  return c.redirect(`/admin/cotizaciones/${encodeURIComponent(id)}`);
+});
+
+adminApp.post("/cotizaciones/:id/send", async (c) => {
+  const id = c.req.param("id");
+  const { QuotesRepo } = await import("../db/quotes");
+  const { Db } = await import("../db/client");
+  const { sendQuoteToCustomer } = await import("../quotes/send");
+  const quote = await new QuotesRepo(new Db(c.env.DB)).get(id);
+  const res = await sendQuoteToCustomer(c.env, id, { resend: (quote?.sent_count ?? 0) > 0 });
+  await audit(c, { action: "quote.send", target: `quote:${id}`, afterVal: res.ok ? "enviada" : `error: ${res.message ?? ""}` });
+  return c.redirect(`/admin/cotizaciones/${encodeURIComponent(id)}`);
+});
+
+adminApp.post("/cotizaciones/:id/status", async (c) => {
+  const id = c.req.param("id");
+  const form = await c.req.formData().catch(() => null);
+  const status = String(form?.get("status") ?? "draft");
+  const { QuotesRepo, QUOTE_STATUSES } = await import("../db/quotes");
+  const { Db } = await import("../db/client");
+  if ((QUOTE_STATUSES as readonly string[]).includes(status)) {
+    await new QuotesRepo(new Db(c.env.DB)).setStatus(id, status as any);
+    await audit(c, { action: "quote.status", target: `quote:${id}`, afterVal: status });
+  }
+  return c.redirect(`/admin/cotizaciones/${encodeURIComponent(id)}`);
+});
+
+adminApp.get("/cotizaciones/:id/pdf", async (c) => {
+  const id = c.req.param("id");
+  const { QuotesRepo } = await import("../db/quotes");
+  const { Db } = await import("../db/client");
+  const { buildQuoteHtml } = await import("../quotes/template");
+  const { htmlToPdf } = await import("../quotes/pdf");
+  const { quoteFilename } = await import("../quotes/link");
+  const repo = new QuotesRepo(new Db(c.env.DB));
+  const quote = await repo.get(id);
+  if (!quote) return c.text("Cotización no encontrada", 404);
+  const html = await buildQuoteHtml(c.env, quote, await repo.items(id));
+  const pdf = await htmlToPdf(c.env, html);
+  if (pdf) {
+    return new Response(pdf as unknown as BodyInit, {
+      status: 200,
+      headers: { "Content-Type": "application/pdf", "Content-Disposition": `inline; filename="${quoteFilename(quote)}"` },
+    });
+  }
+  return c.html(html);
+});
+
+// ── Disparadores (automatizaciones keyword→flujo, multi-canal) ───────────────
+async function saveDisparador(env: Env, form: FormData | null, id?: string): Promise<string | null> {
+  const get = (k: string) => String(form?.get(k) ?? "").trim();
+  const name = get("name");
+  if (!name) return null;
+  const action = (get("action") || "reply_fixed") as any;
+  const payloadStr = get("payload");
+  const actionPayload: Record<string, unknown> = {};
+  if (action === "reply_fixed") actionPayload.message = payloadStr;
+  else if (action === "reply_ai") actionPayload.instruction = payloadStr;
+  else if (action === "label") actionPayload.label = payloadStr;
+  else if (action === "capture_lead") actionPayload.intent = payloadStr;
+  else if (action === "handoff") actionPayload.reason = payloadStr;
+
+  const steps = get("steps")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const [delay, ...rest] = line.split("|");
+      let content = rest.join("|").trim();
+      let kind: "text" | "ai" = "text";
+      // Prefijo "ai:" → ese paso lo redacta la IA con esa instrucción.
+      if (/^ai:/i.test(content)) {
+        kind = "ai";
+        content = content.slice(3).trim();
+      }
+      return { delayMinutes: Number(delay) || 0, kind, content };
+    })
+    .filter((s) => s.content);
+
+  const { TriggersRepo } = await import("../db/triggers");
+  const { Db } = await import("../db/client");
+  const repo = new TriggersRepo(new Db(env.DB));
+  const triggerId = await repo.upsert({
+    id,
+    name,
+    scope: get("scope") || "any",
+    matchKind: (get("match_kind") || "keyword") as any,
+    keywords: get("keywords").split(",").map((s) => s.trim()).filter(Boolean),
+    aiInstruction: get("ai_instruction") || null,
+    action,
+    actionPayload,
+    priority: Number(get("priority")) || 0,
+    runOncePerConversation: form?.get("run_once") != null,
+  });
+  if (action === "flow") await repo.setSteps(triggerId, steps);
+  return triggerId;
+}
+
+adminApp.get("/disparadores", async (c) => c.html(await renderDisparadores(c.env, c.req.query("saved") === "1")));
+
+adminApp.post("/disparadores/save", async (c) => {
+  const form = await c.req.formData().catch(() => null);
+  const id = await saveDisparador(c.env, form);
+  if (id) await audit(c, { action: "trigger.create", target: `trigger:${id}` });
+  return c.redirect("/admin/disparadores?saved=1");
+});
+
+adminApp.post("/disparadores/:id/save", async (c) => {
+  const form = await c.req.formData().catch(() => null);
+  const id = await saveDisparador(c.env, form, c.req.param("id"));
+  if (id) await audit(c, { action: "trigger.update", target: `trigger:${id}` });
+  return c.redirect("/admin/disparadores?saved=1");
+});
+
+adminApp.post("/disparadores/:id/toggle", async (c) => {
+  const id = c.req.param("id");
+  const { TriggersRepo } = await import("../db/triggers");
+  const { Db } = await import("../db/client");
+  const repo = new TriggersRepo(new Db(c.env.DB));
+  const tr = await repo.get(id);
+  if (tr) await repo.setEnabled(id, tr.enabled === 0);
+  return c.redirect("/admin/disparadores?saved=1");
+});
+
+adminApp.post("/disparadores/:id/delete", async (c) => {
+  const { TriggersRepo } = await import("../db/triggers");
+  const { Db } = await import("../db/client");
+  const id = c.req.param("id");
+  await new TriggersRepo(new Db(c.env.DB)).remove(id);
+  await audit(c, { action: "trigger.delete", target: `trigger:${id}` });
+  return c.redirect("/admin/disparadores?saved=1");
+});
 
 // Conexiones: mapa de canales con estado verde/gris (paso 4 del onboarding).
 // Lee los canales pausados de settings y las cuentas conectadas de Zernio.
@@ -2303,8 +2574,10 @@ adminApp.get("/pedidos/feed", async (c) => {
   });
 });
 
+// Catálogo/menú: tabla `products` (precios). Disponible para TODOS los giros —
+// restaurante lo llama "Menú"; los demás, "Catálogo" (lo usa catalogQuery y,
+// para cotizar, la tool crearCotizacion).
 adminApp.get("/menu", async (c) => {
-  if (!isRestaurante(c)) return c.redirect("/admin/overview");
   const { renderMenu } = await import("./views/menu-editor");
   return c.html(await renderMenu(c.env, c.req.query("saved") === "1"));
 });
@@ -2356,6 +2629,23 @@ adminApp.post("/menu/:id/delete", async (c) => {
   await new ProductsRepo(new Db(c.env.DB)).delete(id);
   await audit(c, { action: "menu.product.delete", target: `product:${id}` });
   return c.redirect("/admin/menu");
+});
+
+// Carga el catálogo de ejemplo del pack (NichePack.seedCatalog) si el catálogo
+// está vacío. Reutilizable por cualquier giro que cotice.
+adminApp.post("/menu/seed", async (c) => {
+  const { getNiche } = await import("../niches");
+  const { ProductsRepo } = await import("../db/products");
+  const repo = new ProductsRepo(new Db(c.env.DB));
+  const seed = getNiche(c.env).seedCatalog ?? [];
+  const existing = await repo.count();
+  if (seed.length && existing === 0) {
+    for (const item of seed) {
+      await repo.create({ name: item.name, price: item.price, category: item.category ?? null, description: item.description ?? null });
+    }
+    await audit(c, { action: "menu.catalog.seed", target: "products", afterVal: `${seed.length} artículos` });
+  }
+  return c.redirect("/admin/menu?saved=1");
 });
 
 // Reportes por nicho (la ruta es la misma; el giro decide qué pantalla se sirve).

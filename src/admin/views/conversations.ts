@@ -15,6 +15,8 @@ import type { Env } from "../../env";
 import { Db } from "../../db/client";
 import { InsightsRepo } from "../../db/insights";
 import { MessagesRepo, type MessageButton } from "../../db/messages";
+import { ConversationLabelsRepo, loadLabelCatalog, labelMetaIn } from "../../db/conversationLabels";
+import { QuotesRepo, type Quote } from "../../db/quotes";
 import { SENTIMENT_BADGE } from "./insights";
 import { costOfUsage, type ModelId } from "../../pricing";
 import { channelLabel } from "../../channels/labels";
@@ -206,9 +208,11 @@ interface InboxParams {
   channel?: string;
   /** Filtro por antigüedad del último mensaje: 1 | 7 | 30 días. 0/undefined = sin tope. */
   days?: number;
+  /** Filtro por etiqueta (id del catálogo). Vacío = todas. */
+  label?: string;
 }
 
-/** Lee los parámetros de la bandeja de una request (?q ?f ?c ?ch ?d). */
+/** Lee los parámetros de la bandeja de una request (?q ?f ?c ?ch ?d ?label). */
 export function inboxParamsFrom(q: (k: string) => string | undefined): InboxParams {
   const d = Number.parseInt(q("d") ?? "", 10);
   return {
@@ -217,6 +221,7 @@ export function inboxParamsFrom(q: (k: string) => string | undefined): InboxPara
     selectedId: q("c") || undefined,
     channel: q("ch") || undefined,
     days: [1, 7, 30].includes(d) ? d : undefined,
+    label: q("label") || undefined,
   };
 }
 
@@ -228,6 +233,7 @@ function inboxUrl(p: InboxParams, convId?: string): string {
   if (p.search) qs.set("q", p.search);
   if (p.channel) qs.set("ch", p.channel);
   if (p.days) qs.set("d", String(p.days));
+  if (p.label) qs.set("label", p.label);
   const s = qs.toString();
   return `/admin/conversations${s ? `?${s}` : ""}`;
 }
@@ -256,6 +262,12 @@ export async function renderInboxList(env: Env, p: InboxParams): Promise<string>
   if (p.days) {
     conds.push("c.last_message_at >= ?");
     params.push(now - p.days * 86_400_000);
+  }
+  if (p.label) {
+    conds.push(
+      "EXISTS (SELECT 1 FROM conversation_labels cl WHERE cl.conversation_id = c.id AND cl.label = ?)",
+    );
+    params.push(p.label);
   }
   if (p.filter === "leads") {
     conds.push("EXISTS (SELECT 1 FROM leads l WHERE l.conversation_id = c.id)");
@@ -290,6 +302,13 @@ export async function renderInboxList(env: Env, p: InboxParams): Promise<string>
     params,
   );
 
+  const [catalog, labelMap] = await Promise.all([
+    loadLabelCatalog(env),
+    new ConversationLabelsRepo(db)
+      .byConversationIds(rows.map((r) => r.id))
+      .catch(() => ({}) as Record<string, string[]>),
+  ]);
+
   const items = rows
     .map((r) => {
       const paused = r.paused_until && r.paused_until > now;
@@ -300,6 +319,12 @@ export async function renderInboxList(env: Env, p: InboxParams): Promise<string>
       }
       if (r.open_tickets > 0) badges.push(`<span style="${smallPill("var(--accent-2)")}">🔔</span>`);
       if (r.needs_human > 0) badges.push(`<span style="${smallPill("var(--bad)")}">${t("conv.needsHuman")}</span>`);
+      // Etiquetas del usuario (además de la de sistema "atención humana").
+      const rowLabels = (labelMap[r.id] ?? []).filter((l) => l !== "atencion_humana").slice(0, 3);
+      for (const l of rowLabels) {
+        const m = labelMetaIn(catalog, l);
+        badges.push(`<span style="${smallPill(m.color)}">${escapeHtml(m.name)}</span>`);
+      }
       if (paused) badges.push(`<span style="${smallPill("var(--dim)")}">⏸</span>`);
       if (r.ai_sentiment === "frustrated" || r.ai_sentiment === "angry") {
         const s = SENTIMENT_BADGE[r.ai_sentiment as string];
@@ -394,23 +419,63 @@ export async function renderThreadLive(env: Env, convId: string): Promise<string
       "SELECT COUNT(*) as n FROM tickets WHERE conversation_id = ? AND status != 'resolved'",
       [convId],
     ))?.n ?? 0;
-  // Etiqueta "Atención humana" (la pone el bot al escalar, o el dueño a mano).
-  const needsHuman =
-    (await db.first<{ n: number }>(
-      "SELECT COUNT(*) as n FROM conversation_labels WHERE conversation_id = ? AND label = 'atencion_humana'",
-      [convId],
-    ))?.n ?? 0;
-  const humanChip = `<form method="POST" action="/admin/conversations/${encodeURIComponent(convId)}/label" style="display:inline-flex" title="${
-    needsHuman ? t("conv.unmarkHumanTitle") : t("conv.markHumanTitle")
-  }">
-    <input type="hidden" name="label" value="atencion_humana">
-    <input type="hidden" name="action" value="${needsHuman ? "remove" : "add"}">
-    <button type="submit" class="chip" style="font-size:11px;padding:6px 11px;cursor:pointer;${
-      needsHuman
-        ? "color:var(--bad);border:1px solid var(--bad);background:var(--bad-soft)"
-        : "color:var(--muted);border:1px solid var(--linelit);background:var(--panel2)"
-    }">${needsHuman ? t("conv.humanOn") : t("conv.humanOff")}</button>
-  </form>`;
+  // Etiquetas de la conversación (catálogo del usuario + la de sistema
+  // "atención humana"): chips con ✕ para quitar y un selector para añadir. El
+  // endpoint /label es genérico (acepta cualquier id del catálogo).
+  const [labelCatalog, assignedLabels] = await Promise.all([
+    loadLabelCatalog(env),
+    new ConversationLabelsRepo(db).forConversation(convId).catch(() => [] as string[]),
+  ]);
+  const labelChips = assignedLabels
+    .map((l) => {
+      const m = labelMetaIn(labelCatalog, l);
+      const active = l === "atencion_humana";
+      return `<form method="POST" action="/admin/conversations/${encodeURIComponent(convId)}/label" style="display:inline-flex">
+        <input type="hidden" name="label" value="${escapeHtml(l)}">
+        <input type="hidden" name="action" value="remove">
+        <button type="submit" title="Quitar ${escapeHtml(m.name)}" style="font-size:11px;padding:5px 9px;cursor:pointer;border:1px solid ${
+          active ? "var(--bad)" : m.color
+        };color:${active ? "var(--bad)" : m.color};background:${active ? "var(--bad-soft)" : "var(--panel2)"}">${escapeHtml(
+          m.name,
+        )} ✕</button>
+      </form>`;
+    })
+    .join("");
+  const availableLabels = Object.values(labelCatalog).filter((m) => !assignedLabels.includes(m.id));
+  const addLabelSelect = availableLabels.length
+    ? `<form method="POST" action="/admin/conversations/${encodeURIComponent(convId)}/label" style="display:inline-flex">
+        <input type="hidden" name="action" value="add">
+        <select name="label" onchange="this.form.submit()" title="Añadir etiqueta" style="background:var(--panel2);border:1px dashed var(--linelit);color:var(--muted);font-size:11px;padding:5px 8px">
+          <option value="">+ etiqueta</option>
+          ${availableLabels.map((m) => `<option value="${escapeHtml(m.id)}">${escapeHtml(m.name)}</option>`).join("")}
+        </select>
+      </form>`
+    : "";
+  const labelsBar = `<span style="display:inline-flex;flex-wrap:wrap;gap:5px;align-items:center">${labelChips}${addLabelSelect}</span>`;
+
+  // Cotizaciones de esta conversación (nicho eventos y otros): tarjeta con el
+  // borrador/enviada + botones Editar / Enviar-Reenviar / PDF.
+  const quotes = await new QuotesRepo(db).byConversation(convId, 5).catch(() => [] as Quote[]);
+  const quoteCard = quotes.length
+    ? `<div style="display:flex;flex-direction:column;gap:6px;padding:10px 16px;border-bottom:1px solid var(--line);background:var(--panel2)">
+        ${quotes
+          .map(
+            (q) => `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:12px">
+          <span style="color:var(--accent)">📄</span>
+          <span class="text-cream" style="font-weight:600">${escapeHtml(q.number ?? "Cotización")}</span>
+          <span class="text-muted">${escapeHtml(q.client_name ?? "")}</span>
+          <span class="text-cream">$${(Math.round(q.total * 100) / 100).toLocaleString("en-US")}</span>
+          <span style="font-size:10px;color:${q.status === "accepted" ? "var(--ok)" : q.status === "draft" ? "var(--warn)" : "var(--info)"};border:1px solid currentColor;padding:1px 7px">${q.status === "draft" ? "Borrador" : q.status === "sent" ? "Enviada" : q.status === "accepted" ? "Aceptada" : q.status === "rejected" ? "Rechazada" : "Vencida"}</span>
+          <a href="/admin/cotizaciones/${encodeURIComponent(q.id)}" class="text-accent" style="font-size:11px;text-decoration:none">Editar</a>
+          <a href="/admin/cotizaciones/${encodeURIComponent(q.id)}/pdf" target="_blank" class="text-accent" style="font-size:11px;text-decoration:none">PDF ↗</a>
+          <form method="POST" action="/admin/cotizaciones/${encodeURIComponent(q.id)}/send" style="display:inline">
+            <button type="submit" style="font-size:11px;background:var(--ok);color:var(--on-accent);border:none;padding:4px 10px;cursor:pointer;border-radius:3px">${q.sent_count > 0 ? "Reenviar" : "Enviar"}</button>
+          </form>
+        </div>`,
+          )
+          .join("")}
+      </div>`
+    : "";
 
   // Header: identity + live state + takeover controls.
   const statusColor = paused ? "var(--accent-2)" : "var(--ok)";
@@ -490,7 +555,7 @@ export async function renderThreadLive(env: Env, convId: string): Promise<string
     ${statusPill}
     ${sentBadge}
     ${openTicket > 0 ? `<span style="${statusBadge("var(--accent-2)")}">${t("conv.ticketOpen")}</span>` : ""}
-    ${humanChip}
+    ${labelsBar}
     ${taxiControls}
     ${controls}
   </div>`;
@@ -547,6 +612,7 @@ export async function renderThreadLive(env: Env, convId: string): Promise<string
 
   return `
   ${header}
+  ${quoteCard}
   <div id="msgscroll" style="flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column-reverse;gap:12px;padding:16px;background:var(--bg)">
     ${bubbles || `<div style="text-align:center;font-size:12.5px;color:var(--dim);padding:32px 0">${t("conv.noMessages")}</div>`}
   </div>`;
@@ -628,6 +694,9 @@ export async function renderInbox(env: Env, p: InboxParams): Promise<string> {
   const chanRows = await db.all<{ channel: string }>(
     "SELECT DISTINCT channel FROM conversations WHERE channel IS NOT NULL AND channel != '' ORDER BY channel",
   );
+  // Etiquetas del catálogo (para el filtro por etiqueta).
+  const labelCatalog = await loadLabelCatalog(env).catch(() => ({}));
+  const labelOptions = Object.values(labelCatalog);
   const dayChip = (label: string, d?: number) =>
     filterPill(dayUrl(d), label, (p.days ?? 0) === (d ?? 0), "var(--linelit)");
 
@@ -639,6 +708,7 @@ export async function renderInbox(env: Env, p: InboxParams): Promise<string> {
   if (p.selectedId) pollParams.set("c", p.selectedId);
   if (p.channel) pollParams.set("ch", p.channel);
   if (p.days) pollParams.set("d", String(p.days));
+  if (p.label) pollParams.set("label", p.label);
   const listPollUrl = `/admin/conversations/list-fragment?${pollParams.toString()}`;
 
   let rightPane: string;
@@ -672,6 +742,7 @@ export async function renderInbox(env: Env, p: InboxParams): Promise<string> {
         ${p.selectedId ? `<input type="hidden" name="c" value="${escapeHtml(p.selectedId)}">` : ""}
         ${p.channel ? `<input type="hidden" name="ch" value="${escapeHtml(p.channel)}">` : ""}
         ${p.days ? `<input type="hidden" name="d" value="${p.days}">` : ""}
+        ${p.label ? `<input type="hidden" name="label" value="${escapeHtml(p.label)}">` : ""}
         <input name="q" value="${escapeHtml(p.search ?? "")}" placeholder="${t("conv.searchPlaceholder")}"
                style="flex:1;background:transparent;border:none;color:var(--cream);font-size:12px;outline:none">
       </form>
@@ -698,6 +769,21 @@ export async function renderInbox(env: Env, p: InboxParams): Promise<string> {
       ${dayChip(t("conv.anyDate"))}${dayChip(t("conv.day24"), 1)}${dayChip(t("conv.day7"), 7)}${dayChip(t("conv.day30"), 30)}
       ${p.days || p.search ? `<a href="${inboxUrl({ selectedId: p.selectedId })}" class="chip" style="font-size:11px;padding:5px 10px;color:var(--dim);border:1px solid var(--line)">${t("conv.clear")}</a>` : ""}
     </div>`
+    }
+    ${
+      labelOptions.length
+        ? `<div class="inbox-filters flex flex-wrap items-center gap-2" style="margin-bottom:14px">
+      <select onchange="if(this.value)window.location=this.value" title="Filtrar por etiqueta" style="background:var(--panel);border:1px solid var(--line);color:var(--cream);font-size:11.5px;padding:6px 10px;outline:none">
+        <option value="${escapeHtml(inboxUrl({ ...p, label: undefined }, p.selectedId))}" ${p.label ? "" : "selected"}>Todas las etiquetas</option>
+        ${labelOptions
+          .map(
+            (m) =>
+              `<option value="${escapeHtml(inboxUrl({ ...p, label: m.id }, p.selectedId))}" ${p.label === m.id ? "selected" : ""}>${escapeHtml(m.name)}</option>`,
+          )
+          .join("")}
+      </select>
+    </div>`
+        : ""
     }
 
     <div class="inbox-grid grid grid-cols-1 md:grid-cols-[320px_1fr] overflow-hidden" style="border:1px solid var(--line);background:var(--panel);height:calc(100vh - 200px);min-height:480px">

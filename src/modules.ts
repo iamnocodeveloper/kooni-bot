@@ -153,6 +153,30 @@ export const PAID_MODULES: PaidModule[] = [
     descripcion: "El bot lee páginas de tu sitio (catálogo, inventario, precios) y responde con esa información, actualizada sola cada noche. Requiere una cuenta de scraping (Decodo).",
     tipo: "membresia",
   },
+  {
+    id: "etiquetas_ia",
+    nombre: "Etiquetado inteligente",
+    descripcion: "Crea tus propias etiquetas y deja que el bot etiquete cada conversación solo: por palabras clave o por IA, según lo que dice o hace el cliente. Filtra y organiza por etiqueta.",
+    tipo: "membresia",
+  },
+  {
+    id: "cotizaciones",
+    nombre: "Cotizaciones en PDF",
+    descripcion: "El bot arma la cotización de tu servicio, se genera el PDF con tu formato y se envía al cliente en la conversación. Revísala y edítala antes de mandarla, y reenvíala cuando quieras.",
+    tipo: "membresia",
+  },
+  {
+    id: "archivos_salientes",
+    nombre: "Enviar archivos y PDF",
+    descripcion: "El bot puede enviar imágenes y documentos (PDF) en sus respuestas, no solo texto. Los PDF se generan al vuelo y se sirven por un enlace firmado.",
+    tipo: "membresia",
+  },
+  {
+    id: "flujos",
+    nombre: "Disparadores por palabra clave con IA",
+    descripcion: "Cuando el cliente dice cierta palabra (o la IA detecta una intención), se dispara un flujo: una respuesta fija, una respuesta con IA, etiquetar, capturar lead, pasar a un humano o una secuencia de mensajes.",
+    tipo: "membresia",
+  },
 ];
 
 const ALL_MODULE_IDS: readonly string[] = PAID_MODULES.map((m) => m.id);

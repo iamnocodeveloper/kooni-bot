@@ -102,6 +102,26 @@ export const SETTING_KEYS = {
   featureResenas: "feature_resenas_enabled", // "0" | "1"
   featureCobros: "feature_cobros_enabled", // "0" | "1"
   featureGaleria: "feature_galeria_enabled", // "0" | "1"
+  // Etiquetado inteligente de conversaciones (módulo etiquetas_ia).
+  featureEtiquetas: "feature_etiquetas_enabled", // "0" | "1"
+  // Cotizaciones en PDF (módulo cotizaciones).
+  featureCotizaciones: "feature_cotizaciones_enabled", // "0" | "1"
+  // Envío de archivos/documentos (PDF) en las respuestas (módulo archivos_salientes).
+  featureArchivos: "feature_archivos_enabled", // "0" | "1"
+  // Disparadores keyword→flujo multi-canal (módulo flujos).
+  featureFlujos: "feature_flujos_enabled", // "0" | "1"
+  // Plantilla HTML de la cotización (marcadores {{...}} + bloque {{#items}}).
+  // Vacío = usa la plantilla por defecto embebida (src/quotes/template.ts).
+  quoteTemplateHtml: "quote_template_html",
+  // Defaults de cotización (JSON): currency, footer, validityDays, depositPct.
+  quoteDefaults: "quote_defaults",
+  // "0" | "1": si está en 1, el bot envía el PDF al cliente apenas crea el borrador.
+  quoteAutoSend: "quote_auto_send",
+  // Versión de la plantilla aplicada (para re-render/aviso al dueño).
+  quoteTemplateVersion: "quote_template_version",
+  // Etiqueta que se aplica AUTOMÁTICAMENTE cuando el bot captura un lead
+  // (captureLead). Vacío = no etiqueta. Debe ser el id (slug) de una etiqueta.
+  captureAutoLabel: "capture_auto_label",
   // ¿El bot se presenta como el DUEÑO mismo (primera persona) o como asistente?
   agentPersona: "agent_persona", // "" (asistente) | "dueño"
   // Config de funciones de Extras (enlaces que el bot inyecta al prompt).
@@ -243,6 +263,11 @@ export const SETTING_LABELS: Record<string, string> = {
   [SETTING_KEYS.agentPersona]: "Persona del bot",
   [SETTING_KEYS.reviewLink]: "Link de reseñas",
   [SETTING_KEYS.paymentLink]: "Link de pago",
+  [SETTING_KEYS.quoteTemplateHtml]: "Plantilla HTML de la cotización",
+  [SETTING_KEYS.quoteDefaults]: "Defaults de cotización",
+  [SETTING_KEYS.quoteAutoSend]: "Enviar la cotización automáticamente",
+  [SETTING_KEYS.quoteTemplateVersion]: "Versión de la plantilla de cotización",
+  [SETTING_KEYS.captureAutoLabel]: "Etiqueta automática al capturar lead",
   [SETTING_KEYS.commentFallbackEnabled]: "Respuesta pública a comentarios sin regla",
   [SETTING_KEYS.commentFallbackMessage]: "Texto de la respuesta pública a comentarios",
   [SETTING_KEYS.commentAiFallbackEnabled]: "Respuesta con IA a comentarios sin regla",
@@ -294,6 +319,10 @@ for (const [k, label] of [
   [SETTING_KEYS.featureResenas, "Extra: Pide reseñas"],
   [SETTING_KEYS.featureCobros, "Extra: Cobros"],
   [SETTING_KEYS.featureGaleria, "Extra: Galería"],
+  [SETTING_KEYS.featureEtiquetas, "Extra: Etiquetado inteligente"],
+  [SETTING_KEYS.featureCotizaciones, "Extra: Cotizaciones en PDF"],
+  [SETTING_KEYS.featureArchivos, "Extra: Enviar archivos"],
+  [SETTING_KEYS.featureFlujos, "Extra: Disparadores por palabra clave"],
 ] as const) {
   SETTING_LABELS[k] = label;
 }

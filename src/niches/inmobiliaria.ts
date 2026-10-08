@@ -1,4 +1,4 @@
-import type { NichePack } from "./types";
+import { CATALOG_NAV, type NichePack } from "./types";
 import { agendaRealBlock } from "../prompt/agenda";
 
 // Niche pack: inmobiliaria / agente de bienes raíces / desarrollo. Aporta un
@@ -86,6 +86,7 @@ disponibilidad.
     extraTools: ["buscarPropiedad", "fichaPropiedad"],
     navExtra: [
       { id: "propiedades", label: "Propiedades", icon: "building-2", href: "/admin/propiedades", section: "Mi Agente" },
+      CATALOG_NAV,
     ],
   },
   // Plantillas para pegar en el panel (Conocimiento → Nuevo documento) y el CSV

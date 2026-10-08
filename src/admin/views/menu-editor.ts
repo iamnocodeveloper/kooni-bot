@@ -5,6 +5,7 @@ import type { Env } from "../../env";
 import { layout } from "./layout";
 import { Db } from "../../db/client";
 import { ProductsRepo, type Product } from "../../db/products";
+import { getNiche } from "../../niches";
 import { panelI18n, type T } from "../i18n";
 
 function esc(s: string): string {
@@ -41,6 +42,8 @@ function row(t: T, p: Product): string {
 
 export async function renderMenu(env: Env, saved = false): Promise<string> {
   const { t } = await panelI18n(env);
+  const niche = getNiche(env);
+  const title = niche.id === "restaurante" ? t("med.title") : "Catálogo de precios";
   const products = await new ProductsRepo(new Db(env.DB)).all();
   const byCat = new Map<string, Product[]>();
   for (const p of products) {
@@ -61,10 +64,19 @@ export async function renderMenu(env: Env, saved = false): Promise<string> {
   const body = `
     <div style="display:flex;flex-direction:column;gap:16px">
       <div style="display:flex;flex-direction:column;gap:3px">
-        <h2 class="font-display font-semibold text-[15px] text-cream">${t("med.title")}</h2>
+        <h2 class="font-display font-semibold text-[15px] text-cream">${esc(title)}</h2>
         <p class="text-muted text-[12.5px]">${t("med.subtitle")}</p>
       </div>
       ${saved ? `<div class="border border-ok text-ok" style="padding:9px 12px;font-size:12px;background:var(--panel2)">${t("med.saved")}</div>` : ""}
+
+      ${
+        niche.seedCatalog?.length && products.length === 0
+          ? `<form method="POST" action="/admin/menu/seed" class="bg-panel border border-linelit" style="padding:14px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <span class="text-muted" style="font-size:12.5px;flex:1">¿Arrancamos con paquetes de ejemplo${niche.recordPlural ? ` de ${esc(niche.recordPlural.toLowerCase())}` : ""}? Puedes editarlos después.</span>
+        <button type="submit" style="background:var(--accent);color:var(--on-accent);border:none;padding:8px 16px;font-size:12.5px;font-weight:700;cursor:pointer">Cargar catálogo de ejemplo</button>
+      </form>`
+          : ""
+      }
 
       <form method="POST" action="/admin/menu" class="bg-panel border border-line" style="padding:14px 16px;display:flex;flex-direction:column;gap:8px">
         <span class="font-display font-semibold text-[13px] text-cream">${t("med.add.title")}</span>
@@ -80,5 +92,5 @@ export async function renderMenu(env: Env, saved = false): Promise<string> {
       ${products.length ? groups : `<div class="text-dim text-[12.5px]" style="padding:20px;text-align:center">${t("med.empty")}</div>`}
     </div>`;
 
-  return layout({ title: t("med.title"), activeTab: "menu", body, env });
+  return layout({ title, activeTab: "menu", body, env });
 }

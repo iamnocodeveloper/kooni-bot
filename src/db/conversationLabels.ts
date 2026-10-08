@@ -1,4 +1,6 @@
 import { Db } from "./client";
+import type { Env } from "../env";
+import { LabelsRepo } from "./labels";
 
 /**
  * Etiquetas de conversación del CRM (`conversation_labels`).
@@ -38,6 +40,31 @@ export function labelMeta(label: string): LabelMeta {
       icon: "tag",
     }
   );
+}
+
+/** Catálogo resuelto (sistema + etiquetas del usuario) por id. */
+export type LabelCatalog = Record<string, LabelMeta>;
+
+/**
+ * Catálogo de etiquetas de esta instalación: las de sistema + las definidas por
+ * el usuario en D1 (`labels`). Fail-open: sin D1 devuelve solo las de sistema.
+ */
+export async function loadLabelCatalog(env: Env): Promise<LabelCatalog> {
+  const cat: LabelCatalog = { ...SYSTEM_LABELS };
+  try {
+    const rows = await new LabelsRepo(new Db(env.DB)).list();
+    for (const r of rows) {
+      cat[r.id] = { id: r.id, name: r.name, color: r.color || "var(--muted)", icon: r.icon || "tag" };
+    }
+  } catch {
+    // sin tabla/DB → solo sistema
+  }
+  return cat;
+}
+
+/** Meta de una etiqueta dentro de un catálogo ya cargado (fallback genérico). */
+export function labelMetaIn(catalog: LabelCatalog, label: string): LabelMeta {
+  return catalog[label] ?? labelMeta(label);
 }
 
 export class ConversationLabelsRepo {

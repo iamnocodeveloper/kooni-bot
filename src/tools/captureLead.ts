@@ -34,6 +34,19 @@ export function captureLeadTool(env: Env, getConversationId: () => string | null
         metadata,
       });
 
+      // Etiquetado automático (opcional): si el dueño configuró una etiqueta
+      // para los leads capturados, se aplica aquí. Fail-open.
+      if (convId) {
+        try {
+          const { SettingsRepo, SETTING_KEYS } = await import("../db/settings");
+          const label = (await new SettingsRepo(new Db(env.DB)).get(SETTING_KEYS.captureAutoLabel))?.trim();
+          if (label) {
+            const { ConversationLabelsRepo } = await import("../db/conversationLabels");
+            await new ConversationLabelsRepo(new Db(env.DB)).add(convId, label, "bot");
+          }
+        } catch { /* etiqueta opcional: nunca bloquea la captura */ }
+      }
+
       // Optional external export — Pro-tier feature, skipped if no creds
       // (Implementation deferred to Task 7.4 — adds Google Sheets export)
 

@@ -282,3 +282,42 @@ dueño. **No quites ese cron** (ver `src/crons/schedule.ts`).
 | Mejoras automáticas | `src/flywheel/` | KB propuesta por la IA |
 | Auto-DM por keyword | `src/channels/zernio.ts` | Comentario → DM con botón |
 | Config del negocio | `member/config.local.ts` | Nunca se pisa en updates |
+
+---
+
+## 9. Motores nuevos (etiquetas, disparadores, cotizaciones)
+
+Además del flujo conversacional, hay tres motores genéricos que comparten el
+mismo `ingest()` y sirven a **todos** los giros. No son "flujos visuales": se
+configuran desde el panel y se evalúan en el webhook, sin máquina de estados.
+
+### 9.1 Etiquetas (`src/db/labels.ts` + `src/labels/engine.ts`)
+- Catálogo de etiquetas del usuario + **reglas**: `keyword` (determinista) y
+  `ai` (el modelo de análisis decide).
+- **Tiempo real**: `agent.ts::ingest` aplica las reglas keyword en cada mensaje.
+- **Batch**: el análisis nocturno (`src/insights/analyzer.ts`) corre las reglas IA.
+- **Tool `etiquetarConversacion`**: el propio modelo etiqueta si reconoce la condición.
+- Panel: `/admin/etiquetas`. Filtro por etiqueta en Conversaciones; badge en el kanban.
+- Cada etiqueta habilita además un **segmento de campaña** (`label:<id>` en `src/segments.ts`).
+
+### 9.2 Disparadores keyword→flujo (`src/db/triggers.ts` + `src/triggers/engine.ts`)
+- Multi-canal (a diferencia de los `auto_rules` de Zernio, que son de comentarios).
+- `match_kind`: `keyword` | `ai` | `any`.
+- Acciones: responder texto, responder con IA, etiquetar, capturar lead, derivar a
+  humano, o una **secuencia** de mensajes (`flow`, con pasos `text`/`ai`).
+- Se evalúa en `ingest` ANTES del buffer: si un disparador responde, el agente no
+  vuelve a responder. Panel: `/admin/disparadores`.
+
+### 9.3 Cotizaciones en PDF (`src/db/quotes.ts` + `src/quotes/*`)
+- El bot arma un **borrador** (`crearCotizacion`, nicho eventos y otros) con ítems
+  y datos del evento; reutiliza `products` como catálogo de precios.
+- Plantilla HTML editable (`settings.quote_template_html`) → **PDF** con Cloudflare
+  Browser Rendering (binding `BROWSER`, opcional). Sin él, degrada a texto + enlace.
+- Servido por **enlace firmado** `GET /q/:token` (sin R2). Se envía como **documento**
+  por Telegram/WAHA/Zernio; en el panel se edita y se reenvía.
+
+### 9.4 Catálogo de precios (todos los giros)
+- La tabla `products` (antes solo "Menú" de restaurante) ahora es **Catálogo** para
+  todos los nichos que venden (nav `/admin/menu`). Lo usan `catalogQuery`, `tomarPedido`
+  y `crearCotizacion`. Cada pack puede traer un `seedCatalog` de ejemplo (eventos ya lo tiene).
+

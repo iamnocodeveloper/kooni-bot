@@ -39,6 +39,18 @@ export interface NicheHooks {
   taxiEngine?: boolean;
 }
 
+/**
+ * Ítem de nav que comparten los packs que venden (precios en `products`): abre
+ * el editor de Catálogo (/admin/menu). Se agrega a `hooks.navExtra`.
+ */
+export const CATALOG_NAV: { id: string; label: string; icon: string; href: string; section?: string } = {
+  id: "catalogo",
+  label: "Catálogo",
+  icon: "book-open",
+  href: "/admin/menu",
+  section: "Mi Agente",
+};
+
 export interface NichePack {
   /** id estable = valor de BOT_NICHE (ej. "restaurante"). */
   id: string;
@@ -76,4 +88,10 @@ export interface NichePack {
   interviewQuestions?: string[];
   /** Extensiones del pack (tools, secciones, motor de pedidos). Ver NicheHooks. */
   hooks?: NicheHooks;
+  /**
+   * Catálogo de ejemplo (paquetes/precios) que el pack ofrece cargar de un clic
+   * desde el editor de Catálogo (tabla `products`). Sin esto, el dueño lo arma a
+   * mano. Lo usan los giros que cotizan (eventos, inmobiliaria…).
+   */
+  seedCatalog?: { name: string; price: number; category?: string; description?: string }[];
 }

@@ -75,6 +75,14 @@ LICENSE_PUBLIC_KEY = "MCowBQYDK2VwAyEALxrjpy7pkyHSqlCcObUfMygNXNznd9/YXhamO17e4t
 # Zernio (multicanal — IG/FB/TG/WhatsApp…): automatizaciones desde el panel /admin/automatizaciones.
 # (las reglas se gestionan en el panel; aquí solo si quieres defaults por env)
 
+# ── Cotizaciones en PDF (módulo cotizaciones) ────────────────────────────────
+# Para generar el PDF de las cotizaciones se usa Cloudflare Browser Rendering.
+# Habilítalo en tu cuenta (Dashboard → Workers → Browser Rendering) y descomenta:
+# [browser]
+# binding = "BROWSER"
+# Sin el binding, la cotización se envía como texto + enlace (el enlace /q/<token>
+# sirve el mismo documento como HTML). Opcional, no bloquea el resto.
+
 # Secrets (wrangler secret put <NAME> — nunca en git):
 #   ANTHROPIC_API_KEY | OPENAI_API_KEY | XAI_API_KEY | MINIMAX_API_KEY   — llave de IA (al menos una)
 #   DASHBOARD_PASSWORD          — HTTP Basic Auth del panel (/admin, user: admin)

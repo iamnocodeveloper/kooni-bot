@@ -1465,6 +1465,7 @@ constructor. No hay licencia ni servidor de Horizontes: el tier free/pro se cont
 - \`npx kooni-bot update [dir]\` — trae la versión nueva conservando \`member/\`, \`wrangler.toml\` y datos.
 - \`npx kooni-bot update --all\` — actualiza TODAS las instalaciones registradas en esta computadora.
 - \`npx kooni-bot doctor [dir]\` — diagnostica el bot instalado.
+- \`npx kooni-bot migrate [dir] --to-token <token> --to-account <id>\` — migra la instalación ENTERA a otra cuenta de Cloudflare (D1 + config + secrets + KB + licencia). Solo copia.
 - \`npx kooni-bot version\`.
 
 ## Conexión de canales (DESDE el panel, sin redeploy)
@@ -2150,6 +2151,132 @@ async function cmdDoctor(flags, rest) {
   console.log("");
 }
 
+// Migra una instalación ÍNTEGRA a otra cuenta de Cloudflare (demo → producción,
+// cambio de cuenta, etc.). COPIA: la cuenta de origen no se toca. Requiere tokens
+// con permiso de Workers/D1/Vectorize en AMBAS cuentas.
+async function cmdMigrate(flags, rest) {
+  const cfg = loadCfg();
+  ASSUME_YES = !!(flags.yes || process.env.KOONI_YES);
+  if (flags.lang === "en" || cfg.lang === "en") L = "en";
+  banner();
+
+  const toToken = String(flags["to-token"] || "").trim();
+  const toAccount = String(flags["to-account"] || "").trim();
+  if (!toToken || !toAccount) {
+    console.log("  " + C.red("✗") + " " + m(
+      "faltan --to-token y --to-account de la cuenta DESTINO.",
+      "missing --to-token and --to-account for the DESTINATION account.",
+    ) + "\n");
+    console.log("  " + C.dim(m("Ejemplo:", "Example:")));
+    console.log("  " + C.cyan("npx kooni-bot migrate ./mi-bot --to-token <CF_API_TOKEN> --to-account <ACCOUNT_ID> --yes") + "\n");
+    process.exit(1);
+  }
+
+  const rl = createInterface({ input, output });
+  let dir;
+  try {
+    dir = await resolveBotDir(rest[0], rl);
+  } finally {
+    rl.close();
+  }
+  if (!dir) { console.log("  " + C.red(t().needDir) + " " + (rest[0] || process.cwd()) + "\n"); process.exit(1); }
+
+  // Guardamos el entorno y lo restauramos SIEMPRE al final (éxito o error).
+  const origToken = process.env.CLOUDFLARE_API_TOKEN;
+  const origAccount = process.env.CLOUDFLARE_ACCOUNT_ID;
+  const useSource = () => {
+    const ft = String(flags["from-token"] || origToken || "").trim();
+    const fa = String(flags["from-account"] || origAccount || "").trim();
+    if (ft) process.env.CLOUDFLARE_API_TOKEN = ft; else delete process.env.CLOUDFLARE_API_TOKEN;
+    if (fa) process.env.CLOUDFLARE_ACCOUNT_ID = fa; else delete process.env.CLOUDFLARE_ACCOUNT_ID;
+  };
+  const useTarget = () => {
+    process.env.CLOUDFLARE_API_TOKEN = toToken;
+    process.env.CLOUDFLARE_ACCOUNT_ID = toAccount;
+  };
+  const restoreEnv = () => {
+    if (origToken) process.env.CLOUDFLARE_API_TOKEN = origToken; else delete process.env.CLOUDFLARE_API_TOKEN;
+    if (origAccount) process.env.CLOUDFLARE_ACCOUNT_ID = origAccount; else delete process.env.CLOUDFLARE_ACCOUNT_ID;
+  };
+
+  const backup = join(dir, ".kooni-migration.sql");
+  try {
+    const wt = readFileSync(join(dir, "wrangler.toml"), "utf8");
+    const val = (k) => (wt.match(new RegExp(`^\\s*${k}\\s*=\\s*["']([^"']*)`, "m")) || [])[1];
+    const dbName = val("database_name") || "kooni_db";
+    const kbName = val("index_name") || "kooni_kb";
+    const workerName = (wt.match(/^name\s*=\s*"([^"]+)"/m) || [])[1] || basename(dir);
+    const step = (n, s) => console.log("  " + C.dim(`[${n}/7] ` + s));
+
+    console.log(C.b(`\n  ◇ Migrando ${workerName}`));
+    console.log("  " + C.dim(m("Origen → destino (solo COPIA: la cuenta de origen no se toca).", "Source → destination (copy only: the source account is untouched).")) + "\n");
+
+    // 1. Exportar D1 del origen.
+    step(1, m("Exportando la base de datos del origen…", "Exporting the source database…"));
+    useSource();
+    wrangler(dir, ["d1", "export", dbName, "--remote", "--output=" + backup], { capture: true });
+    console.log("  " + C.green("✓") + " " + m("backup creado", "backup created") + ": " + C.cyan(basename(backup)));
+
+    // 2. Crear D1 en el destino.
+    useTarget();
+    step(2, m("Creando la base D1 en el destino…", "Creating the D1 database on the destination…"));
+    let d1Id = "";
+    try { d1Id = parseD1Id(wrangler(dir, ["d1", "create", dbName], { capture: true })); } catch {}
+    if (!d1Id) { try { d1Id = findD1IdByName(wrangler(dir, ["d1", "list", "--json"], { capture: true }), dbName); } catch {} }
+    if (!d1Id) throw new Error(m(`no pude crear/encontrar la base D1 "${dbName}" en el destino`, `couldn't create/find D1 "${dbName}" on the destination`));
+    patchWranglerFile(dir, (s) => s.replace(/database_id\s*=\s*"[^"]*"/, `database_id = "${d1Id}"`));
+    console.log("  " + C.green("✓") + " " + t().d1Ok(d1Id));
+
+    // 3. Importar datos + aplicar esquema.
+    step(3, m("Importando los datos (leads, conversaciones, KB…)", "Importing data (leads, conversations, KB…)"));
+    wrangler(dir, ["d1", "execute", dbName, "--file=" + backup, "--remote"], { capture: true });
+    wrangler(dir, ["d1", "execute", dbName, "--file=src/db/schema.sql", "--remote"], { capture: true });
+    console.log("  " + C.green("✓") + " " + m("datos importados", "data imported"));
+
+    // 4. Vectorize (índice nuevo; el contenido se re-embebe en el paso 6).
+    step(4, m("Creando el índice de la base de conocimiento…", "Creating the knowledge base index…"));
+    try { wrangler(dir, ["vectorize", "create", kbName, "--dimensions=1024", "--metric=cosine"], { capture: true }); } catch {}
+    console.log("  " + C.green("✓") + " " + t().vectorOk);
+
+    // 5. Secrets desde .dev.vars + deploy.
+    step(5, m("Subiendo secrets y publicando el worker…", "Uploading secrets and publishing the worker…"));
+    runPnpm(dir, ["install"]);
+    for (const key of ["DASHBOARD_PASSWORD", "KB_REINDEX_TOKEN", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "XAI_API_KEY", "MINIMAX_API_KEY", "GEMINI_API_KEY"]) {
+      const v = readDevVar(dir, key);
+      if (v) { try { wrangler(dir, ["secret", "put", key], { input: v, capture: true }); } catch { /* best-effort */ } }
+    }
+    const dep = runPnpm(dir, ["run", "deploy"], { capture: true });
+    let url = (dep.match(/https:\/\/[a-z0-9-]+(?:\.[a-z0-9-]+)*\.workers\.dev/) || [])[0] || "";
+    if (url) patchWranglerFile(dir, (s) => s.replace(/DASHBOARD_BASE_URL\s*=\s*"[^"]*"/g, `DASHBOARD_BASE_URL = "${url}"`));
+    console.log("  " + C.green("✓") + " " + m("worker publicado", "worker published") + (url ? ": " + C.cyan(url) : ""));
+
+    // 6. Re-embebe la KB en el índice nuevo (desde los docs guardados en D1).
+    step(6, m("Re-indexando la base de conocimiento…", "Re-indexing the knowledge base…"));
+    const kbTok = readDevVar(dir, "KB_REINDEX_TOKEN");
+    if (url && kbTok) { try { await fetchTimeout(`${url}/kb/reindex`, { method: "POST", headers: { "X-Reindex-Token": kbTok } }, 30000); } catch { /* la noche lo reintenta */ } }
+    console.log("  " + C.green("✓"));
+
+    // 7. Re-vincular la instalación y la licencia al destino.
+    step(7, m("Re-vinculando la instalación y la licencia…", "Re-linking the install and license…"));
+    try {
+      const lic = await registerInstall(dir, { workerUrl: url });
+      const tok = lic && lic.inst_token;
+      if (tok) { try { wrangler(dir, ["secret", "put", "KOONI_INSTALL_TOKEN"], { input: tok, capture: true }); } catch {} }
+    } catch { /* sin red: el sync nocturno lo reintenta */ }
+    if (url) await syncWorkerLicense(dir, url);
+    writeMarker(dir, { databaseId: d1Id, dbName, kbName, workerUrl: url || undefined });
+
+    console.log("\n  " + C.green("✓") + " " + m("Migración completa.", "Migration complete.") + (url ? "  " + C.cyan(url) : ""));
+    console.log("  " + C.dim(m("El bot ya vive en la cuenta destino. Re-registra los webhooks de los canales si cambió la URL.", "The bot now lives on the destination account. Re-register channel webhooks if the URL changed.")) + "\n");
+  } catch (e) {
+    console.log("\n  " + C.red("✗ " + (e.message || e)) + "\n");
+    process.exitCode = 1;
+  } finally {
+    restoreEnv();
+    rmSync(backup, { force: true });
+  }
+}
+
 // ── ayuda ────────────────────────────────────────────────────────────────────
 function help() {
   console.log(`
@@ -2165,7 +2292,10 @@ ${C.cyan("kooni-bot")} — ${t().helpIntro}
   ${C.cyan("npx kooni-bot update [dir]")}  ${m("actualiza sin perder tu configuración", "update without losing config")}
   ${C.cyan("npx kooni-bot update --all")}   ${m("actualiza TODAS las instalaciones registradas", "update ALL registered installs")}
   ${C.cyan("npx kooni-bot doctor [dir]")}  ${m("diagnóstico del bot instalado", "diagnose the installed bot")}
+  ${C.cyan("npx kooni-bot migrate [dir]")} ${m("migra el bot entero a OTRA cuenta de Cloudflare", "migrate the whole bot to ANOTHER Cloudflare account")}
   ${C.cyan("npx kooni-bot version")}       ${m("versión del CLI", "CLI version")}
+
+${C.dim("  " + m("migrate: `--to-token <token> --to-account <id>` de la cuenta destino (--from-* opcional).", "migrate: `--to-token <token> --to-account <id>` for the destination (--from-* optional)."))}
 
 ${C.dim("  Subdominio workers.dev: si tu cuenta no lo tiene, el deploy lo crea solo y reintenta.")}
 
@@ -2204,6 +2334,7 @@ if (IS_MAIN) {
     if (cmd === "deploy") return cmdDeploy(flags, rest);
     if (cmd === "update") return cmdUpdate(flags, rest);
     if (cmd === "doctor") return cmdDoctor(flags, rest);
+    if (cmd === "migrate") return cmdMigrate(flags, rest);
     console.log(t().unknown + " " + cmd);
     help();
   })().catch((e) => {

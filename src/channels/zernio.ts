@@ -1298,12 +1298,14 @@ export const zernioAdapter: ChannelAdapter = {
               ...(b.callback ? { payload: b.callback } : {}),
             }))
           : undefined;
-      // Multimedia: imagen/audio como attachment del primer chunk (Zernio lo soporta).
+      // Multimedia: imagen/audio/documento como attachment del primer chunk
+      // (Zernio lo soporta).
       const attachments =
         i === 0
           ? [
               ...(reply.imageUrl ? [{ type: "image", url: reply.imageUrl }] : []),
               ...(reply.audioUrl ? [{ type: "audio", url: reply.audioUrl }] : []),
+              ...(reply.documentUrl ? [{ type: "document", url: reply.documentUrl }] : []),
             ]
           : undefined;
       const res = await fetch(`${base}/v1/inbox/conversations/${encodeURIComponent(conversationId)}/messages`, {

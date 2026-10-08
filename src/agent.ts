@@ -302,6 +302,35 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
     // processBuffer NO vuelve a guardarlo (evita el duplicado).
     await this.persistInbound(conv.id, processedText);
 
+    // Etiquetado inteligente (módulo etiquetas_ia): reglas por palabra clave,
+    // en tiempo real. Barato y fail-open — nunca bloquea la respuesta.
+    if (cfg.etiquetasEnabled && processedText.trim()) {
+      try {
+        const { applyKeywordRules } = await import("./labels/engine");
+        await applyKeywordRules(this.env, conv.id, processedText);
+      } catch (e) {
+        console.warn("[ingest] etiquetado por keyword falló:", e);
+      }
+    }
+
+    // Disparadores keyword→flujo (módulo flujos): si alguno responde YA, el
+    // mensaje NO entra al buffer (evita doble respuesta). Los que solo etiquetan
+    // o capturan dejan seguir el flujo normal del agente.
+    if (cfg.flujosEnabled && processedText.trim()) {
+      try {
+        const { evaluateTriggers } = await import("./triggers/engine");
+        const outcome = await evaluateTriggers(this.env, {
+          conversationId: conv.id,
+          channel: payload.channel as ChannelId,
+          channelUserId: payload.channelUserId,
+          text: processedText,
+        });
+        if (outcome.replied) return { acknowledged: true };
+      } catch (e) {
+        console.warn("[ingest] disparadores fallaron (fail-open):", e);
+      }
+    }
+
     // Append to buffer
     const pending = [
       ...this.state.pendingMessages,

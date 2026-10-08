@@ -29,6 +29,10 @@ export const FEATURE_KEYS = {
   galeria: "feature_galeria_enabled",
   webSync: "feature_web_sync_enabled",
   webSyncAnalysis: "feature_web_sync_analysis_enabled",
+  etiquetas: "feature_etiquetas_enabled",
+  cotizaciones: "feature_cotizaciones_enabled",
+  archivos: "feature_archivos_enabled",
+  flujos: "feature_flujos_enabled",
 } as const;
 
 export interface ExtraFeature {
@@ -241,6 +245,50 @@ export const EXTRA_FEATURES: ExtraFeature[] = [
     actuaEn: "bot+panel",
     tipo: "membresia",
   },
+  {
+    id: "etiquetas",
+    module: "etiquetas_ia",
+    toggleKey: FEATURE_KEYS.etiquetas,
+    nombre: "Etiquetado inteligente",
+    emoji: "🏷️",
+    descripcion:
+      "Crea tus propias etiquetas y deja que el bot etiquete cada conversación solo: por palabras clave (si dice X → etiqueta Y) o por IA (entiende la intención). Etiqueta a mano desde el panel y filtra conversaciones por etiqueta.",
+    actuaEn: "bot+panel",
+    tipo: "membresia",
+  },
+  {
+    id: "cotizaciones",
+    module: "cotizaciones",
+    toggleKey: FEATURE_KEYS.cotizaciones,
+    nombre: "Cotizaciones en PDF",
+    emoji: "📄",
+    descripcion:
+      "El bot arma la cotización con tu formato, se genera el PDF y se envía al cliente en la conversación. Ves el borrador en el chat, lo editas a mano si hace falta y lo reenvías con un botón.",
+    actuaEn: "bot+panel",
+    tipo: "membresia",
+  },
+  {
+    id: "archivos",
+    module: "archivos_salientes",
+    toggleKey: FEATURE_KEYS.archivos,
+    nombre: "Enviar imágenes y PDF",
+    emoji: "📎",
+    descripcion:
+      "El bot puede mandar imágenes y documentos (PDF) en sus respuestas, no solo texto. El PDF se genera al vuelo y viaja por un enlace firmado (sin almacenamiento extra).",
+    actuaEn: "bot+panel",
+    tipo: "membresia",
+  },
+  {
+    id: "flujos",
+    module: "flujos",
+    toggleKey: FEATURE_KEYS.flujos,
+    nombre: "Disparadores por palabra clave",
+    emoji: "⚡",
+    descripcion:
+      "Cuando el cliente dice cierta palabra —o la IA detecta una intención— se dispara un flujo: respuesta fija, respuesta con IA, etiquetar, capturar lead, pasar a un humano o una secuencia de mensajes. Funciona en todos los canales.",
+    actuaEn: "bot+panel",
+    tipo: "membresia",
+  },
 ];
 
 /**
@@ -370,6 +418,10 @@ export async function extrasForAgent(
   oidoVistaEnabled: boolean;
   galeriaEnabled: boolean;
   multiIdiomaEnabled: boolean;
+  etiquetasEnabled: boolean;
+  cotizacionesEnabled: boolean;
+  archivosEnabled: boolean;
+  flujosEnabled: boolean;
 }> {
   const mods = await unlockedModules(env, settings);
   const on = (key: string, modId: string) => settings[key] === "1" && mods.has(modId);
@@ -387,6 +439,10 @@ export async function extrasForAgent(
     oidoVistaEnabled: on(FEATURE_KEYS.oidoVista, "oido_vista"),
     galeriaEnabled: on(FEATURE_KEYS.galeria, "galeria"),
     multiIdiomaEnabled: on(FEATURE_KEYS.multiidioma, "multiidioma"),
+    etiquetasEnabled: on(FEATURE_KEYS.etiquetas, "etiquetas_ia"),
+    cotizacionesEnabled: on(FEATURE_KEYS.cotizaciones, "cotizaciones"),
+    archivosEnabled: on(FEATURE_KEYS.archivos, "archivos_salientes"),
+    flujosEnabled: on(FEATURE_KEYS.flujos, "flujos"),
   };
 }
 

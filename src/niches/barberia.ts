@@ -1,4 +1,4 @@
-import type { NichePack } from "./types";
+import { CATALOG_NAV, type NichePack } from "./types";
 import { agendaRealBlock } from "../prompt/agenda";
 
 // Niche pack: barbería / salón de caballeros / estética masculina. Aporta un
@@ -72,4 +72,5 @@ persona lo confirme. Nunca inventes precios, servicios ni disponibilidad.
     "barberia-servicios-ejemplo",
     "barberia-faq",
   ],
+  hooks: { navExtra: [CATALOG_NAV] },
 };

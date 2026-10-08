@@ -1,7 +1,8 @@
 import type { Env } from "../../env";
 import { Db } from "../../db/client";
 import { LeadsRepo, leadMetadata, LEAD_STATUSES, type Lead, type LeadStatus } from "../../db/leads";
-import { ConversationLabelsRepo, NEEDS_HUMAN_LABEL } from "../../db/conversationLabels";
+import { ConversationLabelsRepo, NEEDS_HUMAN_LABEL, loadLabelCatalog, labelMetaIn, type LabelMeta } from "../../db/conversationLabels";
+import { QuotesRepo, type Quote } from "../../db/quotes";
 import { getNiche } from "../../niches";
 import { layout } from "./layout";
 import { fmtDate, fmtDateTime } from "../format";
@@ -22,13 +23,33 @@ const STATUS_COLOR: Record<LeadStatus, string> = {
 
 // ── Kanban (vista por defecto) ──────────────────────────────────────────────
 
-function kanbanCard(t: T, l: Lead, meta: Record<string, string>, niche: ReturnType<typeof getNiche>, needsHuman = false): string {
+const QUOTE_LABEL: Record<string, string> = {
+  draft: "Cotización borrador",
+  sent: "Cotización enviada",
+  accepted: "Cotización aceptada",
+  rejected: "Cotización rechazada",
+  expired: "Cotización vencida",
+};
+
+function quoteChipLabel(q: Quote): string {
+  const total = Math.round(q.total * 100) / 100;
+  return `${QUOTE_LABEL[q.status] ?? "Cotización"} · $${total.toLocaleString("en-US")}`;
+}
+
+function kanbanCard(t: T, l: Lead, meta: Record<string, string>, niche: ReturnType<typeof getNiche>, labels: LabelMeta[] = [], quote?: Quote | null): string {
   const cols = niche.columns.length
     ? niche.columns.map((c) => meta[c.key]).filter(Boolean).slice(0, 3).join(" · ")
     : "";
   const resumen = l.status === "entrada" ? "" : l.intent;
   const moveOpts = LEAD_STATUSES.filter((s) => s !== l.status)
     .map((s) => `<option value="${s}">${esc(niche.statusLabels[s])}</option>`)
+    .join("");
+  const labelChips = labels
+    .slice(0, 3)
+    .map(
+      (m) =>
+        `<span style="font-size:9px;color:${esc(m.color)};border:1px solid ${esc(m.color)};padding:1px 6px;white-space:nowrap">${esc(m.name)}</span>`,
+    )
     .join("");
   return `<div class="kb-card" draggable="true" data-lead-id="${l.id}"
     style="border:1px solid var(--line);background:var(--panel2);padding:10px 11px;display:flex;flex-direction:column;gap:5px;cursor:grab;font-size:12px">
@@ -37,7 +58,8 @@ function kanbanCard(t: T, l: Lead, meta: Record<string, string>, niche: ReturnTy
       <span class="text-dim" style="font-size:10px">${fmtDate(l.created_at)}</span>
     </div>
     ${l.contact ? `<div class="text-muted" style="font-size:11px">${esc(l.contact)}</div>` : ""}
-    ${needsHuman ? `<div><span style="font-size:9px;color:var(--bad);border:1px solid var(--bad);background:var(--bad-soft);padding:1px 6px;white-space:nowrap">${t("lead.needsHuman")}</span></div>` : ""}
+    ${labelChips ? `<div style="display:flex;flex-wrap:wrap;gap:4px">${labelChips}</div>` : ""}
+    ${quote ? `<div><span style="font-size:9px;color:var(--accent);border:1px solid var(--accent);padding:1px 6px;white-space:nowrap">📄 ${esc(quoteChipLabel(quote))}</span></div>` : ""}
     ${cols ? `<div class="text-muted" style="font-size:11px">${esc(cols)}</div>` : ""}
     ${resumen ? `<div class="text-dim" style="font-size:11px;line-height:1.4;max-height:3.2em;overflow:hidden">${esc(resumen)}</div>` : ""}
     <div style="display:flex;gap:6px;align-items:center;margin-top:2px">
@@ -92,12 +114,17 @@ function kanbanJs(t: T): string {
 `;
 }
 
-function renderKanban(t: T, env: Env, list: Lead[], niche: ReturnType<typeof getNiche>, humanSet: Set<string> = new Set()): string {
+function renderKanban(t: T, env: Env, list: Lead[], niche: ReturnType<typeof getNiche>, labelMap: Record<string, string[]> = {}, catalog: Record<string, LabelMeta> = {}, quoteMap: Record<string, Quote> = {}): string {
   const labels = JSON.stringify(Object.fromEntries(LEAD_STATUSES.map((v) => [v, niche.statusLabels[v]])));
   const columns = LEAD_STATUSES.map((s) => {
     const items = list.filter((l) => l.status === s);
     const cards = items
-      .map((l) => kanbanCard(t, l, leadMetadata(l), niche, !!l.conversation_id && humanSet.has(l.conversation_id)))
+      .map((l) => {
+        const assigned = l.conversation_id ? labelMap[l.conversation_id] ?? [] : [];
+        const metas = assigned.map((id) => labelMetaIn(catalog, id));
+        const quote = l.conversation_id ? quoteMap[l.conversation_id] : null;
+        return kanbanCard(t, l, leadMetadata(l), niche, metas, quote);
+      })
       .join("");
     return `<div class="kb-col" data-status="${s}" style="flex:1;min-width:220px;display:flex;flex-direction:column;gap:8px;border:1px solid var(--line);background:var(--panel);padding:10px">
       <div style="display:flex;align-items:center;gap:7px">
@@ -163,6 +190,10 @@ export async function renderLeads(env: Env, vista: "kanban" | "tabla" = "kanban"
   const labelMap = await new ConversationLabelsRepo(db)
     .byConversationIds(list.map((l) => l.conversation_id ?? "").filter(Boolean))
     .catch(() => ({}) as Record<string, string[]>);
+  const catalog = await loadLabelCatalog(env).catch(() => ({}));
+  const quoteMap = await new QuotesRepo(db)
+    .latestByConversations(list.map((l) => l.conversation_id ?? "").filter(Boolean))
+    .catch(() => ({}) as Record<string, Quote>);
   const humanSet = new Set(
     Object.entries(labelMap)
       .filter(([, ls]) => ls.includes(NEEDS_HUMAN_LABEL))
@@ -183,7 +214,7 @@ export async function renderLeads(env: Env, vista: "kanban" | "tabla" = "kanban"
         <a href="/admin/leads/export.csv" style="font-size:12px;padding:6px 12px;border:1px solid var(--line);color:var(--muted);text-decoration:none">${t("lead.exportCsv")}</a>
       </div>
     </div>
-    ${vista === "kanban" ? renderKanban(t, env, list, niche, humanSet) : renderTabla(t, env, list, niche, humanSet)}`;
+    ${vista === "kanban" ? renderKanban(t, env, list, niche, labelMap, catalog, quoteMap) : renderTabla(t, env, list, niche, humanSet)}`;
 
   return layout({ title: niche.recordPlural, activeTab: "leads", body, env });
 }

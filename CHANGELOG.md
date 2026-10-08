@@ -5,6 +5,37 @@ Cambios notables de Kooni. Formato aproximado de
 
 El CLI `kooni-bot` se versiona aparte (npm) — ver la nota de cada versión.
 
+## [1.57.0] — 2026-10-08
+
+### Agregado — etiquetas con IA, cotizaciones en PDF, disparadores y migración de cuenta
+
+- **Etiquetado inteligente** (`etiquetas_ia`): catálogo de etiquetas definido por el
+  usuario (`src/db/labels.ts`) + reglas por **palabra clave** (en tiempo real, en
+  `src/agent.ts::ingest`) y por **IA** (clasificador en el análisis nocturno, motor
+  `src/labels/engine.ts`). Tool `etiquetarConversacion` para que el modelo etiquete
+  al reconocer la condición. Panel `/admin/etiquetas`, chips y filtro por etiqueta en
+  Conversaciones, badges en el kanban.
+- **Cotizaciones en PDF** (`cotizaciones` + `archivos_salientes`): borradores
+  (`quotes`/`quote_items`) que arma el bot con la tool `crearCotizacion` (nicho
+  eventos), plantilla HTML editable con marcadores + bloque de ítems
+  (`src/quotes/template.ts`), PDF vía **Cloudflare Browser Rendering** (`src/quotes/pdf.ts`,
+  binding `BROWSER`, opcional) servido por **enlace firmado** `GET /q/:token` (sin R2).
+  Editor de borrador (`/admin/cotizaciones/:id`) y tarjeta en el hilo con Editar /
+  Enviar / Reenviar. Envío de **documentos** en `OutgoingReply` (Telegram, WAHA, Zernio).
+- **Disparadores keyword→flujo multi-canal** (`flujos`): tabla `triggers` + motor
+  `src/triggers/engine.ts` que corre en `ingest` (todos los canales). Acciones:
+  responder texto, responder con IA, etiquetar, capturar lead, pasar a humano o
+  secuencia de mensajes. Panel `/admin/disparadores`.
+- **`npx kooni-bot migrate`** (CLI 0.8.0): migra una instalación **íntegra** a otra
+  cuenta de Cloudflare (D1 + esquema + re-index de la KB + secrets + deploy +
+  re-vinculación de licencia). Solo copia; la cuenta de origen no se toca. Doc:
+  `docs/MIGRACION.md`.
+- **Novedades** (hub InsForge, migración `20261008120000`): publica la migración y las
+  funciones nuevas para todos los clientes + los 4 módulos nuevos en `modulos_catalogo`.
+- Tests: `test/db/labels`, `test/labels/engine`, `test/tools/etiquetarConversacion`,
+  `test/db/quotes`, `test/quotes/{template,link}`, `test/tools/crearCotizacion`,
+  `test/db/triggers`, `test/triggers/engine`.
+
 ## [1.56.0] — 2026-10-05
 
 ### Agregado — el prompt manual acepta etiquetas `{{...}}` (con barra para insertarlas)

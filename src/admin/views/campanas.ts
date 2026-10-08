@@ -7,7 +7,7 @@ import type { Env } from "../../env";
 import { Db } from "../../db/client";
 import { layout } from "./layout";
 import { panelI18n, type T } from "../i18n";
-import { SEGMENTS, segmentCounts } from "../../segments";
+import { segmentCounts } from "../../segments";
 import {
   listContentTemplates,
   templatesSentLast24h,
@@ -55,20 +55,19 @@ export async function renderCampanas(
 
   const segRows = counts
     .map((s, i) => {
-      const def = SEGMENTS.find((d) => d.id === s.id)!;
       return `
       <label style="display:flex;gap:12px;align-items:flex-start;border:1px solid var(--line);padding:12px 14px;cursor:pointer;background:var(--panel)">
         <input type="radio" name="segment" value="${esc(s.id)}" ${i === 0 ? "checked" : ""} style="margin-top:3px">
         <div style="min-width:0;flex:1">
           <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap">
-            <span style="font-weight:600;font-size:13px">${esc(def.label)}</span>
+            <span style="font-weight:600;font-size:13px">${esc(s.label)}</span>
             <span class="font-mono" style="font-size:11px">
               <b>${s.total}</b> ${t("camp.segTotal")} ·
               <span style="color:var(--ok)">${s.inWindow} ${t("camp.segInWindow")}</span> ·
               <span style="color:var(--warn)">${s.outWindow} ${t("camp.segOutWindow")}</span>
             </span>
           </div>
-          <div class="text-dim" style="font-size:11.5px;margin-top:2px">${esc(def.desc)}</div>
+          <div class="text-dim" style="font-size:11.5px;margin-top:2px">${esc(s.desc)}</div>
         </div>
       </label>`;
     })

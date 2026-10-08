@@ -206,6 +206,17 @@ export async function analyzeConversations(
       if (insight.customer_facts.length > 0) {
         await new CustomerFactsRepo(db).addMany(conv.id, insight.customer_facts);
       }
+      // Etiquetado inteligente (módulo etiquetas_ia): el clasificador IA decide
+      // qué etiquetas definidas por el dueño aplican (reglas kind="ai").
+      try {
+        const { isFeatureActive } = await import("../features");
+        if (await isFeatureActive(env, "etiquetas")) {
+          const { classifyAndApply } = await import("../labels/engine");
+          await classifyAndApply(env, conv.id, transcript);
+        }
+      } catch (e) {
+        console.warn("[insights] etiquetado IA falló (fail-open):", e);
+      }
       analyzed++;
     } catch (e) {
       errors++;

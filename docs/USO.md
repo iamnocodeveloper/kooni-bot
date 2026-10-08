@@ -228,3 +228,27 @@ prueba de manejo) y suma **Inventario** en el menú (`/admin/scraping/inventario
 - El texto viaja al proveedor de IA que **tú** elegiste (con tu llave).
 - Si un cliente pregunta si es un bot, **lo admite** — no lo configures para negarlo.
 - Detalle completo: [`PRIVACY.md`](../PRIVACY.md).
+
+---
+
+## 9. Etiquetas, cotizaciones, disparadores y catálogo
+
+Cuatro funciones nuevas que se configuran desde el panel (menú lateral):
+
+- **Etiquetas** (`Etiquetas`): crea etiquetas propias y reglas para que el bot las
+  ponga solo — por **palabra clave** (en tiempo real) o por **IA** (entiende la
+  intención). Etiqueta a mano desde la conversación (chips) y **filtra** la bandeja
+  por etiqueta. En la misma página defines la etiqueta automática al **capturar un lead**.
+- **Catálogo** (`Catálogo`, en "Mi Agente"): tus precios (tabla `products`). Lo usan
+  el bot para responder precios y, si tu giro cotiza, para **armar cotizaciones**.
+  Los giros con paquetes de ejemplo (eventos) traen un botón "Cargar catálogo de ejemplo".
+- **Cotizaciones** (nicho eventos y otros): el bot arma el **borrador** con lo que el
+  cliente aceptó. En la conversación ves una tarjeta con **Editar / Enviar / Reenviar**;
+  se genera el **PDF** y viaja como documento (Telegram/WhatsApp/…) o como enlace.
+- **Disparadores** (en "Mi Agente"): "si el cliente dice X (o la IA detecta Y) → haz Z".
+  Z puede ser: responder texto, responder con IA, etiquetar, capturar lead, pasar a un
+  humano, o una **secuencia** de mensajes. Funciona en todos los canales.
+
+> Requisitos opcionales: el **PDF** necesita habilitar *Browser Rendering* en tu cuenta
+> de Cloudflare (sin él, la cotización se envía como texto + enlace). Para mover una
+> instalación a otra cuenta, ver [`MIGRACION.md`](./MIGRACION.md).

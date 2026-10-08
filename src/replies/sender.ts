@@ -83,14 +83,15 @@ export async function sendReplyCapped(
   channelUserId: string,
   chunks: string[],
   env: Env,
-  opts: { buttons?: ReplyButton[]; imageUrl?: string; audioUrl?: string; interChunkDelayMs?: number } = {},
+  opts: { buttons?: ReplyButton[]; imageUrl?: string; audioUrl?: string; documentUrl?: string; documentName?: string; interChunkDelayMs?: number } = {},
 ): Promise<{ dropped: string[] }> {
-  const caps = CHANNEL_CAPABILITIES[channel] ?? { buttons: false, image: false, audio: false };
+  const caps = CHANNEL_CAPABILITIES[channel] ?? { buttons: false, image: false, audio: false, document: false };
   const dropped: string[] = [];
 
   let buttons = opts.buttons;
   let imageUrl = opts.imageUrl;
   let audioUrl = opts.audioUrl;
+  let documentUrl = opts.documentUrl;
 
   if (buttons && buttons.length && !caps.buttons) {
     dropped.push("buttons");
@@ -104,6 +105,10 @@ export async function sendReplyCapped(
     dropped.push("audio");
     audioUrl = undefined;
   }
+  if (documentUrl && !caps.document) {
+    dropped.push("document");
+    documentUrl = undefined;
+  }
 
   const adapter = pickAdapter(channel);
   await adapter.sendReply(
@@ -115,6 +120,8 @@ export async function sendReplyCapped(
       ...(buttons && buttons.length ? { buttons } : {}),
       ...(imageUrl ? { imageUrl } : {}),
       ...(audioUrl ? { audioUrl } : {}),
+      ...(documentUrl ? { documentUrl } : {}),
+      ...(documentUrl && opts.documentName ? { documentName: opts.documentName } : {}),
     },
     env,
   );

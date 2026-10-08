@@ -453,6 +453,36 @@ app.post("/webhooks/learn/:channel", async (c) => {
   return c.json({ ok: true, captured: kind, channel }, 200);
 });
 
+// PDF PÚBLICO de una cotización, por enlace FIRMADO (/q/<quoteId>.<firma>). El
+// canal (Telegram/WAHA/Zernio) lo busca al enviar el documento; se genera al
+// vuelo. Sin Browser Rendering, sirve el mismo HTML (siempre abre en el navegador).
+app.get("/q/:token", async (c) => {
+  const token = c.req.param("token");
+  const { verifyQuoteToken, quoteFilename } = await import("./quotes/link");
+  const quoteId = await verifyQuoteToken(c.env, token);
+  if (!quoteId) return c.text("Enlace inválido o vencido", 404);
+  const { Db } = await import("./db/client");
+  const { QuotesRepo } = await import("./db/quotes");
+  const repo = new QuotesRepo(new Db(c.env.DB));
+  const quote = await repo.get(quoteId);
+  if (!quote) return c.text("Cotización no encontrada", 404);
+  const items = await repo.items(quoteId);
+  const { buildQuoteHtml } = await import("./quotes/template");
+  const html = await buildQuoteHtml(c.env, quote, items);
+  const { htmlToPdf } = await import("./quotes/pdf");
+  const pdf = await htmlToPdf(c.env, html);
+  if (pdf) {
+    return new Response(pdf as unknown as BodyInit, {
+      status: 200,
+      headers: {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": `inline; filename="${quoteFilename(quote)}"`,
+      },
+    });
+  }
+  return c.html(html);
+});
+
 // Admin dashboard — sub-app en /admin/*, con login propio (cookie de sesión) o
 // Basic Auth. Ver src/admin/auth.ts.
 app.route("/admin", adminApp);

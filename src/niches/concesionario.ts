@@ -1,4 +1,4 @@
-import type { NichePack } from "./types";
+import { CATALOG_NAV, type NichePack } from "./types";
 import { agendaRealBlock } from "../prompt/agenda";
 
 // Niche pack: CONCESIONARIO / lote de autos (nuevos, seminuevos o usados).
@@ -119,6 +119,7 @@ disponibilidad ni condiciones de financiamiento.
     // se suma el acceso directo al inventario en el menú lateral.
     navExtra: [
       { id: "inventario", label: "Inventario", icon: "car", href: "/admin/scraping/inventario", section: "Mi Agente" },
+      CATALOG_NAV,
     ],
   },
   // Preguntas propias del giro en la entrevista inicial del CLI.

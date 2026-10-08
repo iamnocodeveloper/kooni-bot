@@ -1,4 +1,5 @@
 import type { Env } from "../env";
+import { Db } from "../db/client";
 import { searchKbTool } from "./searchKb";
 import { handoffHumanTool } from "./handoffHuman";
 import { pauseBotTool } from "./pauseBot";
@@ -108,6 +109,30 @@ export async function buildTools(ctx: ToolContext) {
     const { buscarPropiedadTool, fichaPropiedadTool } = await import("./propiedades");
     if (extraTools.includes("buscarPropiedad")) tools.buscarPropiedad = buscarPropiedadTool(ctx.env);
     if (extraTools.includes("fichaPropiedad")) tools.fichaPropiedad = fichaPropiedadTool(ctx.env, getRecursoCtx);
+  }
+
+  // Cotizaciones (nicho eventos y otros): crea/actualiza el borrador con ítems y
+  // datos del evento, y opcionalmente envía el PDF por el canal.
+  if (extraTools.includes("crearCotizacion")) {
+    const { crearCotizacionTool } = await import("./crearCotizacion");
+    tools.crearCotizacion = crearCotizacionTool(ctx.env, ctx.getConversationId, getRecursoCtx);
+  }
+
+  // Etiquetado inteligente (módulo etiquetas_ia): el modelo puede poner etiquetas
+  // que el dueño creó, cuando reconoce su condición. Solo se registra si la
+  // función está activa y hay etiquetas definidas.
+  try {
+    const { isFeatureActive } = await import("../features");
+    if (await isFeatureActive(ctx.env, "etiquetas")) {
+      const { LabelsRepo } = await import("../db/labels");
+      const rows = (await new LabelsRepo(new Db(ctx.env.DB)).list(false)).map((l) => ({ id: l.id, name: l.name }));
+      if (rows.length > 0) {
+        const { etiquetarConversacionTool } = await import("./etiquetarConversacion");
+        tools.etiquetarConversacion = etiquetarConversacionTool(ctx.env, ctx.getConversationId, rows);
+      }
+    }
+  } catch {
+    // sin D1/tabla labels → sin tool (no rompe el agente)
   }
 
   return tools;

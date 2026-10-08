@@ -104,7 +104,19 @@ export const telegramAdapter: ChannelAdapter = {
     const first = reply.chunks[0] ?? "";
     const rest = reply.chunks.slice(1);
 
-    if (reply.imageUrl) {
+    if (reply.documentUrl) {
+      await fetch(`${TG_API}${token}/sendDocument`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: chatId,
+          document: reply.documentUrl,
+          caption: first.slice(0, 1024) || undefined,
+          ...(replyToMessageId ? { reply_to_message_id: replyToMessageId } : {}),
+          ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
+        }),
+      }).catch((e) => console.error("telegram sendDocument error:", e));
+    } else if (reply.imageUrl) {
       await fetch(`${TG_API}${token}/sendPhoto`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -130,7 +142,8 @@ export const telegramAdapter: ChannelAdapter = {
       }).catch((e) => console.error("telegram sendVoice error:", e));
     }
 
-    const textChunks = reply.imageUrl || reply.audioUrl ? rest : reply.chunks;
+    const hasAttachment = Boolean(reply.documentUrl || reply.imageUrl || reply.audioUrl);
+    const textChunks = hasAttachment ? rest : reply.chunks;
     for (let i = 0; i < textChunks.length; i++) {
       await fetch(`${TG_API}${token}/sendChatAction`, {
         method: "POST",
@@ -139,7 +152,7 @@ export const telegramAdapter: ChannelAdapter = {
       }).catch(() => {});
       const delay = i === 0 ? 0 : reply.interChunkDelayMs ?? 1000;
       if (delay > 0) await new Promise((r) => setTimeout(r, delay));
-      const isLast = i === textChunks.length - 1 && !reply.imageUrl && !reply.audioUrl;
+      const isLast = i === textChunks.length - 1 && !hasAttachment;
       await fetch(`${TG_API}${token}/sendMessage`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

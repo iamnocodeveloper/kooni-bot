@@ -837,3 +837,138 @@ CREATE TABLE IF NOT EXISTS taxi_trip_events (
   FOREIGN KEY (trip_id) REFERENCES taxi_trips(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_taxi_trip_events_trip ON taxi_trip_events(trip_id, at);
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- ETIQUETAS definidas por el usuario + reglas que las aplican solas.
+-- `conversation_labels` (arriba) sigue siendo la tabla de asignación
+-- conversación-etiqueta, y su columna `label` guarda el `id` (slug) de una
+-- fila de `labels`. Las etiquetas de sistema (ej. atencion_humana) NO viven
+-- aquí: las resuelve `SYSTEM_LABELS` en src/db/conversationLabels.ts.
+-- ─────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS labels (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  color TEXT,
+  icon TEXT,
+  description TEXT,
+  enabled INTEGER NOT NULL DEFAULT 1,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_labels_enabled ON labels(enabled, sort_order);
+
+-- Regla que aplica una etiqueta. kind=keyword → match determinista por palabras
+-- (keywords JSON array). kind=ai → el modelo de análisis decide con
+-- ai_instruction. enabled=0 la apaga sin borrarla.
+CREATE TABLE IF NOT EXISTS label_rules (
+  id TEXT PRIMARY KEY,
+  label_id TEXT NOT NULL,
+  kind TEXT NOT NULL DEFAULT 'keyword',
+  keywords TEXT,
+  ai_instruction TEXT,
+  enabled INTEGER NOT NULL DEFAULT 1,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_label_rules_label ON label_rules(label_id);
+CREATE INDEX IF NOT EXISTS idx_label_rules_enabled ON label_rules(enabled, kind);
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- COTIZACIONES (draft editable + PDF + envío por la conversación).
+-- El catálogo de precios reutiliza `products` (category agrupa, p.ej. paquetes).
+-- status: draft | sent | accepted | rejected | expired.
+-- ─────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS quotes (
+  id TEXT PRIMARY KEY,
+  conversation_id TEXT,
+  lead_id TEXT,
+  channel TEXT,
+  channel_user_id TEXT,
+  number TEXT,
+  status TEXT NOT NULL DEFAULT 'draft',
+  client_name TEXT,
+  client_contact TEXT,
+  event_type TEXT,
+  event_date TEXT,
+  event_place TEXT,
+  guests INTEGER,
+  notes TEXT,
+  currency TEXT NOT NULL DEFAULT 'USD',
+  subtotal REAL NOT NULL DEFAULT 0,
+  discount REAL NOT NULL DEFAULT 0,
+  tax REAL NOT NULL DEFAULT 0,
+  deposit REAL NOT NULL DEFAULT 0,
+  total REAL NOT NULL DEFAULT 0,
+  valid_until TEXT,
+  created_by TEXT,
+  payload TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  sent_at INTEGER,
+  sent_count INTEGER NOT NULL DEFAULT 0,
+  FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS idx_quotes_conv ON quotes(conversation_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_quotes_status ON quotes(status, created_at);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_quotes_number ON quotes(number);
+
+CREATE TABLE IF NOT EXISTS quote_items (
+  id TEXT PRIMARY KEY,
+  quote_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  description TEXT,
+  qty REAL NOT NULL DEFAULT 1,
+  unit_price REAL NOT NULL DEFAULT 0,
+  total REAL NOT NULL DEFAULT 0,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  FOREIGN KEY (quote_id) REFERENCES quotes(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_quote_items_quote ON quote_items(quote_id, sort_order);
+
+-- Trazabilidad de la cotización: creación, edición, envío, reenvío, cambio de
+-- estado. Alimenta la sección Cotizaciones y la auditoría.
+CREATE TABLE IF NOT EXISTS quote_events (
+  id TEXT PRIMARY KEY,
+  quote_id TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  detail TEXT,
+  at INTEGER NOT NULL,
+  FOREIGN KEY (quote_id) REFERENCES quotes(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_quote_events_quote ON quote_events(quote_id, at);
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- DISPARADORES (automatizaciones keyword→flujo, multi-canal). A diferencia de
+-- `auto_rules` (específico de comentarios de Zernio), esto corre sobre mensajes
+-- entrantes de CUALQUIER canal.
+-- match_kind: keyword | ai | any. action: reply_fixed | reply_ai | label |
+-- capture_lead | handoff | flow. action_payload es JSON según la acción.
+-- ─────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS triggers (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  enabled INTEGER NOT NULL DEFAULT 1,
+  scope TEXT NOT NULL DEFAULT 'any',
+  match_kind TEXT NOT NULL DEFAULT 'keyword',
+  keywords TEXT,
+  ai_instruction TEXT,
+  action TEXT NOT NULL DEFAULT 'reply_fixed',
+  action_payload TEXT,
+  priority INTEGER NOT NULL DEFAULT 0,
+  run_once_per_conversation INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_triggers_enabled ON triggers(enabled, priority);
+
+-- Pasos de un disparador con action=flow: secuencia de mensajes con demora.
+-- kind: text | ai. delay_minutes = espera desde el paso anterior.
+CREATE TABLE IF NOT EXISTS trigger_steps (
+  id TEXT PRIMARY KEY,
+  trigger_id TEXT NOT NULL,
+  idx INTEGER NOT NULL DEFAULT 0,
+  delay_minutes INTEGER NOT NULL DEFAULT 0,
+  kind TEXT NOT NULL DEFAULT 'text',
+  content TEXT,
+  FOREIGN KEY (trigger_id) REFERENCES triggers(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_trigger_steps_trigger ON trigger_steps(trigger_id, idx);

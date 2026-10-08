@@ -74,6 +74,15 @@ const MEMBER_SELECT = `
   JOIN messages m ON m.conversation_id = c.id AND m.role = 'user'`;
 
 function whereFor(segmentId: string): { joins: string; where: string } {
+  // Etiquetas del usuario: "label:<id>" → conversaciones con esa etiqueta.
+  if (segmentId.startsWith("label:")) {
+    const id = segmentId.slice(6);
+    if (!/^[a-z0-9_]{1,40}$/.test(id)) throw new Error(`etiqueta inválida: ${id}`);
+    return {
+      joins: "",
+      where: `WHERE c.id IN (SELECT conversation_id FROM conversation_labels WHERE label = '${id}')`,
+    };
+  }
   switch (segmentId) {
     case "quiero_sin_click":
       return {
@@ -133,6 +142,23 @@ export async function segmentMembers(
   }));
 }
 
+/** Segmentos dinámicos: una audiencia por cada etiqueta habilitada del usuario. */
+export async function labelSegments(db: Db): Promise<SegmentDef[]> {
+  const rows = await db
+    .all<{ id: string; name: string }>("SELECT id, name FROM labels WHERE enabled = 1 ORDER BY sort_order, name")
+    .catch(() => []);
+  return rows.map((r) => ({
+    id: `label:${r.id}`,
+    label: `🏷️ ${r.name}`,
+    desc: "Conversaciones etiquetadas con esta etiqueta.",
+  }));
+}
+
+/** Todos los segmentos: los fijos + uno por etiqueta del usuario. */
+export async function allSegments(db: Db): Promise<SegmentDef[]> {
+  return [...SEGMENTS, ...(await labelSegments(db))];
+}
+
 export interface SegmentCount {
   id: string;
   label: string;
@@ -145,8 +171,8 @@ export interface SegmentCount {
 /** Conteos de todos los segmentos (para pintar la página de campañas). */
 export async function segmentCounts(db: Db, now = Date.now()): Promise<SegmentCount[]> {
   const out: SegmentCount[] = [];
-  for (const seg of SEGMENTS) {
-    const members = await segmentMembers(db, seg.id, now);
+  for (const seg of await allSegments(db)) {
+    const members = await segmentMembers(db, seg.id, now).catch(() => []);
     const inW = members.filter((m) => m.inWindow).length;
     out.push({
       id: seg.id,

@@ -1,4 +1,4 @@
-import type { NichePack } from "./types";
+import { CATALOG_NAV, type NichePack } from "./types";
 
 // Niche pack: agencia / revendedor que vende asistentes de IA y diseño web
 // (p. ej. quien revende Kooni). Aporta un playbook de VENTA CONVERSACIONAL:
@@ -79,4 +79,5 @@ persona lo confirme por WhatsApp. Nunca inventes precios ni plazos.
     "canales-y-costos",
     "faq-kooni",
   ],
+  hooks: { navExtra: [CATALOG_NAV] },
 };

@@ -1,4 +1,4 @@
-import type { NichePack } from "./types";
+import { CATALOG_NAV, type NichePack } from "./types";
 import { agendaRealBlock } from "../prompt/agenda";
 
 // Niche pack: clínica / consultorio / centro médico o de estética. Aporta un
@@ -81,4 +81,5 @@ persona lo confirme. Nunca inventes precios, disponibilidad ni información méd
     "clinica-servicios-ejemplo",
     "clinica-faq",
   ],
+  hooks: { navExtra: [CATALOG_NAV] },
 };
