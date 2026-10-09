@@ -29,6 +29,10 @@ Instalaciones existentes: aplicar el esquema (`pnpm db:apply:remote`, crea `medi
 `trigger_step_media`) y desplegar. Requiere el toggle **Permitir multimedia** y el módulo **Galería**.
 WAHA sigue siendo **edición privada** (no se distribuye a instalaciones públicas).
 
+**CLI `kooni-bot` → 0.8.1** (pendiente de publicar): el instalador ahora comenta el binding R2
+`MEDIA` (antes `CATALOG`, que ya no existe) cuando la cuenta no tiene R2. El template se baja de
+GitHub igual, así que no es imprescindible para actualizar instalaciones.
+
 ## [1.58.1] — 2026-10-08
 
 ### Arreglado — la tarjeta de WAHA ahora se muestra cuando el módulo está activo
