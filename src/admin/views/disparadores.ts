@@ -17,7 +17,7 @@ function actionLabel(t: T, a: TriggerAction): string {
   return t((`trg.action.${a}`) as never);
 }
 
-function triggerRow(t: T, tr: Trigger, steps: { delay_minutes: number; kind: string; content: string | null }[]): string {
+function triggerRow(t: T, tr: Trigger, steps: { delay_minutes: number; kind: string; content: string | null; media?: { resource: string } }[]): string {
   const kws = TriggersRepo.keywordsOf(tr);
   const payload = TriggersRepo.parsePayload(tr);
   const matchDesc =
@@ -26,7 +26,9 @@ function triggerRow(t: T, tr: Trigger, steps: { delay_minutes: number; kind: str
       : tr.match_kind === "keyword"
         ? `${t("trg.keywordsPh")}: ${kws.join(", ") || "—"}`
         : `IA: ${tr.ai_instruction ?? "—"}`;
-  const stepsText = steps.map((s) => `${s.delay_minutes}|${s.content ?? ""}`).join("\n");
+  const stepsText = steps
+    .map((s) => `${s.delay_minutes}|${s.content ?? ""}${s.media?.resource ? `|@${s.media.resource}` : ""}`)
+    .join("\n");
   return `<div class="bg-panel border border-line" style="padding:12px 14px;display:flex;flex-direction:column;gap:9px;${tr.enabled === 0 ? "opacity:.6" : ""}">
     <form method="POST" action="/admin/disparadores/${encodeURIComponent(tr.id)}/save" style="display:flex;flex-direction:column;gap:8px">
       <div style="display:grid;grid-template-columns:1.4fr 1fr 1fr 90px;gap:8px;align-items:center">
@@ -69,7 +71,7 @@ export async function renderDisparadores(env: Env, saved = false): Promise<strin
   const { t } = await panelI18n(env);
   const repo = new TriggersRepo(new Db(env.DB));
   const triggers = await repo.list().catch(() => [] as Trigger[]);
-  const stepMap = new Map<string, { delay_minutes: number; kind: string; content: string | null }[]>();
+  const stepMap = new Map<string, Awaited<ReturnType<TriggersRepo["steps"]>>>();
   for (const tr of triggers) stepMap.set(tr.id, await repo.steps(tr.id).catch(() => []));
 
   const body = `

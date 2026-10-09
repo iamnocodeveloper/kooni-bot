@@ -283,7 +283,7 @@ export const es = {
   "trg.aiPh": "Condición para la IA (ej. el cliente pregunta el precio)",
   "trg.scopePh": "canal (any)",
   "trg.payloadPh": "Texto / instrucción / etiqueta / motivo según la acción",
-  "trg.stepsPh": "Secuencia (una línea por paso: minutos|contenido · prefijo ai: para IA)",
+  "trg.stepsPh": "Secuencia (una línea por paso: minutos|contenido · prefijo ai: para IA · @recurso para adjuntar imagen/audio/PDF)",
   "trg.priority": "Prioridad",
   "trg.runOnce": "Solo una vez por conversación",
   "trg.save": "Guardar",

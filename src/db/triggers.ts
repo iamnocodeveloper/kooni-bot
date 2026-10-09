@@ -43,6 +43,16 @@ export interface TriggerStep {
   delay_minutes: number;
   kind: "text" | "ai";
   content: string | null;
+  /** Recurso de la biblioteca adjunto al paso (opcional), por su nombre. */
+  media?: { resource: string };
+}
+
+export interface TriggerStepInput {
+  kind: "text" | "ai";
+  content: string;
+  delayMinutes: number;
+  /** Nombre del recurso (resource_library) a adjuntar al paso. */
+  resource?: string;
 }
 
 export interface UpsertTriggerInput {
@@ -129,20 +139,36 @@ export class TriggersRepo {
   }
 
   async steps(triggerId: string): Promise<TriggerStep[]> {
-    return this.db.all<TriggerStep>(
-      "SELECT * FROM trigger_steps WHERE trigger_id = ? ORDER BY idx ASC",
+    const rows = await this.db.all<TriggerStep & { media_resource: string | null }>(
+      `SELECT s.*, m.resource AS media_resource
+       FROM trigger_steps s
+       LEFT JOIN trigger_step_media m ON m.trigger_id = s.trigger_id AND m.idx = s.idx
+       WHERE s.trigger_id = ?
+       ORDER BY s.idx ASC`,
       [triggerId],
     );
+    return rows.map((r) => {
+      const { media_resource, ...step } = r;
+      return media_resource ? { ...step, media: { resource: media_resource } } : step;
+    });
   }
 
-  async setSteps(triggerId: string, steps: { kind: "text" | "ai"; content: string; delayMinutes: number }[]): Promise<void> {
+  async setSteps(triggerId: string, steps: TriggerStepInput[]): Promise<void> {
     await this.db.run("DELETE FROM trigger_steps WHERE trigger_id = ?", [triggerId]);
+    await this.db.run("DELETE FROM trigger_step_media WHERE trigger_id = ?", [triggerId]);
     let idx = 0;
     for (const s of steps) {
       await this.db.run(
         "INSERT INTO trigger_steps (id, trigger_id, idx, delay_minutes, kind, content) VALUES (?, ?, ?, ?, ?, ?)",
-        [crypto.randomUUID(), triggerId, idx++, s.delayMinutes, s.kind, s.content],
+        [crypto.randomUUID(), triggerId, idx, s.delayMinutes, s.kind, s.content],
       );
+      if (s.resource?.trim()) {
+        await this.db.run(
+          "INSERT INTO trigger_step_media (trigger_id, idx, resource) VALUES (?, ?, ?)",
+          [triggerId, idx, s.resource.trim()],
+        );
+      }
+      idx++;
     }
   }
 

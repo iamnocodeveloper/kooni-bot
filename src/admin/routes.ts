@@ -1208,7 +1208,16 @@ async function saveDisparador(env: Env, form: FormData | null, id?: string): Pro
     .map((line) => line.trim())
     .filter(Boolean)
     .map((line) => {
-      const [delay, ...rest] = line.split("|");
+      const parts = line.split("|");
+      const delay = parts[0];
+      let rest = parts.slice(1);
+      // Tercer campo opcional `@recurso`: adjunta un recurso de la biblioteca
+      // al paso (imagen/nota de voz/PDF). El `@` lo distingue de un `|` en el texto.
+      let resource: string | undefined;
+      if (rest.length > 1 && rest[rest.length - 1].trim().startsWith("@")) {
+        resource = rest[rest.length - 1].trim().slice(1).trim() || undefined;
+        rest = rest.slice(0, -1);
+      }
       let content = rest.join("|").trim();
       let kind: "text" | "ai" = "text";
       // Prefijo "ai:" → ese paso lo redacta la IA con esa instrucción.
@@ -1216,9 +1225,9 @@ async function saveDisparador(env: Env, form: FormData | null, id?: string): Pro
         kind = "ai";
         content = content.slice(3).trim();
       }
-      return { delayMinutes: Number(delay) || 0, kind, content };
+      return { delayMinutes: Number(delay) || 0, kind, content, ...(resource ? { resource } : {}) };
     })
-    .filter((s) => s.content);
+    .filter((s) => s.content || s.resource);
 
   const { TriggersRepo } = await import("../db/triggers");
   const { Db } = await import("../db/client");

@@ -273,7 +273,7 @@ export const en: Record<keyof typeof es, string> = {
   "trg.aiPh": "AI condition (e.g. the customer asks the price)",
   "trg.scopePh": "channel (any)",
   "trg.payloadPh": "Text / instruction / label / reason depending on the action",
-  "trg.stepsPh": "Sequence (one line per step: minutes|content · prefix ai: for AI)",
+  "trg.stepsPh": "Sequence (one line per step: minutes|content · prefix ai: for AI · @resource to attach an image/audio/PDF)",
   "trg.priority": "Priority",
   "trg.runOnce": "Only once per conversation",
   "trg.save": "Save",

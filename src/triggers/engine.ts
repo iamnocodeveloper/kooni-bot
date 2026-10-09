@@ -5,6 +5,7 @@ import { ConversationLabelsRepo } from "../db/conversationLabels";
 import { LeadsRepo } from "../db/leads";
 import { MessagesRepo } from "../db/messages";
 import { sendReplyCapped } from "../replies/sender";
+import type { ResourceMediaOpts } from "../resources/library";
 import { matchKeywords } from "../utils/keyword-matcher";
 import type { ChannelId } from "../channels/shared";
 
@@ -22,8 +23,9 @@ export interface TriggerEvalContext {
   /**
    * Programa pasos de un `flow` con demora (minutos). Lo aporta el Durable
    * Object (usa el scheduler del agente); en tests puede ser un espía.
+   * `resource` = recurso de la biblioteca a adjuntar (opcional).
    */
-  scheduleFlow?: (steps: { delayMinutes: number; text: string }[]) => void;
+  scheduleFlow?: (steps: { delayMinutes: number; text: string; resource?: string }[]) => void;
 }
 
 export interface TriggerOutcome {
@@ -97,9 +99,15 @@ async function aiText(env: Env, instruction: string, inbound: string): Promise<s
   }
 }
 
-async function sendAndRecord(env: Env, ctx: TriggerEvalContext, db: Db, text: string): Promise<void> {
-  await sendReplyCapped(ctx.channel, ctx.channelUserId, [text], env);
-  await new MessagesRepo(db).append(ctx.conversationId, "assistant", text);
+async function sendAndRecord(
+  env: Env,
+  ctx: TriggerEvalContext,
+  db: Db,
+  text: string,
+  media?: ResourceMediaOpts,
+): Promise<void> {
+  await sendReplyCapped(ctx.channel, ctx.channelUserId, [text], env, media ?? {});
+  if (text.trim()) await new MessagesRepo(db).append(ctx.conversationId, "assistant", text);
 }
 
 /**
@@ -172,17 +180,32 @@ export async function evaluateTriggers(env: Env, ctx: TriggerEvalContext): Promi
             const steps = await repo.steps(trigger.id);
             // Resolvemos el texto de cada paso ahora (los de IA se generan aquí),
             // y separamos los inmediatos de los diferidos (delay_minutes > 0).
-            const delayed: { delayMinutes: number; text: string }[] = [];
+            // Un paso puede llevar un recurso de la biblioteca (imagen/audio/PDF).
+            const { parseResourceLibrary, findResource, resourceMediaOf } = await import("../resources/library");
+            const { SettingsRepo, SETTING_KEYS } = await import("../db/settings");
+            const lib = parseResourceLibrary(await new SettingsRepo(db).get(SETTING_KEYS.resourceLibrary));
+            const mediaOf = (resource?: string): ResourceMediaOpts | undefined => {
+              if (!resource) return undefined;
+              const r = findResource(lib, resource);
+              return r ? resourceMediaOf(r) : undefined;
+            };
+
+            const delayed: { delayMinutes: number; text: string; resource?: string }[] = [];
             for (const step of steps) {
               const content =
                 step.kind === "ai"
                   ? await aiText(env, step.content ?? "Responde al cliente.", text)
                   : step.content;
-              if (!content) continue;
+              const media = mediaOf(step.media?.resource);
+              if (!content && !media) continue;
               if ((step.delay_minutes ?? 0) > 0) {
-                delayed.push({ delayMinutes: step.delay_minutes, text: content });
+                delayed.push({
+                  delayMinutes: step.delay_minutes,
+                  text: content ?? "",
+                  ...(step.media?.resource ? { resource: step.media.resource } : {}),
+                });
               } else {
-                await sendAndRecord(env, ctx, db, content);
+                await sendAndRecord(env, ctx, db, content ?? "", media);
               }
             }
             if (delayed.length) ctx.scheduleFlow?.(delayed);

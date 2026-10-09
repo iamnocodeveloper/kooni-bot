@@ -21,6 +21,7 @@ import type { LangCode } from "./lang/detect";
 import { nowInTz } from "./timezone";
 import { costOfUsage } from "./pricing";
 import type { ChannelId, ReplyButton } from "./channels/shared";
+import type { ResourceMediaOpts } from "./resources/library";
 import { maskTelegramToken } from "./telegramFiles";
 import { refFor } from "./channels/mediaRef";
 
@@ -408,14 +409,20 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
     conversationId: string,
     channel: ChannelId,
     channelUserId: string,
-    steps: { delayMinutes: number; text: string }[],
+    steps: { delayMinutes: number; text: string; resource?: string }[],
   ): Promise<void> {
     let earliest = Infinity;
     for (const step of steps) {
       const at = Date.now() + Math.max(0, step.delayMinutes) * 60_000;
       earliest = Math.min(earliest, at);
       const atSec = Math.floor(at / 1000);
-      const payload = JSON.stringify({ conversationId, channel, channelUserId, text: step.text });
+      const payload = JSON.stringify({
+        conversationId,
+        channel,
+        channelUserId,
+        text: step.text,
+        ...(step.resource ? { resource: step.resource } : {}),
+      });
       const id = `flow-${crypto.randomUUID()}`;
       this.sql`
         INSERT INTO cf_agents_schedules (id, callback, payload, type, time, created_at)
@@ -434,10 +441,18 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
     if (typeof p === "string") {
       try { p = JSON.parse(p); } catch { return; }
     }
-    if (!p?.channel || !p?.channelUserId || !p?.text) return;
+    if (!p?.channel || !p?.channelUserId || (!p?.text && !p?.resource)) return;
     try {
-      await sendReplyCapped(p.channel as ChannelId, p.channelUserId, [String(p.text)], this.env);
-      if (p.conversationId) {
+      let media: ResourceMediaOpts = {};
+      if (p.resource) {
+        const { SettingsRepo, SETTING_KEYS } = await import("./db/settings");
+        const { parseResourceLibrary, findResource, resourceMediaOf } = await import("./resources/library");
+        const lib = parseResourceLibrary(await new SettingsRepo(new Db(this.env.DB)).get(SETTING_KEYS.resourceLibrary));
+        const r = findResource(lib, String(p.resource));
+        if (r) media = resourceMediaOf(r);
+      }
+      await sendReplyCapped(p.channel as ChannelId, p.channelUserId, [String(p.text ?? "")], this.env, media);
+      if (p.conversationId && String(p.text ?? "").trim()) {
         await new MessagesRepo(new Db(this.env.DB)).append(p.conversationId, "assistant", String(p.text));
       }
     } catch (e) {

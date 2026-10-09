@@ -973,6 +973,17 @@ CREATE TABLE IF NOT EXISTS trigger_steps (
 );
 CREATE INDEX IF NOT EXISTS idx_trigger_steps_trigger ON trigger_steps(trigger_id, idx);
 
+-- Recurso multimedia (biblioteca `resource_library`) adjunto a un paso de un
+-- flow, por (trigger_id, idx) — el paso se identifica por su índice dentro del
+-- disparador. Tabla NUEVA, segura de re-aplicar. `resource` = nombre del
+-- recurso de la biblioteca — se resuelve a su URL al momento de enviar.
+CREATE TABLE IF NOT EXISTS trigger_step_media (
+  trigger_id TEXT NOT NULL,
+  idx INTEGER NOT NULL,
+  resource TEXT NOT NULL,
+  PRIMARY KEY (trigger_id, idx)
+);
+
 -- Recursos multimedia SUBIDOS desde el panel (imágenes/audios/PDF de la
 -- biblioteca). Fallback cuando no hay binding R2 `MEDIA`: se guardan los bytes
 -- en D1 y se sirven por enlace firmado (GET /media/:token). Tabla NUEVA, segura

@@ -88,4 +88,29 @@ describe("evaluateTriggers", () => {
     expect(scheduled[0]).toEqual([{ delayMinutes: 5, text: "Paso 2" }]);
     expect(msgs.some((m) => m.content === "Paso 2")).toBe(false);
   });
+
+  it("flow: un paso con @recurso adjunta el recurso de la biblioteca (imagen)", async () => {
+    const { SettingsRepo, SETTING_KEYS } = await import("../../src/db/settings");
+    await new SettingsRepo(db).set(
+      SETTING_KEYS.resourceLibrary,
+      JSON.stringify({ ofertas: { kind: "image", url: "https://x/ofertas.jpg" } }),
+    );
+    const id = await repo.upsert({ name: "Seqv", matchKind: "keyword", keywords: ["oferta"], action: "flow" });
+    await repo.setSteps(id, [{ kind: "text", content: "Mirá", delayMinutes: 0, resource: "ofertas" }]);
+
+    const calls: [string, RequestInit][] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: any, init: any) => {
+        calls.push([String(url), init]);
+        return new Response("{}", { status: 200 });
+      }),
+    );
+
+    const out = await evaluateTriggers(env, ctx("quiero la oferta"));
+    expect(out.replied).toBe(true);
+    const photo = calls.find(([u]) => u.includes("/sendPhoto"));
+    expect(photo).toBeTruthy();
+    expect(JSON.parse(photo![1].body as string).photo).toBe("https://x/ofertas.jpg");
+  });
 });

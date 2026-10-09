@@ -37,6 +37,17 @@ describe("TriggersRepo", () => {
     expect(steps[1].delay_minutes).toBe(5);
   });
 
+  it("pasos de un flujo: adjunta un recurso (media) al paso por idx", async () => {
+    const id = await repo.upsert({ name: "FlowM", matchKind: "any", action: "flow" });
+    await repo.setSteps(id, [
+      { kind: "text", content: "Mirá", delayMinutes: 0, resource: "ofertas" },
+      { kind: "text", content: "Otra cosa", delayMinutes: 0 },
+    ]);
+    const steps = await repo.steps(id);
+    expect(steps[0].media?.resource).toBe("ofertas");
+    expect(steps[1].media).toBeUndefined();
+  });
+
   it("toggle y delete (borra los pasos)", async () => {
     const id = await repo.upsert({ name: "T", matchKind: "any", action: "flow" });
     await repo.setSteps(id, [{ kind: "text", content: "x", delayMinutes: 0 }]);
