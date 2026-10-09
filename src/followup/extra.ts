@@ -98,7 +98,7 @@ export async function runFollowupExtra(
     try {
       await msgs.append(cand.id, "assistant", text);
       await convs.touchLastMessage(cand.id, now);
-      const media = await followupMedia(env, SETTING_KEYS.reengancheResource);
+      const media = await followupMedia(env, SETTING_KEYS.seguimientoResource3, SETTING_KEYS.reengancheResource);
       await sendReplyCapped(cand.channel as ChannelId, cand.channel_user_id, [text], env, {
         ...media,
         interChunkDelayMs: 0,

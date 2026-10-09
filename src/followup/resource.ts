@@ -6,16 +6,20 @@ import { parseResourceLibrary, findResource, resourceMediaOf, type ResourceMedia
 /**
  * Media opcional para un mensaje de seguimiento: el dueño elige en Extras un
  * recurso de la Galería (por nombre) y el seguimiento se envía con esa
- * imagen/nota de voz/PDF. Si no hay o el recurso no existe, devuelve {}.
+ * imagen/video/nota de voz/PDF. Acepta varias claves y devuelve la PRIMERA con
+ * recurso válido (permite un recurso por mensaje + fallback a las claves viejas).
  */
-export async function followupMedia(env: Env, settingKey: string): Promise<ResourceMediaOpts> {
+export async function followupMedia(env: Env, ...settingKeys: string[]): Promise<ResourceMediaOpts> {
   try {
     const repo = new SettingsRepo(new Db(env.DB));
-    const name = (await repo.get(settingKey))?.trim();
-    if (!name) return {};
     const lib = parseResourceLibrary(await repo.get(SETTING_KEYS.resourceLibrary));
-    const r = findResource(lib, name);
-    return r ? resourceMediaOf(r) : {};
+    for (const key of settingKeys) {
+      const name = (await repo.get(key))?.trim();
+      if (!name) continue;
+      const r = findResource(lib, name);
+      if (r) return resourceMediaOf(r);
+    }
+    return {};
   } catch {
     return {};
   }

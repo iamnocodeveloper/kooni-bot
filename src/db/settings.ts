@@ -136,6 +136,10 @@ export const SETTING_KEYS = {
   seguimientoMessage1: "seguimiento_message_1",
   seguimientoMessage2: "seguimiento_message_2",
   seguimientoMessage3: "seguimiento_message_3",
+  // Recurso de la Galería a adjuntar a CADA mensaje de seguimiento (1/2/3).
+  seguimientoResource1: "seguimiento_resource_1",
+  seguimientoResource2: "seguimiento_resource_2",
+  seguimientoResource3: "seguimiento_resource_3",
   // Comentarios SIN automatización: si está en "1", el bot responde EN PÚBLICO
   // (nunca DM) los comentarios de primer nivel que no matchean ninguna regla,
   // con el texto de commentFallbackMessage. Default "" (apagado = no hace nada).
@@ -278,6 +282,9 @@ export const SETTING_LABELS: Record<string, string> = {
   [SETTING_KEYS.seguimientoMessage1]: "Mensaje de seguimiento 1",
   [SETTING_KEYS.seguimientoMessage2]: "Mensaje de seguimiento 2",
   [SETTING_KEYS.seguimientoMessage3]: "Mensaje de seguimiento 3",
+  [SETTING_KEYS.seguimientoResource1]: "Recurso del mensaje 1",
+  [SETTING_KEYS.seguimientoResource2]: "Recurso del mensaje 2",
+  [SETTING_KEYS.seguimientoResource3]: "Recurso del mensaje 3",
   [SETTING_KEYS.quoteTemplateHtml]: "Plantilla HTML de la cotización",
   [SETTING_KEYS.quoteDefaults]: "Defaults de cotización",
   [SETTING_KEYS.quoteAutoSend]: "Enviar la cotización automáticamente",

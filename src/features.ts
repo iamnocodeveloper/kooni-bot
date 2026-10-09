@@ -80,12 +80,6 @@ export const EXTRA_FEATURES: ExtraFeature[] = [
     tipo: "membresia",
     config: [
       {
-        key: SETTING_KEYS.cazadorResource,
-        label: "Recurso a adjuntar (opcional)",
-        placeholder: "ej. ofertas",
-        help: "Nombre de un recurso de la Galería. El seguimiento se envía con esa imagen / nota de voz / PDF.",
-      },
-      {
         key: SETTING_KEYS.seguimientoCustom,
         label: "Personalizar mensajes de seguimiento",
         placeholder: "",
@@ -100,6 +94,12 @@ export const EXTRA_FEATURES: ExtraFeature[] = [
         kind: "textarea",
       },
       {
+        key: SETTING_KEYS.seguimientoResource1,
+        label: "Recurso del mensaje 1 (opcional)",
+        placeholder: "ej. ofertas",
+        help: "Nombre de un recurso de la Galería (imagen/video/nota de voz/PDF). Se adjunta al mensaje 1.",
+      },
+      {
         key: SETTING_KEYS.seguimientoMessage2,
         label: "Mensaje 2 (a los 2–5 días)",
         placeholder: "ej. ¿Te quedó alguna duda? Sigo por acá 🙌",
@@ -107,11 +107,23 @@ export const EXTRA_FEATURES: ExtraFeature[] = [
         kind: "textarea",
       },
       {
+        key: SETTING_KEYS.seguimientoResource2,
+        label: "Recurso del mensaje 2 (opcional)",
+        placeholder: "ej. promo",
+        help: "Nombre de un recurso de la Galería, adjunto al mensaje 2.",
+      },
+      {
         key: SETTING_KEYS.seguimientoMessage3,
         label: "Mensaje 3 (a los 5–10 días)",
         placeholder: "ej. Último aviso: sigo disponible si querés retomar.",
         help: "Se envía 5–10 días después del mensaje 2, si sigue sin contestar.",
         kind: "textarea",
+      },
+      {
+        key: SETTING_KEYS.seguimientoResource3,
+        label: "Recurso del mensaje 3 (opcional)",
+        placeholder: "ej. demo",
+        help: "Nombre de un recurso de la Galería, adjunto al mensaje 3.",
       },
     ],
   },

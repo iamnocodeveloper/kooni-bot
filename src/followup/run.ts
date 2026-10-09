@@ -200,9 +200,8 @@ Escribe UN solo mensaje de seguimiento MUY breve (máximo 2 líneas): retoma con
       await msgs.append(cand.id, "assistant", text, { modelUsed: modelId });
       await convs.touchLastMessage(cand.id, now);
 
-      // El seguimiento puede llevar adjunto un recurso de la Galería (imagen /
-      // nota de voz / PDF) elegido en Extras → Cazador.
-      const media = await followupMedia(env, SETTING_KEYS.cazadorResource);
+      // Recurso adjunto del mensaje 1 (con fallback a la clave vieja).
+      const media = await followupMedia(env, SETTING_KEYS.seguimientoResource1, SETTING_KEYS.cazadorResource);
       await sendReplyCapped(cand.channel as ChannelId, cand.channel_user_id, [text], env, {
         ...media,
         interChunkDelayMs: 0,

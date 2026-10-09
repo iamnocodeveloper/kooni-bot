@@ -144,11 +144,13 @@ describe("isFeatureActive", () => {
 });
 
 describe("Extras — personalizar seguimiento", () => {
-  it("la tarjeta Cazador trae checkbox + 3 mensajes personalizados", () => {
+  it("la tarjeta Cazador trae checkbox + 3 mensajes con su recurso", () => {
     const cazador = EXTRA_FEATURES.find((f) => f.id === "cazador")!;
     const cfg = cazador.config ?? [];
     expect(cfg.find((c) => c.key === "seguimiento_custom")?.kind).toBe("checkbox");
     const msgs = cfg.filter((c) => c.kind === "textarea").map((c) => c.key);
     expect(msgs).toEqual(["seguimiento_message_1", "seguimiento_message_2", "seguimiento_message_3"]);
+    const recursos = cfg.filter((c) => c.key.startsWith("seguimiento_resource_")).map((c) => c.key);
+    expect(recursos).toEqual(["seguimiento_resource_1", "seguimiento_resource_2", "seguimiento_resource_3"]);
   });
 });

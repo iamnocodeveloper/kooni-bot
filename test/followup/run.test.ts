@@ -225,6 +225,21 @@ describe("runFollowups — envío y garantías", () => {
     expect(opts.imageUrl).toBe("https://x/ofertas.jpg");
   });
 
+  it("seguimiento_resource_1 tiene prioridad sobre el fallback cazador_resource", async () => {
+    const { SettingsRepo, SETTING_KEYS } = await import("../../src/db/settings");
+    const s = new SettingsRepo(db);
+    await s.set(SETTING_KEYS.resourceLibrary, JSON.stringify({ a: { kind: "image", url: "https://x/a.jpg" }, b: { kind: "image", url: "https://x/b.jpg" } }));
+    await s.set(SETTING_KEYS.cazadorResource, "a");
+    await s.set(SETTING_KEYS.seguimientoResource1, "b");
+    const hot = await seed("hRes1");
+    await markHot(hot);
+
+    await runFollowups(env, { now: NOW });
+
+    const opts = sendReplyMock.mock.calls[0][4] as { imageUrl?: string };
+    expect(opts.imageUrl).toBe("https://x/b.jpg");
+  });
+
   it("modo personalizado: envía el mensaje 1 del dueño (sin IA)", async () => {
     const { SettingsRepo, SETTING_KEYS } = await import("../../src/db/settings");
     const s = new SettingsRepo(db);

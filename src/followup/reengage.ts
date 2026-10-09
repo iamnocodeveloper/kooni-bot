@@ -150,8 +150,8 @@ Escribe UN solo mensaje MUY breve (máximo 2 líneas): retoma con naturalidad lo
       await msgs.append(cand.id, "assistant", text, { modelUsed: modelId });
       await convs.touchLastMessage(cand.id, now);
 
-      // Segundo toque con recurso opcional de la Galería (Extras → Reenganche).
-      const media = await followupMedia(env, SETTING_KEYS.reengancheResource);
+      // Recurso adjunto del mensaje 2 (con fallback a la clave vieja).
+      const media = await followupMedia(env, SETTING_KEYS.seguimientoResource2, SETTING_KEYS.reengancheResource);
       await sendReplyCapped(cand.channel as ChannelId, cand.channel_user_id, [text], env, {
         ...media,
         interChunkDelayMs: 0,
