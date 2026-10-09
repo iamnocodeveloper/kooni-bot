@@ -5,6 +5,24 @@ Cambios notables de Kooni. Formato aproximado de
 
 El CLI `kooni-bot` se versiona aparte (npm) — ver la nota de cada versión.
 
+## [1.60.0] — 2026-10-09
+
+### Agregado — recursos en el primer mensaje (campañas) + seguimiento personalizable
+
+- **Enviar un recurso en el PRIMER mensaje**: en la Galería, cada recurso tiene el checkbox
+  **"Enviar en el primer mensaje del cliente (campañas)"**. El bot lo manda apenas el cliente
+  escribe por primera vez (conversación nueva), de forma **determinista** —antes de la respuesta y
+  sin depender de que la IA decida—. Ideal para quienes llegan de una campaña. En "Probar el bot"
+  aparece como **"Al primer mensaje enviaría:"** cuando el historial está vacío.
+- **Seguimiento personalizable (hasta 3 mensajes)**: en **Extras → Cazador**, checkbox
+  **"Personalizar mensajes de seguimiento"** (apagado = IA, como hoy) + 3 mensajes. Con el modo
+  activo: el toque 1 sale a las **3–20 h** con tu mensaje 1; si no contestan, el toque 2 a los
+  **2–5 días** con el mensaje 2; y el toque 3 a los **5–10 días** con el mensaje 3 (ticket nuevo
+  `followup_touches`). Un mensaje vacío = ese toque no se envía. La secuencia la gobierna el Cazador.
+
+Instalaciones existentes: `npx kooni-bot update` aplica el esquema (crea `followup_touches`) y
+despliega. Requiere el toggle **Permitir multimedia** + módulo **Galería** para lo de los recursos.
+
 ## [1.59.1] — 2026-10-09
 
 ### Arreglado — la Galería no aparecía en "Probar el bot"
