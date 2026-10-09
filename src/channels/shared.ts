@@ -38,6 +38,12 @@ export interface OutgoingReply {
   imageUrl?: string;
   /** URL de audio para adjuntar (si el canal lo soporta). */
   audioUrl?: string;
+  /**
+   * El audio es una NOTA DE VOZ (PTT) y no un archivo. En WhatsApp/WAHA se
+   * envía por /api/sendVoice (con conversión a opus/ogg); en Telegram por
+   * sendVoice. Si el canal no lo soporta, se manda como audio normal.
+   */
+  voice?: boolean;
   /** URL de un documento (PDF) para adjuntar al primer chunk (si el canal lo soporta). */
   documentUrl?: string;
   /** Nombre visible del archivo (ej. "Cotización-1234.pdf"). */
@@ -54,23 +60,29 @@ export interface ReplyButton {
 }
 
 /** Qué soporta cada canal para el envío (para degradar con gracia). */
-export const CHANNEL_CAPABILITIES: Record<ChannelId, { buttons: boolean; image: boolean; audio: boolean; document: boolean }> = {
-  telegram: { buttons: true, image: true, audio: true, document: true },
-  zernio: { buttons: true, image: true, audio: true, document: true },
-  manychat: { buttons: true, image: true, audio: false, document: false },
-  twilio: { buttons: false, image: true, audio: true, document: false },
-  whatsapp: { buttons: true, image: true, audio: true, document: false },
-  messenger: { buttons: true, image: true, audio: true, document: false },
-  instagram: { buttons: true, image: true, audio: true, document: false },
-  waha: { buttons: false, image: true, audio: true, document: true },
+export const CHANNEL_CAPABILITIES: Record<ChannelId, { buttons: boolean; image: boolean; audio: boolean; voice: boolean; document: boolean }> = {
+  telegram: { buttons: true, image: true, audio: true, voice: true, document: true },
+  zernio: { buttons: true, image: true, audio: true, voice: false, document: true },
+  manychat: { buttons: true, image: true, audio: false, voice: false, document: false },
+  twilio: { buttons: false, image: true, audio: true, voice: false, document: false },
+  whatsapp: { buttons: true, image: true, audio: true, voice: false, document: false },
+  messenger: { buttons: true, image: true, audio: true, voice: false, document: false },
+  instagram: { buttons: true, image: true, audio: true, voice: false, document: false },
+  waha: { buttons: false, image: true, audio: true, voice: true, document: true },
   // MercadoLibre: preguntas y mensajería post-venta son texto plano. Sin
   // botones ni adjuntos por esta vía.
-  mercadolibre: { buttons: false, image: false, audio: false, document: false },
-  webchat: { buttons: false, image: false, audio: false, document: false },
+  mercadolibre: { buttons: false, image: false, audio: false, voice: false, document: false },
+  webchat: { buttons: false, image: false, audio: false, voice: false, document: false },
 };
+
+export type PresenceState = "typing" | "recording" | "paused";
 
 export interface ChannelAdapter {
   parseIncoming(request: Request, env: any): Promise<IncomingMessage>;
   sendReply(reply: OutgoingReply, env: any): Promise<void>;
   showTyping?(channelUserId: string, env: any): Promise<void>;
+  /** Presencia ("escribiendo…", "grabando audio…") donde el canal lo soporte. */
+  showPresence?(channelUserId: string, state: PresenceState, env: any): Promise<void>;
+  /** Marca el mensaje entrante como leído (doble tilde) donde el canal lo soporte. */
+  markSeen?(channelUserId: string, env: any): Promise<void>;
 }

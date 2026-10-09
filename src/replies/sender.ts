@@ -83,14 +83,15 @@ export async function sendReplyCapped(
   channelUserId: string,
   chunks: string[],
   env: Env,
-  opts: { buttons?: ReplyButton[]; imageUrl?: string; audioUrl?: string; documentUrl?: string; documentName?: string; interChunkDelayMs?: number } = {},
+  opts: { buttons?: ReplyButton[]; imageUrl?: string; audioUrl?: string; voice?: boolean; documentUrl?: string; documentName?: string; interChunkDelayMs?: number } = {},
 ): Promise<{ dropped: string[] }> {
-  const caps = CHANNEL_CAPABILITIES[channel] ?? { buttons: false, image: false, audio: false, document: false };
+  const caps = CHANNEL_CAPABILITIES[channel] ?? { buttons: false, image: false, audio: false, voice: false, document: false };
   const dropped: string[] = [];
 
   let buttons = opts.buttons;
   let imageUrl = opts.imageUrl;
   let audioUrl = opts.audioUrl;
+  let voice = opts.voice;
   let documentUrl = opts.documentUrl;
 
   if (buttons && buttons.length && !caps.buttons) {
@@ -104,6 +105,11 @@ export async function sendReplyCapped(
   if (audioUrl && !caps.audio) {
     dropped.push("audio");
     audioUrl = undefined;
+  }
+  // La nota de voz (PTT) degrada a audio normal: no se descarta el audio.
+  if (voice && !caps.voice) {
+    dropped.push("voice");
+    voice = undefined;
   }
   if (documentUrl && !caps.document) {
     dropped.push("document");
@@ -120,6 +126,7 @@ export async function sendReplyCapped(
       ...(buttons && buttons.length ? { buttons } : {}),
       ...(imageUrl ? { imageUrl } : {}),
       ...(audioUrl ? { audioUrl } : {}),
+      ...(audioUrl && voice ? { voice: true } : {}),
       ...(documentUrl ? { documentUrl } : {}),
       ...(documentUrl && opts.documentName ? { documentName: opts.documentName } : {}),
     },

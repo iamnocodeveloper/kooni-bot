@@ -67,4 +67,17 @@ describe("sendReplyCapped — degradación por canal (Fase A)", () => {
     const body = JSON.parse(zn![1].body as string);
     expect(body.buttons[0]).toEqual({ type: "postback", title: "Agendar", payload: "agendar" });
   });
+
+  it("voice degrada a audio normal si el canal no soporta PTT (no descarta el audio)", async () => {
+    mockFetchCalls();
+    const { dropped } = await sendReplyCapped(
+      "twilio",
+      "whatsapp:+123",
+      ["hola"],
+      { TWILIO_ACCOUNT_SID: "sid", TWILIO_AUTH_TOKEN: "tok", TWILIO_WA_FROM: "whatsapp:+1" } as unknown as Env,
+      { audioUrl: "https://x/a.ogg", voice: true },
+    );
+    expect(dropped).toContain("voice");
+    expect(dropped).not.toContain("audio");
+  });
 });
