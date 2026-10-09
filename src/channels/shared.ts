@@ -44,6 +44,8 @@ export interface OutgoingReply {
    * sendVoice. Si el canal no lo soporta, se manda como audio normal.
    */
   voice?: boolean;
+  /** URL de un video para adjuntar al primer chunk (si el canal lo soporta). */
+  videoUrl?: string;
   /** URL de un documento (PDF) para adjuntar al primer chunk (si el canal lo soporta). */
   documentUrl?: string;
   /** Nombre visible del archivo (ej. "Cotización-1234.pdf"). */
@@ -60,19 +62,19 @@ export interface ReplyButton {
 }
 
 /** Qué soporta cada canal para el envío (para degradar con gracia). */
-export const CHANNEL_CAPABILITIES: Record<ChannelId, { buttons: boolean; image: boolean; audio: boolean; voice: boolean; document: boolean }> = {
-  telegram: { buttons: true, image: true, audio: true, voice: true, document: true },
-  zernio: { buttons: true, image: true, audio: true, voice: false, document: true },
-  manychat: { buttons: true, image: true, audio: false, voice: false, document: false },
-  twilio: { buttons: false, image: true, audio: true, voice: false, document: false },
-  whatsapp: { buttons: true, image: true, audio: true, voice: false, document: false },
-  messenger: { buttons: true, image: true, audio: true, voice: false, document: false },
-  instagram: { buttons: true, image: true, audio: true, voice: false, document: false },
-  waha: { buttons: false, image: true, audio: true, voice: true, document: true },
+export const CHANNEL_CAPABILITIES: Record<ChannelId, { buttons: boolean; image: boolean; audio: boolean; voice: boolean; video: boolean; document: boolean }> = {
+  telegram: { buttons: true, image: true, audio: true, voice: true, video: true, document: true },
+  zernio: { buttons: true, image: true, audio: true, voice: false, video: true, document: true },
+  manychat: { buttons: true, image: true, audio: false, voice: false, video: false, document: false },
+  twilio: { buttons: false, image: true, audio: true, voice: false, video: false, document: false },
+  whatsapp: { buttons: true, image: true, audio: true, voice: false, video: false, document: false },
+  messenger: { buttons: true, image: true, audio: true, voice: false, video: false, document: false },
+  instagram: { buttons: true, image: true, audio: true, voice: false, video: false, document: false },
+  waha: { buttons: false, image: true, audio: true, voice: true, video: true, document: true },
   // MercadoLibre: preguntas y mensajería post-venta son texto plano. Sin
   // botones ni adjuntos por esta vía.
-  mercadolibre: { buttons: false, image: false, audio: false, voice: false, document: false },
-  webchat: { buttons: false, image: false, audio: false, voice: false, document: false },
+  mercadolibre: { buttons: false, image: false, audio: false, voice: false, video: false, document: false },
+  webchat: { buttons: false, image: false, audio: false, voice: false, video: false, document: false },
 };
 
 export type PresenceState = "typing" | "recording" | "paused";

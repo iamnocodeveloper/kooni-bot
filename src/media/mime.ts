@@ -7,6 +7,9 @@ const BY_EXT: Record<string, string> = {
   // audio
   ogg: "audio/ogg", oga: "audio/ogg", opus: "audio/ogg", mp3: "audio/mpeg", m4a: "audio/mp4",
   aac: "audio/aac", wav: "audio/wav", amr: "audio/amr",
+  // video
+  mp4: "video/mp4", mov: "video/quicktime", webm: "video/webm", mkv: "video/x-matroska",
+  avi: "video/x-msvideo", "3gp": "video/3gpp",
   // documentos
   pdf: "application/pdf", doc: "application/msword", docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   xls: "application/vnd.ms-excel", xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -23,10 +26,11 @@ export function mimeFromName(name: string | undefined, fallback = "application/o
   return BY_EXT[extOf(name)] ?? fallback;
 }
 
-/** kind del recurso a partir del MIME (image/* | audio/* | resto = document). */
+/** kind del recurso a partir del MIME (image/* | audio/* | video/* | resto = document). */
 export function kindFromMime(mime: string): MediaKind {
   const m = (mime || "").toLowerCase();
   if (m.startsWith("image/")) return "image";
   if (m.startsWith("audio/")) return "audio";
+  if (m.startsWith("video/")) return "video";
   return "document";
 }

@@ -1305,6 +1305,7 @@ export const zernioAdapter: ChannelAdapter = {
           ? [
               ...(reply.imageUrl ? [{ type: "image", url: reply.imageUrl }] : []),
               ...(reply.audioUrl ? [{ type: "audio", url: reply.audioUrl }] : []),
+              ...(reply.videoUrl ? [{ type: "video", url: reply.videoUrl }] : []),
               ...(reply.documentUrl ? [{ type: "document", url: reply.documentUrl }] : []),
             ]
           : undefined;

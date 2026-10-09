@@ -80,4 +80,16 @@ describe("sendReplyCapped — degradación por canal (Fase A)", () => {
     expect(dropped).toContain("voice");
     expect(dropped).not.toContain("audio");
   });
+
+  it("video se descarta si el canal no lo soporta (el texto se envía)", async () => {
+    mockFetchCalls();
+    const { dropped } = await sendReplyCapped(
+      "twilio",
+      "whatsapp:+123",
+      ["hola"],
+      { TWILIO_ACCOUNT_SID: "sid", TWILIO_AUTH_TOKEN: "tok", TWILIO_WA_FROM: "whatsapp:+1" } as unknown as Env,
+      { videoUrl: "https://x/v.mp4" },
+    );
+    expect(dropped).toContain("video");
+  });
 });

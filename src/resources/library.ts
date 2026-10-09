@@ -13,7 +13,7 @@ import type { ReplyButton } from "../channels/shared";
  * — se normaliza a `{kind:"image", url}`.
  */
 
-export type ResourceKind = "image" | "audio" | "document";
+export type ResourceKind = "image" | "audio" | "video" | "document";
 
 export interface LibraryResource {
   name: string;
@@ -66,10 +66,11 @@ function normalizeEntry(name: string, raw: unknown): LibraryResource | null {
     // Legacy: exactamente una de `image` | `audio` | `document`.
     if (!url && asString(e.image)) { url = asString(e.image); kind = kind ?? "image"; }
     else if (!url && asString(e.audio)) { url = asString(e.audio); kind = kind ?? "audio"; }
+    else if (!url && asString(e.video)) { url = asString(e.video); kind = kind ?? "video"; }
     else if (!url && asString(e.document)) { url = asString(e.document); kind = kind ?? "document"; }
   }
   if (!url) return null;
-  if (kind !== "image" && kind !== "audio" && kind !== "document") kind = "image";
+  if (kind !== "image" && kind !== "audio" && kind !== "video" && kind !== "document") kind = "image";
 
   const keywords = Array.isArray(e.keywords)
     ? e.keywords.map((k) => String(k).trim()).filter(Boolean)
@@ -121,6 +122,7 @@ export function firstMessageResources(raw: string | null | undefined): LibraryRe
 export interface ResourceMediaOpts {
   imageUrl?: string;
   audioUrl?: string;
+  videoUrl?: string;
   documentUrl?: string;
   documentName?: string;
   voice?: boolean;
@@ -134,6 +136,8 @@ export function resourceMediaOf(res: LibraryResource): ResourceMediaOpts {
   else if (res.kind === "audio") {
     opts.audioUrl = res.url;
     if (res.asVoice !== false) opts.voice = true;
+  } else if (res.kind === "video") {
+    opts.videoUrl = res.url;
   } else {
     opts.documentUrl = res.url;
     opts.documentName = res.filename ?? `${res.name}.pdf`;
@@ -145,6 +149,7 @@ export function resourceMediaOf(res: LibraryResource): ResourceMediaOpts {
 const KIND_LABEL: Record<ResourceKind, string> = {
   image: "imagen",
   audio: "audio",
+  video: "video",
   document: "documento",
 };
 

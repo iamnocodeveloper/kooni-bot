@@ -79,6 +79,7 @@ export const configEs = {
   "rec.kind.image": "Imagen",
   "rec.kind.audio": "Audio",
   "rec.kind.voice": "Nota de voz",
+  "rec.kind.video": "Video",
   "rec.kind.document": "Documento (PDF)",
   "rec.file": "Archivo (máx {mb} MB; las imágenes se comprimen solas)",
   "rec.urlPh": "o pegá una URL: https://…",

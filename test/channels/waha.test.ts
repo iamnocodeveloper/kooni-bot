@@ -203,6 +203,21 @@ describe("wahaAdapter.sendReply", () => {
     expect(sendText).toHaveLength(1);
   });
 
+  it("envía video por /api/sendVideo con mimetype", async () => {
+    const fetchMock = stub();
+
+    await wahaAdapter.sendReply(
+      { channel: "waha", channelUserId: "x@c.us", chunks: ["mirá"], videoUrl: "https://cdn.example/v.mp4", interChunkDelayMs: 0 },
+      envWaha,
+    );
+
+    const sv = fetchMock.mock.calls.find((c: any[]) => String(c[0]).includes("/api/sendVideo"));
+    expect(sv).toBeTruthy();
+    const body = JSON.parse((sv![1] as RequestInit).body as string);
+    expect(body.file.url).toBe("https://cdn.example/v.mp4");
+    expect(body.file.mimetype).toBe("video/mp4");
+  });
+
   it("envía audio como NOTA DE VOZ por /api/sendVoice (convert) con presencia recording", async () => {
     const fetchMock = stub();
 

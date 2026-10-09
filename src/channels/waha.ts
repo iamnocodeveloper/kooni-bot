@@ -237,6 +237,18 @@ export const wahaAdapter: ChannelAdapter = {
             caption: first.slice(0, 1024) || undefined,
           }),
         }).catch((e) => console.error("waha sendImage error:", e));
+      } else if (reply.videoUrl) {
+        await fetch(`${cfg.base}/api/sendVideo`, {
+          method: "POST",
+          headers: h,
+          signal: AbortSignal.timeout(25_000),
+          body: JSON.stringify({
+            session: cfg.session,
+            chatId,
+            file: { url: reply.videoUrl, mimetype: mimeFromName(reply.videoUrl, "video/mp4") },
+            caption: first.slice(0, 1024) || undefined,
+          }),
+        }).catch((e) => console.error("waha sendVideo error:", e));
       } else if (reply.audioUrl && isVoice) {
         // Nota de voz (PTT) real: /api/sendVoice con convert → WAHA la deja en
         // opus/ogg (el único formato que WhatsApp acepta como nota de voz).
@@ -265,7 +277,7 @@ export const wahaAdapter: ChannelAdapter = {
         }).catch((e) => console.error("waha sendFile (audio) error:", e));
       }
 
-      const hasAttachment = Boolean(reply.documentUrl || reply.imageUrl || reply.audioUrl);
+      const hasAttachment = Boolean(reply.documentUrl || reply.imageUrl || reply.videoUrl || reply.audioUrl);
       const textChunks = hasAttachment ? rest : reply.chunks;
       for (const chunk of textChunks) {
         const res = await fetch(`${cfg.base}/api/sendText`, {

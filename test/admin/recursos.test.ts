@@ -95,6 +95,20 @@ describe("Galería de recursos", () => {
     expect(lib["campaña"].firstMessage).toBe(true);
   });
 
+  it("sube un video y lo guarda como kind video", async () => {
+    const form = new FormData();
+    form.set("name", "demo");
+    form.set("kind", "image");
+    form.set("file", new File([new Uint8Array([1, 2, 3])], "demo.mp4", { type: "video/mp4" }));
+
+    const res = await adminApp.request("/recursos/save", { method: "POST", headers: AUTH, body: form }, env);
+    expect(res.status).toBe(302);
+
+    const lib = parseResourceLibrary(await settings.get(SETTING_KEYS.resourceLibrary));
+    expect(lib.demo.kind).toBe("video");
+    expect(lib.demo.url).toMatch(/^https:\/\/bot\.test\/media\//);
+  });
+
   it("borra un recurso", async () => {
     await settings.set(
       SETTING_KEYS.resourceLibrary,

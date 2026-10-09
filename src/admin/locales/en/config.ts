@@ -78,6 +78,7 @@ export const configEn: Record<keyof typeof configEs, string> = {
   "rec.kind.image": "Image",
   "rec.kind.audio": "Audio",
   "rec.kind.voice": "Voice note",
+  "rec.kind.video": "Video",
   "rec.kind.document": "Document (PDF)",
   "rec.file": "File (max {mb} MB; images are compressed automatically)",
   "rec.urlPh": "or paste a URL: https://…",

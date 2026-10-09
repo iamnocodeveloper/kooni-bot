@@ -237,4 +237,21 @@ describe("telegramAdapter.sendReply — botones y multimedia (Fase A)", () => {
     const body = JSON.parse(voice![1].body as string);
     expect(body.voice).toBe("https://aud/x.ogg");
   });
+
+  it("envía video con sendVideo y el primer chunk como caption", async () => {
+    const fetchMock = vi.fn(async () => new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await telegramAdapter.sendReply(
+      { channel: "telegram", channelUserId: "123", chunks: ["Mirá el video"], videoUrl: "https://vid/x.mp4" },
+      { TELEGRAM_BOT_TOKEN: "tok" } as any,
+    );
+
+    const calls = fetchMock.mock.calls as unknown as [string, RequestInit][];
+    const video = calls.find((c) => String(c[0]).includes("/sendVideo"));
+    expect(video).toBeTruthy();
+    const body = JSON.parse(video![1].body as string);
+    expect(body.video).toBe("https://vid/x.mp4");
+    expect(body.caption).toBe("Mirá el video");
+  });
 });

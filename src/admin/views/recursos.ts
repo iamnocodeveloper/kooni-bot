@@ -23,6 +23,9 @@ function preview(r: LibraryResource): string {
   if (r.kind === "audio") {
     return `<audio controls preload="none" src="${esc(r.url)}" style="height:34px"></audio>`;
   }
+  if (r.kind === "video") {
+    return `<video controls preload="metadata" src="${esc(r.url)}" style="width:96px;height:72px;object-fit:cover;border:1px solid var(--line);border-radius:6px"></video>`;
+  }
   return `<a href="${esc(r.url)}" target="_blank" rel="noopener" class="text-accent text-[12px]">Ver documento</a>`;
 }
 
@@ -85,11 +88,12 @@ export async function renderRecursos(
           <select name="kind" style="${inputStyle}">
             <option value="image" ${editing?.kind === "image" ? "selected" : ""}>${esc(t("rec.kind.image"))}</option>
             <option value="audio" ${editing?.kind === "audio" ? "selected" : ""}>${esc(t("rec.kind.audio"))}</option>
+            <option value="video" ${editing?.kind === "video" ? "selected" : ""}>${esc(t("rec.kind.video"))}</option>
             <option value="document" ${editing?.kind === "document" ? "selected" : ""}>${esc(t("rec.kind.document"))}</option>
           </select>
         </div>
         <label style="font-size:11.5px;color:var(--muted)">${esc(t("rec.file", { mb: maxMb }))}
-          <input type="file" name="file" accept="image/*,audio/*,application/pdf" style="display:block;margin-top:4px;font-size:12px">
+          <input type="file" name="file" accept="image/*,audio/*,video/*,application/pdf" style="display:block;margin-top:4px;font-size:12px">
         </label>
         <input name="url" placeholder="${esc(t("rec.urlPh"))}" value="${esc(editing?.url ?? "")}" style="${inputStyle}">
         <input name="caption" placeholder="${esc(t("rec.captionPh"))}" value="${esc(editing?.caption ?? "")}" style="${inputStyle}">
@@ -128,6 +132,7 @@ export async function renderRecursos(
           if (f && kindSel) {
             if (/^image\\//.test(f.type)) kindSel.value = 'image';
             else if (/^audio\\//.test(f.type)) kindSel.value = 'audio';
+            else if (/^video\\//.test(f.type)) kindSel.value = 'video';
             else if (/pdf/.test(f.type)) kindSel.value = 'document';
           }
         });

@@ -128,6 +128,18 @@ export const telegramAdapter: ChannelAdapter = {
           ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
         }),
       }).catch((e) => console.error("telegram sendPhoto error:", e));
+    } else if (reply.videoUrl) {
+      await fetch(`${TG_API}${token}/sendVideo`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: chatId,
+          video: reply.videoUrl,
+          caption: first.slice(0, 1024) || undefined,
+          ...(replyToMessageId ? { reply_to_message_id: replyToMessageId } : {}),
+          ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
+        }),
+      }).catch((e) => console.error("telegram sendVideo error:", e));
     } else if (reply.audioUrl) {
       await fetch(`${TG_API}${token}/sendVoice`, {
         method: "POST",
@@ -142,7 +154,7 @@ export const telegramAdapter: ChannelAdapter = {
       }).catch((e) => console.error("telegram sendVoice error:", e));
     }
 
-    const hasAttachment = Boolean(reply.documentUrl || reply.imageUrl || reply.audioUrl);
+    const hasAttachment = Boolean(reply.documentUrl || reply.imageUrl || reply.videoUrl || reply.audioUrl);
     const textChunks = hasAttachment ? rest : reply.chunks;
     for (let i = 0; i < textChunks.length; i++) {
       await fetch(`${TG_API}${token}/sendChatAction`, {

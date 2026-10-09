@@ -1317,7 +1317,7 @@ adminApp.post("/recursos/save", async (c) => {
 
   // El archivo subido tiene prioridad sobre la URL pegada.
   let url = get("url");
-  let kind: "image" | "audio" | "document" = (get("kind") || "image") as "image" | "audio" | "document";
+  let kind: "image" | "audio" | "video" | "document" = (get("kind") || "image") as "image" | "audio" | "video" | "document";
   let filename: string | undefined;
   const file = form?.get("file");
   if (file && typeof file === "object" && "arrayBuffer" in file && (file as File).size > 0) {

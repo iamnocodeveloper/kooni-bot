@@ -12,7 +12,7 @@ import { mediaUrl } from "./link";
  * descargan la URL para reenviar el archivo.
  */
 
-export type MediaKind = "image" | "audio" | "document";
+export type MediaKind = "image" | "audio" | "video" | "document";
 
 export interface StoredMedia {
   id: string;

@@ -83,15 +83,16 @@ export async function sendReplyCapped(
   channelUserId: string,
   chunks: string[],
   env: Env,
-  opts: { buttons?: ReplyButton[]; imageUrl?: string; audioUrl?: string; voice?: boolean; documentUrl?: string; documentName?: string; interChunkDelayMs?: number } = {},
+  opts: { buttons?: ReplyButton[]; imageUrl?: string; audioUrl?: string; voice?: boolean; videoUrl?: string; documentUrl?: string; documentName?: string; interChunkDelayMs?: number } = {},
 ): Promise<{ dropped: string[] }> {
-  const caps = CHANNEL_CAPABILITIES[channel] ?? { buttons: false, image: false, audio: false, voice: false, document: false };
+  const caps = CHANNEL_CAPABILITIES[channel] ?? { buttons: false, image: false, audio: false, voice: false, video: false, document: false };
   const dropped: string[] = [];
 
   let buttons = opts.buttons;
   let imageUrl = opts.imageUrl;
   let audioUrl = opts.audioUrl;
   let voice = opts.voice;
+  let videoUrl = opts.videoUrl;
   let documentUrl = opts.documentUrl;
 
   if (buttons && buttons.length && !caps.buttons) {
@@ -111,6 +112,10 @@ export async function sendReplyCapped(
     dropped.push("voice");
     voice = undefined;
   }
+  if (videoUrl && !caps.video) {
+    dropped.push("video");
+    videoUrl = undefined;
+  }
   if (documentUrl && !caps.document) {
     dropped.push("document");
     documentUrl = undefined;
@@ -127,6 +132,7 @@ export async function sendReplyCapped(
       ...(imageUrl ? { imageUrl } : {}),
       ...(audioUrl ? { audioUrl } : {}),
       ...(audioUrl && voice ? { voice: true } : {}),
+      ...(videoUrl ? { videoUrl } : {}),
       ...(documentUrl ? { documentUrl } : {}),
       ...(documentUrl && opts.documentName ? { documentName: opts.documentName } : {}),
     },

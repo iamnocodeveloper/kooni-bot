@@ -53,9 +53,15 @@ describe("resources/library", () => {
     expect(resourceMediaOf({ name: "a", kind: "image", url: "u" })).toEqual({ imageUrl: "u" });
     expect(resourceMediaOf({ name: "a", kind: "audio", url: "u", asVoice: true })).toEqual({ audioUrl: "u", voice: true });
     expect(resourceMediaOf({ name: "a", kind: "audio", url: "u", asVoice: false })).toEqual({ audioUrl: "u" });
+    expect(resourceMediaOf({ name: "a", kind: "video", url: "u" })).toEqual({ videoUrl: "u" });
     const doc = resourceMediaOf({ name: "a", kind: "document", url: "u", filename: "f.pdf" });
     expect(doc.documentUrl).toBe("u");
     expect(doc.documentName).toBe("f.pdf");
+  });
+
+  it("parsea video (kind video + legacy 'video')", () => {
+    expect(parseResourceLibrary(JSON.stringify({ clip: { kind: "video", url: "https://x/v.mp4" } })).clip.kind).toBe("video");
+    expect(parseResourceLibrary(JSON.stringify({ clip: { video: "https://x/v.mp4" } })).clip.kind).toBe("video");
   });
 
   it("resourceCatalogBlock lista nombres + cuándo (y vacío si no hay nada)", () => {
