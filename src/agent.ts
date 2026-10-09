@@ -132,6 +132,16 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
       lastReplyToMessageId: payload.replyToMessageId,
     });
 
+    // Confirmación de lectura (doble tilde) donde el canal lo soporte (WAHA).
+    // Best-effort: nunca frena el ingest.
+    if (!payload.isOwnerMessage && payload.channel !== "webchat") {
+      try {
+        await pickAdapter(payload.channel as ChannelId).markSeen?.(payload.channelUserId, this.env);
+      } catch (e) {
+        console.warn("[ingest] markSeen falló:", e);
+      }
+    }
+
     // Registrar contacto (todos los que interactúan, separado de Leads).
     try {
       const { ContactsRepo } = await import("./db/contacts");
