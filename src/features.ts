@@ -78,6 +78,14 @@ export const EXTRA_FEATURES: ExtraFeature[] = [
       "El bot le escribe solito al cliente que preguntó y se enfrió: un solo mensaje en tu tono, entre 3 y 20 horas después. Recupera ventas que se iban al olvido.",
     actuaEn: "bot",
     tipo: "membresia",
+    config: [
+      {
+        key: SETTING_KEYS.cazadorResource,
+        label: "Recurso a adjuntar (opcional)",
+        placeholder: "ej. ofertas",
+        help: "Nombre de un recurso de la Galería. El seguimiento se envía con esa imagen / nota de voz / PDF.",
+      },
+    ],
   },
   {
     id: "oido_vista",
@@ -166,6 +174,14 @@ export const EXTRA_FEATURES: ExtraFeature[] = [
       "Si el Cazador ya escribió y el cliente sigue sin contestar, el bot insiste una vez más, de 2 a 5 días después, en tu tono. Los que dijeron “luego te digo” vuelven a tu agenda.",
     actuaEn: "bot",
     tipo: "membresia",
+    config: [
+      {
+        key: SETTING_KEYS.reengancheResource,
+        label: "Recurso a adjuntar (opcional)",
+        placeholder: "ej. bienvenida",
+        help: "Nombre de un recurso de la Galería. El segundo toque se envía con esa imagen / nota de voz / PDF.",
+      },
+    ],
   },
   {
     id: "resenas",

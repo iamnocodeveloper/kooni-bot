@@ -22,9 +22,11 @@ import type { Env } from "../env";
 import { Db } from "../db/client";
 import { MessagesRepo } from "../db/messages";
 import { ConversationsRepo } from "../db/conversations";
+import { SETTING_KEYS } from "../db/settings";
 import { resolveAgentConfig, loadLlmOverrides } from "../settings-loader";
 import { createModel } from "../llm/provider";
-import { pickAdapter } from "../replies/sender";
+import { sendReplyCapped } from "../replies/sender";
+import { followupMedia } from "./resource";
 import type { ChannelId } from "../channels/shared";
 import { LANG_LABEL } from "../lang/detect";
 import { conversationLang } from "./language";
@@ -182,16 +184,13 @@ Escribe UN solo mensaje de seguimiento MUY breve (máximo 2 líneas): retoma con
       await msgs.append(cand.id, "assistant", text, { modelUsed: modelId });
       await convs.touchLastMessage(cand.id, now);
 
-      const adapter = pickAdapter(cand.channel as ChannelId);
-      await adapter.sendReply(
-        {
-          channel: cand.channel as ChannelId,
-          channelUserId: cand.channel_user_id,
-          chunks: [text],
-          interChunkDelayMs: 0,
-        },
-        env,
-      );
+      // El seguimiento puede llevar adjunto un recurso de la Galería (imagen /
+      // nota de voz / PDF) elegido en Extras → Cazador.
+      const media = await followupMedia(env, SETTING_KEYS.cazadorResource);
+      await sendReplyCapped(cand.channel as ChannelId, cand.channel_user_id, [text], env, {
+        ...media,
+        interChunkDelayMs: 0,
+      });
       sent++;
     } catch (e) {
       // El claim se queda (no reintentamos a este cliente): mejor un follow-up

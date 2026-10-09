@@ -23,7 +23,7 @@ vi.mock("../../src/llm/provider", () => ({
 }));
 
 vi.mock("../../src/replies/sender", () => ({
-  pickAdapter: () => ({ sendReply: (...a: unknown[]) => sendReplyMock(...a) }),
+  sendReplyCapped: (...a: unknown[]) => sendReplyMock(...a),
 }));
 
 import { createTestMiniflare } from "../helpers/miniflareSetup";
@@ -141,9 +141,9 @@ describe("runFollowups — envío y garantías", () => {
     const r = await runFollowups(env, { now: NOW });
     expect(r).toEqual({ sent: 1, skipped: 0, errors: 0 });
     expect(sendReplyMock).toHaveBeenCalledTimes(1);
-    const [payload] = sendReplyMock.mock.calls[0];
-    expect(payload.channelUserId).toBe("h1");
-    expect(payload.chunks[0]).toContain("duda");
+    const [, channelUserId, chunks] = sendReplyMock.mock.calls[0] as [unknown, string, string[]];
+    expect(channelUserId).toBe("h1");
+    expect(chunks[0]).toContain("duda");
 
     const history = await msgs.lastN(hot, 5);
     expect(history[history.length - 1].role).toBe("assistant");
@@ -209,5 +209,19 @@ describe("runFollowups — envío y garantías", () => {
     const prompt = (generateTextMock.mock.calls[0][0] as { prompt: string }).prompt;
     expect(prompt).toContain("EXCLUSIVAMENTE en inglés");
     expect(prompt).not.toContain("español mexicano");
+  });
+
+  it("adjunta el recurso configurado en Extras → Cazador", async () => {
+    const { SettingsRepo, SETTING_KEYS } = await import("../../src/db/settings");
+    const s = new SettingsRepo(db);
+    await s.set(SETTING_KEYS.resourceLibrary, JSON.stringify({ ofertas: { kind: "image", url: "https://x/ofertas.jpg" } }));
+    await s.set(SETTING_KEYS.cazadorResource, "ofertas");
+    const hot = await seed("hMedia");
+    await markHot(hot);
+
+    await runFollowups(env, { now: NOW });
+
+    const opts = sendReplyMock.mock.calls[0][4] as { imageUrl?: string };
+    expect(opts.imageUrl).toBe("https://x/ofertas.jpg");
   });
 });
