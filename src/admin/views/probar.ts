@@ -64,6 +64,24 @@ export async function renderProbar(env: Env): Promise<string> {
       return b;
     }
 
+    // Muestra el recurso que el bot ENVIARÍA (modo prueba: no se envía de verdad).
+    function appendMedia(wrap, r){
+      var box = document.createElement('div');
+      box.style.cssText = 'margin-top:6px;padding:8px;border:1px dashed var(--line);border-radius:10px;background:var(--bg);display:flex;flex-direction:column;gap:6px;max-width:260px';
+      var label = document.createElement('div');
+      label.style.cssText = 'font-size:9.5px;color:var(--dim)';
+      label.textContent = '${t("prb.wouldSend")}';
+      box.appendChild(label);
+      var el;
+      if (r.kind === 'image') { el = document.createElement('img'); el.src = r.url; el.style.cssText = 'max-width:100%;border-radius:8px'; }
+      else if (r.kind === 'audio') { el = document.createElement('audio'); el.controls = true; el.src = r.url; el.style.width = '100%'; }
+      else { el = document.createElement('a'); el.href = r.url; el.target = '_blank'; el.rel = 'noopener'; el.textContent = 'Ver documento'; el.style.cssText = 'font-size:11px;color:var(--accent)'; }
+      box.appendChild(el);
+      if (r.caption) { var cap = document.createElement('div'); cap.style.cssText = 'font-size:11.5px;color:var(--cream)'; cap.textContent = r.caption; box.appendChild(cap); }
+      wrap.appendChild(box);
+      log.scrollTop = log.scrollHeight;
+    }
+
     form.addEventListener('submit', async function(e){
       e.preventDefault();
       var text = input.value.trim();
@@ -86,6 +104,9 @@ export async function renderProbar(env: Env): Promise<string> {
         thinking.parentNode.querySelector('div:last-child').textContent =
           (j.model ? j.model.replace(/^.*\\//,'').slice(0,22) : '') +
           (j.toolCalls && j.toolCalls.length ? '${t("prb.used")}' + j.toolCalls.map(function(t){return t.toolName;}).join(', ') : '');
+        // Si el bot llamó a enviarRecurso, mostramos el recurso (vista previa).
+        var recursos = (j.toolCalls || []).map(function(t){ return t.output; }).filter(function(o){ return o && o.kind && o.url; });
+        if (recursos.length) appendMedia(thinking.parentNode, recursos[0]);
         history.push({ role: 'assistant', content: j.reply });
       } catch (err) {
         thinking.textContent = '✗ ' + err.message;

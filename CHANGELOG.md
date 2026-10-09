@@ -5,6 +5,20 @@ Cambios notables de Kooni. Formato aproximado de
 
 El CLI `kooni-bot` se versiona aparte (npm) — ver la nota de cada versión.
 
+## [1.59.1] — 2026-10-09
+
+### Arreglado — la Galería no aparecía en "Probar el bot"
+
+- La ventana **Probar el bot** (`/admin/probar`) filtraba a herramientas de **solo lectura** y
+  dejaba fuera `enviarRecurso`, así que el bot nunca mandaba imágenes/audios en la prueba (aunque
+  sí lo haría en un chat real). Ahora `enviarRecurso` está disponible ahí y corre en **modo
+  simulado**: no envía nada y el chat de prueba muestra el **recurso que enviaría** (imagen/audio/
+  PDF con su texto).
+- El resultado de cada herramienta viaja al panel para esa previsualización.
+
+Nota: en la prueba el bot decide por IA. Para que mande un recurso, el campo **"cuándo usarlo"**
+debe ser concreto (ej. "cuando pidan ofertas o promos") y hay que escribir algo que lo dispare.
+
 ## [1.59.0] — 2026-10-09
 
 ### Agregado — Galería de recursos (subida) + envío natural por WAHA

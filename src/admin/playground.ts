@@ -17,17 +17,29 @@ import type { Tier } from "../upgrade/modelSelector";
 
 export interface TestTurnResult {
   reply: string;
-  toolCalls: { toolName: string; input: unknown }[];
+  toolCalls: { toolName: string; input: unknown; output?: unknown }[];
   model: string;
 }
 
-const READ_ONLY_TOOLS = new Set(["searchKb", "catalogQuery", "reportQuery", "inventarioQuery", "buscarPropiedad"]);
+// En prueba: solo herramientas de LECTURA (no capturan leads ni crean tickets).
+// `enviarRecurso` SÍ se permite, pero corre en modo simulado (sin canal): no
+// manda nada y devuelve el recurso para previsualizarlo en el chat de prueba.
+const READ_ONLY_TOOLS = new Set([
+  "searchKb",
+  "catalogQuery",
+  "reportQuery",
+  "inventarioQuery",
+  "buscarPropiedad",
+  "enviarRecurso",
+]);
 
 const TEST_NOTE = `<modo_prueba>
 Estás en una prueba interna del dueño del negocio, no con un cliente real. Las
 herramientas de acción (capturar lead, agendar, pasar a un humano) NO están
 disponibles: si normalmente las usarías, sigue la conversación con naturalidad y
 di lo que le dirías al cliente (ej. "te tomaría los datos y te contactamos").
+La Galería SÍ está disponible: si corresponde, llama enviarRecurso con el nombre
+del recurso (se mostrará como vista previa; en la prueba no se envía nada).
 </modo_prueba>`;
 
 export async function runTestTurn(
@@ -70,10 +82,12 @@ export async function runTestTurn(
 
   const steps = await result.steps;
   const toolCalls = steps.flatMap((s) =>
-    (s.toolCalls ?? []).map((tc: { toolName: string; input: unknown }) => ({
-      toolName: tc.toolName,
-      input: tc.input,
-    })),
+    (s.toolCalls ?? []).map((tc: { toolCallId?: string; toolName: string; input: unknown }) => {
+      const tr = (s.toolResults ?? []).find(
+        (r: { toolCallId?: string }) => r.toolCallId && r.toolCallId === tc.toolCallId,
+      ) as { output?: unknown } | undefined;
+      return { toolName: tc.toolName, input: tc.input, ...(tr ? { output: tr.output } : {}) };
+    }),
   );
 
   return {

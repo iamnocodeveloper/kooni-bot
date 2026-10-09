@@ -42,11 +42,7 @@ export function enviarRecursoTool(
       caption: z.string().optional().describe("Texto corto que acompaña el recurso (opcional)"),
     }),
     execute: async ({ nombre, caption }) => {
-      const convId = getConversationId();
-      if (!convId) return { error: "no_conversation" as const };
       const ctx = getCtx();
-      if (!ctx) return { error: "sin_canal" as const, mensaje: "No se pudo determinar el canal." };
-
       try {
         const repo = new SettingsRepo(new Db(env.DB));
         const raw = await repo.get(SETTING_KEYS.resourceLibrary);
@@ -62,6 +58,24 @@ export function enviarRecursoTool(
         }
         const res = lib[key];
         const msg = caption ?? res.caption ?? "";
+
+        // Sin canal (p. ej. la ventana "Probar el bot"): no se envía nada; se
+        // devuelve el recurso para que el panel lo previsualice.
+        if (!ctx) {
+          return {
+            ok: true as const,
+            nombre: key,
+            enviado: false,
+            simulado: true,
+            kind: res.kind,
+            url: res.url,
+            caption: msg || "Aquí tienes 👇",
+            ...(res.asVoice ? { asVoice: true } : {}),
+          };
+        }
+
+        const convId = getConversationId();
+        if (!convId) return { error: "no_conversation" as const };
 
         // Enviar con degradación por canal (sendReplyCapped descarta lo no soportado).
         const { dropped } = await sendReplyCapped(

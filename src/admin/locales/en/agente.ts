@@ -129,6 +129,7 @@ export const agenteEn: Record<keyof typeof agenteEs, string> = {
   "prb.reset": "Chat restarted. Type a message to begin.",
   "prb.thinking": "thinking",
   "prb.used": " · used: ",
+  "prb.wouldSend": "It would send this resource:",
   "prb.pageTitle": "Test the bot",
 
   // ── Knowledge (KB) ─────────────────────────────────────────────────────────

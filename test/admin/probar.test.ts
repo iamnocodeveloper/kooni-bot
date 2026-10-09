@@ -79,6 +79,8 @@ describe("Probar el bot", () => {
     const arg = streamTextMock.mock.calls[0][0] as { tools: Record<string, unknown>; system: { content: string }[] };
     expect(Object.keys(arg.tools)).not.toContain("captureLead");
     expect(Object.keys(arg.tools)).not.toContain("handoffHuman");
+    // La Galería SÍ está disponible en prueba (corre en modo simulado).
+    expect(Object.keys(arg.tools)).toContain("enviarRecurso");
     expect(arg.system.some((s) => s.content.includes("modo_prueba"))).toBe(true);
   });
 

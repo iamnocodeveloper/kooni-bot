@@ -129,6 +129,7 @@ export const agenteEs = {
   "prb.reset": "Chat reiniciado. Escribe un mensaje para empezar.",
   "prb.thinking": "pensando",
   "prb.used": " · usó: ",
+  "prb.wouldSend": "Enviaría este recurso:",
   "prb.pageTitle": "Probar el bot",
 
   // ── Conocimiento (KB) ──────────────────────────────────────────────────────
