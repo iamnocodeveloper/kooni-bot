@@ -685,15 +685,21 @@ export default {
     // desbloqueado. Follow-up bot: UN mensaje breve de seguimiento a leads que
     // lo ameritan (venta abierta / 4+ preguntas), dentro de la ventana de 3-20h
     // y máximo una vez por conversación. Acotado por caps internos.
-    const settings = await new SettingsRepo(new Db(env.DB)).all().catch(() => ({}));
+    const settings: Record<string, string> = await new SettingsRepo(new Db(env.DB)).all().catch(() => ({}));
     const { isFeatureActive } = await import("./features");
-    if (await isFeatureActive(env, "cazador", settings)) {
+    const seguimientoCustom = settings[SETTING_KEYS.seguimientoCustom] === "1";
+    const cazadorActive = await isFeatureActive(env, "cazador", settings);
+    if (cazadorActive) {
       const { runFollowups } = await import("./followup/run");
       await runFollowups(env).catch((e) => console.error("followups:", e));
     }
     // Reenganche (Kooni+): segundo toque 2-5 días después del Cazador si el
-    // cliente sigue sin contestar. Corre solo si está activo.
-    if (await isFeatureActive(env, "reenganche", settings)) {
+    // cliente sigue sin contestar. Con seguimiento personalizado la secuencia la
+    // gobierna el Cazador (usa el mensaje 2 del dueño aunque el toggle de
+    // Reenganche esté apagado). Sin personalizar, corre solo si está activo.
+    const reengancheActive =
+      (await isFeatureActive(env, "reenganche", settings)) || (cazadorActive && seguimientoCustom);
+    if (reengancheActive) {
       const { runReengagements } = await import("./followup/reengage");
       await runReengagements(env).catch((e) => console.error("reenganche:", e));
     }

@@ -224,4 +224,32 @@ describe("runFollowups — envío y garantías", () => {
     const opts = sendReplyMock.mock.calls[0][4] as { imageUrl?: string };
     expect(opts.imageUrl).toBe("https://x/ofertas.jpg");
   });
+
+  it("modo personalizado: envía el mensaje 1 del dueño (sin IA)", async () => {
+    const { SettingsRepo, SETTING_KEYS } = await import("../../src/db/settings");
+    const s = new SettingsRepo(db);
+    await s.set(SETTING_KEYS.seguimientoCustom, "1");
+    await s.set(SETTING_KEYS.seguimientoMessage1, "¡Hola! ¿Seguimos con lo tuyo?");
+    const hot = await seed("hCustom");
+    await markHot(hot);
+
+    const r = await runFollowups(env, { now: NOW });
+
+    expect(r.sent).toBe(1);
+    expect(generateTextMock).not.toHaveBeenCalled();
+    const chunks = (sendReplyMock.mock.calls[0] as unknown[])[2] as string[];
+    expect(chunks[0]).toBe("¡Hola! ¿Seguimos con lo tuyo?");
+  });
+
+  it("modo personalizado sin mensaje 1: no envía nada", async () => {
+    const { SettingsRepo, SETTING_KEYS } = await import("../../src/db/settings");
+    await new SettingsRepo(db).set(SETTING_KEYS.seguimientoCustom, "1");
+    const hot = await seed("hCustomEmpty");
+    await markHot(hot);
+
+    const r = await runFollowups(env, { now: NOW });
+
+    expect(r.sent).toBe(0);
+    expect(sendReplyMock).not.toHaveBeenCalled();
+  });
 });

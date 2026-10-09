@@ -22,7 +22,7 @@ import type { Env } from "../env";
 import { Db } from "../db/client";
 import { MessagesRepo } from "../db/messages";
 import { ConversationsRepo } from "../db/conversations";
-import { SETTING_KEYS } from "../db/settings";
+import { SettingsRepo, SETTING_KEYS } from "../db/settings";
 import { resolveAgentConfig, loadLlmOverrides } from "../settings-loader";
 import { createModel } from "../llm/provider";
 import { sendReplyCapped } from "../replies/sender";
@@ -116,6 +116,12 @@ export async function runFollowups(
   const cfg = await resolveAgentConfig(env, []);
   if (cfg.botPaused) return { sent: 0, skipped: 0, errors: 0 };
 
+  // Modo "personalizar seguimiento": si está encendido, el toque 1 usa el texto
+  // del dueño (seguimiento_message_1) en vez de la IA. Vacío = no se envía.
+  const settings = new SettingsRepo(db);
+  const customOn = (await settings.get(SETTING_KEYS.seguimientoCustom)) === "1";
+  const customText = customOn ? ((await settings.get(SETTING_KEYS.seguimientoMessage1)) ?? "").trim() : "";
+
   // Cap diario global — el follow-up es un toque fino, no una campaña.
   const sentToday =
     (
@@ -142,6 +148,12 @@ export async function runFollowups(
   let errors = 0;
 
   for (const cand of candidates) {
+    // Modo personalizado con el mensaje 1 vacío → ese toque no se envía (y no se
+    // reclama, para poder enviarlo si el dueño lo completa después).
+    if (customOn && !customText) {
+      skipped++;
+      continue;
+    }
     // Claim ANTES de enviar: si otra corrida (o un tick concurrente) ya lo
     // tomó, INSERT OR IGNORE no escribe y saltamos — imposible duplicar.
     const claim = await db.run(
@@ -154,18 +166,22 @@ export async function runFollowups(
     }
 
     try {
-      const history = await msgs.lastN(cand.id, 6);
-      const transcript = history
-        .map((m) => `${m.role === "user" ? "Cliente" : "Tú"}: ${m.content.slice(0, 300)}`)
-        .join("\n");
-      // El seguimiento mantiene el idioma de la conversación (no siempre
-      // español): se detecta de los mensajes del cliente y, si no hay certeza,
-      // se usa el idioma base de la instalación.
-      const lang = conversationLang(env, history);
+      let text: string;
+      if (customOn) {
+        text = customText;
+      } else {
+        const history = await msgs.lastN(cand.id, 6);
+        const transcript = history
+          .map((m) => `${m.role === "user" ? "Cliente" : "Tú"}: ${m.content.slice(0, 300)}`)
+          .join("\n");
+        // El seguimiento mantiene el idioma de la conversación (no siempre
+        // español): se detecta de los mensajes del cliente y, si no hay certeza,
+        // se usa el idioma base de la instalación.
+        const lang = conversationLang(env, history);
 
-      const result = await generateText({
-        model,
-        prompt: `Eres ${env.BOT_NAME}, respondiendo chats de ${env.BUSINESS_NAME} en primera persona: humano, breve, sin emojis, nunca pushy.
+        const result = await generateText({
+          model,
+          prompt: `Eres ${env.BOT_NAME}, respondiendo chats de ${env.BUSINESS_NAME} en primera persona: humano, breve, sin emojis, nunca pushy.
 
 IDIOMA: Escribe el mensaje EXCLUSIVAMENTE en ${LANG_LABEL[lang]}. No mezcles idiomas.
 
@@ -176,9 +192,9 @@ ${cand.display_name ? `Se llama ${cand.display_name}.` : ""}
 ${transcript}
 
 Escribe UN solo mensaje de seguimiento MUY breve (máximo 2 líneas): retoma con naturalidad lo último que hablaron y pregúntale si necesita ayuda o le quedó alguna duda. NO repitas links que ya le mandaste salvo que sea natural. Responde SOLO con el mensaje, sin comillas ni explicación.`,
-      });
-
-      const text = result.text.trim();
+        });
+        text = result.text.trim();
+      }
       if (!text) throw new Error("empty followup text");
 
       await msgs.append(cand.id, "assistant", text, { modelUsed: modelId });

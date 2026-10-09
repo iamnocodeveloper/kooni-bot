@@ -19,7 +19,7 @@ import type { Env } from "../env";
 import { Db } from "../db/client";
 import { MessagesRepo } from "../db/messages";
 import { ConversationsRepo } from "../db/conversations";
-import { SETTING_KEYS } from "../db/settings";
+import { SettingsRepo, SETTING_KEYS } from "../db/settings";
 import { resolveAgentConfig, loadLlmOverrides } from "../settings-loader";
 import { createModel } from "../llm/provider";
 import { sendReplyCapped } from "../replies/sender";
@@ -76,6 +76,12 @@ export async function runReengagements(
   const cfg = await resolveAgentConfig(env, []);
   if (cfg.botPaused) return { sent: 0, skipped: 0, errors: 0 };
 
+  // Modo "personalizar seguimiento": el toque 2 usa el mensaje 2 del dueño en vez
+  // de la IA. Vacío = no se envía.
+  const settings = new SettingsRepo(db);
+  const customOn = (await settings.get(SETTING_KEYS.seguimientoCustom)) === "1";
+  const customText = customOn ? ((await settings.get(SETTING_KEYS.seguimientoMessage2)) ?? "").trim() : "";
+
   const sentToday =
     (
       await db.first<{ n: number }>(
@@ -97,6 +103,10 @@ export async function runReengagements(
   let errors = 0;
 
   for (const cand of candidates) {
+    if (customOn && !customText) {
+      skipped++;
+      continue;
+    }
     const claim = await db.run(
       "INSERT OR IGNORE INTO reengagement_sends (conversation_id, sent_at) VALUES (?, ?)",
       [cand.id, now],
@@ -107,17 +117,21 @@ export async function runReengagements(
     }
 
     try {
-      const history = await msgs.lastN(cand.id, 6);
-      const transcript = history
-        .map((m) => `${m.role === "user" ? "Cliente" : "Tú"}: ${m.content.slice(0, 300)}`)
-        .join("\n");
-      // Segundo toque en el idioma de la conversación (antes salía siempre en
-      // español aunque el cliente escribiera en inglés).
-      const lang = conversationLang(env, history);
+      let text: string;
+      if (customOn) {
+        text = customText;
+      } else {
+        const history = await msgs.lastN(cand.id, 6);
+        const transcript = history
+          .map((m) => `${m.role === "user" ? "Cliente" : "Tú"}: ${m.content.slice(0, 300)}`)
+          .join("\n");
+        // Segundo toque en el idioma de la conversación (antes salía siempre en
+        // español aunque el cliente escribiera en inglés).
+        const lang = conversationLang(env, history);
 
-      const result = await generateText({
-        model,
-        prompt: `Eres ${env.BOT_NAME}, respondiendo chats de ${env.BUSINESS_NAME} en primera persona: humano, breve, sin emojis, nunca pushy.
+        const result = await generateText({
+          model,
+          prompt: `Eres ${env.BOT_NAME}, respondiendo chats de ${env.BUSINESS_NAME} en primera persona: humano, breve, sin emojis, nunca pushy.
 
 IDIOMA: Escribe el mensaje EXCLUSIVAMENTE en ${LANG_LABEL[lang]}. No mezcles idiomas.
 
@@ -128,9 +142,9 @@ ${cand.display_name ? `Se llama ${cand.display_name}.` : ""}
 ${transcript}
 
 Escribe UN solo mensaje MUY breve (máximo 2 líneas): retoma con naturalidad lo último que hablaron y cierra sin presionar. NO repitas links que ya le mandaste. Responde SOLO con el mensaje, sin comillas ni explicación.`,
-      });
-
-      const text = result.text.trim();
+        });
+        text = result.text.trim();
+      }
       if (!text) throw new Error("empty reengagement text");
 
       await msgs.append(cand.id, "assistant", text, { modelUsed: modelId });
