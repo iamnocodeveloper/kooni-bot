@@ -5,6 +5,20 @@ Cambios notables de Kooni. Formato aproximado de
 
 El CLI `kooni-bot` se versiona aparte (npm) — ver la nota de cada versión.
 
+## [1.61.0] — 2026-10-09
+
+### Agregado — video en recursos, adjunto por mensaje de seguimiento y versión en el panel
+
+- **Video como recurso**: la Galería ahora acepta imágenes, notas de voz, PDF **y videos**. El bot los
+  envía por el canal (WAHA `/api/sendVideo`, Telegram `/sendVideo`, Zernio) y degrada a texto donde el
+  canal no lo soporta. Sin R2 el tope sigue siendo ~1.8 MB por archivo (los videos grandes piden R2).
+- **Adjunto en cada mensaje de seguimiento**: los hasta 3 mensajes del Cazador pueden llevar **su
+  propio recurso** (imagen/video/nota de voz/PDF) elegido en Extras → Cazador. Se mantiene el fallback
+  a las claves viejas (Cazador/Reenganche) para no romper instalaciones existentes.
+- **Versión del sistema** visible al pie del sidebar del panel ("sesión activa · v1.61.0").
+- **Novedades** publicadas en el hub (Galería, primer mensaje de campaña y seguimiento personalizable)
+  para todos los clientes.
+
 ## [1.60.1] — 2026-10-09
 
 ### Arreglado — los recursos de campaña no se reenvían a mitad de charla
