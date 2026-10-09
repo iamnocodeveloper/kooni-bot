@@ -18,6 +18,7 @@ export const es = {
   "nav.automatizaciones": "Automatizaciones",
   "nav.disparadores": "Disparadores",
   "nav.kb": "Conocimiento",
+  "nav.recursos": "Galería",
   "nav.mejoras": "Mejoras",
   "nav.campanas": "Campañas",
   "nav.conexiones": "Conexiones",

@@ -58,6 +58,7 @@ import { renderAutomatizaciones } from "./views/automatizaciones";
 import { renderEtiquetas } from "./views/etiquetas";
 import { renderCotizaciones, renderCotizacionEditor } from "./views/cotizaciones";
 import { renderDisparadores } from "./views/disparadores";
+import { renderRecursos } from "./views/recursos";
 import { renderComentarios, renderComentariosList, renderComentarioThread, renderComposeBox, commentsParamsFrom } from "./views/comentarios";
 import { renderContactos } from "./views/contactos";
 import { renderLicencia } from "./views/licencia";
@@ -1271,6 +1272,93 @@ adminApp.post("/disparadores/:id/delete", async (c) => {
   await new TriggersRepo(new Db(c.env.DB)).remove(id);
   await audit(c, { action: "trigger.delete", target: `trigger:${id}` });
   return c.redirect("/admin/disparadores?saved=1");
+});
+
+// ── Galería de recursos (biblioteca multimedia: imagen / nota de voz / PDF) ──
+// Sube archivos al almacén (R2 si hay binding `MEDIA`, si no D1) y los guarda
+// en el setting `resource_library`. El bot los usa con la tool enviarRecurso.
+adminApp.get("/recursos", async (c) =>
+  c.html(
+    await renderRecursos(
+      c.env,
+      {
+        saved: c.req.query("saved") === "1",
+        deleted: c.req.query("deleted") === "1",
+        error: c.req.query("error") || undefined,
+      },
+      c.req.query("edit") || undefined,
+    ),
+  ),
+);
+
+adminApp.post("/recursos/save", async (c) => {
+  const { SettingsRepo, SETTING_KEYS } = await import("../db/settings");
+  const { Db } = await import("../db/client");
+  const { parseResourceLibrary } = await import("../resources/library");
+  const { putMedia, maxMediaBytes } = await import("../media/store");
+  const { mimeFromName, kindFromMime } = await import("../media/mime");
+
+  const form = await c.req.formData().catch(() => null);
+  const get = (k: string) => String(form?.get(k) ?? "").trim();
+  const name = get("name");
+  if (!name) return c.redirect("/admin/recursos?error=" + encodeURIComponent("Falta el nombre del recurso"));
+
+  const repo = new SettingsRepo(new Db(c.env.DB));
+  const lib = parseResourceLibrary(await repo.get(SETTING_KEYS.resourceLibrary));
+
+  // El archivo subido tiene prioridad sobre la URL pegada.
+  let url = get("url");
+  let kind: "image" | "audio" | "document" = (get("kind") || "image") as "image" | "audio" | "document";
+  let filename: string | undefined;
+  const file = form?.get("file");
+  if (file && typeof file === "object" && "arrayBuffer" in file && (file as File).size > 0) {
+    const f = file as File;
+    const bytes = new Uint8Array(await f.arrayBuffer());
+    if (bytes.byteLength > maxMediaBytes(c.env)) {
+      return c.redirect("/admin/recursos?error=" + encodeURIComponent("El archivo supera el tamaño máximo permitido"));
+    }
+    const mime = f.type || mimeFromName(f.name);
+    kind = kindFromMime(mime);
+    const stored = await putMedia(c.env, bytes, { mime, name: f.name || name, kind });
+    url = stored.url;
+    filename = stored.name;
+  }
+  if (!url) return c.redirect("/admin/recursos?error=" + encodeURIComponent("Subí un archivo o pegá una URL"));
+
+  const keywords = get("keywords").split(",").map((s) => s.trim()).filter(Boolean);
+  const prev = lib[name];
+  lib[name] = {
+    name,
+    kind,
+    url,
+    ...(filename ? { filename } : {}),
+    ...(get("caption") ? { caption: get("caption") } : {}),
+    ...(get("when") ? { when: get("when") } : {}),
+    ...(keywords.length ? { keywords } : {}),
+    ...(kind === "audio" ? { asVoice: form?.get("asVoice") != null } : {}),
+    ...(prev?.buttons ? { buttons: prev.buttons } : {}),
+  };
+  await repo.set(SETTING_KEYS.resourceLibrary, JSON.stringify(lib));
+  await audit(c, { action: "recursos.save", target: `recurso:${name}` });
+  return c.redirect("/admin/recursos?saved=1");
+});
+
+adminApp.post("/recursos/delete", async (c) => {
+  const { SettingsRepo, SETTING_KEYS } = await import("../db/settings");
+  const { Db } = await import("../db/client");
+  const { parseResourceLibrary } = await import("../resources/library");
+  const form = await c.req.formData().catch(() => null);
+  const name = String(form?.get("name") ?? "").trim();
+  if (name) {
+    const repo = new SettingsRepo(new Db(c.env.DB));
+    const lib = parseResourceLibrary(await repo.get(SETTING_KEYS.resourceLibrary));
+    if (lib[name]) {
+      delete lib[name];
+      await repo.set(SETTING_KEYS.resourceLibrary, JSON.stringify(lib));
+    }
+  }
+  await audit(c, { action: "recursos.delete", target: `recurso:${name}` });
+  return c.redirect("/admin/recursos?deleted=1");
 });
 
 // Conexiones: mapa de canales con estado verde/gris (paso 4 del onboarding).

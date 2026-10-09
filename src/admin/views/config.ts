@@ -534,6 +534,8 @@ export async function renderConfig(
           placeholder: t("cfg.resources.ph"),
           rows: 4,
         })}
+
+        <a href="/admin/recursos" class="text-accent text-[12px]">${t("rec.title")} →</a>
       </div>
 
       <button type="submit" class="bigbtn font-display font-bold text-[13px] cursor-pointer"

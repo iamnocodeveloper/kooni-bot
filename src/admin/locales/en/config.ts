@@ -68,6 +68,38 @@ export const configEn: Record<keyof typeof configEs, string> = {
     '{"catalog":{"image":"https://...","caption":"Our catalog 👇","buttons":[{"text":"Get a quote","url":"https://wa.me/..."}]}}',
   "cfg.saveChanges": "Save changes",
 
+  // ── Resource gallery (views/recursos.ts) ───────────────────────────────────
+  "rec.title": "Resource gallery",
+  "rec.subtitle":
+    "Upload images, voice notes and PDFs the bot can send when the customer asks. Each resource has a \"when to use it\" so the bot knows when to send it.",
+  "rec.new": "New resource",
+  "rec.editing": "Editing: {name}",
+  "rec.namePh": "name (e.g. offers, welcome, menu)",
+  "rec.kind.image": "Image",
+  "rec.kind.audio": "Audio",
+  "rec.kind.voice": "Voice note",
+  "rec.kind.document": "Document (PDF)",
+  "rec.file": "File (max {mb} MB; images are compressed automatically)",
+  "rec.urlPh": "or paste a URL: https://…",
+  "rec.captionPh": "Text that goes with it (optional)",
+  "rec.whenPh": "when to use it (e.g. when they ask about offers or promos)",
+  "rec.keywordsPh": "keywords separated by commas (optional)",
+  "rec.asVoice": "Send the audio as a voice note",
+  "rec.create": "Add",
+  "rec.update": "Save changes",
+  "rec.cancel": "Cancel",
+  "rec.edit": "Edit",
+  "rec.delete": "Delete",
+  "rec.when": "When",
+  "rec.keywords": "Keywords",
+  "rec.saved": "Saved ✓",
+  "rec.deleted": "Resource deleted",
+  "rec.empty": "No resources yet. Add one above.",
+  "rec.hint":
+    "The bot picks them by name. You need \"Allow media\" on in Settings and the Gallery module unlocked.",
+  "rec.footer":
+    "Resources can also be used in trigger steps and in follow-ups (Hunter), by referencing the resource name.",
+
   // Settings · Control cards (control-levels.ts → renderCardGroup). Display-only
   // keys; `label`/`title`/`help`/`desc` stay as the ES source + match keys.
   "cl.tone.title": "Tone",

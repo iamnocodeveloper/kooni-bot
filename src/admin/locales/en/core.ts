@@ -15,6 +15,7 @@ export const en: Record<keyof typeof es, string> = {
   "nav.automatizaciones": "Automations",
   "nav.disparadores": "Triggers",
   "nav.kb": "Knowledge",
+  "nav.recursos": "Gallery",
   "nav.mejoras": "Improvements",
   "nav.campanas": "Campaigns",
   "nav.conexiones": "Connections",

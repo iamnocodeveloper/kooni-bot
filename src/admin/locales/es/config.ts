@@ -69,6 +69,38 @@ export const configEs = {
     '{"catalogo":{"image":"https://...","caption":"Nuestro catálogo 👇","buttons":[{"text":"Cotizar","url":"https://wa.me/..."}]}}',
   "cfg.saveChanges": "Guardar cambios",
 
+  // ── Galería de recursos (views/recursos.ts) ────────────────────────────────
+  "rec.title": "Galería de recursos",
+  "rec.subtitle":
+    "Subí imágenes, notas de voz y PDF que el bot puede enviar cuando el cliente los pida. Cada recurso lleva un «cuándo usarlo» para que el bot sepa cuándo mandarlo.",
+  "rec.new": "Nuevo recurso",
+  "rec.editing": "Editando: {name}",
+  "rec.namePh": "nombre (ej. ofertas, bienvenida, menu)",
+  "rec.kind.image": "Imagen",
+  "rec.kind.audio": "Audio",
+  "rec.kind.voice": "Nota de voz",
+  "rec.kind.document": "Documento (PDF)",
+  "rec.file": "Archivo (máx {mb} MB; las imágenes se comprimen solas)",
+  "rec.urlPh": "o pegá una URL: https://…",
+  "rec.captionPh": "Texto que acompaña (opcional)",
+  "rec.whenPh": "cuándo usarlo (ej. cuando pidan ofertas o promos)",
+  "rec.keywordsPh": "palabras clave separadas por coma (opcional)",
+  "rec.asVoice": "Enviar el audio como nota de voz",
+  "rec.create": "Agregar",
+  "rec.update": "Guardar cambios",
+  "rec.cancel": "Cancelar",
+  "rec.edit": "Editar",
+  "rec.delete": "Borrar",
+  "rec.when": "Cuándo",
+  "rec.keywords": "Palabras",
+  "rec.saved": "Guardado ✓",
+  "rec.deleted": "Recurso eliminado",
+  "rec.empty": "Todavía no hay recursos. Agregá uno arriba.",
+  "rec.hint":
+    "El bot los elige por nombre. Necesitás «Permitir multimedia» activo en Configuración y el módulo Galería desbloqueado.",
+  "rec.footer":
+    "Los recursos también se pueden usar en pasos de un disparador y en los seguimientos (Cazador), indicando el nombre del recurso.",
+
   // Config · Tarjetas de control (control-levels.ts → renderCardGroup). El ES es
   // el TEXTO ORIGINAL verbatim; `label`/`title`/`help`/`desc` siguen siendo los
   // valores ES + las claves de matcheo, y estas `cl.*` son solo para mostrar.
