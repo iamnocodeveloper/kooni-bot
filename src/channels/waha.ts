@@ -16,9 +16,10 @@
  *                  "text": "hola", "media": { "mimetype": "image/jpeg", "url": "..." } } }
  * chatId puede ser "…@c.us" (persona) o "…@g.us" (grupo).
  */
-import type { ChannelAdapter, IncomingMessage, OutgoingReply } from "./shared";
+import type { ChannelAdapter, IncomingMessage, OutgoingReply, PresenceState } from "./shared";
 import type { Env } from "../env";
 import { resolveWahaConfig, type WahaConfig } from "./wahaCredentials";
+import { mimeFromName } from "../media/mime";
 
 const DEFAULT_SESSION = "default";
 
@@ -199,53 +200,134 @@ export const wahaAdapter: ChannelAdapter = {
 
     const first = reply.chunks[0] ?? "";
     const rest = reply.chunks.slice(1);
+    const isVoice = Boolean(reply.voice && reply.audioUrl);
 
-    if (reply.documentUrl) {
-      await fetch(`${cfg.base}/api/sendFile`, {
-        method: "POST",
-        headers: h,
-        signal: AbortSignal.timeout(20_000),
-        body: JSON.stringify({
-          session: cfg.session,
-          chatId,
-          file: { url: reply.documentUrl, filename: reply.documentName ?? "documento.pdf", mimetype: "application/pdf" },
-          caption: first.slice(0, 1024) || undefined,
-        }),
-      }).catch((e) => console.error("waha sendFile (documento) error:", e));
-    } else if (reply.imageUrl) {
-      await fetch(`${cfg.base}/api/sendFile`, {
-        method: "POST",
-        headers: h,
-        // Timeout: un WAHA colgado no debe bloquear el Durable Object.
-        signal: AbortSignal.timeout(15_000),
-        body: JSON.stringify({ session: cfg.session, chatId, file: { url: reply.imageUrl }, caption: first.slice(0, 1024) || undefined }),
-      }).catch((e) => console.error("waha sendFile error:", e));
-    } else if (reply.audioUrl) {
-      await fetch(`${cfg.base}/api/sendFile`, {
-        method: "POST",
-        headers: h,
-        signal: AbortSignal.timeout(15_000),
-        body: JSON.stringify({ session: cfg.session, chatId, file: { url: reply.audioUrl }, caption: undefined }),
-      }).catch((e) => console.error("waha sendFile error:", e));
-    }
+    // Presencia natural: "grabando audio…" antes de una nota de voz; "escribiendo…"
+    // antes del texto. Best-effort (si WAHA no lo soporta, se ignora).
+    if (isVoice) await setPresence(cfg, chatId, "recording");
+    else if (reply.chunks.length) await startTyping(cfg, chatId);
 
-    const hasAttachment = Boolean(reply.documentUrl || reply.imageUrl || reply.audioUrl);
-    const textChunks = hasAttachment ? rest : reply.chunks;
-    for (const chunk of textChunks) {
-      const res = await fetch(`${cfg.base}/api/sendText`, {
-        method: "POST",
-        headers: h,
-        signal: AbortSignal.timeout(15_000),
-        body: JSON.stringify({ session: cfg.session, chatId, text: chunk }),
-      });
-      if (!res.ok) {
-        const detail = await res.text().catch(() => "");
-        throw new Error(`waha sendText falló: ${res.status} ${detail.slice(0, 200)}`);
+    try {
+      if (reply.documentUrl) {
+        await fetch(`${cfg.base}/api/sendFile`, {
+          method: "POST",
+          headers: h,
+          signal: AbortSignal.timeout(20_000),
+          body: JSON.stringify({
+            session: cfg.session,
+            chatId,
+            file: {
+              url: reply.documentUrl,
+              filename: reply.documentName ?? "documento.pdf",
+              mimetype: mimeFromName(reply.documentName ?? reply.documentUrl, "application/pdf"),
+            },
+            caption: first.slice(0, 1024) || undefined,
+          }),
+        }).catch((e) => console.error("waha sendFile (documento) error:", e));
+      } else if (reply.imageUrl) {
+        await fetch(`${cfg.base}/api/sendImage`, {
+          method: "POST",
+          headers: h,
+          // Timeout: un WAHA colgado no debe bloquear el Durable Object.
+          signal: AbortSignal.timeout(15_000),
+          body: JSON.stringify({
+            session: cfg.session,
+            chatId,
+            file: { url: reply.imageUrl, mimetype: mimeFromName(reply.imageUrl, "image/jpeg") },
+            caption: first.slice(0, 1024) || undefined,
+          }),
+        }).catch((e) => console.error("waha sendImage error:", e));
+      } else if (reply.audioUrl && isVoice) {
+        // Nota de voz (PTT) real: /api/sendVoice con convert → WAHA la deja en
+        // opus/ogg (el único formato que WhatsApp acepta como nota de voz).
+        await fetch(`${cfg.base}/api/sendVoice`, {
+          method: "POST",
+          headers: h,
+          signal: AbortSignal.timeout(20_000),
+          body: JSON.stringify({
+            session: cfg.session,
+            chatId,
+            file: { url: reply.audioUrl, mimetype: "audio/ogg; codecs=opus" },
+            convert: true,
+          }),
+        }).catch((e) => console.error("waha sendVoice error:", e));
+      } else if (reply.audioUrl) {
+        await fetch(`${cfg.base}/api/sendFile`, {
+          method: "POST",
+          headers: h,
+          signal: AbortSignal.timeout(15_000),
+          body: JSON.stringify({
+            session: cfg.session,
+            chatId,
+            file: { url: reply.audioUrl, mimetype: mimeFromName(reply.audioUrl, "audio/ogg") },
+            caption: undefined,
+          }),
+        }).catch((e) => console.error("waha sendFile (audio) error:", e));
       }
+
+      const hasAttachment = Boolean(reply.documentUrl || reply.imageUrl || reply.audioUrl);
+      const textChunks = hasAttachment ? rest : reply.chunks;
+      for (const chunk of textChunks) {
+        const res = await fetch(`${cfg.base}/api/sendText`, {
+          method: "POST",
+          headers: h,
+          signal: AbortSignal.timeout(15_000),
+          body: JSON.stringify({ session: cfg.session, chatId, text: chunk }),
+        });
+        if (!res.ok) {
+          const detail = await res.text().catch(() => "");
+          throw new Error(`waha sendText falló: ${res.status} ${detail.slice(0, 200)}`);
+        }
+      }
+    } finally {
+      // Cierra la presencia: si no, el chat queda "escribiendo…"/"grabando…".
+      await stopTyping(cfg, chatId);
     }
   },
 
-  async showTyping(_channelUserId: string, _env: Env): Promise<void> {
-    // WAHA core no expone typing de forma fiable — no-op.
+  async showTyping(channelUserId: string, env: Env): Promise<void> {
+    const cfg = await resolveWahaConfig(env);
+    if (!cfg.base) return;
+    await startTyping(cfg, channelUserId);
+  },
+
+  async showPresence(channelUserId: string, state: PresenceState, env: Env): Promise<void> {
+    const cfg = await resolveWahaConfig(env);
+    if (!cfg.base) return;
+    await setPresence(cfg, channelUserId, state);
+  },
+
+  async markSeen(channelUserId: string, env: Env): Promise<void> {
+    const cfg = await resolveWahaConfig(env);
+    if (!cfg.base) return;
+    await fetch(`${cfg.base}/api/sendSeen`, {
+      method: "POST",
+      headers: headers(cfg),
+      signal: AbortSignal.timeout(8000),
+      body: JSON.stringify({ session: cfg.session, chatId: channelUserId }),
+    }).catch((e) => console.error("waha sendSeen error:", e));
   },
 };
+
+/** POST best-effort a WAHA (usado por presencia/visto). */
+async function wahaPost(cfg: WahaConfig, path: string, body: unknown, timeoutMs = 8000): Promise<void> {
+  await fetch(`${cfg.base}${path}`, {
+    method: "POST",
+    headers: headers(cfg),
+    signal: AbortSignal.timeout(timeoutMs),
+    body: JSON.stringify(body),
+  }).catch(() => {});
+}
+
+async function startTyping(cfg: WahaConfig, chatId: string): Promise<void> {
+  await wahaPost(cfg, "/api/startTyping", { session: cfg.session, chatId });
+}
+
+async function stopTyping(cfg: WahaConfig, chatId: string): Promise<void> {
+  await wahaPost(cfg, "/api/stopTyping", { session: cfg.session, chatId });
+}
+
+async function setPresence(cfg: WahaConfig, chatId: string, state: PresenceState): Promise<void> {
+  const presence = state === "recording" ? "recording" : state === "paused" ? "paused" : "available";
+  await wahaPost(cfg, `/api/${encodeURIComponent(cfg.session)}/presence`, { chatId, presence });
+}

@@ -151,23 +151,33 @@ describe("wahaAdapter.parseIncoming", () => {
 });
 
 describe("wahaAdapter.sendReply", () => {
-  it("envía por POST /api/sendText con session + chatId", async () => {
-    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => new Response(JSON.stringify({ chatId: "ok" }), { status: 200 }));
+  function stub(status = 200) {
+    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => new Response(JSON.stringify({}), { status }));
     vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  }
+  const urls = (m: any) => m.mock.calls.map((c: any[]) => String(c[0]));
+
+  it("envía por POST /api/sendText con session + chatId (con presencia)", async () => {
+    const fetchMock = stub();
 
     await wahaAdapter.sendReply(
       { channel: "waha", channelUserId: "593983859723@c.us", chunks: ["Hola", "¿te ayudo?"], interChunkDelayMs: 0 },
       envWaha,
     );
 
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    const sendText = fetchMock.mock.calls.filter((c: any[]) => String(c[0]).includes("/api/sendText"));
+    expect(sendText).toHaveLength(2);
+    const [url, init] = sendText[0] as unknown as [string, RequestInit];
     expect(url).toBe("https://waha.example.com:3000/api/sendText");
     expect((init.headers as Record<string, string>)["X-Api-Key"]).toBe("apikey123");
     const body = JSON.parse(init.body as string);
     expect(body.session).toBe("ventas");
     expect(body.chatId).toBe("593983859723@c.us");
     expect(body.text).toBe("Hola");
+    // Presencia natural: "escribiendo…" al empezar y cierre al terminar.
+    expect(urls(fetchMock).some((u: string) => u.includes("/api/startTyping"))).toBe(true);
+    expect(urls(fetchMock).some((u: string) => u.includes("/api/stopTyping"))).toBe(true);
   });
 
   it("lanza si WAHA_API_URL no está configurado", async () => {
@@ -176,21 +186,47 @@ describe("wahaAdapter.sendReply", () => {
     ).rejects.toThrow("WAHA_API_URL");
   });
 
-  it("envía imagen por /api/sendFile y el texto restante", async () => {
-    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => new Response(JSON.stringify({}), { status: 200 }));
-    vi.stubGlobal("fetch", fetchMock);
+  it("envía imagen por /api/sendImage y el texto restante", async () => {
+    const fetchMock = stub();
 
     await wahaAdapter.sendReply(
       { channel: "waha", channelUserId: "x@c.us", chunks: ["mira la foto", "y esto"], imageUrl: "https://cdn.example/img.jpg", interChunkDelayMs: 0 },
       envWaha,
     );
 
-    const sendFile = fetchMock.mock.calls.find((c) => String((c as [string])[0]).includes("/api/sendFile"));
-    expect(sendFile).toBeTruthy();
-    const body = JSON.parse((sendFile![1] as RequestInit).body as string);
+    const sendImage = fetchMock.mock.calls.find((c: any[]) => String(c[0]).includes("/api/sendImage"));
+    expect(sendImage).toBeTruthy();
+    const body = JSON.parse((sendImage![1] as RequestInit).body as string);
     expect(body.file.url).toBe("https://cdn.example/img.jpg");
     // solo el resto va como sendText (el primer chunk fue caption)
-    const sendText = fetchMock.mock.calls.filter((c) => String((c as [string])[0]).includes("/api/sendText"));
+    const sendText = fetchMock.mock.calls.filter((c: any[]) => String(c[0]).includes("/api/sendText"));
     expect(sendText).toHaveLength(1);
+  });
+
+  it("envía audio como NOTA DE VOZ por /api/sendVoice (convert) con presencia recording", async () => {
+    const fetchMock = stub();
+
+    await wahaAdapter.sendReply(
+      { channel: "waha", channelUserId: "x@c.us", chunks: ["escuchá"], audioUrl: "https://cdn.example/a.mp3", voice: true, interChunkDelayMs: 0 },
+      envWaha,
+    );
+
+    const sendVoice = fetchMock.mock.calls.find((c: any[]) => String(c[0]).includes("/api/sendVoice"));
+    expect(sendVoice).toBeTruthy();
+    const body = JSON.parse((sendVoice![1] as RequestInit).body as string);
+    expect(body.file.mimetype).toBe("audio/ogg; codecs=opus");
+    expect(body.convert).toBe(true);
+    // presencia "grabando audio"
+    const presence = fetchMock.mock.calls.find((c: any[]) => String(c[0]).includes("/presence"));
+    expect(presence).toBeTruthy();
+    expect(JSON.parse((presence![1] as RequestInit).body as string).presence).toBe("recording");
+  });
+
+  it("marca visto con POST /api/sendSeen", async () => {
+    const fetchMock = stub();
+    await wahaAdapter.markSeen!("x@c.us", envWaha);
+    const seen = fetchMock.mock.calls.find((c: any[]) => String(c[0]).includes("/api/sendSeen"));
+    expect(seen).toBeTruthy();
+    expect(JSON.parse((seen![1] as RequestInit).body as string).chatId).toBe("x@c.us");
   });
 });
