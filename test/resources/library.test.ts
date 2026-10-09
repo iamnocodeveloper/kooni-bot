@@ -78,4 +78,14 @@ describe("resources/library", () => {
     expect(lib.b.firstMessage).toBeUndefined();
     expect(firstMessageResources(raw).map((r) => r.name)).toEqual(["a"]);
   });
+
+  it("resourceCatalogBlock NO incluye los recursos firstMessage", () => {
+    const raw = JSON.stringify({
+      campana: { kind: "image", url: "u", firstMessage: true, when: "cuando escriba" },
+      ofertas: { kind: "image", url: "v", when: "cuando pidan ofertas" },
+    });
+    const block = resourceCatalogBlock(raw);
+    expect(block).toContain("ofertas");
+    expect(block).not.toContain("campana");
+  });
 });

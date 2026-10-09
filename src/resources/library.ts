@@ -155,7 +155,9 @@ const KIND_LABEL: Record<ResourceKind, string> = {
  */
 export function resourceCatalogBlock(raw: string | null | undefined): string {
   const lib = parseResourceLibrary(raw);
-  const names = Object.keys(lib);
+  // Los recursos marcados `firstMessage` NO entran al catálogo del LLM: se envían
+  // solos en el primer mensaje (determinista), no los elige la IA.
+  const names = Object.keys(lib).filter((n) => !lib[n].firstMessage);
   if (!names.length) return "";
   const lines = names.map((name) => {
     const r = lib[name];

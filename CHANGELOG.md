@@ -5,6 +5,14 @@ Cambios notables de Kooni. Formato aproximado de
 
 El CLI `kooni-bot` se versiona aparte (npm) — ver la nota de cada versión.
 
+## [1.60.1] — 2026-10-09
+
+### Arreglado — los recursos de campaña no se reenvían a mitad de charla
+
+- Los recursos marcados **"enviar en el primer mensaje"** ya **no** entran al catálogo que elige
+  la IA: se mandan solos en el primer contacto (determinista). Así un "cuándo usarlo" vago (ej.
+  "cuando un usuario escribe") no hace que el bot los vuelva a mandar en plena conversación.
+
 ## [1.60.0] — 2026-10-09
 
 ### Agregado — recursos en el primer mensaje (campañas) + seguimiento personalizable
