@@ -84,6 +84,34 @@ describe("Probar el bot", () => {
     expect(arg.system.some((s) => s.content.includes("modo_prueba"))).toBe(true);
   });
 
+  it("primer mensaje: adelanta los recursos firstMessage", async () => {
+    stubStream("¡Hola! ¿Cómo te ayudo?");
+    const env = makeEnv();
+    (env as any).DB = {
+      prepare: (sql: string) => ({
+        bind: (...params: unknown[]) => ({
+          first: async () =>
+            sql.includes("settings") && params[0] === "resource_library"
+              ? { value: JSON.stringify({ IMG1: { kind: "image", url: "https://x/i1.jpg", firstMessage: true } }) }
+              : null,
+          all: async () => ({ results: [] }),
+          run: async () => ({ meta: {} }),
+        }),
+        all: async () => ({ results: [] }),
+      }),
+    };
+    const res = await adminApp.fetch(
+      req("/probar/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: "hola", history: [] }),
+      }),
+      env,
+    );
+    const j = (await res.json()) as { firstMessage?: { name: string }[] };
+    expect(j.firstMessage?.[0].name).toBe("IMG1");
+  });
+
   it("POST /admin/probar/send sin texto → 400", async () => {
     const res = await adminApp.fetch(
       req("/probar/send", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }),

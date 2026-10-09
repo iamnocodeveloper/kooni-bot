@@ -130,6 +130,7 @@ export const agenteEs = {
   "prb.thinking": "pensando",
   "prb.used": " · usó: ",
   "prb.wouldSend": "Enviaría este recurso:",
+  "prb.firstMessageWouldSend": "Al primer mensaje enviaría:",
   "prb.pageTitle": "Probar el bot",
 
   // ── Conocimiento (KB) ──────────────────────────────────────────────────────

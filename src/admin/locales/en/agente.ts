@@ -130,6 +130,7 @@ export const agenteEn: Record<keyof typeof agenteEs, string> = {
   "prb.thinking": "thinking",
   "prb.used": " · used: ",
   "prb.wouldSend": "It would send this resource:",
+  "prb.firstMessageWouldSend": "On the first message it would send:",
   "prb.pageTitle": "Test the bot",
 
   // ── Knowledge (KB) ─────────────────────────────────────────────────────────

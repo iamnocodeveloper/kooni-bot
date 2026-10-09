@@ -65,12 +65,12 @@ export async function renderProbar(env: Env): Promise<string> {
     }
 
     // Muestra el recurso que el bot ENVIARÍA (modo prueba: no se envía de verdad).
-    function appendMedia(wrap, r){
+    function appendMedia(wrap, r, labelText){
       var box = document.createElement('div');
       box.style.cssText = 'margin-top:6px;padding:8px;border:1px dashed var(--line);border-radius:10px;background:var(--bg);display:flex;flex-direction:column;gap:6px;max-width:260px';
       var label = document.createElement('div');
       label.style.cssText = 'font-size:9.5px;color:var(--dim)';
-      label.textContent = '${t("prb.wouldSend")}';
+      label.textContent = labelText || '${t("prb.wouldSend")}';
       box.appendChild(label);
       var el;
       if (r.kind === 'image') { el = document.createElement('img'); el.src = r.url; el.style.cssText = 'max-width:100%;border-radius:8px'; }
@@ -107,6 +107,12 @@ export async function renderProbar(env: Env): Promise<string> {
         // Si el bot llamó a enviarRecurso, mostramos el recurso (vista previa).
         var recursos = (j.toolCalls || []).map(function(t){ return t.output; }).filter(function(o){ return o && o.kind && o.url; });
         if (recursos.length) appendMedia(thinking.parentNode, recursos[0]);
+        // Primer mensaje: la Galería envía sola los recursos de campaña.
+        if (j.firstMessage && j.firstMessage.length) {
+          for (var i = 0; i < j.firstMessage.length; i++) {
+            appendMedia(thinking.parentNode, j.firstMessage[i], '${t("prb.firstMessageWouldSend")}');
+          }
+        }
         history.push({ role: 'assistant', content: j.reply });
       } catch (err) {
         thinking.textContent = '✗ ' + err.message;

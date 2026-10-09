@@ -19,6 +19,8 @@ export interface TestTurnResult {
   reply: string;
   toolCalls: { toolName: string; input: unknown; output?: unknown }[];
   model: string;
+  /** Recursos que el bot enviaría AL PRIMER mensaje (solo si el historial está vacío). */
+  firstMessage?: { name: string; kind: string; url: string; caption?: string }[];
 }
 
 // En prueba: solo herramientas de LECTURA (no capturan leads ni crean tickets).
@@ -94,5 +96,32 @@ export async function runTestTurn(
     reply: reply.trim() || "(el bot no devolvió texto)",
     toolCalls,
     model: modelId,
+    ...(await firstMessagePreview(env, history.length === 0)),
   };
+}
+
+/**
+ * En una prueba con el historial VACÍO (primer mensaje), adelanta los recursos
+ * que el agente enviaría automáticamente al primer contacto (flag `firstMessage`).
+ */
+async function firstMessagePreview(
+  env: Env,
+  isFirst: boolean,
+): Promise<{ firstMessage?: { name: string; kind: string; url: string; caption?: string }[] }> {
+  if (!isFirst) return {};
+  try {
+    const { Db } = await import("../db/client");
+    const { SettingsRepo, SETTING_KEYS } = await import("../db/settings");
+    const { firstMessageResources } = await import("../resources/library");
+    const raw = await new SettingsRepo(new Db(env.DB)).get(SETTING_KEYS.resourceLibrary);
+    const list = firstMessageResources(raw).map((r) => ({
+      name: r.name,
+      kind: r.kind,
+      url: r.url,
+      ...(r.caption ? { caption: r.caption } : {}),
+    }));
+    return list.length ? { firstMessage: list } : {};
+  } catch {
+    return {};
+  }
 }
