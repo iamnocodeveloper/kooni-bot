@@ -100,6 +100,10 @@ export const configEs = {
     "El bot los elige por nombre. Necesitás «Permitir multimedia» activo en Configuración y el módulo Galería desbloqueado.",
   "rec.footer":
     "Los recursos también se pueden usar en pasos de un disparador y en los seguimientos (Cazador), indicando el nombre del recurso.",
+  "rec.firstMessage": "Enviar en el primer mensaje del cliente (campañas)",
+  "rec.firstMessageHint":
+    "Si lo marcás, el bot manda este recurso apenas el cliente escribe por primera vez (no lo decide la IA). Ideal para quienes llegan de una campaña.",
+  "rec.badgeFirst": "1er mensaje",
 
   // Config · Tarjetas de control (control-levels.ts → renderCardGroup). El ES es
   // el TEXTO ORIGINAL verbatim; `label`/`title`/`help`/`desc` siguen siendo los

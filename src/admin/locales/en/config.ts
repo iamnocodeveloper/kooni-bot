@@ -99,6 +99,10 @@ export const configEn: Record<keyof typeof configEs, string> = {
     "The bot picks them by name. You need \"Allow media\" on in Settings and the Gallery module unlocked.",
   "rec.footer":
     "Resources can also be used in trigger steps and in follow-ups (Hunter), by referencing the resource name.",
+  "rec.firstMessage": "Send on the customer's first message (campaigns)",
+  "rec.firstMessageHint":
+    "If checked, the bot sends this resource as soon as the customer writes for the first time (no AI decision). Great for people coming from a campaign.",
+  "rec.badgeFirst": "1st message",
 
   // Settings · Control cards (control-levels.ts → renderCardGroup). Display-only
   // keys; `label`/`title`/`help`/`desc` stay as the ES source + match keys.

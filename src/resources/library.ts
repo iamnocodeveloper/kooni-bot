@@ -26,6 +26,12 @@ export interface LibraryResource {
   keywords?: string[];
   /** Solo audio: enviar como nota de voz (PTT) donde el canal lo soporte. */
   asVoice?: boolean;
+  /**
+   * Enviar en el PRIMER mensaje del cliente (conversación nueva). Determinista:
+   * lo manda el agente al recibir el primer entrante, sin depender de la IA. Para
+   * material de campaña.
+   */
+  firstMessage?: boolean;
   buttons?: ReplyButton[];
 }
 
@@ -78,6 +84,7 @@ function normalizeEntry(name: string, raw: unknown): LibraryResource | null {
     ...(asString(e.when) ? { when: asString(e.when) } : {}),
     ...(keywords && keywords.length ? { keywords } : {}),
     ...(kind === "audio" ? { asVoice: e.asVoice === false ? false : true } : {}),
+    ...(e.firstMessage === true ? { firstMessage: true } : {}),
     ...(normalizeButtons(e.buttons) ? { buttons: normalizeButtons(e.buttons) } : {}),
   };
 }
@@ -104,6 +111,11 @@ export function parseResourceLibrary(raw: string | null | undefined): ResourceLi
 export function findResource(lib: ResourceLibrary, name: string): LibraryResource | null {
   const key = Object.keys(lib).find((k) => k.toLowerCase() === String(name).toLowerCase());
   return key ? lib[key] : null;
+}
+
+/** Recursos marcados para enviar en el PRIMER mensaje del cliente (campañas). */
+export function firstMessageResources(raw: string | null | undefined): LibraryResource[] {
+  return Object.values(parseResourceLibrary(raw)).filter((r) => r.firstMessage === true);
 }
 
 export interface ResourceMediaOpts {

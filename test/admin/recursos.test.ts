@@ -81,6 +81,20 @@ describe("Galería de recursos", () => {
     expect(lib.bienvenida.url).toMatch(/^https:\/\/bot\.test\/media\//);
   });
 
+  it("guarda firstMessage (enviar en el primer mensaje)", async () => {
+    const form = new FormData();
+    form.set("name", "campaña");
+    form.set("kind", "image");
+    form.set("url", "https://cdn.example.com/c.jpg");
+    form.set("firstMessage", "on");
+
+    const res = await adminApp.request("/recursos/save", { method: "POST", headers: AUTH, body: form }, env);
+    expect(res.status).toBe(302);
+
+    const lib = parseResourceLibrary(await settings.get(SETTING_KEYS.resourceLibrary));
+    expect(lib["campaña"].firstMessage).toBe(true);
+  });
+
   it("borra un recurso", async () => {
     await settings.set(
       SETTING_KEYS.resourceLibrary,

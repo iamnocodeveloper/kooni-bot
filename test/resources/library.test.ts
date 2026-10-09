@@ -4,6 +4,7 @@ import {
   findResource,
   resourceMediaOf,
   resourceCatalogBlock,
+  firstMessageResources,
 } from "../../src/resources/library";
 
 describe("resources/library", () => {
@@ -65,5 +66,16 @@ describe("resources/library", () => {
     expect(block).toContain("ofertas");
     expect(block).toContain("cuando pidan ofertas");
     expect(block).toContain("<recursos_multimedia>");
+  });
+
+  it("parsea firstMessage y firstMessageResources lo filtra", () => {
+    const raw = JSON.stringify({
+      a: { kind: "image", url: "u", firstMessage: true },
+      b: { kind: "image", url: "v" },
+    });
+    const lib = parseResourceLibrary(raw);
+    expect(lib.a.firstMessage).toBe(true);
+    expect(lib.b.firstMessage).toBeUndefined();
+    expect(firstMessageResources(raw).map((r) => r.name)).toEqual(["a"]);
   });
 });

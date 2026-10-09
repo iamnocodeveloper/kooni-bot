@@ -30,10 +30,11 @@ function resourceRow(t: T, r: LibraryResource): string {
   const kindLabel = r.kind === "audio" && r.asVoice !== false ? t("rec.kind.voice") : t(`rec.kind.${r.kind}` as never);
   const when = r.when ? `<span class="text-dim text-[11px]">${esc(t("rec.when"))}: ${esc(r.when)}</span>` : "";
   const kw = r.keywords?.length ? `<span class="text-dim text-[11px]">${esc(t("rec.keywords"))}: ${esc(r.keywords.join(", "))}</span>` : "";
+  const first = r.firstMessage ? `<span class="text-[10px] tracking-wide border px-1.5" style="color:var(--accent);border-color:var(--accent)">${esc(t("rec.badgeFirst"))}</span>` : "";
   return `<div class="bg-panel border border-line" style="padding:12px 14px;display:flex;gap:14px;align-items:center">
     <div style="min-width:72px">${preview(r)}</div>
     <div style="display:flex;flex-direction:column;gap:3px;flex:1;min-width:0">
-      <span class="font-display font-semibold text-[13px] text-cream">${esc(r.name)} <span class="text-dim text-[11px]">· ${esc(kindLabel)}</span></span>
+      <span class="font-display font-semibold text-[13px] text-cream">${esc(r.name)} <span class="text-dim text-[11px]">· ${esc(kindLabel)}</span> ${first}</span>
       ${r.caption ? `<span class="text-muted text-[12px]">${esc(r.caption)}</span>` : ""}
       ${when}
       ${kw}
@@ -97,6 +98,10 @@ export async function renderRecursos(
         <label style="font-size:11.5px;color:var(--muted);display:inline-flex;gap:6px;align-items:center">
           <input type="checkbox" name="asVoice" ${editing ? (editing.asVoice !== false ? "checked" : "") : "checked"}> ${esc(t("rec.asVoice"))}
         </label>
+        <label style="font-size:11.5px;color:var(--muted);display:inline-flex;gap:6px;align-items:center">
+          <input type="checkbox" name="firstMessage" ${editing?.firstMessage ? "checked" : ""}> ${esc(t("rec.firstMessage"))}
+        </label>
+        <span class="text-dim text-[11px]">${esc(t("rec.firstMessageHint"))}</span>
         <div style="display:flex;gap:8px;align-items:center">
           <button type="submit" style="background:var(--accent);color:var(--on-accent);border:none;padding:8px 16px;font-size:12.5px;font-weight:700;cursor:pointer">${esc(editing ? t("rec.update") : t("rec.create"))}</button>
           ${editing ? `<a href="/admin/recursos" class="text-dim text-[11.5px]">${esc(t("rec.cancel"))}</a>` : ""}

@@ -1345,6 +1345,7 @@ adminApp.post("/recursos/save", async (c) => {
     ...(get("when") ? { when: get("when") } : {}),
     ...(keywords.length ? { keywords } : {}),
     ...(kind === "audio" ? { asVoice: form?.get("asVoice") != null } : {}),
+    ...(form?.get("firstMessage") != null ? { firstMessage: true } : {}),
     ...(prev?.buttons ? { buttons: prev.buttons } : {}),
   };
   await repo.set(SETTING_KEYS.resourceLibrary, JSON.stringify(lib));
