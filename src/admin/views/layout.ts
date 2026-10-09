@@ -617,7 +617,7 @@ function sidebar(activeTab: string, locked: (id: string) => boolean, niche: Nich
         </div>
         <div style="line-height:1.2;overflow:hidden">
           <div style="font-size:12px;font-weight:600;white-space:nowrap;text-overflow:ellipsis;overflow:hidden">${t("chrome.panelBot")}</div>
-          <div style="font-size:10px;color:var(--dim)">${t("chrome.session")}</div>
+          <div style="font-size:10px;color:var(--dim)">${t("chrome.session")} · v${escLogin(BOT_VERSION)}</div>
         </div>
       </div>
     </div>

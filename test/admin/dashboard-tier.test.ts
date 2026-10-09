@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { layout } from "../../src/admin/views/layout";
+import { BOT_VERSION } from "../../src/version";
 import { makeDb, testLicense } from "../helpers/license";
 import type { Env } from "../../src/env";
 
@@ -51,5 +52,10 @@ describe("dashboard nav — sin tabs bloqueados", () => {
   it("sin env (fallback): todo abierto", async () => {
     const html = await layout({ title: "T", activeTab: "overview", body: "x" });
     expect(html).toContain('href="/admin/insights"');
+  });
+
+  it("el sidebar muestra la versión del sistema", async () => {
+    const html = await page("free");
+    expect(html).toContain(`v${BOT_VERSION}`);
   });
 });
