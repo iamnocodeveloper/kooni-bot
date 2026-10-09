@@ -106,6 +106,15 @@ export class MessagesRepo {
     return byMessage;
   }
 
+  /** ¿Cuántos mensajes tiene la conversación? (0 = primer mensaje del cliente). */
+  async count(conversationId: string): Promise<number> {
+    const row = await this.db.first<{ n: number }>(
+      "SELECT COUNT(*) AS n FROM messages WHERE conversation_id = ?",
+      [conversationId],
+    );
+    return row?.n ?? 0;
+  }
+
   async lastN(conversationId: string, n: number): Promise<Message[]> {
     const rows = await this.db.all<Message>(
       `SELECT * FROM (

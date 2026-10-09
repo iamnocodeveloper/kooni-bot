@@ -143,6 +143,17 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
       }
     }
 
+    // Recursos de CAMPAÑA: en el PRIMER mensaje del cliente (conversación sin
+    // mensajes previos) la Galería manda los recursos marcados `firstMessage`,
+    // de forma determinista (no depende de la IA). Van ANTES de la respuesta.
+    if (!payload.isOwnerMessage && payload.channel !== "webchat") {
+      try {
+        await this.sendFirstMessageResources(conv.id, payload.channel as ChannelId, payload.channelUserId);
+      } catch (e) {
+        console.warn("[ingest] firstMessage resources:", e);
+      }
+    }
+
     // Registrar contacto (todos los que interactúan, separado de Leads).
     try {
       const { ContactsRepo } = await import("./db/contacts");
@@ -398,6 +409,36 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
     this.setState({ ...this.state, lastAlarmAt: alarmAt });
 
     return { acknowledged: true };
+  }
+
+  /**
+   * Recursos de CAMPAÑA: en el PRIMER mensaje del cliente (conversación sin
+   * mensajes previos) la Galería manda los recursos marcados `firstMessage`, de
+   * forma determinista (no depende de la IA). No hace nada si la Galería está
+   * apagada o la conversación ya tenía mensajes.
+   */
+  private async sendFirstMessageResources(
+    conversationId: string,
+    channel: ChannelId,
+    channelUserId: string,
+  ): Promise<void> {
+    const db = new Db(this.env.DB);
+    const msgs = new MessagesRepo(db);
+    if ((await msgs.count(conversationId)) > 0) return; // solo el primer mensaje
+    const cfg = await resolveAgentConfig(this.env, []);
+    if (!cfg.galeriaEnabled || !cfg.allowMultimedia) return;
+
+    const { SettingsRepo, SETTING_KEYS } = await import("./db/settings");
+    const { firstMessageResources, resourceMediaOf } = await import("./resources/library");
+    const raw = await new SettingsRepo(db).get(SETTING_KEYS.resourceLibrary);
+    for (const r of firstMessageResources(raw)) {
+      try {
+        await sendReplyCapped(channel, channelUserId, [r.caption ?? ""], this.env, resourceMediaOf(r));
+        if (r.caption) await msgs.append(conversationId, "assistant", r.caption);
+      } catch (e) {
+        console.warn("[ingest] firstMessage resource falló:", e);
+      }
+    }
   }
 
   /**
