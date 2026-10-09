@@ -12,6 +12,7 @@ import type { Env } from "./env";
 import { Db } from "./db/client";
 import { SettingsRepo, SETTING_KEYS } from "./db/settings";
 import { unlockedModules } from "./modules";
+import { resourceCatalogBlock } from "./resources/library";
 
 /** Settings de los toggles de las funciones que actúan en el BOT. */
 export const FEATURE_KEYS = {
@@ -433,6 +434,10 @@ export async function extrasForAgent(
   if (on(FEATURE_KEYS.encuestas, "encuestas")) extraInstructions.push(ENCUESTAS_PROMPT_BLOCK);
   if (on(FEATURE_KEYS.resenas, "resenas")) extraInstructions.push(resenasBlock(settings[SETTING_KEYS.reviewLink]));
   if (on(FEATURE_KEYS.cobros, "cobros")) extraInstructions.push(cobrosBlock(settings[SETTING_KEYS.paymentLink]));
+  if (on(FEATURE_KEYS.galeria, "galeria")) {
+    const recursos = resourceCatalogBlock(settings[SETTING_KEYS.resourceLibrary]);
+    if (recursos) extraInstructions.push(recursos);
+  }
   return {
     extraInstructions,
     vigilanteEnabled: on(FEATURE_KEYS.vigilante, "vigilante"),

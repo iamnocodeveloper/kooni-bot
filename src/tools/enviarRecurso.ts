@@ -4,8 +4,9 @@ import type { Env } from "../env";
 import { Db } from "../db/client";
 import { SettingsRepo, SETTING_KEYS } from "../db/settings";
 import { sendReplyCapped } from "../replies/sender";
-import type { ChannelId, ReplyButton } from "../channels/shared";
+import type { ChannelId } from "../channels/shared";
 import { chunkReply } from "../replies/chunker";
+import { parseResourceLibrary, resourceMediaOf } from "../resources/library";
 
 /** Contexto extendido con el canal real (lo pone el agente antes de llamar). */
 export interface RecursoCtx {
@@ -51,13 +52,7 @@ export function enviarRecursoTool(
         const raw = await repo.get(SETTING_KEYS.resourceLibrary);
         if (!raw) return { error: "sin_biblioteca" as const, mensaje: "El dueño aún no configuró recursos multimedia." };
 
-        let lib: Record<string, { image?: string; audio?: string; document?: string; caption?: string; buttons?: ReplyButton[] }> = {};
-        try {
-          lib = JSON.parse(raw);
-        } catch {
-          return { error: "biblioteca_invalida" as const, mensaje: "La biblioteca de recursos tiene un formato inválido." };
-        }
-
+        const lib = parseResourceLibrary(raw);
         const key = Object.keys(lib).find((k) => k.toLowerCase() === String(nombre).toLowerCase());
         if (!key) {
           return {
@@ -74,12 +69,7 @@ export function enviarRecursoTool(
           ctx.channelUserId,
           chunkReply(msg || "Aquí tienes 👇"),
           env,
-          {
-            imageUrl: res.image,
-            audioUrl: res.audio,
-            ...(res.document ? { documentUrl: res.document, documentName: `${key}.pdf` } : {}),
-            buttons: res.buttons,
-          },
+          resourceMediaOf(res),
         );
 
         return {
