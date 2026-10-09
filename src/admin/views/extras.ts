@@ -78,18 +78,38 @@ export async function renderExtras(env: Env, saved = false, report?: string): Pr
         </div>`;
     }
 
-    // Campos de config de la función (ej. links de reseñas y de pago).
+    // Campos de config de la función (links de reseñas/pago, mensajes de
+    // seguimiento, etc.). `kind` decide el control: checkbox | textarea | text.
     if ((f.config ?? []).length > 0 && st.unlocked) {
       const fields = (f.config ?? [])
-        .map(
-          (c) => `
-            <div style="display:flex;flex-direction:column;gap:4px;max-width:420px">
+        .map((c) => {
+          const val = settings[c.key] ?? "";
+          const help = `<span class="text-[10.5px] text-dim">${esc(c.help)}</span>`;
+          if (c.kind === "checkbox") {
+            return `<div style="display:flex;flex-direction:column;gap:2px;max-width:520px">
+              <label style="display:flex;align-items:center;gap:9px;font-size:12.5px;color:var(--cream);cursor:pointer">
+                <input type="checkbox" id="${esc(c.key)}" name="${esc(c.key)}" value="1" ${val === "1" ? "checked" : ""}
+                       style="accent-color:var(--accent);width:16px;height:16px">
+                <span>${esc(c.label)}</span>
+              </label>
+              ${help}
+            </div>`;
+          }
+          if (c.kind === "textarea") {
+            return `<div style="display:flex;flex-direction:column;gap:4px;max-width:520px">
               <label class="text-[11px] text-dim" for="${esc(c.key)}">${esc(c.label)}</label>
-              <input type="text" id="${esc(c.key)}" name="${esc(c.key)}" value="${esc(settings[c.key] ?? "")}"
+              <textarea id="${esc(c.key)}" name="${esc(c.key)}" rows="2" placeholder="${esc(c.placeholder)}"
+                        style="${SELECT_STYLE};resize:vertical;font-family:inherit">${esc(val)}</textarea>
+              ${help}
+            </div>`;
+          }
+          return `<div style="display:flex;flex-direction:column;gap:4px;max-width:420px">
+              <label class="text-[11px] text-dim" for="${esc(c.key)}">${esc(c.label)}</label>
+              <input type="text" id="${esc(c.key)}" name="${esc(c.key)}" value="${esc(val)}"
                      placeholder="${esc(c.placeholder)}" style="${SELECT_STYLE}">
-              <span class="text-[10.5px] text-dim">${esc(c.help)}</span>
-            </div>`,
-        )
+              ${help}
+            </div>`;
+        })
         .join("");
       extra += `<div style="display:flex;flex-direction:column;gap:8px;margin-top:2px">${fields}</div>`;
     }

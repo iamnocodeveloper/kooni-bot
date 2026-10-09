@@ -131,6 +131,11 @@ export const SETTING_KEYS = {
   // el Cazador y el Reenganche pueden adjuntar una imagen/nota de voz/PDF.
   cazadorResource: "cazador_resource",
   reengancheResource: "reenganche_resource",
+  // Seguimiento personalizado: modo manual (hasta 3 mensajes) en vez de IA.
+  seguimientoCustom: "seguimiento_custom", // "1" = usar los mensajes de abajo
+  seguimientoMessage1: "seguimiento_message_1",
+  seguimientoMessage2: "seguimiento_message_2",
+  seguimientoMessage3: "seguimiento_message_3",
   // Comentarios SIN automatización: si está en "1", el bot responde EN PÚBLICO
   // (nunca DM) los comentarios de primer nivel que no matchean ninguna regla,
   // con el texto de commentFallbackMessage. Default "" (apagado = no hace nada).
@@ -269,6 +274,10 @@ export const SETTING_LABELS: Record<string, string> = {
   [SETTING_KEYS.paymentLink]: "Link de pago",
   [SETTING_KEYS.cazadorResource]: "Recurso del Cazador",
   [SETTING_KEYS.reengancheResource]: "Recurso del Reenganche",
+  [SETTING_KEYS.seguimientoCustom]: "Personalizar mensajes de seguimiento",
+  [SETTING_KEYS.seguimientoMessage1]: "Mensaje de seguimiento 1",
+  [SETTING_KEYS.seguimientoMessage2]: "Mensaje de seguimiento 2",
+  [SETTING_KEYS.seguimientoMessage3]: "Mensaje de seguimiento 3",
   [SETTING_KEYS.quoteTemplateHtml]: "Plantilla HTML de la cotización",
   [SETTING_KEYS.quoteDefaults]: "Defaults de cotización",
   [SETTING_KEYS.quoteAutoSend]: "Enviar la cotización automáticamente",

@@ -8,6 +8,7 @@ import {
   VOZ_MARCA_PROMPT_BLOCK,
   MULTIIDIOMA_PROMPT_BLOCK,
   ENCUESTAS_PROMPT_BLOCK,
+  EXTRA_FEATURES,
 } from "../src/features";
 import type { Env } from "../src/env";
 import type { D1Database } from "@cloudflare/workers-types";
@@ -139,5 +140,15 @@ describe("isFeatureActive", () => {
     expect(await isFeatureActive(env({}), "cazador", { feature_cazador_enabled: "1" })).toBe(true);
     expect(await isFeatureActive(env({}), "cazador", {})).toBe(false);
     expect(await isFeatureActive(env({}), "no_existe", {})).toBe(false);
+  });
+});
+
+describe("Extras — personalizar seguimiento", () => {
+  it("la tarjeta Cazador trae checkbox + 3 mensajes personalizados", () => {
+    const cazador = EXTRA_FEATURES.find((f) => f.id === "cazador")!;
+    const cfg = cazador.config ?? [];
+    expect(cfg.find((c) => c.key === "seguimiento_custom")?.kind).toBe("checkbox");
+    const msgs = cfg.filter((c) => c.kind === "textarea").map((c) => c.key);
+    expect(msgs).toEqual(["seguimiento_message_1", "seguimiento_message_2", "seguimiento_message_3"]);
   });
 });

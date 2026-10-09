@@ -51,7 +51,7 @@ export interface ExtraFeature {
   /** "reporte" = además del toggle muestra canal + botón de prueba. */
   kind?: "toggle" | "reporte";
   /** Campos de config extra (inputs) que se guardan con el form de Extras. */
-  config?: { key: string; label: string; placeholder: string; help: string }[];
+  config?: { key: string; label: string; placeholder: string; help: string; kind?: "text" | "textarea" | "checkbox" }[];
 }
 
 /** Catálogo del menú Extras (el orden es el del grid). */
@@ -84,6 +84,34 @@ export const EXTRA_FEATURES: ExtraFeature[] = [
         label: "Recurso a adjuntar (opcional)",
         placeholder: "ej. ofertas",
         help: "Nombre de un recurso de la Galería. El seguimiento se envía con esa imagen / nota de voz / PDF.",
+      },
+      {
+        key: SETTING_KEYS.seguimientoCustom,
+        label: "Personalizar mensajes de seguimiento",
+        placeholder: "",
+        help: "Apagado (por defecto) = los redacta la IA. Encendido = usás tus textos de abajo (hasta 3 toques).",
+        kind: "checkbox",
+      },
+      {
+        key: SETTING_KEYS.seguimientoMessage1,
+        label: "Mensaje 1 (a las 3–20 h)",
+        placeholder: "ej. ¡Hola! ¿Seguimos con lo que te interesaba?",
+        help: "Se envía entre 3 y 20 h después del último mensaje del cliente. Vacío = ese toque no se envía.",
+        kind: "textarea",
+      },
+      {
+        key: SETTING_KEYS.seguimientoMessage2,
+        label: "Mensaje 2 (a los 2–5 días)",
+        placeholder: "ej. ¿Te quedó alguna duda? Sigo por acá 🙌",
+        help: "Se envía 2–5 días después del mensaje 1, si el cliente no contestó.",
+        kind: "textarea",
+      },
+      {
+        key: SETTING_KEYS.seguimientoMessage3,
+        label: "Mensaje 3 (a los 5–10 días)",
+        placeholder: "ej. Último aviso: sigo disponible si querés retomar.",
+        help: "Se envía 5–10 días después del mensaje 2, si sigue sin contestar.",
+        kind: "textarea",
       },
     ],
   },
