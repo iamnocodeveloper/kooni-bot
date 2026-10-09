@@ -13,6 +13,10 @@ export interface Env {
   // como texto + enlace (degradación limpia). Requiere habilitar Browser
   // Rendering en la cuenta y `[browser] binding = "BROWSER"` en wrangler.toml.
   BROWSER?: Fetcher;
+  // R2 con los recursos multimedia subidos desde el panel (biblioteca de
+  // recursos). Opcional: sin este binding, los archivos se guardan en D1
+  // (`media_assets`) y se sirven por enlace firmado. Ver src/media/store.ts.
+  MEDIA?: R2Bucket;
 
   // Vars (member-set)
   BOT_NAME: string;

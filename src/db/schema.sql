@@ -972,3 +972,17 @@ CREATE TABLE IF NOT EXISTS trigger_steps (
   FOREIGN KEY (trigger_id) REFERENCES triggers(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_trigger_steps_trigger ON trigger_steps(trigger_id, idx);
+
+-- Recursos multimedia SUBIDOS desde el panel (imágenes/audios/PDF de la
+-- biblioteca). Fallback cuando no hay binding R2 `MEDIA`: se guardan los bytes
+-- en D1 y se sirven por enlace firmado (GET /media/:token). Tabla NUEVA, segura
+-- de re-aplicar. kind: image | audio | document.
+CREATE TABLE IF NOT EXISTS media_assets (
+  id TEXT PRIMARY KEY,
+  kind TEXT NOT NULL,
+  mime TEXT NOT NULL,
+  name TEXT,
+  bytes BLOB NOT NULL,
+  size INTEGER NOT NULL,
+  created_at INTEGER NOT NULL
+);

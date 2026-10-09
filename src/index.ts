@@ -483,6 +483,28 @@ app.get("/q/:token", async (c) => {
   return c.html(html);
 });
 
+// Recurso multimedia SUBIDO (biblioteca de recursos) servido por enlace
+// FIRMADO (/media/<id>.<firma>). Público a propósito: el canal (WAHA/Telegram)
+// descarga esta URL para reenviar el archivo al cliente. Ver src/media/store.ts.
+app.get("/media/:token", async (c) => {
+  const token = c.req.param("token");
+  const { verifyMediaToken } = await import("./media/link");
+  const id = await verifyMediaToken(c.env, token);
+  if (!id) return c.text("Enlace inválido", 404);
+  const { getMedia } = await import("./media/store");
+  const media = await getMedia(c.env, id);
+  if (!media) return c.text("Recurso no encontrado", 404);
+  return new Response(media.bytes as unknown as BodyInit, {
+    status: 200,
+    headers: {
+      "Content-Type": media.mime,
+      // Contenido inmutable (id únicos por subida): cache agresivo para que el
+      // canal no lo vuelva a pedir.
+      "Cache-Control": "public, max-age=31536000, immutable",
+    },
+  });
+});
+
 // Admin dashboard — sub-app en /admin/*, con login propio (cookie de sesión) o
 // Basic Auth. Ver src/admin/auth.ts.
 app.route("/admin", adminApp);
