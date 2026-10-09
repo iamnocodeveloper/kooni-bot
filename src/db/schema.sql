@@ -997,3 +997,12 @@ CREATE TABLE IF NOT EXISTS media_assets (
   size INTEGER NOT NULL,
   created_at INTEGER NOT NULL
 );
+
+-- Tercer toque del seguimiento personalizado (Kooni+, modo manual): reclamo por
+-- (conversation_id, step) para no repetir el toque 3. Tabla NUEVA.
+CREATE TABLE IF NOT EXISTS followup_touches (
+  conversation_id TEXT NOT NULL,
+  step INTEGER NOT NULL,
+  sent_at INTEGER NOT NULL,
+  PRIMARY KEY (conversation_id, step)
+);

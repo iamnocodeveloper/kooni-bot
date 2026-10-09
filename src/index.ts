@@ -703,6 +703,12 @@ export default {
       const { runReengagements } = await import("./followup/reengage");
       await runReengagements(env).catch((e) => console.error("reenganche:", e));
     }
+    // Tercer toque del seguimiento personalizado: 5–10 días después del 2º, solo
+    // si el dueño activó el modo manual y escribió el mensaje 3.
+    if (cazadorActive && seguimientoCustom && (settings[SETTING_KEYS.seguimientoMessage3] ?? "").trim()) {
+      const { runFollowupExtra } = await import("./followup/extra");
+      await runFollowupExtra(env).catch((e) => console.error("seguimiento-3:", e));
+    }
 
     // Cobranza (nicho `cartera`): recordatorios por mora + promesas de pago.
     // El motor aplica cooldown, intentos máximos y tope por corrida.
