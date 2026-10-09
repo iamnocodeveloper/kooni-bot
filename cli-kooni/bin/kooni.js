@@ -1292,7 +1292,7 @@ async function deployBot(dir, { flags = {}, rl } = {}) {
     console.log("  " + C.yellow("⚠") + " " + t().r2Warn);
     patchWranglerFile(dir, (s) => s
       .replace(/\[\[r2_buckets\]\]/, "# [[r2_buckets]] (R2 no habilitado — opcional)")
-      .replace(/^binding\s*=\s*"CATALOG"/m, '# binding = "CATALOG"')
+      .replace(/^binding\s*=\s*"MEDIA"/m, '# binding = "MEDIA"')
       .replace(/^bucket_name\s*=\s*"[^"]*"/m, '# bucket_name = "kooni-bot-catalog"'));
   }
 

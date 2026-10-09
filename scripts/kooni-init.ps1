@@ -301,10 +301,10 @@ if ($Mode -eq "deploy") {
   OK "Vectorize kooni_kb listo (o ya existía)"
   $r2out = Exec $NPX @("wrangler","r2","bucket","create","kooni-bot-catalog")
   if ($r2out -match "10042" -or $r2out -match "enable R2") {
-    Warn "R2 no está habilitado en tu cuenta (gratis: dash.cloudflare.com → R2). El bot funciona sin él (código no usa CATALOG); se agrega después."
+    Warn "R2 no está habilitado en tu cuenta (gratis: dash.cloudflare.com → R2). El bot funciona sin él (los archivos se guardan en D1); se agrega después."
     $toml = Get-Content "wrangler.toml" -Raw -Encoding utf8
     $toml = $toml -replace '\[\[r2_buckets\]\]', '# [[r2_buckets]] (R2 no habilitado — opcional)'
-    $toml = $toml -replace 'binding = "CATALOG"', '# binding = "CATALOG"'
+    $toml = $toml -replace 'binding = "MEDIA"', '# binding = "MEDIA"'
     $toml = $toml -replace 'bucket_name = "[^"]*"', '# bucket_name = "kooni-bot-catalog"'
     [IO.File]::WriteAllText((Join-Path $Root "wrangler.toml"), $toml, (New-Object Text.UTF8Encoding $false))
   } else { OK "R2 kooni-bot-catalog listo (o ya existía)" }

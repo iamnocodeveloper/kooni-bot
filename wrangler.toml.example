@@ -31,6 +31,14 @@ binding = "KB"
 index_name = "kooni_kb"
 # Crea tu índice con: wrangler vectorize create kooni_kb --dimensions=1024 --metric=cosine
 
+# Bucket R2 para los recursos multimedia SUBIDOS desde el panel (Galería:
+# imágenes, notas de voz y PDF). OPCIONAL: sin este binding los archivos se
+# guardan en D1 y el bot funciona igual. Si tu cuenta no tiene R2, el instalador
+# comenta este bloque solo.
+[[r2_buckets]]
+binding = "MEDIA"
+bucket_name = "kooni-bot-catalog"
+
 [vars]
 LLM_PROVIDER = "openai"               # 'anthropic' | 'openai' | 'xai'
 # IMPORTANTE: si tu OPENAI_API_KEY es de un GATEWAY (AIsa, OpenRouter, etc.) y

@@ -5,6 +5,30 @@ Cambios notables de Kooni. Formato aproximado de
 
 El CLI `kooni-bot` se versiona aparte (npm) — ver la nota de cada versión.
 
+## [1.59.0] — 2026-10-09
+
+### Agregado — Galería de recursos (subida) + envío natural por WAHA
+
+- **Galería (`/admin/recursos`)**: subí **imágenes, notas de voz y PDF** desde el panel (o pegá una
+  URL). Se guardan con estrategia **auto**: bucket R2 `MEDIA` si está bound; si no, en D1
+  (`media_assets`). Se sirven por **enlace firmado** público `GET /media/:token` (el canal descarga
+  la URL para reenviar el archivo). Las imágenes se comprimen en el navegador antes de subir.
+- **El bot sabe cuándo mandar cada recurso**: cada uno lleva un campo **"cuándo usarlo"** y el
+  catálogo completo (nombres + cuándo) se inyecta al prompt. Antes, el modelo solo conocía los
+  nombres cuando fallaba una llamada a `enviarRecurso`.
+- **Envío natural por WAHA**: imagen por `/api/sendImage`; **nota de voz real (PTT)** por
+  `/api/sendVoice` con `convert:true`; documento por `/api/sendFile`. Presencia "escribiendo…" y
+  "grabando audio…" (`startTyping` / `presence`) y **confirmación de lectura** (`sendSeen`) al recibir.
+- **Recursos en flujos y seguimientos**: los pasos de un disparador aceptan `@recurso` (tercer campo
+  de la línea `minutos|contenido|@recurso`, también en pasos diferidos); el Cazador y el Reenganche
+  pueden adjuntar un recurso elegido en **Extras**.
+- **R2 opcional**: el template incluye el binding `MEDIA` (`kooni-bot-catalog`) y el instalador lo
+  comenta solo si la cuenta no tiene R2 — el bot funciona igual con D1.
+
+Instalaciones existentes: aplicar el esquema (`pnpm db:apply:remote`, crea `media_assets` y
+`trigger_step_media`) y desplegar. Requiere el toggle **Permitir multimedia** y el módulo **Galería**.
+WAHA sigue siendo **edición privada** (no se distribuye a instalaciones públicas).
+
 ## [1.58.1] — 2026-10-08
 
 ### Arreglado — la tarjeta de WAHA ahora se muestra cuando el módulo está activo

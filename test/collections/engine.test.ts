@@ -42,8 +42,9 @@ describe("motor de cobranza (runCollections)", () => {
 
     const r = await runCollections(env, { force: true });
     expect(r.sent).toBe(1);
-    expect(sent[0].url).toContain("/api/sendText");
-    expect(sent[0].body.chatId).toBe("50688887777@c.us");
+    const text = sent.find((c) => c.url.includes("/api/sendText"));
+    expect(text).toBeTruthy();
+    expect(text.body.chatId).toBe("50688887777@c.us");
 
     const inter = await repo.listInteractions(debtorId);
     expect(inter[0].outcome).toBe("recordatorio");
