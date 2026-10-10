@@ -14,7 +14,7 @@
 import { createInterface } from "node:readline/promises";
 import { emitKeypressEvents } from "node:readline";
 import { stdin as input, stdout as output } from "node:process";
-import { mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, readdirSync, statSync, cpSync } from "node:fs";
+import { mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, readdirSync, statSync, cpSync, unlinkSync } from "node:fs";
 import { realpathSync } from "node:fs";
 import { join, basename, dirname, isAbsolute } from "node:path";
 import { homedir } from "node:os";
@@ -1459,6 +1459,7 @@ constructor. No hay licencia ni servidor de Horizontes: el tier free/pro se cont
 - \`npx kooni-bot install <giro>\` — instala el bot de un giro (ej. \`restaurante\`).
 - \`npx kooni-bot login\` — conecta el CLI a la cuenta Kooni del usuario (device flow: abre el navegador y aprueba un código).
 - \`npx kooni-bot whoami\` — muestra con qué cuenta está conectado.
+- \`npx kooni-bot logout\` — cierra la sesión del CLI (para instalar con otra cuenta).
 - \`npx kooni-bot pair [dir]\` — vincula (o re-vincula) un bot YA desplegado a la cuenta.
 - \`npx kooni-bot init [dir]\` — descarga el template, configura (idioma, negocio, cerebro) y ofrece desplegar.
 - \`npx kooni-bot deploy [dir]\` — provisiona Cloudflare (login, D1/Vectorize/R2, secrets, migraciones, deploy).
@@ -1486,7 +1487,7 @@ Si dudas: **member/ es sagrado, src/ se actualiza.**
 
 ## Instalación de cero (resumen)
 1. \`npx kooni-bot login\` — conecta el CLI a la cuenta Kooni del usuario (abre el navegador y aprueba un código). **OBLIGATORIO**: sin esta sesión la instalación NO se registra en el panel ni se puede licenciar. En agente/CI: \`npx kooni-bot login --wait\` (el usuario aprueba el código).
-2. \`npx kooni-bot init\` (o \`init --yes --slug <slug> --negocio "…" --cerebro claude\` para agentes/CI). Init exige la sesión del paso 1; registra la instalación y le crea su licencia free (vinculada al panel).
+2. \`npx kooni-bot init\` (o \`init --yes --slug <slug> --negocio "…" --cerebro claude --account <email>\` para agentes/CI). **OJO**: si la computadora ya tiene una sesión guardada, \`init\` NO la reusa en silencio — **siempre confirma la cuenta** (el dueño puede tener su cuenta y las de varios clientes, y la instalación debe quedar en la correcta). En un agente pregunta si usar la cuenta actual o conectar otra; en no-interactivo **exige \`--account <email>\`** (o \`--login --wait\`) y, si no, **aborta** para no licenciar al cliente equivocado. Para cambiar de cuenta: \`npx kooni-bot logout\` y volver a \`login\`. Registra la instalación y le crea su licencia free (vinculada al panel).
 3. \`npx kooni-bot deploy\` (login de Cloudflare, D1/Vectorize/R2, secrets, migraciones, deploy). Re-emite con la URL real y guarda el token por instalación (reporte de uso + sync de licencia).
    - El CLI hace el login LIMPIO de Cloudflare: quita \`CLOUDFLARE_API_TOKEN\`/\`CLOUDFLARE_API_KEY\` del entorno, cierra la sesión previa (\`wrangler logout\`) y abre el navegador para OAuth con la cuenta correcta. No hay que hacer nada manual.
 4. Abrir el panel del bot en \`https://<worker>.workers.dev/admin\` (usuario \`admin\` + \`DASHBOARD_PASSWORD\`).
@@ -1619,10 +1620,62 @@ async function sessionTokenValid(token) {
 
 // Garantiza una sesión del CLI (login por dispositivo). Obligatorio para
 // registrar y licenciar la instalación. Devuelve { token, delegated }.
-async function ensureSession(flags = {}) {
+// Cuenta de la sesión del CLI (email + rol), o null si no se pudo consultar.
+async function sessionAccount(token) {
+  try {
+    const r = await apiPost("/cli-whoami", {}, token);
+    const j = await r.json().catch(() => ({}));
+    return j.email ? { email: j.email, role: j.role || null } : null;
+  } catch {
+    return null;
+  }
+}
+
+// Sesión del CLI para INSTALAR/DESPLEGAR. A diferencia de reusar la sesión en
+// silencio, SIEMPRE confirma la cuenta: el dueño puede tener VARIAS cuentas (la
+// suya y de clientes) y la instalación debe quedar ligada a la correcta.
+//  - Interactivo: pregunta "¿con esta cuenta o conectar otra?" (nunca silencioso).
+//  - Agente/CI: exige `--account <email>` (si ya es la correcta) o `--login --wait`.
+//  - `--no-login`: instalación anónima (no se registra ni licencia).
+async function ensureInstallSession(flags = {}, rl) {
+  if (flags["no-login"]) return { token: null, delegated: false };
+
   const existing = loadCreds().token;
-  if (existing && (await sessionTokenValid(existing))) return { token: existing, delegated: false };
-  if (existing) console.log("  " + C.yellow("⚠") + " " + m("tu sesión de Kooni expiró — hay que reconectar el CLI.", "your Kooni session expired — reconnecting the CLI."));
+  const valid = existing ? await sessionTokenValid(existing) : false;
+
+  if (!interactive()) {
+    if (flags.login) return await runDeviceLogin(flags);
+    if (valid && flags.account) {
+      const acc = await sessionAccount(existing);
+      if (acc && acc.email.toLowerCase() === String(flags.account).toLowerCase()) {
+        console.log("  " + C.green("✓") + " " + m(`usando la cuenta ${acc.email}`, `using account ${acc.email}`));
+        return { token: existing, delegated: false };
+      }
+      console.log("  " + C.red("✗") + " " + m(`la sesión guardada es ${acc ? acc.email : "otra"}, no ${flags.account}.`, `the saved session is ${acc ? acc.email : "another"}, not ${flags.account}.`));
+    }
+    console.log(C.yellow("  ── PARA EL AGENTE ──  [E-INPUT-REQUIRED]"));
+    console.log("  " + m("No se instala sin confirmar la CUENTA (evita licenciar al cliente equivocado).", "Won't install without confirming the ACCOUNT (avoids licensing the wrong client)."));
+    console.log("  " + m("Pídele al usuario que apruebe el login y reintentá:", "Ask the user to approve the login and retry:"));
+    console.log("  " + C.cyan("npx kooni-bot login --wait") + "   " + C.dim(m("(o agregá --account <email> si ya es la correcta)", "(or add --account <email> if it's already the right one)")) + "\n");
+    return { token: null, delegated: true };
+  }
+
+  if (valid) {
+    const acc = await sessionAccount(existing);
+    const email = (acc && acc.email) || m("(sesión activa)", "(active session)");
+    const items = [
+      { key: "use", label: m(`Usar ${email}`, `Use ${email}`) },
+      { key: "other", label: m("Conectar otra cuenta (login)", "Connect another account (login)") },
+    ];
+    const i = await select(rl, m("¿Con qué cuenta querés instalar este bot?", "Which account should install this bot?"), items);
+    if (items[i].key === "other") {
+      console.log("  " + C.b(m("Conecta el CLI a la cuenta correcta:", "Connect the CLI to the right account:")));
+      return await runDeviceLogin(flags);
+    }
+    console.log("  " + C.green("✓") + " " + m(`usando la cuenta ${email}`, `using account ${email}`));
+    return { token: existing, delegated: false };
+  }
+
   console.log("  " + C.b(m("Para registrar y licenciar tu bot, conecta el CLI a tu cuenta Kooni:", "To register and license your bot, connect the CLI to your Kooni account:")));
   return await runDeviceLogin(flags);
 }
@@ -1732,6 +1785,20 @@ async function cmdWhoami(flags) {
   console.log("  " + C.green("✓") + " " + m("Conectado como", "Connected as") + " " + C.b(j.email) + (j.role ? C.dim(` (${j.role})`) : "") + "\n");
 }
 
+// `kooni-bot logout` — cierra la sesión del CLI (para instalar con OTRA cuenta).
+function cmdLogout(flags) {
+  const cfg = loadCfg();
+  if (flags.lang === "en" || cfg.lang === "en") L = "en";
+  banner();
+  const c = loadCreds();
+  if (!c.token) {
+    console.log("  " + C.yellow("⚠") + " " + m("no hay sesión del CLI.", "no CLI session.") + "\n");
+    return;
+  }
+  try { unlinkSync(CRED_FILE); } catch { /* ya no está */ }
+  console.log("  " + C.green("✓") + " " + m("sesión cerrada. La próxima instalación te pedirá conectar una cuenta.", "session closed. The next install will ask you to connect an account.") + "\n");
+}
+
 // `kooni-bot pair` — vincula (o re-vincula) un bot ya desplegado a la cuenta.
 async function cmdPair(flags, rest) {
   const cfg = loadCfg();
@@ -1739,15 +1806,20 @@ async function cmdPair(flags, rest) {
   if (flags.lang === "en" || cfg.lang === "en") L = "en";
   banner();
 
-  const creds = loadCreds();
-  if (!creds.token) {
-    console.log("  " + C.yellow("⚠") + " " + m("primero conectá el CLI: npx kooni-bot login", "connect the CLI first: npx kooni-bot login") + "\n");
-    process.exit(1);
-  }
-
   const rl = createInterface({ input, output });
   let dir;
-  try { dir = await resolveBotDir(rest[0], rl); } finally { rl.close(); }
+  try {
+    // Igual que init/deploy: confirma la cuenta (no reusa la sesión en silencio).
+    if (!flags["no-login"]) {
+      const sess = await ensureInstallSession(flags, rl);
+      if (!sess.token) {
+        console.log("  " + C.yellow("⚠") + " " + m("conectá el CLI a tu cuenta: npx kooni-bot login", "connect the CLI to your account: npx kooni-bot login") + "\n");
+        if (sess.delegated) console.log("  " + C.cyan("npx kooni-bot login --wait") + "\n");
+        process.exit(1);
+      }
+    }
+    dir = await resolveBotDir(rest[0], rl);
+  } finally { rl.close(); }
   if (!dir) { console.log("  " + C.red(t().needDir) + " " + (rest[0] || process.cwd()) + "\n"); process.exit(1); }
 
   const id = readInstallIdentity(dir);
@@ -1832,16 +1904,21 @@ async function cmdInit(flags, rest) {
     // Login de Kooni OBLIGATORIO: sin sesión no se puede registrar la instalación
     // ni vincularla al panel para licenciarla. `--no-login` es la salida explícita
     // (instalación anónima/offline: NO aparecerá en el panel ni podrá licenciarse).
+    let installAccount = null;
     if (flags["no-login"]) {
       console.log("  " + C.yellow("⚠") + " " + m("modo --no-login: la instalación NO se registrará ni podrá licenciarse.", "--no-login mode: the install will NOT be registered or licenseable."));
     } else {
-      const sess = await ensureSession(flags);
+      // SIEMPRE confirma la cuenta (no reusa la sesión en silencio): el dueño
+      // puede tener varias cuentas (la suya + clientes).
+      const sess = await ensureInstallSession(flags, rl);
       if (!sess.token) {
-        // Sin sesión: no creamos una instalación a medias.
+        // Sin sesión confirmada: no creamos una instalación a medias.
         console.log("  " + C.yellow("⚠") + " " + m("conecta el CLI a tu cuenta Kooni (arriba) y vuelve a correr init.", "connect the CLI to your Kooni account first (above) and re-run init."));
         if (sess.delegated) console.log("  " + C.cyan("npx kooni-bot login --wait") + "\n");
         process.exit(1);
       }
+      const acc = await sessionAccount(sess.token);
+      if (acc && acc.email) installAccount = acc.email;
     }
 
     // descargar + extraer
@@ -1887,6 +1964,7 @@ async function cmdInit(flags, rest) {
       workerName: meta && meta.workerName,
       dbName: meta && meta.dbName,
       kbName: meta && meta.kbName,
+      account: installAccount,
     });
 
     // Registro en el backend de licencias: crea/actualiza la instalación y su
@@ -1957,7 +2035,7 @@ async function cmdDeploy(flags, rest) {
     // Login de Kooni OBLIGATORIO: el deploy registra y vincula la instalación al
     // panel (token por instalación → licencia + reporte de uso).
     if (!flags["no-login"]) {
-      const sess = await ensureSession(flags);
+      const sess = await ensureInstallSession(flags, rl);
       if (!sess.token) {
         console.log("  " + C.red("✗") + " " + m("conecta el CLI a tu cuenta Kooni antes de desplegar (npx kooni-bot login).", "connect the CLI to your Kooni account before deploying (npx kooni-bot login).") + "\n");
         if (sess.delegated) console.log("  " + C.cyan("npx kooni-bot login --wait") + "\n");
@@ -2287,6 +2365,7 @@ ${C.cyan("kooni-bot")} — ${t().helpIntro}
   ${C.cyan("npx kooni-bot install <giro>")} ${m("instala el bot de un giro (ej. restaurante)", "install a niche bot (e.g. restaurante)")}
   ${C.cyan("npx kooni-bot login")}         ${m("conecta el CLI a tu cuenta Kooni (abre el navegador)", "connect the CLI to your Kooni account (opens browser)")}
   ${C.cyan("npx kooni-bot whoami")}        ${m("muestra con qué cuenta estás conectado", "shows which account you're connected as")}
+  ${C.cyan("npx kooni-bot logout")}        ${m("cierra la sesión (para instalar con OTRA cuenta)", "log out (to install with ANOTHER account)")}
   ${C.cyan("npx kooni-bot pair [dir]")}    ${m("vincula un bot ya desplegado a tu cuenta", "link an already-deployed bot to your account")}
   ${C.cyan("npx kooni-bot deploy [dir]")}  ${m("provisiona Cloudflare y publica el worker", "provision Cloudflare and publish the worker")}
   ${C.cyan("npx kooni-bot update [dir]")}  ${m("actualiza sin perder tu configuración", "update without losing config")}
@@ -2299,14 +2378,17 @@ ${C.dim("  " + m("migrate: `--to-token <token> --to-account <id>` de la cuenta d
 
 ${C.dim("  Subdominio workers.dev: si tu cuenta no lo tiene, el deploy lo crea solo y reintenta.")}
 
-${C.dim("  " + m("Login de Kooni: `init` y `deploy` exigen conectar el CLI a tu cuenta", "Kooni login: `init` and `deploy` require connecting the CLI to your account"))}
-${C.dim("  " + m("(`npx kooni-bot login`). Sin esa sesión la instalación no se registra en el panel", "(`npx kooni-bot login`). Without that session the install isn't registered in the panel"))}
-${C.dim("  " + m("ni se puede licenciar. `deploy` guarda el token por instalación (uso + licencia).", "and can't be licensed. `deploy` saves the per-install token (usage + license)."))}
+${C.dim("  " + m("Login de Kooni: `init` y `deploy` SIEMPRE confirman la cuenta — nunca", "Kooni login: `init` and `deploy` ALWAYS confirm the account — never"))}
+${C.dim("  " + m("reusan la sesión en silencio (podés tener tu cuenta y las de tus clientes).", "silently reuse the session (you may have your account and your clients')."))}
+${C.dim("  " + m("Sin sesión, la instalación no se registra en el panel ni se puede licenciar.", "Without a session, the install isn't registered in the panel and can't be licensed."))}
+${C.dim("  " + m("Para cambiar de cuenta: `logout` y volver a `login` (o elegir «otra cuenta» al instalar).", "To switch accounts: `logout` then `login` (or pick \"another account\" during install)."))}
 
 ${C.dim("  Flags de init (modo no-interactivo, para agentes):")}
 ${C.dim("    --yes  --slug <slug>  --negocio <nombre>  --bot-name <nombre>  --lang es-MX|es-ES|en|pt-BR")}
 ${C.dim("    --tier free|pro  --cerebro claude|chatgpt|grok|gateway  --base-url <url>")}
 ${C.dim("    --que --ofrece --horario --ubicacion --telefono --web --pagos --faq --reglas --tono")}
+${C.dim("    --account <email>  (confirma la cuenta de la sesión; sin esto, en agente aborta)")}
+${C.dim("    --login            (fuerza un login nuevo; con --wait espera la aprobación)")}
 ${C.dim("    --email <correo>  --no-deploy  --no-agent-skill  --no-login  --license <codigo-KOONI-PRO-V2>")}
 `);
 }
@@ -2330,6 +2412,7 @@ if (IS_MAIN) {
     if (cmd === "install") return cmdInstall(flags, rest);
     if (cmd === "login") return cmdLogin(flags);
     if (cmd === "whoami") return cmdWhoami(flags);
+    if (cmd === "logout") return cmdLogout(flags);
     if (cmd === "pair") return cmdPair(flags, rest);
     if (cmd === "deploy") return cmdDeploy(flags, rest);
     if (cmd === "update") return cmdUpdate(flags, rest);

@@ -5,6 +5,12 @@ Cambios notables de Kooni. Formato aproximado de
 
 El CLI `kooni-bot` se versiona aparte (npm) — ver la nota de cada versión.
 
+**CLI `kooni-bot` → 0.8.2** (pendiente de publicar): `init`/`install`/`deploy`/`pair` **siempre
+confirman la cuenta** antes de instalar — nunca reusan la sesión del CLI en silencio. Como el dueño
+puede tener su cuenta y las de varios clientes, al instalar se pregunta «¿con esta cuenta o conectar
+otra?»; en agente/CI se exige `--account <email>` (o `--login --wait`) y, si no, **aborta** (no
+instala/licencia bajo la cuenta equivocada). Nuevo comando `logout` para cambiar de cuenta.
+
 ## [1.61.0] — 2026-10-09
 
 ### Agregado — video en recursos, adjunto por mensaje de seguimiento y versión en el panel
