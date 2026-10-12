@@ -2697,6 +2697,24 @@ adminApp.post("/menu", async (c) => {
   return c.redirect("/admin/menu?saved=1");
 });
 
+// Carga el catálogo de ejemplo del pack (NichePack.seedCatalog) si el catálogo
+// está vacío. Reutilizable por cualquier giro que cotice. OJO: va ANTES de
+// `/menu/:id` — si no, Hono matchea "seed" como :id y esta ruta nunca corre.
+adminApp.post("/menu/seed", async (c) => {
+  const { getNiche } = await import("../niches");
+  const { ProductsRepo } = await import("../db/products");
+  const repo = new ProductsRepo(new Db(c.env.DB));
+  const seed = getNiche(c.env).seedCatalog ?? [];
+  const existing = await repo.count();
+  if (seed.length && existing === 0) {
+    for (const item of seed) {
+      await repo.create({ name: item.name, price: item.price, category: item.category ?? null, description: item.description ?? null });
+    }
+    await audit(c, { action: "menu.catalog.seed", target: "products", afterVal: `${seed.length} artículos` });
+  }
+  return c.redirect("/admin/menu?saved=1");
+});
+
 adminApp.post("/menu/:id", async (c) => {
   const { ProductsRepo } = await import("../db/products");
   const f = await c.req.formData();
@@ -2729,23 +2747,6 @@ adminApp.post("/menu/:id/delete", async (c) => {
   await new ProductsRepo(new Db(c.env.DB)).delete(id);
   await audit(c, { action: "menu.product.delete", target: `product:${id}` });
   return c.redirect("/admin/menu");
-});
-
-// Carga el catálogo de ejemplo del pack (NichePack.seedCatalog) si el catálogo
-// está vacío. Reutilizable por cualquier giro que cotice.
-adminApp.post("/menu/seed", async (c) => {
-  const { getNiche } = await import("../niches");
-  const { ProductsRepo } = await import("../db/products");
-  const repo = new ProductsRepo(new Db(c.env.DB));
-  const seed = getNiche(c.env).seedCatalog ?? [];
-  const existing = await repo.count();
-  if (seed.length && existing === 0) {
-    for (const item of seed) {
-      await repo.create({ name: item.name, price: item.price, category: item.category ?? null, description: item.description ?? null });
-    }
-    await audit(c, { action: "menu.catalog.seed", target: "products", afterVal: `${seed.length} artículos` });
-  }
-  return c.redirect("/admin/menu?saved=1");
 });
 
 // Reportes por nicho (la ruta es la misma; el giro decide qué pantalla se sirve).

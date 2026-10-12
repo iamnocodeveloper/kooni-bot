@@ -57,6 +57,26 @@ export const restaurante: NichePack = {
       { id: "reportes", label: "Reportes", icon: "bar-chart-3", href: "/admin/reportes", section: "Análisis" },
     ],
   },
+  // Menú de EJEMPLO que el dueño carga de un clic en Menú (tabla `products`) para
+  // arrancar: precios genéricos, él los ajusta a los reales. Sin esto, el botón
+  // "Cargar catálogo de ejemplo" nunca aparecía para restaurante.
+  seedCatalog: [
+    { name: "Guacamole con totopos", price: 90, category: "Entradas", description: "Guacamole fresco con totopos de maíz." },
+    { name: "Queso fundido", price: 110, category: "Entradas", description: "Queso fundido con chorizo o champiñones." },
+    { name: "Alitas (10 pzas)", price: 140, category: "Entradas", description: "Alitas con salsa BBQ o búfalo." },
+    { name: "Tacos al pastor (orden)", price: 95, category: "Platos fuertes", description: "Tres tacos al pastor con piña." },
+    { name: "Enchiladas verdes", price: 130, category: "Platos fuertes", description: "Enchiladas de pollo bañadas en salsa verde." },
+    { name: "Hamburguesa clásica", price: 120, category: "Platos fuertes", description: "Carne de res, queso, lechuga y tomate." },
+    { name: "Pizza margarita", price: 150, category: "Platos fuertes", description: "Pizza con tomate, mozzarella y albahaca." },
+    { name: "Pechuga a la plancha", price: 160, category: "Platos fuertes", description: "Pechuga de pollo con guarnición." },
+    { name: "Combo individual", price: 130, category: "Combos", description: "Un plato fuerte + refresco." },
+    { name: "Combo familiar", price: 480, category: "Combos", description: "Cuatro platos fuertes + cuatro refrescos." },
+    { name: "Agua de horchata", price: 35, category: "Bebidas", description: "Agua fresca de horchata." },
+    { name: "Refresco", price: 30, category: "Bebidas", description: "Refresco de lata." },
+    { name: "Limonada", price: 40, category: "Bebidas", description: "Limonada natural." },
+    { name: "Flan casero", price: 55, category: "Postres", description: "Flan napolitano de la casa." },
+    { name: "Pastel de chocolate", price: 60, category: "Postres", description: "Rebanada de pastel de chocolate." },
+  ],
   playbook: `<playbook_restaurante>
 Sos el que atiende los pedidos del restaurante por chat. Objetivo: llevar la
 conversación hasta un PEDIDO CONFIRMADO, o resolver la duda si no es un pedido.

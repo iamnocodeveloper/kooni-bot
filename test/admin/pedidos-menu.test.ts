@@ -90,6 +90,16 @@ describe("rutas del nicho restaurante", () => {
     expect(await res.text()).toContain('name="imageUrl"');
   });
 
+  it("restaurante: ofrece cargar el menú de ejemplo y lo carga con un toque", async () => {
+    const screen = await adminApp.request("/menu", { headers: authHeader() }, env);
+    expect(await screen.text()).toContain("Cargar catálogo de ejemplo");
+
+    await adminApp.request("/menu/seed", { method: "POST", headers: authHeader() }, env);
+    const all = await new ProductsRepo(db).all();
+    expect(all.length).toBeGreaterThan(5);
+    expect(all.map((p) => p.category)).toContain("Combos");
+  });
+
   it("cambiar el estado de un pedido desde el panel avanza el flujo", async () => {
     const { id } = await new OrdersRepo(db).create({
       channel: "telegram",
