@@ -2691,6 +2691,7 @@ adminApp.post("/menu", async (c) => {
     price,
     category: String(f.get("category") ?? "").trim() || null,
     description: String(f.get("description") ?? "").trim() || null,
+    imageUrl: String(f.get("imageUrl") ?? "").trim() || null,
   });
   await audit(c, { action: "menu.product.create", target: `product:${id}`, targetLabel: name });
   return c.redirect("/admin/menu?saved=1");
@@ -2706,6 +2707,7 @@ adminApp.post("/menu/:id", async (c) => {
     price: Number.isFinite(price) && price >= 0 ? price : undefined,
     category: f.has("category") ? String(f.get("category") ?? "").trim() || null : undefined,
     description: f.has("description") ? String(f.get("description") ?? "").trim() || null : undefined,
+    imageUrl: f.has("imageUrl") ? String(f.get("imageUrl") ?? "").trim() || null : undefined,
   });
   await audit(c, { action: "menu.product.update", target: `product:${id}` });
   return c.redirect("/admin/menu?saved=1");

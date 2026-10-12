@@ -191,6 +191,7 @@ export const agenteEs = {
   "med.price.placeholder": "precio",
   "med.cat.placeholder": "categoría",
   "med.desc.placeholder": "descripción (opcional)",
+  "med.image.placeholder": "URL de foto (opcional)",
   "med.add.button": "Agregar",
   "med.empty": "El menú está vacío. Agregá el primer producto arriba o pegá el menú como documento en Conocimiento.",
   "med.noCategory": "Sin categoría",

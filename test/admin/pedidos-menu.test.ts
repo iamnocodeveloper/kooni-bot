@@ -75,6 +75,21 @@ describe("rutas del nicho restaurante", () => {
     expect(await products.all()).toHaveLength(0);
   });
 
+  it("menú: guarda y borra la foto del producto (imageUrl)", async () => {
+    const products = new ProductsRepo(db);
+    await adminApp.request("/menu", form({ name: "Pizza", price: "120", imageUrl: "https://cdn/pizza.jpg" }), env);
+    const all = await products.all();
+    expect(all[0].image_url).toBe("https://cdn/pizza.jpg");
+
+    await adminApp.request(`/menu/${all[0].id}`, form({ name: "Pizza", price: "120", imageUrl: "" }), env);
+    expect((await products.get(all[0].id))!.image_url).toBe(null);
+  });
+
+  it("la pantalla de menú ofrece el campo de foto", async () => {
+    const res = await adminApp.request("/menu", { headers: authHeader() }, env);
+    expect(await res.text()).toContain('name="imageUrl"');
+  });
+
   it("cambiar el estado de un pedido desde el panel avanza el flujo", async () => {
     const { id } = await new OrdersRepo(db).create({
       channel: "telegram",

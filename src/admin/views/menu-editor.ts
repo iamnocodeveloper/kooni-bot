@@ -27,6 +27,10 @@ function row(t: T, p: Product): string {
         <button type="submit" style="background:var(--accent);color:var(--on-accent);border:none;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer">${t("common.save")}</button>
       </div>
       <input name="description" value="${esc(p.description ?? "")}" placeholder="${t("med.desc.placeholder")}" style="background:var(--bg);border:1px solid var(--line);color:var(--muted);padding:6px 8px;font-size:12px;width:100%">
+      <div style="display:flex;gap:8px;align-items:center">
+        ${p.image_url ? `<img src="${esc(p.image_url)}" alt="" style="width:40px;height:40px;object-fit:cover;border-radius:6px;border:1px solid var(--line);flex:none">` : ""}
+        <input name="imageUrl" type="url" value="${esc(p.image_url ?? "")}" placeholder="${t("med.image.placeholder")}" style="flex:1;background:var(--bg);border:1px solid var(--line);color:var(--muted);padding:6px 8px;font-size:12px">
+      </div>
     </form>
     <div style="display:flex;gap:6px;align-items:center">
       <form method="POST" action="/admin/menu/${p.id}/toggle" style="display:inline">
@@ -86,6 +90,7 @@ export async function renderMenu(env: Env, saved = false): Promise<string> {
           <input name="category" placeholder="${t("med.cat.placeholder")}" style="background:var(--bg);border:1px solid var(--line);color:var(--muted);padding:7px 9px;font-size:12px">
         </div>
         <input name="description" placeholder="${t("med.desc.placeholder")}" style="background:var(--bg);border:1px solid var(--line);color:var(--muted);padding:7px 9px;font-size:12px">
+        <input name="imageUrl" type="url" placeholder="${t("med.image.placeholder")}" style="background:var(--bg);border:1px solid var(--line);color:var(--muted);padding:7px 9px;font-size:12px">
         <button type="submit" style="background:var(--accent);color:var(--on-accent);border:none;padding:8px 16px;font-size:12.5px;font-weight:700;cursor:pointer;align-self:start">${t("med.add.button")}</button>
       </form>
 

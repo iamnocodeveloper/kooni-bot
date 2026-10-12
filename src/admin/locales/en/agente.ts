@@ -191,6 +191,7 @@ export const agenteEn: Record<keyof typeof agenteEs, string> = {
   "med.price.placeholder": "price",
   "med.cat.placeholder": "category",
   "med.desc.placeholder": "description (optional)",
+  "med.image.placeholder": "photo URL (optional)",
   "med.add.button": "Add",
   "med.empty": "The menu is empty. Add the first product above or paste the menu as a document in Knowledge.",
   "med.noCategory": "Uncategorized",
