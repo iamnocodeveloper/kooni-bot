@@ -483,6 +483,15 @@ app.get("/q/:token", async (c) => {
   return c.html(html);
 });
 
+// Página PÚBLICA de seguimiento de un pedido (/t/<code>). El `track_code` de 6
+// caracteres ES el token; la abre el cliente desde el botón "Ver seguimiento"
+// que mandan los avisos del pedido. Sin sesión (nicho restaurante).
+app.get("/t/:code", async (c) => {
+  const { renderTrack } = await import("./admin/views/track");
+  const r = await renderTrack(c.env, c.req.param("code"));
+  return c.html(r.html, r.status as 200 | 404);
+});
+
 // Recurso multimedia SUBIDO (biblioteca de recursos) servido por enlace
 // FIRMADO (/media/<id>.<firma>). Público a propósito: el canal (WAHA/Telegram)
 // descarga esta URL para reenviar el archivo al cliente. Ver src/media/store.ts.
