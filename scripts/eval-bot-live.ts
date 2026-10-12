@@ -225,10 +225,10 @@ async function judgeOne(
 }
 
 async function loadFixtures(): Promise<EvalFixture[]> {
-  // Single source of truth: test/fixtures/eval-scenarios.json, via the typed
-  // accessor in scripts/eval-scenarios.ts (same set the unit tests validate).
+  // Single source of truth: src/lab/scenarios.ts (+ scenarios.json), via the
+  // typed accessor in scripts/eval-scenarios.ts (same set the unit tests validate).
   if (!Array.isArray(evalScenarios) || evalScenarios.length === 0) {
-    throw new Error("No hay escenarios en test/fixtures/eval-scenarios.json.");
+    throw new Error("No hay escenarios en src/lab/scenarios.json.");
   }
   return evalScenarios;
 }
