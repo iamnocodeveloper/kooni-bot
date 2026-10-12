@@ -49,7 +49,6 @@ export const restaurante: NichePack = {
     "restaurante-casos-limite",
   ],
   hooks: {
-    orderEngine: true,
     extraTools: ["tomarPedido"],
     navExtra: [
       { id: "pedidos", label: "Pedidos", icon: "shopping-bag", href: "/admin/pedidos", section: "Inbox" },

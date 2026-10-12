@@ -174,11 +174,10 @@ describe("giros con cita: guía de agenda real", () => {
 });
 
 describe("hooks del pack (restaurante)", () => {
-  it("declara el motor de pedidos, la tool tomarPedido y las secciones extra", () => {
+  it("declara la tool tomarPedido y las secciones extra", () => {
     const n = getNiche(envWith("restaurante"));
-    expect(n.hooks?.orderEngine).toBe(true);
     expect(n.hooks?.extraTools).toContain("tomarPedido");
-    expect(n.hooks?.navExtra?.map((x) => x.id)).toEqual(["pedidos", "menu", "reportes"]);
+    expect(n.hooks?.navExtra?.map((x) => x.id)).toEqual(["pedidos", "menu", "zonas", "reportes"]);
     expect(n.interviewQuestions && n.interviewQuestions.length).toBeGreaterThan(3);
   });
 

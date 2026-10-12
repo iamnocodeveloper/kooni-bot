@@ -28,11 +28,6 @@ export interface NicheHooks {
    */
   navExtra?: { id: string; label: string; icon: string; href: string; section?: string }[];
   /**
-   * El pack usa el motor de pedidos (tablas orders / order_items / order_events
-   * de schema.sql). Lo consultan los reportes y la página pública de seguimiento.
-   */
-  orderEngine?: boolean;
-  /**
    * El pack usa el motor de despacho de taxis (tablas taxi_bases / taxi_drivers /
    * taxi_queue / taxi_trips / taxi_trip_events de schema.sql).
    */
