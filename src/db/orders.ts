@@ -78,6 +78,13 @@ export interface OrderEvent {
   at: number;
 }
 
+export interface OrderSchedule {
+  order_id: string;
+  scheduled_at: number;
+  note: string | null;
+  created_at: number;
+}
+
 export interface NewOrderItem {
   productId?: string | null;
   name: string;
@@ -238,5 +245,32 @@ export class OrdersRepo {
       "INSERT INTO order_events (id, order_id, status, note, at) VALUES (?, ?, ?, ?, ?)",
       [crypto.randomUUID(), orderId, status, note, Date.now()],
     );
+  }
+
+  /** Marca el pedido como programado para `scheduledAt` (epoch ms). Idempotente. */
+  async setSchedule(orderId: string, scheduledAt: number, note?: string | null): Promise<void> {
+    await this.db.run(
+      `INSERT INTO order_schedule (order_id, scheduled_at, note, created_at)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(order_id) DO UPDATE SET scheduled_at = excluded.scheduled_at, note = excluded.note`,
+      [orderId, scheduledAt, note ?? null, Date.now()],
+    );
+  }
+
+  async schedule(orderId: string): Promise<OrderSchedule | null> {
+    return this.db.first<OrderSchedule>("SELECT * FROM order_schedule WHERE order_id = ?", [orderId]);
+  }
+
+  /** Programaciones de varios pedidos a la vez (para pintar el panel). */
+  async schedulesFor(orderIds: string[]): Promise<Map<string, OrderSchedule>> {
+    const map = new Map<string, OrderSchedule>();
+    if (!orderIds.length) return map;
+    const placeholders = orderIds.map(() => "?").join(",");
+    const rows = await this.db.all<OrderSchedule>(
+      `SELECT * FROM order_schedule WHERE order_id IN (${placeholders})`,
+      orderIds,
+    );
+    for (const r of rows) map.set(r.order_id, r);
+    return map;
   }
 }

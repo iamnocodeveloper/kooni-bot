@@ -30,6 +30,11 @@ const timeAgo = (t: T, ms: number) => {
   const h = Math.round(m / 60);
   return h < 24 ? t("ped.ago.h", { h }) : t("ped.ago.d", { d: Math.round(h / 24) });
 };
+const fmtWhen = (ms: number) => {
+  const d = new Date(ms);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${p(d.getDate())}/${p(d.getMonth() + 1)} ${p(d.getHours())}:${p(d.getMinutes())}`;
+};
 
 const STATUS_COLOR: Record<OrderStatus, string> = {
   recibido: "var(--warn)",
@@ -77,7 +82,7 @@ function logistics(t: T, o: Order): string {
   return `<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:2px">${proof}${driver}</div>`;
 }
 
-function orderCard(t: T, o: Order, items: OrderItem[], tv: boolean): string {
+function orderCard(t: T, o: Order, items: OrderItem[], tv: boolean, schedAt: number | null = null): string {
   const fs = tv ? { code: 20, total: 16, line: 14, btn: 15, btnPad: "12px 18px" } : { code: 14, total: 13, line: 12, btn: 12, btnPad: "7px 13px" };
   const detalle = items
     .map((it) => `${it.qty}× ${esc(it.name)}${it.notes ? ` <span class="text-dim">(${esc(it.notes)})</span>` : ""}`)
@@ -103,6 +108,7 @@ function orderCard(t: T, o: Order, items: OrderItem[], tv: boolean): string {
     <div class="text-muted" style="font-size:${fs.line}px">${esc(o.customer_name || t("ped.noName"))}${o.customer_phone ? ` · ${esc(o.customer_phone)}` : ""}</div>
     ${o.address ? `<div class="text-muted" style="font-size:${fs.line}px">📍 ${esc(o.address)}${o.delivery_zone ? ` <span class="text-dim">(${esc(o.delivery_zone)})</span>` : ""}</div>` : `<div class="text-dim" style="font-size:${fs.line}px">📍 ${t("ped.pickup")}</div>`}
     <div class="text-muted" style="line-height:1.5;font-size:${fs.line}px">${detalle}</div>
+    ${schedAt ? `<div class="text-warn" style="font-size:${fs.line}px">🕒 ${t("ped.scheduled")} ${fmtWhen(schedAt)}</div>` : ""}
     ${o.notes ? `<div class="text-dim" style="font-size:${fs.line - 0.5}px">${t("ped.note")} ${esc(o.notes)}</div>` : ""}
     ${acciones ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:2px">${acciones}</div>` : ""}
     ${logistics(t, o)}
@@ -173,8 +179,10 @@ export async function renderPedidos(
   const active = filter ? await repo.list({ status: filter, limit: 100 }) : await repo.active();
   const recientes = filter ? [] : (await repo.list({ limit: 20 })).filter((o) => o.status === "entregado" || o.status === "cancelado");
 
+  const schedules = await repo.schedulesFor([...active, ...recientes].map((o) => o.id)).catch(() => new Map());
+
   const withItems = async (list: Order[]) =>
-    Promise.all(list.map(async (o) => orderCard(t, o, await repo.items(o.id), tv)));
+    Promise.all(list.map(async (o) => orderCard(t, o, await repo.items(o.id), tv, schedules.get(o.id)?.scheduled_at ?? null)));
 
   const activeCards = (await withItems(active)).join("");
   const recCards = (await withItems(recientes)).join("");

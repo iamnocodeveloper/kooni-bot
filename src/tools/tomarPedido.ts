@@ -46,6 +46,10 @@ export function tomarPedidoTool(
         .default(0)
         .describe("costo de envío de esa zona. El sistema lo recalcula desde la zona configurada; no lo inventes."),
       paymentMethod: z.string().describe("efectivo | transferencia | tarjeta"),
+      scheduledAt: z
+        .string()
+        .optional()
+        .describe("si el cliente pidió el pedido PARA MÁS TARDE: fecha/hora en ISO 8601 (ej. '2026-10-12T20:30'). Vacío si es para ahora."),
       notes: z.string().optional().describe("nota general del pedido"),
     }),
     execute: async (input) => {
@@ -127,6 +131,13 @@ export function tomarPedidoTool(
       });
 
       const order = await orders.get(id);
+
+      // Pedido programado (para más tarde): si el cliente dio una fecha/hora
+      // válida, se guarda para que el panel muestre "para las HH:MM".
+      const schedMs = input.scheduledAt ? Date.parse(input.scheduledAt) : NaN;
+      if (Number.isFinite(schedMs)) {
+        await orders.setSchedule(id, schedMs, null).catch(() => {});
+      }
       try {
         const { notifyOwnerNewOrder } = await import("../orders/notify");
         await notifyOwnerNewOrder(env, order!, await orders.items(id));

@@ -135,4 +135,23 @@ describe("tomarPedidoTool", () => {
     });
     expect(r.ok).toBe(true);
   });
+
+  it("guarda la programación si el cliente pidió el pedido para más tarde", async () => {
+    const when = "2026-10-20T20:30:00.000Z";
+    const r = await run({
+      items: [{ name: "Pizza", qty: 1, unitPrice: 100 }],
+      pickup: true,
+      paymentMethod: "efectivo",
+      scheduledAt: when,
+    });
+    const order = await orders.byTrackCode(r.pedido);
+    const sched = await orders.schedule(order!.id);
+    expect(sched!.scheduled_at).toBe(Date.parse(when));
+  });
+
+  it("sin scheduledAt no crea programación", async () => {
+    const r = await run({ items: [{ name: "Pizza", qty: 1, unitPrice: 100 }], pickup: true, paymentMethod: "efectivo" });
+    const order = await orders.byTrackCode(r.pedido);
+    expect(await orders.schedule(order!.id)).toBeNull();
+  });
 });

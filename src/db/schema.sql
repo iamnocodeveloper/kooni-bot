@@ -570,6 +570,17 @@ CREATE TABLE IF NOT EXISTS order_events (
 );
 CREATE INDEX IF NOT EXISTS idx_order_events_order ON order_events(order_id, at);
 
+-- Pedido PROGRAMADO (para más tarde): el momento en que el cliente quiere que se
+-- prepare/entregue. Tabla aparte (no una columna de orders) porque schema.sql se
+-- reaplica idempotente y SQLite no tiene ADD COLUMN IF NOT EXISTS.
+CREATE TABLE IF NOT EXISTS order_schedule (
+  order_id TEXT PRIMARY KEY,
+  scheduled_at INTEGER NOT NULL,
+  note TEXT,
+  created_at INTEGER NOT NULL,
+  FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE
+);
+
 -- PWA: suscripciones push de los dispositivos del dueno (panel instalado como
 -- app). endpoint es unico por navegador y dispositivo. p256dh y auth son las
 -- claves del cliente en base64url que devuelve pushManager.subscribe

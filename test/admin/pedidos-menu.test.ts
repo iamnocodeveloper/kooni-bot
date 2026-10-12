@@ -129,6 +129,16 @@ describe("rutas del nicho restaurante", () => {
     expect(red.status).toBe(302);
   });
 
+  it("pedidos: muestra un pedido programado", async () => {
+    const repo = new OrdersRepo(db);
+    const { id } = await repo.create({ channel: "telegram", channelUserId: "7", paymentMethod: "efectivo", items: [{ name: "X", qty: 1, unitPrice: 10 }] });
+    await repo.setSchedule(id, Date.parse("2026-10-20T20:30:00.000Z"));
+    const res = await adminApp.request("/pedidos", { headers: authHeader() }, env);
+    const html = await res.text();
+    expect(html).toContain("Programado para");
+    expect(html).toContain("20/10");
+  });
+
   it("pedidos: marcar el pago como recibido y asignar repartidor", async () => {
     const repo = new OrdersRepo(db);
     const { id } = await repo.create({ channel: "telegram", channelUserId: "9", paymentMethod: "efectivo", items: [{ name: "X", qty: 1, unitPrice: 10 }] });

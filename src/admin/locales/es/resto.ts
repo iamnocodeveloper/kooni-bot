@@ -40,6 +40,7 @@ export const restoEs = {
   "ped.driverName": "nombre",
   "ped.driverPhone": "teléfono",
   "ped.assign": "Asignar",
+  "ped.scheduled": "Programado para",
 
   // ── Viajes (taxis) ─────────────────────────────────────────────────────────
   "via.title": "Viajes",

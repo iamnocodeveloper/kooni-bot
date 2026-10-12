@@ -40,6 +40,7 @@ export const restoEn: Record<keyof typeof restoEs, string> = {
   "ped.driverName": "name",
   "ped.driverPhone": "phone",
   "ped.assign": "Assign",
+  "ped.scheduled": "Scheduled for",
 
   // ── Viajes (taxis) ─────────────────────────────────────────────────────────
   "via.title": "Trips",
