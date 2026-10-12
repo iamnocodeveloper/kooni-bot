@@ -11,6 +11,44 @@ puede tener su cuenta y las de varios clientes, al instalar se pregunta «¿con 
 otra?»; en agente/CI se exige `--account <email>` (o `--login --wait`) y, si no, **aborta** (no
 instala/licencia bajo la cuenta equivocada). Nuevo comando `logout` para cambiar de cuenta.
 
+## [1.62.0] — 2026-10-12
+
+### Agregado — Laboratorio: poné a prueba a tu agente antes de que hable con clientes
+
+En vez de "esperar que el bot ande", ahora se mide. El **Laboratorio** (`/admin/laboratorio`,
+nuevo en **Análisis**) corre al agente REAL en un **sandbox** (no persiste conversaciones,
+mensajes, leads ni tickets, y no manda nada por ningún canal) contra:
+
+- **Escenarios** ("rápido"): 20 casos de un solo mensaje (FAQ, capturar lead, agendar, handoff,
+  frustración, fuera de alcance, imagen y voz) en ES/EN/PT — los mismos que ya usaba `pnpm eval`.
+- **Clientes simulados** ("personas"): 8 clientes multi-turno que insisten, regatean, se enojan,
+  piden un humano o escriben informal — incluidos dos de comida (pide fuera de zona, pedido para
+  más tarde).
+
+Un **juez IA** puntúa cada conversación (0–100), te muestra **qué falló y por qué**, y cada fallo
+queda propuesto en **Mejoras** (✓ aplicar a la KB con un clic). Hay **historial con delta**: re-corré
+después de cada cambio y mirá qué se rompió y qué se arregló. Todo reusa piezas que ya existían
+(fixtures, helpers del juez, playground, flywheel).
+
+Tablas nuevas `lab_runs`/`lab_results` (idempotentes). Instalaciones existentes: `npx kooni-bot update`.
+
+### Mejorado — nicho de comida (restaurante)
+
+- **Arreglado el seguimiento del pedido**: el botón "Ver seguimiento" del cliente apuntaba a `/t/<código>`
+  **sin ruta montada** — estaba roto. Ahora hay una página pública con estado, línea de tiempo
+  (`order_events`), ítems y total.
+- **El bot ya ve el menú del panel**: `catalogQuery` leía un catálogo estático vacío; ahora consulta la
+  tabla `products` (lo que cargás en Menú), con fallback al estático.
+- **Foto por producto**: campo de imagen (con miniatura) en el editor de Menú; el bot puede referenciarla.
+- **Zonas de entrega**: tabla `delivery_zones` y pantalla **Zonas** (envío y **mínimo por zona**). El bot
+  resuelve el envío y el mínimo desde la zona (no los inventa): zona desconocida → ofrece retiro/handoff;
+  bajo el mínimo → rechaza. Sin zonas cargadas, sigue como antes (envío desde la KB).
+- **Pago recibido + asignar repartidor** en cada pedido (el nombre del repartidor sale en el aviso "en camino").
+- **Pedidos programados**: el bot guarda la hora pedida (tabla `order_schedule`) y la tarjeta muestra
+  "Programado para DD/MM HH:MM".
+- **Menú de ejemplo** para arrancar de un clic (antes el botón no aparecía) y **arreglo** de la ruta
+  `/menu/seed`, que estaba sombreada por `/menu/:id` y nunca corría.
+
 ## [1.61.0] — 2026-10-09
 
 ### Agregado — video en recursos, adjunto por mensaje de seguimiento y versión en el panel

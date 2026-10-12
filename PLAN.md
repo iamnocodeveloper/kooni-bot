@@ -5,6 +5,77 @@
 
 ---
 
+## 🏁 CIERRE DE ETAPA — v1.62.0 (2026-10-12)
+
+> **Estado:** `pnpm typecheck` limpio · tests afectados en verde (rápidos 98/98; pesados de
+> `miniflare` verificados por archivo por la lentitud conocida — deuda #16) · `main` empujado.
+> Alcance: **Laboratorio de auto-evaluación** + **mejoras al nicho de comida (`restaurante`)**.
+> Disparador: análisis comparativo read-only contra **vocero-crm** (sin tocar código), del que
+> se aprobó un plan centrado en estas dos piezas.
+
+### Versiones
+
+| Pieza | Versión | Estado |
+|---|---|---|
+| Bot (`package.json`) | **1.62.0** | En `main` |
+| CLI (`cli-kooni/package.json`) | sin cambios | npm no aplica |
+| Esquema D1 | +3 tablas | `schema.sql` (idempotente) |
+
+### A. Laboratorio (auto-evaluación del agente) — `/admin/laboratorio`
+
+Mide al agente ANTES de clientes reales. Corre al agente REAL en **sandbox** (no persiste
+conversaciones/mensajes/leads/tickets ni manda por canal) contra **20 escenarios** de un mensaje
+(los mismos de `pnpm eval`) y **8 personas** multi-turno (incluye 2 de comida). Un **juez IA**
+puntúa cada conversación, muestra qué falló, propone cada fallo en **Mejoras** (aplicar a la KB con
+un clic) y guarda **historial con delta** (roto/arreglado por corrida).
+
+Piezas (reusa lo que ya existía):
+- `src/lab/scenarios.ts` + `scenarios.json`: fuente ÚNICA de escenarios (movida desde
+  `test/fixtures/`); `scripts/eval-scenarios.ts` ahora re-exporta. `src/lab/personas.ts`.
+- `src/tools/index.ts`: `buildTools({ sandbox: true })` neutraliza las tools de ACCIÓN (stub, sin
+  escribir); las de lectura siguen reales.
+- `src/lab/runner.ts` (`runLabScenario`, `agentTurn` compartido con el playground),
+  `src/lab/simulator.ts` (cliente simulado), `src/lab/judge.ts` (helpers puros movidos del CLI +
+  `judgeTranscript`), `src/lab/delta.ts`, `src/lab/run.ts` (orquestación secuencial + hallazgos→Mejoras).
+- `src/db/lab.ts` (repo) + tablas `lab_runs`/`lab_results`. `src/admin/views/laboratorio.ts` +
+  rutas `GET /laboratorio`, `GET /laboratorio/run/:id`, `POST /laboratorio/run` (lanza en
+  `waitUntil`, la vista hace poll). Nav en **Análisis**; módulo `laboratorio` en `modules.ts`.
+- i18n ES/EN (prefijo `laboratorio.*` — ojo: `lab.*` ya lo usa Etiquetas).
+
+### B. Nicho de comida (`restaurante`)
+
+- **Bug arreglado #1 — seguimiento roto:** `tomarPedido`/`orders/notify` mandaban el botón "Ver
+  seguimiento" a `/t/<code>` y **no había ruta montada**. Ahora `src/admin/views/track.ts` +
+  `GET /t/:code` (público, sin sesión) con estado, timeline (`order_events`), ítems y total.
+- **Bug arreglado #2 — `/menu/seed` sombreada:** estaba registrada DESPUÉS de `/menu/:id`, así que
+  Hono la matcheaba como `id="seed"` y el botón "Cargar catálogo de ejemplo" **nunca corría** (también
+  afectaba a eventos). Reordenada antes de `/menu/:id`.
+- `catalogQuery` ahora lee el menú del panel (`products`), no el catálogo estático vacío → el bot
+  cotiza lo que el dueño cargó.
+- Foto por producto (`products.image_url`): campo + miniatura en el editor de Menú.
+- **Zonas de entrega** (`delivery_zones`, `DeliveryZonesRepo`, pantalla `/admin/zonas`): envío y
+  **mínimo por zona** resueltos por `tomarPedido` (zona desconocida → retiro/handoff; bajo el mínimo
+  → rechaza). Fail-open sin zonas.
+- **Pago recibido + asignar repartidor** en la tarjeta de Pedidos (rutas `/pedidos/:id/proof|driver`).
+- **Pedidos programados** (`order_schedule`, `scheduledAt` en `tomarPedido`; badge en Pedidos).
+- `seedCatalog` de ejemplo + limpieza del hook muerto `orderEngine`.
+
+### Deuda / pendiente (reservado)
+
+- **Suite completa:** corre muy lento (>10 min) por `miniflare` sin `dispose()` — deuda **#16**
+  heredada; se verificó por archivo. Prioridad si se quiere CI confiable.
+- **Despliegue (por el dueño):** `pnpm db:apply:remote` (crea `lab_runs`/`lab_results`/
+  `delivery_zones`/`order_schedule`) + `npx kooni-bot update` en cardaniel y en el template. No se
+  ejecutó desde aquí (paso con credenciales/cuenta).
+- **Laboratorio — mejoras siguientes:** runner por lotes si el tiempo del Worker aprieta; juez
+  seleccionable desde el panel (`lab_judge_model` ya soportado por el helper, falta el campo);
+  escenarios editables por el dueño.
+- **Fuera de alcance de esta etapa (del análisis con vocero-crm):** ventana 24h + plantillas en la
+  ruta viva del agente (WhatsApp Cloud), pantalla de **Resultados** con dinero + periodo anterior,
+  **estados de entrega/lectura**, menú web público, reparto/dispatch completo, pack `comida` genérico.
+
+---
+
 ## 🏁 CIERRE DE ETAPA — v1.57.0 (2026-10-08)
 
 > **Estado: CERRADA.** `pnpm typecheck` limpio · tests nuevos y afectados en verde ·
