@@ -214,6 +214,28 @@ export const agenteEn: Record<keyof typeof agenteEs, string> = {
   "zon.deactivate": "Deactivate",
   "zon.empty": "No zones yet. Until you add zones, the bot takes the delivery fee from the Knowledge base text.",
 
+  // ── Laboratory (agent evaluation) ──────────────────────────────────────────
+  "laboratorio.title": "Laboratory",
+  "laboratorio.subtitle": "Run your agent against simulated clients and test scenarios BEFORE it talks to real customers. An AI judge scores each conversation and tells you what fails. It touches nothing real.",
+  "laboratorio.run.quick": "▶ Run scenarios",
+  "laboratorio.run.personas": "▶ Run simulated clients",
+  "laboratorio.running": "Running…",
+  "laboratorio.error": "Error",
+  "laboratorio.empty": "You haven't run the Laboratory yet. Start with \"Run scenarios\".",
+  "laboratorio.score": "Score",
+  "laboratorio.threshold": "threshold",
+  "laboratorio.turns": "turns",
+  "laboratorio.toolUsed": "used:",
+  "laboratorio.kind.quick": "Scenarios",
+  "laboratorio.kind.personas": "Simulated clients",
+  "laboratorio.delta.vs": "vs. previous run",
+  "laboratorio.delta.none": "No previous run to compare.",
+  "laboratorio.broke": "Broke:",
+  "laboratorio.fixed": "Fixed:",
+  "laboratorio.findings": "{n} case(s) failed",
+  "laboratorio.findings.link": "See in Improvements",
+  "laboratorio.history": "History",
+
   // ── Bases (taxis) ──────────────────────────────────────────────────────────
   "bed.title": "Bases",
   "bed.subtitle": "Each base with its zones and fares. The bot picks the closest base to the customer that has drivers in the queue.",

@@ -477,6 +477,46 @@ CREATE TABLE IF NOT EXISTS audit_log (
 CREATE INDEX IF NOT EXISTS idx_audit_at ON audit_log(at);
 CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_log(action, at);
 
+-- ── Laboratorio (auto-evaluacion del agente) ─────────────────────────────────
+-- Una corrida = un set de escenarios contra el agente REAL en sandbox, mas un
+-- resultado por escenario. Habilitan el score, los hallazgos y el delta entre
+-- corridas. Ver src/lab/*.
+CREATE TABLE IF NOT EXISTS lab_runs (
+  id TEXT PRIMARY KEY,
+  kind TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'running',
+  judge_model TEXT,
+  threshold REAL NOT NULL DEFAULT 0.85,
+  scenarios_count INTEGER NOT NULL DEFAULT 0,
+  passed INTEGER NOT NULL DEFAULT 0,
+  failed INTEGER NOT NULL DEFAULT 0,
+  pass_rate REAL,
+  meets_threshold INTEGER,
+  cost REAL NOT NULL DEFAULT 0,
+  note TEXT,
+  started_at INTEGER NOT NULL,
+  finished_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_lab_runs_started ON lab_runs(started_at DESC);
+
+CREATE TABLE IF NOT EXISTS lab_results (
+  id TEXT PRIMARY KEY,
+  run_id TEXT NOT NULL,
+  scenario_id TEXT NOT NULL,
+  label TEXT,
+  category TEXT,
+  lang TEXT,
+  passed INTEGER NOT NULL,
+  reason TEXT,
+  bot_text TEXT,
+  tool_calls TEXT,
+  turns INTEGER,
+  duration_ms INTEGER,
+  created_at INTEGER NOT NULL,
+  FOREIGN KEY (run_id) REFERENCES lab_runs(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_lab_results_run ON lab_results(run_id);
+
 -- ── Nicho RESTAURANTE (pack "pedidos") ────────────────────────────────────────
 -- Todo lo de aca activa SOLO con BOT_NICHE=restaurante. Las tablas son
 -- idempotentes (IF NOT EXISTS) y no afectan a instalaciones de otros giros:

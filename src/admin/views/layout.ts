@@ -87,6 +87,7 @@ const NAV: Section[] = [
     label: "Análisis",
     items: [
       { id: "insights", label: "Insights", href: "/admin/insights", icon: "scan-eye" },
+      { id: "laboratorio", label: "Laboratorio", href: "/admin/laboratorio", icon: "flask-conical" },
       { id: "stats", label: "Estadísticas", href: "/admin/stats", icon: "bar-chart-3" },
       { id: "scraping", label: "Scraping", href: "/admin/scraping", icon: "globe" },
       { id: "costs", label: "Costos", href: "/admin/costs", icon: "receipt" },

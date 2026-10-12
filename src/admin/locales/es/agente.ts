@@ -214,6 +214,28 @@ export const agenteEs = {
   "zon.deactivate": "Desactivar",
   "zon.empty": "Sin zonas cargadas. Mientras no agregues zonas, el bot toma el envío del texto de la KB.",
 
+  // ── Laboratorio (evaluación del agente) ────────────────────────────────────
+  "laboratorio.title": "Laboratorio",
+  "laboratorio.subtitle": "Corré a tu agente contra clientes simulados y escenarios de prueba ANTES de que hable con clientes reales. Un juez IA puntúa cada conversación y te dice qué falla. No toca nada real.",
+  "laboratorio.run.quick": "▶ Correr escenarios",
+  "laboratorio.run.personas": "▶ Correr clientes simulados",
+  "laboratorio.running": "Corriendo…",
+  "laboratorio.error": "Error",
+  "laboratorio.empty": "Todavía no corriste el Laboratorio. Empezá con \"Correr escenarios\".",
+  "laboratorio.score": "Score",
+  "laboratorio.threshold": "umbral",
+  "laboratorio.turns": "turnos",
+  "laboratorio.toolUsed": "usó:",
+  "laboratorio.kind.quick": "Escenarios",
+  "laboratorio.kind.personas": "Clientes simulados",
+  "laboratorio.delta.vs": "vs. corrida anterior",
+  "laboratorio.delta.none": "Sin corrida anterior para comparar.",
+  "laboratorio.broke": "Se rompió:",
+  "laboratorio.fixed": "Se arregló:",
+  "laboratorio.findings": "{n} caso(s) fallaron",
+  "laboratorio.findings.link": "Ver en Mejoras",
+  "laboratorio.history": "Historial",
+
   // ── Bases (taxis) ──────────────────────────────────────────────────────────
   "bed.title": "Bases",
   "bed.subtitle": "Cada base con sus zonas y tarifas. El bot elige la más cercana al cliente que tenga conductores en la cola.",

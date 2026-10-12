@@ -183,6 +183,13 @@ export const PAID_MODULES: PaidModule[] = [
     descripcion: "Habilita el canal de WhatsApp self-hosted (WAHA) en esta instalación. El super admin lo activa por licencia; además hay que configurar la URL/API key del servidor WAHA en Conexiones. Sin este módulo, el webhook de WAHA queda apagado.",
     tipo: "membresia",
   },
+  {
+    id: "laboratorio",
+    nombre: "Laboratorio",
+    descripcion: "Poné a prueba a tu agente antes de que hable con clientes reales: clientes simulados y escenarios de prueba corren en un sandbox, un juez IA puntúa cada conversación, te muestra qué falla y te propone la mejora. No toca nada real.",
+    tipo: "membresia",
+    tab: "laboratorio",
+  },
 ];
 
 const ALL_MODULE_IDS: readonly string[] = PAID_MODULES.map((m) => m.id);

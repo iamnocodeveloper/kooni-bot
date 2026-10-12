@@ -859,6 +859,33 @@ adminApp.get("/conversations/:id", (c) =>
 adminApp.get("/media/telegram", (c) => serveTelegramMedia(c.req.query("u") ?? "", c.env));
 adminApp.get("/media/waha", (c) => serveWahaMedia(c.req.query("u") ?? "", c.env));
 
+// ── Laboratorio (auto-evaluación del agente) ────────────────────────────────
+// Corre escenarios/clientes simulados contra el agente REAL en sandbox (no
+// persiste ni manda nada) y los puntúa con un juez IA. Ver src/lab/*.
+adminApp.get("/laboratorio", async (c) => {
+  const { renderLaboratorio } = await import("./views/laboratorio");
+  return c.html(await renderLaboratorio(c.env));
+});
+
+adminApp.get("/laboratorio/run/:id", async (c) => {
+  const { renderLaboratorio } = await import("./views/laboratorio");
+  return c.html(await renderLaboratorio(c.env, c.req.param("id")));
+});
+
+adminApp.post("/laboratorio/run", async (c) => {
+  const { LabRepo } = await import("../db/lab");
+  const { runLab, DEFAULT_LAB_THRESHOLD, DEFAULT_LAB_MAX } = await import("../lab/run");
+  const f = await c.req.formData();
+  const kind = String(f.get("kind") ?? "quick") === "personas" ? "personas" : "quick";
+  const repo = new LabRepo(new Db(c.env.DB));
+  const runId = await repo.createRun({ kind, threshold: DEFAULT_LAB_THRESHOLD });
+  // La corrida es secuencial y puede tardar: se ejecuta en segundo plano y la
+  // vista hace poll mientras status="running".
+  c.executionCtx.waitUntil(runLab(c.env, runId, { kind, maxScenarios: DEFAULT_LAB_MAX }));
+  await audit(c, { action: "lab.run", target: `lab:${runId}`, targetLabel: kind });
+  return c.redirect(`/admin/laboratorio/run/${runId}`);
+});
+
 // Insights tab. Visiting it opportunistically grades a few pending
 // conversations in the background (waitUntil) so the tab catches up on its own
 // even without pressing "Analizar ahora". TODO: move the main run to
