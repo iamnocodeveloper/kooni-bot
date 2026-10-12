@@ -42,7 +42,31 @@ export function getTaxiCtx(): { lat: number; lng: number; name?: string; address
 export interface ToolContext {
   env: Env;
   getConversationId: () => string | null;
+  /**
+   * Modo Laboratorio (y pruebas): las tools de ACCIÓN (capturar lead, agendar,
+   * handoff, tomar pedido…) NO escriben nada — devuelven un stub con lo que
+   * "habrían hecho". Las de LECTURA (searchKb, catálogo, inventario…) siguen
+   * reales, para que el lab pruebe la KB de verdad.
+   */
+  sandbox?: boolean;
 }
+
+/** Tools de acción que en modo sandbox no deben tocar D1 ni mandar nada. */
+const SANDBOX_ACTION_TOOLS = new Set([
+  "captureLead",
+  "moverLead",
+  "handoffHuman",
+  "scheduleAppointment",
+  "pauseBot",
+  "snoozeUser",
+  "tomarPedido",
+  "solicitarTaxi",
+  "crearCotizacion",
+  "registrarCalificacion",
+  "consultarDeuda",
+  "registrarPromesa",
+  "llamarDeudor",
+]);
 
 export async function buildTools(ctx: ToolContext) {
   // TODAS las tools están disponibles en todos los planes — free y Pro se
@@ -133,6 +157,24 @@ export async function buildTools(ctx: ToolContext) {
     }
   } catch {
     // sin D1/tabla labels → sin tool (no rompe el agente)
+  }
+
+  // Modo Laboratorio: neutraliza las tools de ACCIÓN reemplazando solo su
+  // `execute` (conserva descripción y schema, así el modelo igual las invoca y
+  // el juez ve si eligió la tool correcta). Nada toca D1 ni manda mensajes.
+  if (ctx.sandbox) {
+    for (const name of SANDBOX_ACTION_TOOLS) {
+      const orig = tools[name];
+      if (!orig) continue;
+      tools[name] = {
+        ...orig,
+        execute: async (input: unknown) => ({
+          ok: true,
+          sandbox: true,
+          haria: `${name} ${JSON.stringify(input ?? {}).slice(0, 300)}`,
+        }),
+      };
+    }
   }
 
   return tools;

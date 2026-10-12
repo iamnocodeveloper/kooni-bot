@@ -8,7 +8,7 @@ import {
   DEFAULT_THRESHOLD,
   type EvalFixture,
   type EvalResult,
-} from "../../scripts/eval-bot-live";
+} from "../../src/lab/judge";
 
 // Estos tests validan SOLO la lógica pura de scoring/parsing del runner.
 // El "juez" está mockeado como strings de salida — cero red, cero env vars.

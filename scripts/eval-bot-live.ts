@@ -28,132 +28,19 @@ import process from "node:process";
 import { generateText, type LanguageModel } from "ai";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { evalScenarios } from "./eval-scenarios";
+import {
+  JUDGE_MODEL,
+  DEFAULT_THRESHOLD,
+  parseJudgeVerdict,
+  scoreResults,
+  buildJudgePrompt,
+  summarize,
+  type EvalFixture,
+  type JudgeVerdict,
+  type EvalResult,
+} from "../src/lab/judge";
 
-// Sonnet 4.x — modelo juez. Sonnet evalúa las respuestas que produjo Haiku.
-export const JUDGE_MODEL = "claude-sonnet-4-5-20250929";
-export const DEFAULT_THRESHOLD = 0.85;
 export const DEFAULT_WAIT_MS = 20_000;
-
-export interface EvalFixture {
-  id: string;
-  userMessage: string;
-  rubric: string;
-  expectedToolCall?: string | null;
-}
-
-export interface JudgeVerdict {
-  passed: boolean;
-  reason: string;
-}
-
-export interface EvalResult {
-  id: string;
-  passed: boolean;
-  reason: string;
-}
-
-export interface EvalSummary {
-  total: number;
-  passed: number;
-  failed: number;
-  passRate: number; // 0..1
-  meetsThreshold: boolean;
-  threshold: number;
-  results: EvalResult[];
-}
-
-/**
- * Parsea la salida del juez a un veredicto estructurado.
- *
- * El juez puede devolver JSON puro o JSON embebido en texto. Si no se puede
- * extraer un objeto válido con un boolean `passed`, se cuenta como FALLO
- * (fail-closed) en vez de explotar — un veredicto ilegible no debe pasar.
- */
-export function parseJudgeVerdict(raw: string): JudgeVerdict {
-  if (typeof raw !== "string" || raw.trim() === "") {
-    return { passed: false, reason: "Judge devolvió respuesta vacía." };
-  }
-
-  const match = raw.match(/\{[\s\S]*\}/);
-  if (!match) {
-    return { passed: false, reason: "Judge no devolvió JSON parseable." };
-  }
-
-  let obj: unknown;
-  try {
-    obj = JSON.parse(match[0]);
-  } catch {
-    return { passed: false, reason: "Judge devolvió JSON inválido." };
-  }
-
-  if (obj === null || typeof obj !== "object") {
-    return { passed: false, reason: "Judge devolvió un JSON no-objeto." };
-  }
-
-  const record = obj as Record<string, unknown>;
-  if (typeof record.passed !== "boolean") {
-    return { passed: false, reason: "Judge omitió el campo booleano 'passed'." };
-  }
-
-  const reason =
-    typeof record.reason === "string" && record.reason.trim() !== ""
-      ? record.reason.trim()
-      : "(sin razón)";
-
-  return { passed: record.passed, reason };
-}
-
-/** Agrega resultados individuales en un resumen con pass-rate y umbral. */
-export function scoreResults(
-  results: EvalResult[],
-  threshold: number = DEFAULT_THRESHOLD,
-): EvalSummary {
-  const total = results.length;
-  const passed = results.filter((r) => r.passed).length;
-  const failed = total - passed;
-  const passRate = total === 0 ? 0 : passed / total;
-  return {
-    total,
-    passed,
-    failed,
-    passRate,
-    threshold,
-    meetsThreshold: total > 0 && passRate >= threshold,
-    results,
-  };
-}
-
-/** Construye el prompt del juez para un escenario + respuesta del bot. */
-export function buildJudgePrompt(fix: EvalFixture, botReply: string): string {
-  return [
-    `Escenario: ${fix.id}`,
-    `El usuario escribió: "${fix.userMessage}"`,
-    `Rúbrica de aprobación: ${fix.rubric}`,
-    `Herramienta esperada: ${fix.expectedToolCall ?? "ninguna"}`,
-    "",
-    "Respuesta del bot:",
-    `"""${botReply}"""`,
-    "",
-    "¿La respuesta del bot cumple la rúbrica? Responde SOLO con un objeto JSON:",
-    `{"passed": <true|false>, "reason": "<una oración>"}`,
-  ].join("\n");
-}
-
-/** Renderiza un reporte legible del resumen. */
-export function summarize(summary: EvalSummary): string {
-  const lines: string[] = [];
-  for (const r of summary.results) {
-    lines.push(`  ${r.passed ? "✓" : "✗"} ${r.id} — ${r.reason}`);
-  }
-  lines.push("");
-  lines.push(
-    `${summary.passed}/${summary.total} aprobados ` +
-      `(${(summary.passRate * 100).toFixed(0)}%) — ` +
-      `umbral ${(summary.threshold * 100).toFixed(0)}% — ` +
-      `${summary.meetsThreshold ? "PASS ✅" : "FAIL ❌"}`,
-  );
-  return lines.join("\n");
-}
 
 // --- Capa con efectos (red). No se ejecuta al importar. ---
 

@@ -1,9 +1,9 @@
 import type { Env } from "../env";
 import type { SystemModelMessage } from "ai";
-import { streamText } from "ai";
 import { buildTools } from "../tools";
 import { resolveAgentConfig } from "../settings-loader";
 import { createModel } from "../llm/provider";
+import { agentTurn } from "../lab/runner";
 import type { Tier } from "../upgrade/modelSelector";
 
 // "Probar el bot" — corre un turno del agente REAL (mismo system prompt, mismo
@@ -70,31 +70,11 @@ export async function runTestTurn(
     { role: "user" as const, content: text },
   ];
 
-  const result = streamText({
-    model,
-    system,
-    messages,
-    tools,
-    stopWhen: ({ steps }) => steps.length >= 6,
-    ...(cfg.temperature !== undefined ? { temperature: cfg.temperature } : {}),
-  });
-
-  let reply = "";
-  for await (const chunk of result.textStream) reply += chunk;
-
-  const steps = await result.steps;
-  const toolCalls = steps.flatMap((s) =>
-    (s.toolCalls ?? []).map((tc: { toolCallId?: string; toolName: string; input: unknown }) => {
-      const tr = (s.toolResults ?? []).find(
-        (r: { toolCallId?: string }) => r.toolCallId && r.toolCallId === tc.toolCallId,
-      ) as { output?: unknown } | undefined;
-      return { toolName: tc.toolName, input: tc.input, ...(tr ? { output: tr.output } : {}) };
-    }),
-  );
+  const turn = await agentTurn(model, system, messages, tools, cfg.temperature);
 
   return {
-    reply: reply.trim() || "(el bot no devolvió texto)",
-    toolCalls,
+    reply: turn.reply || "(el bot no devolvió texto)",
+    toolCalls: turn.toolCalls,
     model: modelId,
     ...(await firstMessagePreview(env, history.length === 0)),
   };
