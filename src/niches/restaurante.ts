@@ -54,6 +54,7 @@ export const restaurante: NichePack = {
     navExtra: [
       { id: "pedidos", label: "Pedidos", icon: "shopping-bag", href: "/admin/pedidos", section: "Inbox" },
       { id: "menu", label: "Menú", icon: "book-open", href: "/admin/menu", section: "Mi Agente" },
+      { id: "zonas", label: "Zonas", icon: "map-pin", href: "/admin/zonas", section: "Mi Agente" },
       { id: "reportes", label: "Reportes", icon: "bar-chart-3", href: "/admin/reportes", section: "Análisis" },
     ],
   },

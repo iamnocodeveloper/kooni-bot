@@ -200,6 +200,20 @@ export const agenteEs = {
   "med.delete": "Borrar",
   "med.soldoutNote": "agotado — el bot no lo ofrece",
 
+  // ── Zonas de entrega (restaurante) ─────────────────────────────────────────
+  "zon.title": "Zonas de entrega",
+  "zon.subtitle": "Cuánto cuesta el envío y el mínimo de pedido por zona. El bot usa esto para cotizar el envío — no lo inventa.",
+  "zon.add.title": "Agregar zona",
+  "zon.name.placeholder": "nombre de la zona",
+  "zon.fee.placeholder": "envío",
+  "zon.min.placeholder": "mínimo",
+  "zon.notes.placeholder": "notas (opcional): referencia, tiempo estimado…",
+  "zon.fee.short": "Envío",
+  "zon.min.short": "Mínimo",
+  "zon.activate": "Activar",
+  "zon.deactivate": "Desactivar",
+  "zon.empty": "Sin zonas cargadas. Mientras no agregues zonas, el bot toma el envío del texto de la KB.",
+
   // ── Bases (taxis) ──────────────────────────────────────────────────────────
   "bed.title": "Bases",
   "bed.subtitle": "Cada base con sus zonas y tarifas. El bot elige la más cercana al cliente que tenga conductores en la cola.",

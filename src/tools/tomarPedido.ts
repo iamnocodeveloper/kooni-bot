@@ -4,6 +4,7 @@ import type { Env } from "../env";
 import { Db } from "../db/client";
 import { OrdersRepo } from "../db/orders";
 import { ProductsRepo } from "../db/products";
+import { DeliveryZonesRepo } from "../db/deliveryZones";
 import type { RecursoCtx } from "./enviarRecurso";
 
 // Tool del nicho RESTAURANTE. El modelo arma el pedido conversando (varios
@@ -38,12 +39,12 @@ export function tomarPedidoTool(
       customerPhone: z.string().optional().describe("teléfono/WhatsApp de contacto"),
       pickup: z.boolean().optional().describe("true si el cliente RETIRA en el local (sin envío)"),
       address: z.string().optional().describe("dirección completa con referencias; vacío si es retiro"),
-      deliveryZone: z.string().optional().describe("nombre de la zona de entrega"),
+      deliveryZone: z.string().optional().describe("nombre de la zona de entrega (debe ser una de las zonas configuradas)"),
       deliveryFee: z
         .number()
         .nonnegative()
         .default(0)
-        .describe("costo de envío de esa zona (0 si es retiro). Sácalo de searchKb, no lo inventes."),
+        .describe("costo de envío de esa zona. El sistema lo recalcula desde la zona configurada; no lo inventes."),
       paymentMethod: z.string().describe("efectivo | transferencia | tarjeta"),
       notes: z.string().optional().describe("nota general del pedido"),
     }),
@@ -71,6 +72,46 @@ export function tomarPedidoTool(
       });
 
       const pickup = input.pickup === true;
+      const subtotal = items.reduce((s, it) => s + it.qty * it.unitPrice, 0);
+
+      // Zonas de entrega configuradas en el panel: el envío y el mínimo salen de
+      // la ZONA, no del modelo. Sin zonas cargadas → comportamiento anterior.
+      let deliveryZone: string | null = null;
+      let deliveryFee = 0;
+      if (!pickup) {
+        const zones = await new DeliveryZonesRepo(db).active().catch(() => []);
+        if (zones.length > 0) {
+          const zone = await new DeliveryZonesRepo(db).match(input.deliveryZone ?? "").catch(() => null);
+          if (!zone) {
+            return {
+              ok: false,
+              error: "zona_desconocida",
+              zonas: zones.map((zn) => zn.name),
+              instruccion:
+                `La zona "${input.deliveryZone ?? "?"}" no está cubierta. Las zonas con entrega son: ` +
+                `${zones.map((zn) => zn.name).join(", ")}. Ofrecé retiro en el local o pasá el chat a una ` +
+                `persona (handoffHuman); NO registres el pedido con una zona inventada.`,
+            };
+          }
+          if (zone.min_order > 0 && subtotal < zone.min_order) {
+            return {
+              ok: false,
+              error: "minimo_no_alcanzado",
+              minimo: zone.min_order,
+              subtotal,
+              instruccion:
+                `El mínimo de pedido para ${zone.name} es $${zone.min_order} y el pedido suma $${subtotal}. ` +
+                `Decile al cliente que agregue algo más (o cambiá a retiro si aplica). No registres el pedido todavía.`,
+            };
+          }
+          deliveryZone = zone.name;
+          deliveryFee = zone.fee;
+        } else {
+          deliveryZone = input.deliveryZone ?? null;
+          deliveryFee = input.deliveryFee ?? 0;
+        }
+      }
+
       const { id, trackCode } = await orders.create({
         conversationId: getConversationId(),
         channel: ctx?.channel ?? "web",
@@ -78,8 +119,8 @@ export function tomarPedidoTool(
         customerName: input.customerName ?? null,
         customerPhone: input.customerPhone ?? null,
         address: pickup ? null : input.address ?? null,
-        deliveryZone: pickup ? null : input.deliveryZone ?? null,
-        deliveryFee: pickup ? 0 : input.deliveryFee ?? 0,
+        deliveryZone,
+        deliveryFee,
         paymentMethod: input.paymentMethod,
         notes: input.notes ?? null,
         items,

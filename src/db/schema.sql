@@ -498,6 +498,23 @@ CREATE TABLE IF NOT EXISTS products (
 );
 CREATE INDEX IF NOT EXISTS idx_products_active ON products(active, category);
 
+-- Zonas de entrega del nicho RESTAURANTE: el costo de envío y el mínimo por zona
+-- viven acá (editables en /admin/zonas), no solo en el texto de la KB. tomarPedido
+-- resuelve el envío/mínimo desde la zona en vez de confiar en el modelo. Si no hay
+-- zonas cargadas, se conserva el comportamiento anterior (envío desde la KB).
+CREATE TABLE IF NOT EXISTS delivery_zones (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  fee REAL NOT NULL DEFAULT 0,
+  min_order REAL NOT NULL DEFAULT 0,
+  notes TEXT,
+  active INTEGER NOT NULL DEFAULT 1,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_delivery_zones_active ON delivery_zones(active, sort_order);
+
 -- Pedidos. status: recibido -> confirmado -> preparacion -> camino -> entregado
 -- (o cancelado). El timestamp de cada cambio de estado vive en order_events
 -- (para los reportes). driver_* y track_code se llenan en el Entregable 4 (reparto).

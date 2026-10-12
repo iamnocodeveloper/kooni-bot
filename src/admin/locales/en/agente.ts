@@ -200,6 +200,20 @@ export const agenteEn: Record<keyof typeof agenteEs, string> = {
   "med.delete": "Delete",
   "med.soldoutNote": "sold out — the bot doesn't offer it",
 
+  // ── Delivery zones (restaurant) ────────────────────────────────────────────
+  "zon.title": "Delivery zones",
+  "zon.subtitle": "Delivery cost and order minimum per zone. The bot uses this to quote shipping — it never invents it.",
+  "zon.add.title": "Add zone",
+  "zon.name.placeholder": "zone name",
+  "zon.fee.placeholder": "delivery",
+  "zon.min.placeholder": "minimum",
+  "zon.notes.placeholder": "notes (optional): landmark, estimated time…",
+  "zon.fee.short": "Delivery",
+  "zon.min.short": "Minimum",
+  "zon.activate": "Activate",
+  "zon.deactivate": "Deactivate",
+  "zon.empty": "No zones yet. Until you add zones, the bot takes the delivery fee from the Knowledge base text.",
+
   // ── Bases (taxis) ──────────────────────────────────────────────────────────
   "bed.title": "Bases",
   "bed.subtitle": "Each base with its zones and fares. The bot picks the closest base to the customer that has drivers in the queue.",

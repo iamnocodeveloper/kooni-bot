@@ -36,7 +36,7 @@ beforeEach(async () => {
 
 describe("rutas del nicho restaurante", () => {
   it("GET /admin/pedidos y /admin/menu y /admin/reportes responden 200 con BOT_NICHE=restaurante", async () => {
-    for (const path of ["/pedidos", "/menu", "/reportes"]) {
+    for (const path of ["/pedidos", "/menu", "/zonas", "/reportes"]) {
       const res = await adminApp.request(path, { headers: authHeader() }, env);
       expect(res.status, path).toBe(200);
       expect((await res.text()).length).toBeGreaterThan(100);
@@ -98,6 +98,35 @@ describe("rutas del nicho restaurante", () => {
     const all = await new ProductsRepo(db).all();
     expect(all.length).toBeGreaterThan(5);
     expect(all.map((p) => p.category)).toContain("Combos");
+  });
+
+  it("zonas: crear, editar, desactivar y borrar", async () => {
+    const { DeliveryZonesRepo } = await import("../../src/db/deliveryZones");
+    const repo = new DeliveryZonesRepo(db);
+
+    const res = await adminApp.request("/zonas", form({ name: "Centro", fee: "40", minOrder: "150" }), env);
+    expect(res.status).toBe(302);
+    const all = await repo.all();
+    expect(all).toHaveLength(1);
+    expect(all[0].fee).toBe(40);
+    const id = all[0].id;
+
+    await adminApp.request(`/zonas/${id}`, form({ name: "Centro", fee: "50", minOrder: "200" }), env);
+    expect((await repo.get(id))!.fee).toBe(50);
+
+    await adminApp.request(`/zonas/${id}/toggle`, { method: "POST", headers: authHeader() }, env);
+    expect((await repo.get(id))!.active).toBe(0);
+
+    await adminApp.request(`/zonas/${id}/delete`, { method: "POST", headers: authHeader() }, env);
+    expect(await repo.all()).toHaveLength(0);
+  });
+
+  it("GET /zonas responde 200 con restaurante y redirige en otro giro", async () => {
+    const ok = await adminApp.request("/zonas", { headers: authHeader() }, env);
+    expect(ok.status).toBe(200);
+    const other = { ...env, BOT_NICHE: "generico" } as Env;
+    const red = await adminApp.request("/zonas", { headers: authHeader() }, other);
+    expect(red.status).toBe(302);
   });
 
   it("cambiar el estado de un pedido desde el panel avanza el flujo", async () => {

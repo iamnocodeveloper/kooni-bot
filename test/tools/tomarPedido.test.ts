@@ -3,6 +3,7 @@ import { createTestMiniflare } from "../helpers/miniflareSetup";
 import { Db } from "../../src/db/client";
 import { OrdersRepo } from "../../src/db/orders";
 import { ProductsRepo } from "../../src/db/products";
+import { DeliveryZonesRepo } from "../../src/db/deliveryZones";
 import { tomarPedidoTool } from "../../src/tools/tomarPedido";
 
 let env: any;
@@ -81,5 +82,57 @@ describe("tomarPedidoTool", () => {
     await expect(
       run({ items: [{ name: "X", qty: 1, unitPrice: 10 }], paymentMethod: "efectivo", pickup: true }),
     ).resolves.toMatchObject({ ok: true });
+  });
+
+  it("con zonas configuradas, el envío sale de la ZONA (no del modelo)", async () => {
+    await new DeliveryZonesRepo(db).create({ name: "Centro", fee: 40, minOrder: 0 });
+    const r = await run({
+      items: [{ name: "Pizza", qty: 1, unitPrice: 200 }],
+      address: "Av. Centro 1",
+      deliveryZone: "centro", // minúsculas: matchea case-insensitive
+      deliveryFee: 999, // el modelo se equivocó
+      paymentMethod: "efectivo",
+    });
+    expect(r.ok).toBe(true);
+    const order = await orders.byTrackCode(r.pedido);
+    expect(order!.delivery_fee).toBe(40);
+    expect(order!.delivery_zone).toBe("Centro");
+    expect(order!.total).toBe(240);
+  });
+
+  it("zona desconocida → no registra nada y pide retiro/handoff", async () => {
+    await new DeliveryZonesRepo(db).create({ name: "Centro", fee: 40 });
+    const r = await run({
+      items: [{ name: "Pizza", qty: 1, unitPrice: 200 }],
+      address: "x",
+      deliveryZone: "Sur",
+      paymentMethod: "efectivo",
+    });
+    expect(r.ok).toBe(false);
+    expect(r.error).toBe("zona_desconocida");
+    expect(await orders.list()).toHaveLength(0);
+  });
+
+  it("mínimo por zona → rechaza si el subtotal no llega", async () => {
+    await new DeliveryZonesRepo(db).create({ name: "Centro", fee: 40, minOrder: 300 });
+    const r = await run({
+      items: [{ name: "Pizza", qty: 1, unitPrice: 200 }],
+      address: "x",
+      deliveryZone: "Centro",
+      paymentMethod: "efectivo",
+    });
+    expect(r.ok).toBe(false);
+    expect(r.error).toBe("minimo_no_alcanzado");
+    expect(await orders.list()).toHaveLength(0);
+  });
+
+  it("pickup ignora las zonas (no valida mínimo ni zona)", async () => {
+    await new DeliveryZonesRepo(db).create({ name: "Centro", fee: 40, minOrder: 500 });
+    const r = await run({
+      items: [{ name: "Café", qty: 1, unitPrice: 30 }],
+      pickup: true,
+      paymentMethod: "efectivo",
+    });
+    expect(r.ok).toBe(true);
   });
 });

@@ -2652,6 +2652,12 @@ function isTaxis(c: { env: Env }): boolean {
   return (c.env.BOT_NICHE ?? "").trim().toLowerCase() === "taxis";
 }
 
+/** Lee un monto no negativo de un campo de formulario (0 si inválido). */
+function formMoney(v: unknown): number {
+  const n = Number(v);
+  return Number.isFinite(n) && n >= 0 ? n : 0;
+}
+
 adminApp.get("/pedidos", async (c) => {
   if (!isRestaurante(c)) return c.redirect("/admin/overview");
   const { renderPedidos } = await import("./views/pedidos");
@@ -2747,6 +2753,65 @@ adminApp.post("/menu/:id/delete", async (c) => {
   await new ProductsRepo(new Db(c.env.DB)).delete(id);
   await audit(c, { action: "menu.product.delete", target: `product:${id}` });
   return c.redirect("/admin/menu");
+});
+
+// Zonas de entrega (nicho restaurante): envío y mínimo por zona, que usa
+// tomarPedido para cotizar el envío en vez de confiar en el modelo/KB.
+adminApp.get("/zonas", async (c) => {
+  if (!isRestaurante(c)) return c.redirect("/admin/overview");
+  const { renderZonas } = await import("./views/zonas");
+  return c.html(await renderZonas(c.env, c.req.query("saved") === "1"));
+});
+
+adminApp.post("/zonas", async (c) => {
+  if (!isRestaurante(c)) return c.redirect("/admin/overview");
+  const { DeliveryZonesRepo } = await import("../db/deliveryZones");
+  const f = await c.req.formData();
+  const name = String(f.get("name") ?? "").trim();
+  if (!name) return c.redirect("/admin/zonas");
+  const id = await new DeliveryZonesRepo(new Db(c.env.DB)).create({
+    name,
+    fee: formMoney(f.get("fee")),
+    minOrder: formMoney(f.get("minOrder")),
+    notes: String(f.get("notes") ?? "").trim() || null,
+  });
+  await audit(c, { action: "zonas.create", target: `zone:${id}`, targetLabel: name });
+  return c.redirect("/admin/zonas?saved=1");
+});
+
+adminApp.post("/zonas/:id", async (c) => {
+  if (!isRestaurante(c)) return c.redirect("/admin/overview");
+  const { DeliveryZonesRepo } = await import("../db/deliveryZones");
+  const f = await c.req.formData();
+  const id = c.req.param("id");
+  await new DeliveryZonesRepo(new Db(c.env.DB)).update(id, {
+    name: String(f.get("name") ?? "").trim() || undefined,
+    fee: f.has("fee") ? formMoney(f.get("fee")) : undefined,
+    minOrder: f.has("minOrder") ? formMoney(f.get("minOrder")) : undefined,
+    notes: f.has("notes") ? String(f.get("notes") ?? "").trim() || null : undefined,
+  });
+  await audit(c, { action: "zonas.update", target: `zone:${id}` });
+  return c.redirect("/admin/zonas?saved=1");
+});
+
+adminApp.post("/zonas/:id/toggle", async (c) => {
+  if (!isRestaurante(c)) return c.redirect("/admin/overview");
+  const { DeliveryZonesRepo } = await import("../db/deliveryZones");
+  const repo = new DeliveryZonesRepo(new Db(c.env.DB));
+  const id = c.req.param("id");
+  const z = await repo.get(id);
+  if (z) await repo.setActive(id, z.active === 0);
+  await audit(c, { action: "zonas.toggle", target: `zone:${id}` });
+  return c.redirect("/admin/zonas");
+});
+
+adminApp.post("/zonas/:id/delete", async (c) => {
+  if (!isRestaurante(c)) return c.redirect("/admin/overview");
+  const { DeliveryZonesRepo } = await import("../db/deliveryZones");
+  const id = c.req.param("id");
+  await new DeliveryZonesRepo(new Db(c.env.DB)).delete(id);
+  await audit(c, { action: "zonas.delete", target: `zone:${id}` });
+  return c.redirect("/admin/zonas");
 });
 
 // Reportes por nicho (la ruta es la misma; el giro decide qué pantalla se sirve).
