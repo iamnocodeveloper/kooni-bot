@@ -34,6 +34,12 @@ export const restoEs = {
   "ped.ago.min": "hace {m} min",
   "ped.ago.h": "hace {h} h",
   "ped.ago.d": "hace {d} d",
+  "ped.proof": "Pago recibido",
+  "ped.proofDone": "Pago ✓",
+  "ped.driver": "Repartidor",
+  "ped.driverName": "nombre",
+  "ped.driverPhone": "teléfono",
+  "ped.assign": "Asignar",
 
   // ── Viajes (taxis) ─────────────────────────────────────────────────────────
   "via.title": "Viajes",

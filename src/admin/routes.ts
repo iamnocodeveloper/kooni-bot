@@ -2641,6 +2641,30 @@ adminApp.post("/pedidos/:id/status", async (c) => {
   return c.redirect("/admin/pedidos");
 });
 
+// Pago recibido (marca el comprobante). El nombre del repartidor asignado sale
+// en el aviso "en camino" al cliente.
+adminApp.post("/pedidos/:id/proof", async (c) => {
+  const { OrdersRepo } = await import("../db/orders");
+  const f = await c.req.formData().catch(() => null);
+  const id = c.req.param("id");
+  const url = String(f?.get("proofUrl") ?? "").trim() || "manual";
+  await new OrdersRepo(new Db(c.env.DB)).setPaymentProof(id, url);
+  await audit(c, { action: "order.proof", target: `order:${id}`, afterVal: url });
+  return c.redirect("/admin/pedidos");
+});
+
+adminApp.post("/pedidos/:id/driver", async (c) => {
+  const { OrdersRepo } = await import("../db/orders");
+  const f = await c.req.formData();
+  const id = c.req.param("id");
+  const name = String(f.get("driverName") ?? "").trim();
+  const phone = String(f.get("driverPhone") ?? "").trim();
+  if (!name) return c.redirect("/admin/pedidos");
+  await new OrdersRepo(new Db(c.env.DB)).assignDriver(id, name, phone);
+  await audit(c, { action: "order.driver", target: `order:${id}`, afterVal: name });
+  return c.redirect("/admin/pedidos");
+});
+
 // ── Nicho RESTAURANTE: vistas Pedidos / Menú / Reportes ─────────────────────
 // El nav solo las muestra si BOT_NICHE=restaurante (hooks.navExtra); igual
 // redirigimos si no es el giro, para no servir una vista vacía por URL directa.

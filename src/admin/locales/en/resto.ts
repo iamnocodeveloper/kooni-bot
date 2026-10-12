@@ -34,6 +34,12 @@ export const restoEn: Record<keyof typeof restoEs, string> = {
   "ped.ago.min": "{m} min ago",
   "ped.ago.h": "{h} h ago",
   "ped.ago.d": "{d} d ago",
+  "ped.proof": "Payment received",
+  "ped.proofDone": "Paid ✓",
+  "ped.driver": "Driver",
+  "ped.driverName": "name",
+  "ped.driverPhone": "phone",
+  "ped.assign": "Assign",
 
   // ── Viajes (taxis) ─────────────────────────────────────────────────────────
   "via.title": "Trips",

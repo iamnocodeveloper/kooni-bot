@@ -59,6 +59,24 @@ function nextActions(o: Order): OrderStatus[] {
   return opts;
 }
 
+// Controles operativos del pedido: marcar el pago como recibido y asignar el
+// repartidor (que aparece en el aviso "en camino" al cliente). Solo para
+// pedidos vivos.
+function logistics(t: T, o: Order): string {
+  if (o.status === "entregado" || o.status === "cancelado") return "";
+  const proof = o.payment_proof_url
+    ? `<span class="text-ok text-[11px]">${t("ped.proofDone")}</span>`
+    : `<form method="POST" action="/admin/pedidos/${o.id}/proof" style="display:inline"><button type="submit" style="background:transparent;border:1px solid var(--line);color:var(--muted);padding:5px 10px;font-size:11.5px;cursor:pointer">${t("ped.proof")}</button></form>`;
+  const driver = o.driver_name
+    ? `<span class="text-dim text-[11px]">🛵 ${esc(o.driver_name)}${o.driver_phone ? ` · ${esc(o.driver_phone)}` : ""}</span>`
+    : `<form method="POST" action="/admin/pedidos/${o.id}/driver" style="display:inline-flex;gap:4px;align-items:center">
+        <input name="driverName" placeholder="${t("ped.driverName")}" style="background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:4px 7px;font-size:11.5px;width:90px">
+        <input name="driverPhone" placeholder="${t("ped.driverPhone")}" style="background:var(--bg);border:1px solid var(--line);color:var(--muted);padding:4px 7px;font-size:11.5px;width:90px">
+        <button type="submit" style="background:transparent;border:1px solid var(--line);color:var(--muted);padding:5px 10px;font-size:11.5px;cursor:pointer">${t("ped.assign")}</button>
+      </form>`;
+  return `<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:2px">${proof}${driver}</div>`;
+}
+
 function orderCard(t: T, o: Order, items: OrderItem[], tv: boolean): string {
   const fs = tv ? { code: 20, total: 16, line: 14, btn: 15, btnPad: "12px 18px" } : { code: 14, total: 13, line: 12, btn: 12, btnPad: "7px 13px" };
   const detalle = items
@@ -87,6 +105,7 @@ function orderCard(t: T, o: Order, items: OrderItem[], tv: boolean): string {
     <div class="text-muted" style="line-height:1.5;font-size:${fs.line}px">${detalle}</div>
     ${o.notes ? `<div class="text-dim" style="font-size:${fs.line - 0.5}px">${t("ped.note")} ${esc(o.notes)}</div>` : ""}
     ${acciones ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:2px">${acciones}</div>` : ""}
+    ${logistics(t, o)}
   </div>`;
 }
 

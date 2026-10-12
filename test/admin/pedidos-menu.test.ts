@@ -129,6 +129,19 @@ describe("rutas del nicho restaurante", () => {
     expect(red.status).toBe(302);
   });
 
+  it("pedidos: marcar el pago como recibido y asignar repartidor", async () => {
+    const repo = new OrdersRepo(db);
+    const { id } = await repo.create({ channel: "telegram", channelUserId: "9", paymentMethod: "efectivo", items: [{ name: "X", qty: 1, unitPrice: 10 }] });
+
+    await adminApp.request(`/pedidos/${id}/proof`, { method: "POST", headers: authHeader() }, env);
+    expect((await repo.get(id))!.payment_proof_url).toBe("manual");
+
+    await adminApp.request(`/pedidos/${id}/driver`, form({ driverName: "Luis", driverPhone: "555" }), env);
+    const o = await repo.get(id);
+    expect(o!.driver_name).toBe("Luis");
+    expect(o!.driver_phone).toBe("555");
+  });
+
   it("cambiar el estado de un pedido desde el panel avanza el flujo", async () => {
     const { id } = await new OrdersRepo(db).create({
       channel: "telegram",
