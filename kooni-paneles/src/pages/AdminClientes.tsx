@@ -6,14 +6,21 @@ import type { Profile } from "../lib/types";
 export default function AdminClientes() {
   const { t, formatDate } = useI18n();
   const [rows, setRows] = useState<Profile[]>([]);
+  const [instCounts, setInstCounts] = useState<Map<string, number>>(new Map());
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
 
   async function load() {
     setLoading(true);
-    const { data, error } = await insforge.database.from("profiles").select("*").order("created_at", { ascending: false }).limit(500);
-    if (error) setErr((error as any).message);
-    setRows((data ?? []) as Profile[]);
+    const [profiles, inst] = await Promise.all([
+      insforge.database.from("profiles").select("*").order("created_at", { ascending: false }).limit(500),
+      insforge.database.from("instalaciones").select("user_id").limit(2000),
+    ]);
+    if (profiles.error) setErr((profiles.error as any).message);
+    setRows((profiles.data ?? []) as Profile[]);
+    const counts = new Map<string, number>();
+    for (const i of (inst.data ?? []) as { user_id: string }[]) counts.set(i.user_id, (counts.get(i.user_id) ?? 0) + 1);
+    setInstCounts(counts);
     setLoading(false);
   }
 
@@ -41,13 +48,15 @@ export default function AdminClientes() {
               <th>{t("admin.clientes.colEmail")}</th>
               <th>{t("admin.clientes.colName")}</th>
               <th>{t("admin.clientes.colRole")}</th>
+              <th>{t("admin.clientes.colInstalaciones")}</th>
               <th>{t("admin.clientes.colAlta")}</th>
+              <th>{t("admin.clientes.colUltimoIngreso")}</th>
             </tr>
           </thead>
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={4} className="text-muted">{t("common.loading")}</td>
+                <td colSpan={6} className="text-muted">{t("common.loading")}</td>
               </tr>
             )}
             {rows.map((p) => (
@@ -61,7 +70,9 @@ export default function AdminClientes() {
                     <option value="admin">{t("admin.clientes.roleAdmin")}</option>
                   </select>
                 </td>
+                <td className="text-muted">{instCounts.get(p.id) ?? 0}</td>
                 <td className="text-muted">{formatDate(p.created_at)}</td>
+                <td className="text-muted">{p.last_login ? formatDate(p.last_login) : t("common.never")}</td>
               </tr>
             ))}
           </tbody>

@@ -36,6 +36,7 @@ export default function AdminInstalaciones() {
               <th>{t("admin.instalaciones.colBot")}</th>
               <th>{t("admin.instalaciones.colUid")}</th>
               <th>{t("admin.instalaciones.colPlan")}</th>
+              <th>{t("admin.instalaciones.colAlta")}</th>
               <th>{t("admin.instalaciones.colMessages")}</th>
               <th>{t("admin.instalaciones.colAi")}</th>
               <th>{t("admin.instalaciones.colLastSeen")}</th>
@@ -45,12 +46,12 @@ export default function AdminInstalaciones() {
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={7} className="text-muted">{t("common.loading")}</td>
+                <td colSpan={8} className="text-muted">{t("common.loading")}</td>
               </tr>
             )}
             {rows.length === 0 && !loading && (
               <tr>
-                <td colSpan={7} className="text-muted">{t("admin.instalaciones.empty")}</td>
+                <td colSpan={8} className="text-muted">{t("admin.instalaciones.empty")}</td>
               </tr>
             )}
             {rows.map((i) => {
@@ -66,6 +67,7 @@ export default function AdminInstalaciones() {
                   <td>
                     <span className={`chip ${i.tier === "pro" ? "bg-accentSoft text-accent" : "bg-panel2 text-muted"}`}>{i.tier ?? "free"}</span>
                   </td>
+                  <td className="text-muted">{i.first_seen ? formatDate(i.first_seen) : "—"}</td>
                   <td className="font-mono">{u?.conteos?.mensajes30 != null ? formatNumber(u.conteos.mensajes30) : "—"}</td>
                   <td className="font-mono">{u?.costos?.ia30 != null ? `$${Number(u.costos.ia30).toFixed(2)}` : "—"}</td>
                   <td>

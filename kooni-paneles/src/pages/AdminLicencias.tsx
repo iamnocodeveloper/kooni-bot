@@ -200,6 +200,7 @@ export default function AdminLicencias() {
               <th>{t("admin.licencias.colPlan")}</th>
               <th>{t("admin.licencias.colStatus")}</th>
               <th>{t("admin.licencias.colExpiry")}</th>
+              <th>{t("admin.licencias.colAlta")}</th>
               <th>{t("admin.licencias.colModules")}</th>
               <th>{t("admin.licencias.colTariff")}</th>
               <th>{t("admin.licencias.colCode")}</th>
@@ -209,12 +210,12 @@ export default function AdminLicencias() {
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={8} className="text-muted">{t("common.loading")}</td>
+                <td colSpan={9} className="text-muted">{t("common.loading")}</td>
               </tr>
             )}
             {rows.length === 0 && !loading && (
               <tr>
-                <td colSpan={8} className="text-muted">{t("admin.licencias.empty")}</td>
+                <td colSpan={9} className="text-muted">{t("admin.licencias.empty")}</td>
               </tr>
             )}
             {rows.map((l) => (
@@ -230,6 +231,7 @@ export default function AdminLicencias() {
                   <span className={`chip ${l.estado === "activa" ? "bg-ok/15 text-ok" : "bg-bad/15 text-bad"}`}>{l.estado}</span>
                 </td>
                 <td className="text-muted">{l.expiry ? formatDate(l.expiry) : l.kind === "lifetime" ? t("common.lifetime") : "—"}</td>
+                <td className="text-muted">{formatDate(l.created_at)}</td>
                 <td className="text-muted">{(l.modules ?? []).length}</td>
                 <td className="text-muted">
                   {l.precio != null

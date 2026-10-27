@@ -21,9 +21,18 @@ export default async function (req: Request): Promise<Response> {
   if (!token) return json({ error: "unauthorized" }, 401);
 
   const admin = createAdminClient({ baseUrl: Deno.env.get("INSFORGE_BASE_URL")!, apiKey: Deno.env.get("API_KEY")! });
-  const { data: rows } = await admin.database.from("cli_tokens").select("user_id, label, created_at").eq("token_hash", hash(token));
+  const tokenHash = hash(token);
+  const { data: rows } = await admin.database.from("cli_tokens").select("user_id, label, created_at").eq("token_hash", tokenHash);
   const tok = Array.isArray(rows) ? rows[0] : rows;
   if (!tok) return json({ error: "token desconocido" }, 401);
+
+  // Marca de uso (best-effort): el panel muestra cuándo se usó la sesión del
+  // CLI por última vez. No afecta la respuesta si el update falla.
+  try {
+    await admin.database.from("cli_tokens").update({ last_used_at: new Date().toISOString() }).eq("token_hash", tokenHash);
+  } catch {
+    /* sin red: la consulta principal ya respondió */
+  }
 
   const { data: profRows } = await admin.database.from("profiles").select("email, role").eq("id", tok.user_id);
   const prof = Array.isArray(profRows) ? profRows[0] : profRows;

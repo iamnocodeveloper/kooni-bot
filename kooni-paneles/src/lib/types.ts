@@ -5,6 +5,8 @@ export interface Profile {
   role: "cliente" | "revendedor" | "admin";
   language: "es" | "en";
   created_at: string;
+  /** Último ingreso al panel/hub (lo estampa ensure_profile en cada sesión). */
+  last_login: string | null;
 }
 
 export interface Licencia {
