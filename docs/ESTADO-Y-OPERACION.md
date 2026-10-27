@@ -1,4 +1,4 @@
-# Estado y operación — cierre de etapa (v1.52.1, 2026-09-30)
+# Estado y operación — cierre de etapa (v1.63.0, 2026-10-27)
 
 Documento de referencia de **qué se cambió, cómo se opera y qué queda pendiente**.
 Complementa a [`DESPLIEGUE.md`](./DESPLIEGUE.md) (puesta en marcha), [`USO.md`](./USO.md)
@@ -10,20 +10,22 @@ Complementa a [`DESPLIEGUE.md`](./DESPLIEGUE.md) (puesta en marcha), [`USO.md`](
 
 | Pieza | Dónde se publica | Estado |
 |---|---|---|
-| **Bot** (`src/`, `migrations/`, `skill/`) | **GitHub**: `iamnocodeveloper/kooni-bot`, branch `main` | ✅ al día — último commit `ad28a92`, versión del bot **1.52.1** |
-| **CLI** (`cli-kooni/`, paquete npm `kooni-bot`) | **npm** | ⚠️ **atrás**: publicado `0.4.0`, el repo tiene `0.5.0` |
+| **Bot** (`src/`, `migrations/`, `skill/`) | **GitHub**: `iamnocodeveloper/kooni-bot`, branch `main` | ✅ al día — último commit `0c1519d`, versión del bot **1.63.0** |
+| **CLI** (`cli-kooni/`, paquete npm `kooni-bot`) | **npm** | ⚠️ **atrás**: publicado `0.4.0`, el repo tiene `0.8.2` |
 | **Paneles** (`kooni-paneles/`) | **InsForge** → https://t6bferet.insforge.site | ✅ desplegado |
-| **Backend del hub** (`functions/`, `migrations/`) | Proyecto InsForge `kooni` (`t6bferet`) | ✅ migración `profiles.language` aplicada |
+| **Backend del hub** (`functions/`, `migrations/`) | Proyecto InsForge `kooni` (`t6bferet`) | ✅ `profiles.language` aplicada · ⚠️ `profiles.last_login` incluida, pendiente de aplicar |
 
 - **El bot NO se publica en npm.** Las instalaciones lo bajan del **tarball de GitHub `main`**;
   `npx kooni-bot update` compara la versión del `package.json` de `main` para detectar updates.
   Por eso, subir a `main` **ya alcanza** para que las instalaciones limpias/nuevas lo reciban.
 - **La CLI sí va por npm**: si cambia algo en `cli-kooni/`, hay que publicar
-  (`cd cli-kooni && npm publish`). Hoy `npx kooni-bot` trae la `0.4.0` (pendiente subir la `0.5.0`).
+  (`cd cli-kooni && npm publish`). Hoy `npx kooni-bot` trae la `0.4.0` (pendiente publicar la `0.8.2`).
+  El `update` del CLI ya re-aplica `src/db/schema.sql` y despliega, así que las
+  instalaciones existentes reciben `contact_blocks` sin pasos extra.
 
 ---
 
-## 2. Qué cambió en esta etapa (v1.49 → v1.52.1)
+## 2. Qué cambió en esta etapa (v1.49 → v1.63.0)
 
 | Versión | Tema | Archivos clave |
 |---|---|---|
@@ -32,6 +34,7 @@ Complementa a [`DESPLIEGUE.md`](./DESPLIEGUE.md) (puesta en marcha), [`USO.md`](
 | **1.51.0** | **Scraping sin depender de la cuota de Decodo** (sitemaps por fetch directo + reintentos + modo barato + errores clasificados), **validación de cambios**, **25 autos + paginar**, y la infra i18n del panel. | `src/integrations/directFetch.ts`, `src/integrations/decodo.ts`, `src/db/changeReviews.ts` |
 | **1.52.0** | **Panel del bot 100% bilingüe ES/EN** (~1900 claves, diccionarios por área). | `src/admin/i18n.ts`, `src/admin/locales/{es,en}/*` |
 | **1.52.1** | **WAHA anunciaba los archivos con `localhost`** → reescritura del origen al host configurado (bot + proxy del panel). Además se destrabó la lista de módulos de cardaniel. | `src/channels/wahaCredentials.ts`, `src/admin/media.ts` |
+| **1.63.0** | **Pausa/bloqueo por contacto** (`contact_blocks`, pausa indefinida, ecos WAHA/WhatsApp Cloud), **inventario con `trim`/`description` + dedupe IA** y **Decodo como proveedor principal**. | `src/silence.ts`, `src/db/contactBlocks.ts`, `src/kb/analysis.ts`, `src/integrations/scraper.ts`, `docs/PAUSA-Y-BLOQUEOS.md`, `docs/INVENTARIO-VERSIONES-Y-DUPLICADOS.md` |
 
 ---
 
@@ -206,9 +209,8 @@ Tabla **`web_sync_change_reviews`**: cada cambio de una corrida se marca
 ## 5. Pendientes
 
 1. **Probar en vivo audio/foto en cardaniel** (es lo único no verificado; el resto se validó con tests).
-2. **`npm publish` de la CLI `0.5.0`** (`cd cli-kooni && npm publish`) — hoy npm sirve `0.4.0`.
-3. **Sección "Inventario sincronizado"** con búsqueda + paginación en la pestaña Scraping
-   (hoy se ve el diff de la corrida, no el inventario completo).
+2. **`npm publish` de la CLI `0.8.2`** (`cd cli-kooni && npm publish`) — hoy npm sirve `0.4.0`.
+3. **Aplicar la migración `profiles.last_login`** en InsForge y redesplegar `kooni-paneles`.
 4. **Botón "Probar Decodo"** (status + cuerpo + cuota) y **aviso al dueño** cuando el scraping falla.
 5. **`docs/design-system.md` está desactualizado** (describe el tema teal viejo; la identidad
    vigente es la magenta de `IDENTIDAD-KOONI.md` y `layout.ts`).
