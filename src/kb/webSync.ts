@@ -187,7 +187,7 @@ export interface WebSyncSummary {
   removed?: number;
   changed?: number;
   /** Análisis IA del inventario (solo si el toggle está encendido). */
-  analysis?: { analyzed: number; applied: number; skipped?: string; error?: string };
+  analysis?: { analyzed: number; applied: number; duplicates?: number; skipped?: string; error?: string };
   /** Cuántas URLs se bajaron directo / con AIsa / con Decodo. */
   direct?: number;
   aisa?: number;
@@ -197,6 +197,8 @@ export interface WebSyncSummary {
 export interface WebSyncRunOptions {
   /** true en el tick nocturno: además del sync del feed, corre el batch de fotos. */
   images?: boolean;
+  /** Tope de fichas a enriquecer en esta corrida (default 20). */
+  imageMax?: number;
   /** Quién disparó la corrida (queda en el registro de scraping). */
   trigger?: "cron" | "manual" | "api" | "rebuild";
 }
@@ -425,12 +427,14 @@ export async function runWebSync(env: Env, opts: WebSyncRunOptions = {}): Promis
       summary.analysis = {
         analyzed: analysis.analyzed,
         applied: analysis.applied,
+        duplicates: analysis.duplicates,
         ...(analysis.skipped ? { skipped: analysis.skipped } : {}),
         ...(analysis.error ? { error: analysis.error } : {}),
       };
       if (analysis.applied > 0) {
         console.log(
-          `[webSync] análisis IA: ${analysis.applied} auto(s) corregido(s) de ${analysis.analyzed} revisado(s)`,
+          `[webSync] análisis IA: ${analysis.applied} auto(s) corregido(s) de ${analysis.analyzed} revisado(s)` +
+            (analysis.duplicates ? ` · ${analysis.duplicates} duplicado(s)` : ""),
         );
       }
     } catch (e) {
@@ -461,7 +465,7 @@ export async function runWebSync(env: Env, opts: WebSyncRunOptions = {}): Promis
   // borra, y está acotado a `max` autos por corrida (ver refreshVehicleImages).
   if (opts.images) {
     try {
-      const img = await refreshVehicleImages(env, db);
+      const img = await refreshVehicleImages(env, db, { max: opts.imageMax });
       summary.imagesFetched = img.fetched;
       summary.imagesFailed = img.failed;
       summary.imagesPending = img.pending;
@@ -494,6 +498,7 @@ export async function runWebSync(env: Env, opts: WebSyncRunOptions = {}): Promis
         note: summary.analysis
           ? (
               `análisis IA: ${summary.analysis.applied} corregido(s) de ${summary.analysis.analyzed}` +
+              (summary.analysis.duplicates ? ` · ${summary.analysis.duplicates} duplicado(s)` : "") +
               (summary.analysis.skipped ? ` (${summary.analysis.skipped})` : "") +
               (summary.analysis.error ? ` — error: ${summary.analysis.error}` : "")
             ).slice(0, 500)

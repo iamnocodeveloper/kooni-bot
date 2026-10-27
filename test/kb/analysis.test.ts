@@ -15,6 +15,8 @@ function v(partial: Partial<StoredVehicle> & { key: string }): StoredVehicle {
     year: 2022,
     make: "Kia",
     model: "Telluride SX",
+    trim: null,
+    description: null,
     condition: "Usado",
     price: 32900,
     miles: 31000,

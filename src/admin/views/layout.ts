@@ -56,6 +56,7 @@ const NAV: Section[] = [
       { id: "conversations", label: "Conversaciones", href: "/admin/conversations", icon: "messages-square" },
       { id: "comentarios", label: "Comentarios", href: "/admin/comentarios", icon: "message-circle" },
       { id: "contactos", label: "Contactos", href: "/admin/contactos", icon: "users" },
+      { id: "bloqueados", label: "Bloqueados", href: "/admin/blocked", icon: "ban" },
       { id: "leads", label: "Leads", href: "/admin/leads", icon: "user-plus" },
       { id: "etiquetas", label: "Etiquetas", href: "/admin/etiquetas", icon: "tags" },
       { id: "tickets", label: "Tickets", href: "/admin/tickets", icon: "life-buoy" },

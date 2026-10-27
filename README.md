@@ -21,7 +21,9 @@
 >
 > Guía de marca: [`docs/IDENTIDAD-KOONI.md`](docs/IDENTIDAD-KOONI.md) ·
 > Arquitectura: [`docs/ARQUITECTURA.md`](docs/ARQUITECTURA.md) ·
-> Despliegue: [`docs/DESPLIEGUE.md`](docs/DESPLIEGUE.md)
+> Despliegue: [`docs/DESPLIEGUE.md`](docs/DESPLIEGUE.md) ·
+> Pausa y bloqueos: [`docs/PAUSA-Y-BLOQUEOS.md`](docs/PAUSA-Y-BLOQUEOS.md) ·
+> Inventario y duplicados: [`docs/INVENTARIO-VERSIONES-Y-DUPLICADOS.md`](docs/INVENTARIO-VERSIONES-Y-DUPLICADOS.md)
 
 ---
 

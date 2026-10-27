@@ -111,7 +111,7 @@ LICENSE_PUBLIC_KEY = "MCowBQYDK2VwAyEALxrjpy7pkyHSqlCcObUfMygNXNznd9/YXhamO17e4t
 #                                 del LLM (`llm_api_key`) es de AIsa, se hereda sola.
 #                                 El proveedor se elige en el panel:
 #                                 Configuración → Scraping → `scrape_provider`
-#                                 (auto = directo → AIsa → Decodo | aisa | decodo).
+#                                 (auto = Decodo → sitemap directo → AIsa | aisa | decodo).
 
 [triggers]
 crons = ["0 3 * * *"]  # purga nocturna y trabajos diarios

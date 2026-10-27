@@ -11,6 +11,52 @@ puede tener su cuenta y las de varios clientes, al instalar se pregunta «¿con 
 otra?»; en agente/CI se exige `--account <email>` (o `--login --wait`) y, si no, **aborta** (no
 instala/licencia bajo la cuenta equivocada). Nuevo comando `logout` para cambiar de cuenta.
 
+## [1.63.0] — 2026-10-27
+
+### Agregado — pausa por contacto y lista de bloqueados
+
+- **Pausa indefinida por conversación**: además de “Pausar 1 h”, el hilo ofrece
+  “Pausar hasta reactivar”. El bot no vuelve solo: el dueño lo devuelve con
+  “Devolver al bot”.
+- **Contactos bloqueados al bot** (`/admin/blocked`, tabla nueva `contact_blocks`):
+  silencio total para ese contacto — ni respuestas, ni seguimientos, ni campañas,
+  ni disparadores, ni cobranzas. Se puede bloquear desde el hilo o desde la página,
+  y desbloquear cuando quieras. El bloqueo es **por canal**.
+- **El dueño responde desde fuera → el bot se pausa hasta reactivarlo**:
+  - Instagram/Messenger vía Meta (`is_echo`) y Zernio (`outgoing`): ya existía,
+    ahora la pausa es **indefinida**.
+  - **WAHA** (WhatsApp self-hosted): los mensajes `fromMe` ahora se registran como
+    `owner` y pausan el bot (antes se descartaban).
+  - **WhatsApp Cloud API**: se procesan `message_echoes` / `smb_message_echoes`.
+  - Responder desde el inbox `/admin/conversations` también deja pausa indefinida.
+- `processBuffer` re-chequea el silencio antes de gastar LLM (cierra la carrera
+  “pausaron entre el ingest y el alarm”).
+
+### Mejorado — scraping con versión, descripción y duplicados
+
+- El inventario guarda **`trim`** y **`description`** por auto (extraídos del
+  JSON-LD / og:description / markdown de la ficha).
+- El análisis IA ahora recibe **título + URL + descripción** y detecta:
+  - **versiones distintas con el mismo título** (ej. “SX” vs “SX Prestige”),
+    proponiendo `trim`/`description` para diferenciarlas;
+  - **la misma unidad publicada dos veces** → `duplicateOf` (no se borra: deja de
+    aparecer en las respuestas). Si alguno tiene VIN, **nunca** se marca duplicado.
+- `vehicleKey` ya no colapsa todos los autos sin VIN ni link en una sola clave.
+- El bot (`inventarioQuery`/`fichaAuto`) recibe `version` y `descripcion`, y
+  `fichaAuto` distingue candidatos ambiguos.
+- Nuevo botón **“Enriquecer fichas (60)”** en Scraping para backfill por tandas.
+
+### Cambiado — Decodo es el proveedor principal
+
+- `scrape_provider=auto` ahora es **Decodo → sitemap directo (gratis) → AIsa**.
+  Con `decodo` no hay fallback; con `aisa` solo se usa AIsa.
+- Si Decodo devuelve `quota`, en `auto` se cae a AIsa; la corrida solo se corta si
+  ambos se agotan.
+- `docs/ESTADO-Y-OPERACION.md` y el panel actualizados con el nuevo orden.
+
+Instalaciones existentes: `npx kooni-bot update` y re-aplicar `src/db/schema.sql`
+para crear `contact_blocks`. La migración es idempotente.
+
 ## [1.62.0] — 2026-10-12
 
 ### Agregado — Laboratorio: poné a prueba a tu agente antes de que hable con clientes

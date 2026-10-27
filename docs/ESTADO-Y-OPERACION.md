@@ -103,18 +103,21 @@ SELECT value FROM settings WHERE key = 'module_unlocks';
 DELETE FROM settings WHERE key = 'module_unlocks';
 ```
 
-### 3.5 Scraping: elegir proveedor (AIsa | Decodo | Auto)
+### 3.5 Scraping: elegir proveedor (Decodo | AIsa | Auto)
 
 Setting **`scrape_provider`** (Configuración → Scraping):
 
 | Valor | Qué hace |
 |---|---|
-| `auto` (default) | intento **directo** (barato) → **AIsa** → **Decodo** |
+| `auto` (default) | **Decodo** → sitemap directo (gratis) → **AIsa** |
 | `aisa` | solo **AIsa** (Firecrawl vía `api.aisa.one`) |
 | `decodo` | solo **Decodo** |
 
-- **AIsa** es la salida cuando el sitio **bloquea al Worker** (403 del WAF) o Decodo
-  no tiene cuota. Key: `aisa_api_key` en el panel; **vacía ⇒ hereda `llm_api_key`**
+- **Decodo es el proveedor principal** (HTML/JSON-LD: precio, millas, versión y
+  descripción de la ficha). El **fetch directo** queda como ahorro para los
+  sitemaps XML; **AIsa** es el fallback cuando Decodo falla o se queda sin cuota.
+- **AIsa** sigue siendo la salida cuando el sitio **bloquea al Worker** (403 del
+  WAF). Key: `aisa_api_key` en el panel; **vacía ⇒ hereda `llm_api_key`**
   (si esa key es de AIsa). También sirve el secret `AISA_API_KEY`.
 - **Descubrimiento**: con AIsa se usa `firecrawl/map` sobre el sitio y se arma el
   listado con las URLs `/inventory/…` (≈490 links → 341 fichas en greenwaykia).
@@ -122,16 +125,30 @@ Setting **`scrape_provider`** (Configuración → Scraping):
   llamada (~1 crédito/página). ⚠️ **Las millas pueden no venir** en el markdown de
   AIsa (el sitio las muestra por JS); Decodo (HTML/JSON-LD) sí las trae.
 - **Costo**: ~1 crédito por ficha. Enriquecer 341 autos ≈ **341 créditos**; el `map`
-  es 1 sola llamada. Conviene enriquecer por lotes (la corrida nocturna ya lo hace).
+  es 1 sola llamada. Conviene enriquecer por lotes (la corrida nocturna ya lo hace;
+  “Enriquecer fichas (60)” hace una tanda manual).
 - **El sitemap se baja directo** y **se exige que sea XML de verdad**: un WAF que
   responde `200` con una página HTML de challenge ya **no** se confunde con el sitemap.
 - Decodo: **reintentos con backoff** en 429/5xx/timeout, **modo barato** por default
   (`proxy_pool: standard`, sin `headless`) y **errores clasificados**:
   `quota` (plan/cuota agotada), `auth` (credencial inválida), `rate_limit`, `server`, `empty`, `timeout`.
-  Si el error es `quota`, la corrida **se corta** en vez de seguir pegándole a la API.
+  Con `auto`, un `quota` de Decodo cae a AIsa; la corrida solo se corta si **ambos**
+  se agotan.
 - Dónde ver el error concreto: **Scraping → detalle de la corrida** (recuadro rojo `Error: …`).
   El flash de "Scrapear ahora" solo muestra el conteo; el resumen dice cuántas URLs
   se bajaron **directo / AIsa / Decodo**.
+
+### 3.5.1 Versiones, descripción y posibles duplicados
+
+- La ficha guarda **`trim`** (versión) y **`description`** además de precio/millas/foto.
+  El análisis IA incluye **título, URL y descripción** para distinguir dos autos con
+  el mismo título (ej. “SX” vs “SX Prestige”).
+- Si dos publicaciones son **la misma unidad**, el análisis marca `duplicateOf` y el
+  auto deja de aparecer en las respuestas (no se borra: queda en el panel).
+  **Regla dura:** si alguno de los dos tiene VIN, nunca se marcan como duplicados.
+- Los cambios de **Versión** y **Descripción** aparecen en el registro de scraping
+  (`web_sync_changes`) para validarlos igual que precio/millas.
+- Detalle completo: [`INVENTARIO-VERSIONES-Y-DUPLICADOS.md`](./INVENTARIO-VERSIONES-Y-DUPLICADOS.md).
 
 ### 3.6 Validar los cambios del scraping
 
@@ -154,6 +171,20 @@ Tabla **`web_sync_change_reviews`**: cada cambio de una corrida se marca
 - **Fallback IA global**: `comment_ai_fallback_enabled` + `comment_ai_fallback_prompt`
   (Extras → Automatizaciones) — el bot responde con IA los comentarios que no matchean ninguna regla.
 
+### 3.9 Pausa y contactos bloqueados
+
+- **Pausa temporal** (`/conversations/:id/pause`): 1 h.
+- **Pausa hasta reactivar** (`/conversations/:id/pause-forever`): usa
+  `PAUSE_INDEFINITE` en `paused_until`; solo vuelve con “Devolver bot”.
+- **Contactos bloqueados** (tabla `contact_blocks`, página `/admin/blocked`):
+  silencio total — respuestas, seguimientos, campañas, disparadores y cobranzas.
+  El bloqueo es por canal y no borra historial.
+- **Eco del dueño**: Meta (`is_echo`), Zernio (`outgoing`), WAHA (`fromMe`) y
+  WhatsApp Cloud (`message_echoes`) registran el mensaje como `owner` y dejan
+  pausa **indefinida**. Telegram no aplica; ManyChat no recibe el eco de la app.
+- El bloqueo/pausa se re-chequea en `processBuffer` antes de gastar LLM.
+- Detalle y diagnóstico: [`PAUSA-Y-BLOQUEOS.md`](./PAUSA-Y-BLOQUEOS.md).
+
 ---
 
 ## 4. Checklist de verificación (post-deploy)
@@ -165,6 +196,10 @@ Tabla **`web_sync_change_reviews`**: cada cambio de una corrida se marca
 - [ ] Mandar **foto** → el bot la describe
 - [ ] Comentario nuevo → aparece en Comentarios con publicación + automatización; se puede validar
 - [ ] Nueva corrida de scraping → filtros de validación funcionando
+- [ ] `scrape_provider=decodo` y el resumen de la corrida cuenta **decodo** (no aisa/directo)
+- [ ] Responder desde WhatsApp/IG → el hilo muestra el mensaje como `owner` y el bot queda pausado hasta reactivarlo
+- [ ] Bloquear un contacto de prueba → no responde, pero el mensaje queda registrado; `/admin/blocked` lo lista
+- [ ] “Enriquecer fichas (60)” completa `description`/`trim` y el panel de duplicados marca/desmarca
 
 ---
 

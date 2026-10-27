@@ -7,6 +7,8 @@ function v(over: Partial<StoredVehicle> & { key: string; title: string }): Store
     year: null,
     make: null,
     model: null,
+    trim: null,
+    description: null,
     condition: "Usado",
     price: null,
     miles: null,

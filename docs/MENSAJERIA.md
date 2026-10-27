@@ -46,11 +46,12 @@ Webhook (src/index.ts)
 | Canal pausado (`paused_channels`) | **Sí** | No | No |
 | Bot pausado (`bot_paused=1`) | **Sí** | No | No |
 | Conversación pausada (takeover / `paused_until`) | **Sí** | No | No |
+| Contacto bloqueado (`contact_blocks`) | **Sí** | No (hasta desbloquear) | No |
 | Spam (3ª repetición en 5) | **Sí** | No (cooldown 1 h) | No |
 | Tope diario (50 turnos/24 h) | **Sí** + despedida | Despedida 1 vez, luego 12 h | No |
 | Límite de plan free | **Sí** + aviso de límite | Aviso 1 vez | No |
 | Comentario de post (Zernio) | No entra al agente (va a `comments`/DM) | Auto-DM | — |
-| Eco del dueño (`ownerEcho`) | Sí (rol `owner`) | No (pausa 1 h) | No |
+| Eco del dueño (`ownerEcho`) | Sí (rol `owner`) | No (pausa **indefinida**) | No |
 
 Regla: **"guardado" es incondicional; "responde" y "alarma" dependen del estado.**
 

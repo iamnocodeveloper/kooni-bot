@@ -147,12 +147,19 @@ app.post("/webhooks/waha", async (c) => {
   }
   try {
     const msg = await wahaAdapter.parseIncoming(c.req.raw, c.env);
+    const doId = c.env.AGENT.idFromName(`${msg.channel}:${msg.channelUserId}`);
+    const stub = c.env.AGENT.get(doId);
+    // Eco propio (el dueño respondió desde su teléfono): se registra como
+    // `owner` y pausa el bot. No es una pregunta para el agente.
+    if (msg.ownerEcho) {
+      await stub.recordOwnerEcho(msg).catch((e) => console.error("waha ownerEcho:", e));
+      return c.text("ok", 200);
+    }
     // Nicho taxis: si el remitente es un conductor registrado, lo maneja el
     // motor de despacho (cola) y NO llega al agente.
     const { handleDriverMessage } = await import("./taxi/driverInbound");
     if (await handleDriverMessage(c.env, msg)) return c.text("ok", 200);
-    const doId = c.env.AGENT.idFromName(`${msg.channel}:${msg.channelUserId}`);
-    await c.env.AGENT.get(doId).ingest(msg).catch((e) => console.error("waha ingest:", e));
+    await stub.ingest(msg).catch((e) => console.error("waha ingest:", e));
     return c.text("ok", 200);
   } catch (e) {
     console.warn("waha webhook ignorado (no es un mensaje entrante):", e);
@@ -414,10 +421,16 @@ app.post("/webhooks/whatsapp", async (c) => {
   const origin = c.env.DASHBOARD_BASE_URL || new URL(c.req.url).origin;
   const { handleDriverMessage } = await import("./taxi/driverInbound");
   for (const msg of await parseWhatsAppEvents(body as any, c.env, origin)) {
+    const doId = c.env.AGENT.idFromName(`${msg.channel}:${msg.channelUserId}`);
+    const stub = c.env.AGENT.get(doId);
+    // Eco del negocio (respondió desde la app de WhatsApp): registrar + pausar.
+    if (msg.ownerEcho) {
+      await stub.recordOwnerEcho(msg).catch((e) => console.error("whatsapp ownerEcho:", e));
+      continue;
+    }
     // Nicho taxis: mensajes de conductores registrados van a la cola, no al agente.
     if (await handleDriverMessage(c.env, msg)) continue;
-    const doId = c.env.AGENT.idFromName(`${msg.channel}:${msg.channelUserId}`);
-    await c.env.AGENT.get(doId).ingest(msg);
+    await stub.ingest(msg);
   }
   return c.text("EVENT_RECEIVED", 200);
 });

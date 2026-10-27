@@ -9,13 +9,13 @@ import { fetchSitemapDirect, looksLikeSitemap, looksLikeXml } from "./directFetc
  * Conmutador de scraping del inventario (Web Sync + fichas).
  *
  * Elige la fuente según el setting **`scrape_provider`**:
- *   - `"auto"`   (default) → directo (barato) → **AIsa** → Decodo
+ *   - `"auto"`   (default) → **Decodo** → directo (solo sitemaps, gratis) → AIsa
  *   - `"aisa"`   → **AIsa** (Firecrawl) y punto
- *   - `"decodo"` → Decodo
+ *   - `"decodo"` → **Decodo** y punto
  *
- * AIsa es la salida cuando el sitio **bloquea al Worker** (403) o Decodo no tiene
- * cuota: `firecrawl/map` descubre las URLs y `firecrawl/scrape` trae el markdown
- * (con precio y fotos) del mismo modo que un navegador.
+ * Decodo es el proveedor PRINCIPAL (HTML/JSON-LD autoritativo para precio,
+ * millas, versión y descripción). El fetch directo queda como ahorro para los
+ * sitemaps XML; AIsa es la salida cuando Decodo falla o se queda sin cuota.
  */
 export type ScrapeProvider = "auto" | "aisa" | "decodo";
 
@@ -73,21 +73,32 @@ export async function scrapeForFeed(env: Env, url: string): Promise<FeedResult> 
   const provider = await resolveScrapeProvider(env);
   const isSitemap = looksLikeSitemap(url);
   let directNote: string | undefined;
+  let lastCode: string | undefined;
 
-  // 1) Directo (barato). Sirve cuando el sitio NO bloquea al Worker.
-  //    OJO: un WAF puede devolver 200 con una página HTML de challenge → exigimos
-  //    que el cuerpo sea XML de verdad antes de aceptarlo.
-  if (isSitemap) {
+  // 1) DECODO (principal). Los sitemaps se piden SIN markdown (son XML); un feed
+  //    de texto/listicle se pide en markdown, como lo espera el parser.
+  if (provider !== "aisa") {
+    const r = await scrapeUrl(env, url, isSitemap ? { markdown: false } : {});
+    if (r.ok) return { ok: true, content: r.content, source: "decodo" };
+    lastCode = r.code;
+    directNote = `Decodo: ${r.error}`;
+    if (provider === "decodo") return { ok: false, error: r.error, code: r.code };
+  }
+
+  // 2) Directo (gratis): solo sitemaps y solo en `auto`. Sirve cuando el sitio
+  //    NO bloquea al Worker. Exigimos XML de verdad (un WAF puede devolver 200
+  //    con una página HTML de challenge).
+  if (provider === "auto" && isSitemap) {
     const direct = await fetchSitemapDirect(url, env);
     const text = direct.text ?? "";
     if (direct.ok && text.trim() && looksLikeXml(text)) return { ok: true, content: text, source: "directo" };
-    directNote = direct.ok
-      ? "fetch directo: respondió algo que no es XML (¿challenge del WAF?)"
-      : `fetch directo: ${direct.error ?? `HTTP ${direct.status}`}`;
+    directNote = `${directNote ?? ""}${
+      directNote ? "; " : ""
+    }${direct.ok ? "fetch directo: respondió algo que no es XML (¿challenge del WAF?)" : `fetch directo: ${direct.error ?? `HTTP ${direct.status}`}`}`;
   }
 
-  // 2) AIsa (Firecrawl) si el proveedor lo permite y hay key.
-  if (provider !== "decodo" && (await aisaConfigured(env))) {
+  // 3) AIsa (Firecrawl): fallback en `auto`, único proveedor en `aisa`.
+  if (await aisaConfigured(env)) {
     if (isSitemap) {
       // Descubrimiento: `map` del origen → sitemap sintetizado con las fichas.
       const m = await aisaMap(env, originOf(url), 1000);
@@ -97,18 +108,22 @@ export async function scrapeForFeed(env: Env, url: string): Promise<FeedResult> 
         return { ok: false, error: "AIsa map: no encontró fichas de inventario", code: "empty" };
       }
       if (provider === "aisa") return { ok: false, error: m.error ?? "AIsa map falló", code: m.code };
+      lastCode = m.code ?? lastCode;
+      directNote = `${directNote ?? ""}${directNote ? "; " : ""}AIsa map: ${m.error ?? "falló"}`;
     } else {
       const s = await aisaScrape(env, url);
       if (s.ok && s.markdown) return { ok: true, content: s.markdown, source: "aisa" };
       if (provider === "aisa") return { ok: false, error: s.error ?? "AIsa falló", code: s.code };
+      lastCode = s.code ?? lastCode;
+      directNote = `${directNote ?? ""}${directNote ? "; " : ""}AIsa: ${s.error ?? "falló"}`;
     }
   }
 
-  // 3) Decodo (último recurso).
-  const r = await scrapeUrl(env, url);
-  if (r.ok) return { ok: true, content: r.content, source: "decodo" };
-  const error = directNote ? `${directNote}; Decodo: ${r.error}` : r.error;
-  return { ok: false, error, code: r.code };
+  return {
+    ok: false,
+    error: directNote ?? "sin proveedor de scraping disponible",
+    code: lastCode ?? "unknown",
+  };
 }
 
 export interface DetailsResult {
@@ -121,10 +136,10 @@ export interface DetailsResult {
 }
 
 /**
- * Trae una ficha para enriquecer precio/millas/foto.
+ * Trae una ficha para enriquecer precio/millas/foto/descripción.
  *
- * Con **AIsa** devuelve `markdown` (una sola llamada = 1 crédito, y ya trae la
- * foto inline). Con Decodo devuelve `html` (JSON-LD autoritativo), como antes.
+ * Orden: **Decodo** (HTML/JSON-LD, autoritativo) → AIsa (markdown) en `auto`.
+ * Con `decodo` no hay fallback; con `aisa` solo se usa AIsa.
  */
 export async function scrapeForDetails(
   env: Env,
@@ -132,13 +147,26 @@ export async function scrapeForDetails(
   opts: { timeoutMs?: number; markdown?: boolean } = {},
 ): Promise<DetailsResult> {
   const provider = await resolveScrapeProvider(env);
-  if (provider !== "decodo" && (await aisaConfigured(env))) {
-    const s = await aisaScrape(env, url);
-    if (s.ok && s.markdown) return { ok: true, kind: "markdown", content: s.markdown };
-    if (provider === "aisa") return { ok: false, kind: "markdown", error: s.error, code: s.code };
-  }
   const wantMd = opts.markdown ?? false;
-  const r = await scrapeUrl(env, url, { markdown: wantMd, timeoutMs: opts.timeoutMs });
-  if (r.ok) return { ok: true, kind: wantMd ? "markdown" : "html", content: r.content };
-  return { ok: false, kind: wantMd ? "markdown" : "html", error: r.error, code: r.code };
+
+  // 1) Decodo (principal).
+  if (provider !== "aisa") {
+    const r = await scrapeUrl(env, url, { markdown: wantMd, timeoutMs: opts.timeoutMs });
+    if (r.ok) return { ok: true, kind: wantMd ? "markdown" : "html", content: r.content };
+    if (provider === "decodo") {
+      return { ok: false, kind: wantMd ? "markdown" : "html", error: r.error, code: r.code };
+    }
+    // `auto`: si Decodo falla (p. ej. cuota), caemos a AIsa.
+    if (await aisaConfigured(env)) {
+      const s = await aisaScrape(env, url);
+      if (s.ok && s.markdown) return { ok: true, kind: "markdown", content: s.markdown };
+      return { ok: false, kind: "markdown", error: s.error ?? r.error, code: s.code ?? r.code };
+    }
+    return { ok: false, kind: wantMd ? "markdown" : "html", error: r.error, code: r.code };
+  }
+
+  // 2) AIsa como único proveedor.
+  const s = await aisaScrape(env, url);
+  if (s.ok && s.markdown) return { ok: true, kind: "markdown", content: s.markdown };
+  return { ok: false, kind: "markdown", error: s.error, code: s.code };
 }

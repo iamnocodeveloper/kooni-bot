@@ -271,6 +271,10 @@ export async function renderInboxList(env: Env, p: InboxParams): Promise<string>
   }
   if (p.filter === "leads") {
     conds.push("EXISTS (SELECT 1 FROM leads l WHERE l.conversation_id = c.id)");
+  } else if (p.filter === "bloqueados") {
+    conds.push(
+      "EXISTS (SELECT 1 FROM contact_blocks b WHERE b.channel = c.channel AND b.channel_user_id = c.channel_user_id)",
+    );
   } else if (p.filter === "atencion") {
     conds.push(
       "((c.paused_until IS NOT NULL AND c.paused_until > ?) OR EXISTS (SELECT 1 FROM tickets t WHERE t.conversation_id = c.id AND t.status != 'resolved'))",
@@ -295,7 +299,8 @@ export async function renderInboxList(env: Env, p: InboxParams): Promise<string>
        (SELECT status FROM leads l WHERE l.conversation_id = c.id ORDER BY created_at DESC LIMIT 1) as lead_status,
        (SELECT COUNT(*) FROM tickets t WHERE t.conversation_id = c.id AND t.status != 'resolved') as open_tickets,
        (SELECT COUNT(*) FROM conversation_labels cl WHERE cl.conversation_id = c.id AND cl.label = 'atencion_humana') as needs_human,
-       (SELECT sentiment FROM conversation_insights i WHERE i.conversation_id = c.id) as ai_sentiment
+       (SELECT sentiment FROM conversation_insights i WHERE i.conversation_id = c.id) as ai_sentiment,
+       (SELECT COUNT(*) FROM contact_blocks b WHERE b.channel = c.channel AND b.channel_user_id = c.channel_user_id) as is_blocked
      FROM conversations c
      ${whereSql}
      ORDER BY c.last_message_at DESC LIMIT 50`,
@@ -312,7 +317,9 @@ export async function renderInboxList(env: Env, p: InboxParams): Promise<string>
   const items = rows
     .map((r) => {
       const paused = r.paused_until && r.paused_until > now;
+      const blocked = r.is_blocked > 0;
       const badges: string[] = [];
+      if (blocked) badges.push(`<span style="${smallPill("var(--bad)")}">${t("conv.blockedBadge")}</span>`);
       if (r.lead_count > 0) {
         const b = leadBadge[r.lead_status as string] ?? leadBadge.new;
         badges.push(`<span style="${smallPill(b.color)}">${b.txt}</span>`);
@@ -325,7 +332,7 @@ export async function renderInboxList(env: Env, p: InboxParams): Promise<string>
         const m = labelMetaIn(catalog, l);
         badges.push(`<span style="${smallPill(m.color)}">${escapeHtml(m.name)}</span>`);
       }
-      if (paused) badges.push(`<span style="${smallPill("var(--dim)")}">⏸</span>`);
+      if (paused && !blocked) badges.push(`<span style="${smallPill("var(--dim)")}">⏸</span>`);
       if (r.ai_sentiment === "frustrated" || r.ai_sentiment === "angry") {
         const s = SENTIMENT_BADGE[r.ai_sentiment as string];
         badges.push(`<span style="${smallPill(SENTIMENT_COLOR[r.ai_sentiment as string])}">${s.txt}</span>`);
@@ -414,6 +421,11 @@ export async function renderThreadLive(env: Env, convId: string): Promise<string
 
   const now = Date.now();
   const paused = conv.paused_until && conv.paused_until > now;
+  const blocked =
+    ((await db.first<{ n: number }>(
+      "SELECT COUNT(*) as n FROM contact_blocks WHERE channel = ? AND channel_user_id = ?",
+      [conv.channel, conv.channel_user_id],
+    ))?.n ?? 0) > 0;
   const openTicket =
     (await db.first<{ n: number }>(
       "SELECT COUNT(*) as n FROM tickets WHERE conversation_id = ? AND status != 'resolved'",
@@ -478,9 +490,9 @@ export async function renderThreadLive(env: Env, convId: string): Promise<string
     : "";
 
   // Header: identity + live state + takeover controls.
-  const statusColor = paused ? "var(--accent-2)" : "var(--ok)";
+  const statusColor = blocked ? "var(--bad)" : paused ? "var(--accent-2)" : "var(--ok)";
   const statusPill = `<span style="${statusBadge(statusColor)}">${
-    paused ? t("conv.botPaused") : t("conv.botActive")
+    blocked ? t("conv.blocked") : paused ? t("conv.botPaused") : t("conv.botActive")
   }</span>`;
 
   // "NEUTRAL" NO SE MUESTRA. El analizador clasifica cómo quedó el cliente en
@@ -498,27 +510,45 @@ export async function renderThreadLive(env: Env, convId: string): Promise<string
       ? `<span style="${statusBadge(SENTIMENT_COLOR[insight.sentiment])}">${SENTIMENT_BADGE[insight.sentiment].txt}</span>`
       : "";
 
-  const controls = paused
-    ? `
-    <details style="position:relative;margin-left:auto">
-      <summary class="chip"
-               hx-post="/admin/conversations/${encodeURIComponent(convId)}/resume"
-               hx-swap="none"
-               title="${t("conv.returnBotTitle")}"
-               style="cursor:pointer;list-style:none;font-size:11px;color:var(--accent-2);background:var(--panel2);border:1px solid var(--linelit);padding:6px 11px;display:inline-flex;align-items:center;gap:6px">${t("conv.returnBot")}</summary>
-      <form method="POST" action="/admin/conversations/${encodeURIComponent(convId)}/resume"
-            style="position:absolute;right:0;z-index:10;margin-top:8px;width:280px;background:var(--panel);border:1px solid var(--linelit);box-shadow:6px 6px 0 rgba(0,0,0,.4);padding:12px">
-        <p style="font-size:11px;color:var(--muted);margin:0 0 8px">${t("conv.resumeHint")}</p>
-        <textarea name="summary" rows="3" required placeholder="${t("conv.resumePlaceholder")}"
-                  style="width:100%;background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:8px 10px;font-size:12px;outline:none;resize:vertical;margin-bottom:8px"></textarea>
-        <button class="bigbtn" style="width:100%;background:var(--accent);border:1px solid var(--accent);color:var(--on-accent);box-shadow:3px 3px 0 var(--linelit);padding:9px;font-size:12px;font-weight:700;font-family:'Sora';cursor:pointer">${t("conv.sendToBot")}</button>
-      </form>
-    </details>`
-    : `
-    <button hx-post="/admin/conversations/${encodeURIComponent(convId)}/pause" hx-target="#thread-live" hx-swap="innerHTML"
-            class="chip" style="margin-left:auto;font-size:11px;color:var(--muted);background:var(--panel2);border:1px solid var(--linelit);padding:6px 11px;cursor:pointer">
-      ${t("conv.pauseBot")}
-    </button>`;
+  const chipBtn = (action: string, label: string, color: string, confirm?: string) =>
+    `<button hx-post="/admin/conversations/${encodeURIComponent(convId)}/${action}" hx-target="#thread-live" hx-swap="innerHTML"${
+      confirm ? ` hx-confirm="${escapeHtml(confirm)}"` : ""
+    } class="chip" style="font-size:11px;color:${color};background:var(--panel2);border:1px solid ${color};padding:6px 11px;cursor:pointer">${label}</button>`;
+
+  const blockBtn = chipBtn("block", t("conv.block"), "var(--bad)", t("conv.blockConfirm"));
+  const unblockBtn = chipBtn("unblock", t("conv.unblock"), "var(--ok)");
+  const pauseForeverBtn = chipBtn("pause-forever", t("conv.pauseForever"), "var(--accent-2)");
+
+  const controls = blocked
+    ? `<div style="margin-left:auto;display:flex;gap:6px;align-items:center">${unblockBtn}</div>`
+    : paused
+      ? `
+    <div style="margin-left:auto;display:flex;gap:6px;align-items:center">
+      <details style="position:relative">
+        <summary class="chip"
+                 hx-post="/admin/conversations/${encodeURIComponent(convId)}/resume"
+                 hx-swap="none"
+                 title="${t("conv.returnBotTitle")}"
+                 style="cursor:pointer;list-style:none;font-size:11px;color:var(--accent-2);background:var(--panel2);border:1px solid var(--linelit);padding:6px 11px;display:inline-flex;align-items:center;gap:6px">${t("conv.returnBot")}</summary>
+        <form method="POST" action="/admin/conversations/${encodeURIComponent(convId)}/resume"
+              style="position:absolute;right:0;z-index:10;margin-top:8px;width:280px;background:var(--panel);border:1px solid var(--linelit);box-shadow:6px 6px 0 rgba(0,0,0,.4);padding:12px">
+          <p style="font-size:11px;color:var(--muted);margin:0 0 8px">${t("conv.resumeHint")}</p>
+          <textarea name="summary" rows="3" required placeholder="${t("conv.resumePlaceholder")}"
+                    style="width:100%;background:var(--bg);border:1px solid var(--line);color:var(--cream);padding:8px 10px;font-size:12px;outline:none;resize:vertical;margin-bottom:8px"></textarea>
+          <button class="bigbtn" style="width:100%;background:var(--accent);border:1px solid var(--accent);color:var(--on-accent);box-shadow:3px 3px 0 var(--linelit);padding:9px;font-size:12px;font-weight:700;font-family:'Sora';cursor:pointer">${t("conv.sendToBot")}</button>
+        </form>
+      </details>
+      ${blockBtn}
+    </div>`
+      : `
+    <div style="margin-left:auto;display:flex;gap:6px;align-items:center">
+      <button hx-post="/admin/conversations/${encodeURIComponent(convId)}/pause" hx-target="#thread-live" hx-swap="innerHTML"
+              class="chip" style="font-size:11px;color:var(--muted);background:var(--panel2);border:1px solid var(--linelit);padding:6px 11px;cursor:pointer">
+        ${t("conv.pauseBot")}
+      </button>
+      ${pauseForeverBtn}
+      ${blockBtn}
+    </div>`;
 
   // Nicho taxis: selector "Elegir conductor" en la cabecera del hilo. Al elegir,
   // se asigna el viaje (o se crea si no existe) y se le avisa al cliente.
@@ -681,6 +711,8 @@ export async function renderInbox(env: Env, p: InboxParams): Promise<string> {
           OR EXISTS (SELECT 1 FROM tickets t WHERE t.conversation_id = c.id AND t.status != 'resolved')`,
       [now],
     ))?.n ?? 0;
+  const nBlocked =
+    (await db.first<{ n: number }>("SELECT COUNT(*) as n FROM contact_blocks"))?.n ?? 0;
 
   const filterPill = (href: string, label: string, active: boolean, color: string) =>
     `<a href="${href}" class="chip" style="font-size:11px;letter-spacing:.05em;padding:5px 12px;white-space:nowrap;border:1px solid ${color};${
@@ -734,6 +766,7 @@ export async function renderInbox(env: Env, p: InboxParams): Promise<string> {
       ${filterPill(pillUrl(), `${t("conv.filterAll")} · ${totalConvs}`, !p.filter, "var(--accent)")}
       ${filterPill(pillUrl("leads"), `${t("conv.filterLeads")} · ${totalLeads}`, p.filter === "leads", "var(--accent)")}
       ${filterPill(pillUrl("atencion"), `${t("conv.filterAttention")} · ${needAttention}`, p.filter === "atencion", "var(--bad)")}
+      ${filterPill(pillUrl("bloqueados"), `${t("conv.filterBlocked")} · ${nBlocked}`, p.filter === "bloqueados", "var(--bad)")}
       ${filterPill(pillUrl("molestos"), `${t("conv.filterAngry")} · ${nMolestos}`, p.filter === "molestos", "var(--bad)")}
       ${filterPill(pillUrl("contentos"), `${t("conv.filterHappy")} · ${nContentos}`, p.filter === "contentos", "var(--ok)")}
       <form method="GET" action="/admin/conversations" class="ml-auto" style="display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);padding:7px 12px;min-width:200px">

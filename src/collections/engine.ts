@@ -13,6 +13,7 @@ import { Db } from "../db/client";
 import { CollectionsRepo, normalizePhone } from "../db/collections";
 import { ConversationsRepo } from "../db/conversations";
 import { MessagesRepo } from "../db/messages";
+import { isContactBlocked } from "../silence";
 
 /** No contactar al mismo deudor más seguido que esto. */
 const COOLDOWN_HOURS = 20;
@@ -175,6 +176,11 @@ export async function runCollections(env: Env, opts: { force?: boolean } = {}): 
           out.skipped++;
           continue;
         }
+        // Silencio total: un contacto bloqueado no recibe recordatorios.
+        if (await isContactBlocked(env, dest.channel, dest.channelUserId)) {
+          out.skipped++;
+          continue;
+        }
         const balance = Number(acc.amount) - Number(acc.paid);
         const dias = Math.max(0, Math.floor((now - Number(acc.due_date)) / 86_400_000));
         const text = renderCollectionTemplate(rule.template || DEFAULT_TEMPLATE, {
@@ -247,6 +253,8 @@ export async function runCollections(env: Env, opts: { force?: boolean } = {}): 
         },
       );
       try {
+        // Silencio total: un contacto bloqueado no recibe recordatorios.
+        if (await isContactBlocked(env, dest.channel, dest.channelUserId)) continue;
         const conv = await convs.getOrCreate(dest.channel, dest.channelUserId, p.debtor_name ?? undefined);
         await pickAdapter(dest.channel as any).sendReply(
           { channel: dest.channel as any, channelUserId: dest.channelUserId, chunks: [text] },

@@ -186,6 +186,8 @@ export async function renderScraping(env: Env, q: ScrapingQuery = {}): Promise<s
          style="border:1px solid var(--line);color:var(--cream);padding:8px 12px;text-decoration:none">${t("scr.exportCsv")}</a>
       <button type="submit" formmethod="POST" formaction="/admin/scraping/run" class="text-[12px] font-display font-semibold"
               style="margin-left:auto;border:1px solid var(--accent);color:var(--accent);background:none;padding:8px 15px;cursor:pointer">${t("scr.scrapeNow")}</button>
+      <button type="submit" formmethod="POST" formaction="/admin/scraping/fichas" class="text-[12px] font-display font-semibold"
+              style="border:1px solid var(--line);color:var(--cream);background:none;padding:8px 15px;cursor:pointer">${t("scr.enrich")}</button>
     </form>`;
 
   const th = (label: string, extra = "") =>

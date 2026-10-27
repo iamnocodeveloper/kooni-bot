@@ -106,6 +106,9 @@ async function sendAndRecord(
   text: string,
   media?: ResourceMediaOpts,
 ): Promise<void> {
+  // Un contacto bloqueado (o una conversación pausada) no recibe disparadores.
+  const { isConversationSilent } = await import("../silence");
+  if ((await isConversationSilent(env, ctx.conversationId)).silent) return;
   await sendReplyCapped(ctx.channel, ctx.channelUserId, [text], env, media ?? {});
   if (text.trim()) await new MessagesRepo(db).append(ctx.conversationId, "assistant", text);
 }

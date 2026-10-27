@@ -169,6 +169,8 @@ describe("sitemap DealerInspire (fuente cuando /llm/inventory/ murió)", () => {
           imgStatus: "ok" as const,
           imgAt: 123,
           changedAt: 1,
+          trim: null,
+          description: null,
         },
       },
     };

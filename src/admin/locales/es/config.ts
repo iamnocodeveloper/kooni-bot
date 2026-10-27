@@ -150,8 +150,8 @@ export const configEs = {
 
   // Config · Scraping web (Decodo)
   "cfg.scrape.providerLabel": "Proveedor de scraping",
-  "cfg.scrape.help": "Quién lee el sitio del negocio. En «Auto» se intenta bajar directo (barato) y, si el sitio bloquea, se usa AIsa y por último Decodo.",
-  "cfg.scrape.opt.auto": "Auto (recomendado)",
+  "cfg.scrape.help": "Quién lee el sitio del negocio. En «Auto» Decodo es el principal; si falla, se intenta bajar el sitemap directo (gratis) y por último AIsa.",
+  "cfg.scrape.opt.auto": "Auto (Decodo primero · recomendado)",
   "cfg.scrape.opt.aisa": "AIsa (Firecrawl)",
   "cfg.scrape.opt.decodo": "Decodo",
   "cfg.scrape.aisaKeyLabel": "AIsa — API key (vacío = usa la del LLM)",

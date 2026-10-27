@@ -145,12 +145,18 @@ export const wahaAdapter: ChannelAdapter = {
     const body = (await request.json().catch(() => null)) as any;
     const event = body?.event;
     const payload = body?.payload ?? {};
-    // Solo mensajes ENTRANTES de usuarios (no ecos propios ni acks).
-    if (event !== "message" || payload.fromMe === true) {
+    // Solo mensajes. Los ecos propios (`fromMe`) SÍ se procesan: son la señal
+    // de que el dueño respondió desde su teléfono y el bot debe pausarse.
+    if (event !== "message") {
       throw new Error("not an incoming waha message");
     }
-    const chatId = String(payload.chatId ?? payload.from ?? "").trim();
+    const fromMe = payload.fromMe === true;
+    const chatId = String(payload.chatId ?? (fromMe ? payload.to : payload.from) ?? "").trim();
     if (!chatId) throw new Error("waha message without chatId");
+    // Grupos y estados no son conversaciones 1:1 del bot.
+    if (chatId.endsWith("@g.us") || /@broadcast|status@/i.test(chatId)) {
+      throw new Error("waha group/broadcast message ignored");
+    }
 
     // WAHA (WAMessage) usa `body` para el texto y `from` para el chat; algunos
     // builds/versiones viejas traen `text`/`chatId`. Aceptamos ambos.
@@ -186,6 +192,7 @@ export const wahaAdapter: ChannelAdapter = {
       text,
       imageUrl,
       audioUrl,
+      ownerEcho: fromMe || undefined,
       location: locationFromPayload(payload),
       receivedAt: Date.now(),
       rawPayload: body,

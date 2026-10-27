@@ -3,8 +3,9 @@ import { streamText } from "ai";
 import type { SystemModelMessage } from "ai";
 import type { Env } from "./env";
 import { Db } from "./db/client";
-import { ConversationsRepo } from "./db/conversations";
+import { ConversationsRepo, PAUSE_INDEFINITE } from "./db/conversations";
 import { MessagesRepo } from "./db/messages";
+import { isContactBlocked, isConversationSilent } from "./silence";
 import { resolveAgentConfig } from "./settings-loader";
 import { buildTools } from "./tools";
 import { buildMultimodalUserMessage } from "./media/vision";
@@ -133,6 +134,15 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
       lastReplyToMessageId: payload.replyToMessageId,
     });
 
+    // Contacto BLOQUEADO al bot: silencio total. El mensaje se registra para que
+    // el panel muestre el hilo, pero no se marca como leído, no se mandan
+    // recursos de primer mensaje, no se evalúan límites y no se arma el alarm.
+    if (await isContactBlocked(this.env, payload.channel, payload.channelUserId)) {
+      await this.persistInbound(conv.id, inboundLabel(payload));
+      console.warn(`[ingest] contacto bloqueado (${conv.id}) — mensaje registrado sin respuesta`);
+      return { acknowledged: true };
+    }
+
     // Confirmación de lectura (doble tilde) donde el canal lo soporte (WAHA).
     // Best-effort: nunca frena el ingest.
     if (!payload.isOwnerMessage && payload.channel !== "webchat") {
@@ -211,10 +221,10 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
       // solo marca de contexto, sin pausar
     }
 
-    // Conversación pausada (takeover del dueño, spam o tope diario): el bot
-    // calla, pero el mensaje del cliente se registra igual para que el panel
-    // muestre el hilo completo mientras el humano atiende.
-    if (await convs.isPaused(conv.id)) {
+    // Conversación pausada (takeover del dueño, spam o tope diario) o contacto
+    // bloqueado: el bot calla, pero el mensaje del cliente se registra igual
+    // para que el panel muestre el hilo completo mientras el humano atiende.
+    if ((await convs.isPaused(conv.id)) || (await isContactBlocked(this.env, conv.channel, conv.channel_user_id))) {
       await this.persistInbound(conv.id, inboundLabel(payload));
       return { acknowledged: true };
     }
@@ -505,7 +515,7 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
    * El negocio respondió al cliente DESDE FUERA del panel (app nativa de
    * Instagram/Messenger/WhatsApp, u otra herramienta). Lo registramos en el
    * hilo como `owner` para que el CRM muestre la conversación completa, y
-   * pausamos el bot 1h (mismo takeover que responder desde el panel).
+   * pausamos el bot HASTA QUE EL DUEÑO LO REACTIVE (pausa indefinida).
    *
    * De-duplicación: el bot y el panel también producen "echo" — si un mensaje
    * idéntico (assistant/owner) se guardó hace < 3 min, este echo es esa misma
@@ -513,7 +523,10 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
    */
   async recordOwnerEcho(payload: AgentIncomingPayload): Promise<{ acknowledged: true }> {
     const text = (payload.text ?? "").trim();
-    if (!text) return { acknowledged: true };
+    // Un eco puede ser solo media (sticker/foto/audio). Guardamos un marcador
+    // para que el hilo lo muestre: lo importante es que el dueño respondió.
+    const marker = text || (payload.imageUrl ? "[imagen]" : payload.audioUrl ? "[audio]" : "");
+    if (!marker) return { acknowledged: true };
 
     const db = new Db(this.env.DB);
     const convs = new ConversationsRepo(db);
@@ -529,18 +542,25 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
     const isDup = recent.some(
       (m) =>
         (m.role === "assistant" || m.role === "owner") &&
-        m.content.trim() === text &&
+        m.content.trim() === marker &&
         (m.created_at ?? 0) >= cutoff,
     );
     if (isDup) {
       console.log(`[recordOwnerEcho] duplicado ignorado (conv ${conv.id})`);
       return { acknowledged: true };
     }
-
-    await msgs.append(conv.id, "owner", text);
+    await msgs.append(conv.id, "owner", marker);
     await convs.touchLastMessage(conv.id);
-    await convs.setPausedUntil(conv.id, Date.now() + 60 * 60 * 1000);
-    console.log(`[recordOwnerEcho] respuesta manual registrada + bot en pausa 1h (conv ${conv.id})`);
+
+    // Un contacto bloqueado se queda bloqueado: registrar su mensaje no cambia
+    // la pausa (el bloqueo manda).
+    if (await isContactBlocked(this.env, conv.channel, conv.channel_user_id)) {
+      console.log(`[recordOwnerEcho] contacto bloqueado, se registra sin tocar la pausa (conv ${conv.id})`);
+      return { acknowledged: true };
+    }
+
+    await convs.setPausedUntil(conv.id, PAUSE_INDEFINITE);
+    console.log(`[recordOwnerEcho] respuesta manual registrada + bot pausado hasta reactivar (conv ${conv.id})`);
     return { acknowledged: true };
   }
 
@@ -562,6 +582,16 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
     const convId = this.state.conversationId;
     if (!convId) {
       console.warn("[SupportAgent.processBuffer] no conversation_id in state");
+      return;
+    }
+
+    // Re-chequeo de silencio: el dueño pudo pausar/bloquear entre el ingest y
+    // este alarm. Si es así, el buffer se descarta y NO se gasta LLM.
+    const silence = await isConversationSilent(this.env, convId);
+    if (silence.silent) {
+      console.log(
+        `[processBuffer] conversación silenciada (${silence.blocked ? "bloqueada" : "pausada"}) — buffer descartado (conv ${convId})`,
+      );
       return;
     }
 

@@ -34,10 +34,12 @@ export interface InventarioCtx {
 
 function vehicleLine(v: StoredVehicle): string {
   const parts = [v.title];
+  if (v.trim && !v.title.toLowerCase().includes(v.trim.toLowerCase())) parts.push(`versión ${v.trim}`);
   if (v.condition) parts.push(v.condition);
   if (v.miles !== null) parts.push(`${v.miles.toLocaleString("en-US")} millas`);
   if (v.price !== null) parts.push(`$${v.price.toLocaleString("en-US")}`);
   if (v.vin) parts.push(`VIN ${v.vin}`);
+  if (v.description) parts.push(v.description.slice(0, 90));
   return parts.join(" · ");
 }
 
@@ -135,14 +137,17 @@ export function inventarioQueryTool(env: Env) {
         matches: res.matches.map((m) => ({
           vin: m.vin,
           titulo: m.title,
+          version: m.trim,
           condicion: m.condition,
           precio: m.price,
           millas: m.miles,
           url: m.listingUrl,
+          ...(m.description ? { descripcion: m.description.slice(0, 240) } : {}),
         })),
         marcasDisponibles: marcasTxt,
         nota:
-          "Ofrecé hasta 3 opciones con nombre, condición, precio, millas y el link (url) de la ficha. " +
+          "Ofrecé hasta 3 opciones con nombre, versión, condición, precio, millas y el link (url) de la ficha. " +
+          "Si dos autos comparten título, usá `version`, `descripcion` y `url` para explicar la diferencia real. " +
           "Si hay `hayMas`, decile al cliente que hay más y ofrecé mostrarle la siguiente tanda " +
           "(volvé a llamar a esta tool con pagina = paginaSiguiente). " +
           "Si un precio viene null, decí que se consulta — no lo inventes. " +
@@ -211,10 +216,12 @@ export function fichaAutoTool(
       const ficha = {
         vin: enriched.vin,
         titulo: enriched.title,
+        version: enriched.trim,
         condicion: enriched.condition,
         precio: enriched.price,
         millas: enriched.miles,
         url: enriched.listingUrl,
+        ...(enriched.description ? { descripcion: enriched.description } : {}),
         desglosePrecio: enriched.pricing ?? null,
       };
 
@@ -244,7 +251,8 @@ export function fichaAutoTool(
           ? { enviada: fotoEnviada, descartes }
           : { enviada: false, nota: "Sin foto disponible todavía (se intenta de noche)." },
         instruccion:
-          "Pasale al cliente la ficha COMPLETA en texto: nombre exacto, condición, millas, precio y VIN. " +
+          "Pasale al cliente la ficha COMPLETA en texto: nombre exacto, versión, condición, millas, precio y VIN. " +
+          "Si trae `descripcion`, usala para explicar qué distingue esta versión de otra con el mismo título. " +
           "Si trae desglosePrecio, mostralo (precio de lista, descuento y fees) y cerrá con el precio final. " +
           "Incluí SIEMPRE el link de la ficha (url). Si algún dato viene null, decí que se consulta — no lo inventes.",
       };

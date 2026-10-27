@@ -15,6 +15,7 @@ import { Db } from "./db/client";
 import { MessagesRepo } from "./db/messages";
 import { segmentMembers } from "./segments";
 import { pickAdapter } from "./replies/sender";
+import { isContactBlocked } from "./silence";
 import type { ChannelId } from "./channels/shared";
 
 export interface ContentTemplate {
@@ -70,6 +71,7 @@ export interface CampaignResult {
   sentFreeform: number;
   sentTemplate: number;
   skippedDuplicate: number;
+  skippedBlocked: number;
   skippedQuota: number;
   failed: number;
 }
@@ -106,11 +108,17 @@ export async function sendCampaign(
     sentFreeform: 0,
     sentTemplate: 0,
     skippedDuplicate: 0,
+    skippedBlocked: 0,
     skippedQuota: 0,
     failed: 0,
   };
 
   for (const m of members) {
+    // Silencio total: un contacto bloqueado no recibe campañas.
+    if (await isContactBlocked(env, m.channel, m.channelUserId)) {
+      result.skippedBlocked++;
+      continue;
+    }
     const useFreeform = m.inWindow && opts.freeformText;
     const useTemplate = !m.inWindow && opts.template;
     if (!useFreeform && !useTemplate) continue;
@@ -170,7 +178,7 @@ export async function sendCampaign(
   console.log(
     `[campaigns] ${opts.campaignKey} seg=${opts.segmentId} audiencia=${result.audience} ` +
       `freeform=${result.sentFreeform} plantilla=${result.sentTemplate} ` +
-      `dup=${result.skippedDuplicate} cuota=${result.skippedQuota} fail=${result.failed}`,
+      `dup=${result.skippedDuplicate} bloqueados=${result.skippedBlocked} cuota=${result.skippedQuota} fail=${result.failed}`,
   );
   return result;
 }

@@ -19,6 +19,8 @@ const MEDIA_TTL_MS = 10 * 60 * 1000; // la URL firmada del proxy vive 10 min
 
 interface WaMessage {
   from?: string;
+  /** Solo en ecos: el cliente que recibió la respuesta del negocio. */
+  to?: string;
   id?: string;
   timestamp?: string;
   type?: string;
@@ -35,6 +37,9 @@ interface WaChange {
     metadata?: { phone_number_id?: string; display_phone_number?: string };
     contacts?: { profile?: { name?: string }; wa_id?: string }[];
     messages?: WaMessage[];
+    /** Ecos de mensajes enviados desde la app del negocio (SMB/coexistence). */
+    message_echoes?: WaMessage[];
+    smb_message_echoes?: WaMessage[];
     statuses?: unknown[];
   };
 }
@@ -92,9 +97,14 @@ export async function parseWhatsAppEvents(
   const out: IncomingMessage[] = [];
   for (const entry of body.entry ?? []) {
     for (const change of entry.changes ?? []) {
-      if (change.field && change.field !== "messages") continue;
+      // `messages` = entrantes; los campos de eco son respuestas del negocio
+      // enviadas desde la app de WhatsApp (SMB/coexistence).
+      const echoField = change.field === "smb_message_echoes" || change.field === "message_echoes";
+      if (change.field && change.field !== "messages" && !echoField) continue;
       const value = change.value;
-      if (!value?.messages?.length) continue; // statuses-only u otros → ignora
+      if (!value) continue;
+      const echoes = [...(value.message_echoes ?? []), ...(value.smb_message_echoes ?? [])];
+      if (!value.messages?.length && !echoes.length) continue; // statuses-only u otros
       const nameByWaId = new Map<string, string>();
       for (const c of value.contacts ?? []) {
         if (c.wa_id && c.profile?.name) nameByWaId.set(c.wa_id, c.profile.name);
@@ -136,6 +146,33 @@ export async function parseWhatsAppEvents(
           imageUrl,
           location,
           isOwnerMessage: false,
+          receivedAt: Date.now(),
+          rawPayload: m,
+        });
+      }
+
+      // Ecos: el negocio respondió desde la app. `to` es el cliente. No
+      // descargamos media (solo importa pausar el bot); un marcador alcanza.
+      for (const m of echoes) {
+        const to = m.to;
+        if (!to) continue;
+        const text =
+          m.type === "text"
+            ? m.text?.body || undefined
+            : m.type === "image"
+              ? m.image?.caption || undefined
+              : undefined;
+        const imageUrl = m.type === "image" && !text ? "echo:image" : undefined;
+        const audioUrl = m.type === "audio" ? "echo:audio" : undefined;
+        if (!text && !imageUrl && !audioUrl) continue;
+        console.log("whatsapp echo:", JSON.stringify({ to, type: m.type, hasText: !!text }));
+        out.push({
+          channel: "whatsapp",
+          channelUserId: String(to),
+          text,
+          imageUrl,
+          audioUrl,
+          ownerEcho: true,
           receivedAt: Date.now(),
           rawPayload: m,
         });

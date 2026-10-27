@@ -1074,3 +1074,18 @@ CREATE TABLE IF NOT EXISTS followup_touches (
   sent_at INTEGER NOT NULL,
   PRIMARY KEY (conversation_id, step)
 );
+
+-- Contactos BLOQUEADOS al bot (silencio total: no responde, ni seguimientos, ni
+-- campañas, ni disparadores). Es una acción humana del panel, no del modelo.
+-- Clave por canal+usuario (igual que `contacts`/`conversations`). Tabla NUEVA,
+-- segura de re-aplicar. La pausa temporal sigue en `paused_until`.
+CREATE TABLE IF NOT EXISTS contact_blocks (
+  channel TEXT NOT NULL,
+  channel_user_id TEXT NOT NULL,
+  display_name TEXT,
+  reason TEXT,
+  created_by TEXT NOT NULL DEFAULT 'panel',
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (channel, channel_user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_contact_blocks_at ON contact_blocks(created_at);

@@ -50,6 +50,10 @@ export async function pickReengagementCandidates(env: Env, now: number, limit: n
      WHERE r.conversation_id IS NULL
        AND c.channel != 'instagram'
        AND (c.paused_until IS NULL OR c.paused_until < ?)
+       AND NOT EXISTS (
+         SELECT 1 FROM contact_blocks b
+         WHERE b.channel = c.channel AND b.channel_user_id = c.channel_user_id
+       )
        AND f.sent_at <= ? AND f.sent_at >= ?
        AND (SELECT role FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1) = 'assistant'
      ORDER BY f.sent_at ASC

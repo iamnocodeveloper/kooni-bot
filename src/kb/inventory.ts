@@ -28,6 +28,10 @@ export interface Vehicle {
   year: number | null;
   make: string | null;
   model: string | null;
+  /** Versión/trim (ej. "SX Prestige"). Ayuda a distinguir autos con el mismo título. */
+  trim: string | null;
+  /** Descripción de la ficha (recortada). Se usa para diferenciar versiones. */
+  description: string | null;
   /** Normalizado a español: "Nuevo" | "Usado" | "Certificado". */
   condition: string | null;
   price: number | null;
@@ -61,6 +65,11 @@ export interface StoredVehicle extends Vehicle {
    * la URL configurada.
    */
   source?: "csv";
+  /**
+   * Si el análisis IA determinó que es la MISMA unidad que otro `key`, se marca
+   * acá. No se borra: se excluye de las respuestas y queda revisable en el panel.
+   */
+  duplicateOf?: string;
 }
 
 export interface VehicleStore {
@@ -160,10 +169,20 @@ export function quickHash(s: string): string {
   return (h >>> 0).toString(36);
 }
 
-export function vehicleKey(vin: string | null, listingUrl: string | null): string {
+/** Tope de descripción guardada por auto (el store vive en una fila de D1). */
+export const MAX_DESCRIPTION = 800;
+
+export function vehicleKey(
+  vin: string | null,
+  listingUrl: string | null,
+  discriminator?: string | null,
+): string {
   if (vin && vin.length >= 11) return `vin:${vin}`;
   if (listingUrl) return `url:${quickHash(listingUrl)}`;
-  return `url:${quickHash("sin-link")}`;
+  // Sin VIN ni ficha: NO colapsar todos en el mismo bucket. Título/precio/millas
+  // distintos producen keys distintas (antes dos autos sin link se pisaban).
+  const d = discriminator?.trim() ? `|${quickHash(discriminator)}` : "";
+  return `url:${quickHash("sin-link" + d)}`;
 }
 
 function parseBlock(block: string, feedUrl: string): Vehicle | null {
@@ -231,12 +250,14 @@ function parseBlock(block: string, feedUrl: string): Vehicle | null {
   if (!hasRealIdentity) return null;
 
   return {
-    key: vehicleKey(vin, listingUrl),
+    key: vehicleKey(vin, listingUrl, `${title}|${price ?? ""}|${miles ?? ""}|${condition ?? ""}`),
     vin,
     title,
     year,
     make,
     model,
+    trim: null,
+    description: null,
     condition,
     price,
     miles,
@@ -356,6 +377,9 @@ export function vehicleFromSlug(slug: string, listingUrl: string, feedUrl: strin
   const make = makeRaw ? prettyToken(makeRaw) : null;
   const modelTokens = tokens.filter((t) => !BODY_TOKENS.has(t));
   const model = modelTokens.length ? prettyWords(modelTokens) : null;
+  // Trim = siglas conocidas ("SX", "EX", "X Line"…) que van después del modelo.
+  const trimTokens = modelTokens.slice(1).filter((t) => UPPER_TOKENS.has(t));
+  const trim = trimTokens.length ? prettyWords(trimTokens) : null;
   const title = [year ?? undefined, make, model].filter(Boolean).join(" ").trim();
   if (!title) return null;
 
@@ -366,6 +390,8 @@ export function vehicleFromSlug(slug: string, listingUrl: string, feedUrl: strin
     year,
     make,
     model,
+    trim,
+    description: null,
     condition,
     price: null,
     miles: null,
@@ -423,6 +449,8 @@ export function renderVehicleBlock(v: Vehicle): string {
   if (v.miles !== null) parts.push(`${v.miles.toLocaleString("en-US")} millas`);
   if (v.price !== null) parts.push(`$${v.price.toLocaleString("en-US")}`);
   if (v.vin) parts.push(`VIN ${v.vin}`);
+  // La descripción distingue versiones con el mismo título ("SX" vs "SX Prestige").
+  if (v.description) parts.push(`Detalle: ${v.description.slice(0, 200)}`);
   return parts.join(" · ");
 }
 
@@ -517,12 +545,15 @@ export async function saveVehicleStore(db: Db, store: VehicleStore): Promise<voi
   await new SettingsRepo(db).set(SETTING_KEYS.webSyncVehicles, JSON.stringify(store));
 }
 
-/** Vehículos del store, en orden estable. */
-export function listStoredVehicles(store: VehicleStore): StoredVehicle[] {
+/** Vehículos del store, en orden estable (por defecto oculta duplicados IA). */
+export function listStoredVehicles(
+  store: VehicleStore,
+  opts: { includeDuplicates?: boolean } = {},
+): StoredVehicle[] {
   return Object.keys(store.vehicles)
     .sort()
     .map((k) => store.vehicles[k])
-    .filter(Boolean);
+    .filter((v) => !!v && (opts.includeDuplicates || !v.duplicateOf));
 }
 
 /** Filtro de la vista "Inventario sincronizado" del panel. */
@@ -592,12 +623,16 @@ export function mergeVehicleStore(prev: VehicleStore, current: Vehicle[]): Vehic
     const price = v.price ?? old?.price ?? null;
     const miles = v.miles ?? old?.miles ?? null;
     const condition = v.condition ?? old?.condition ?? null;
+    const trim = v.trim ?? old?.trim ?? null;
+    const description = v.description ?? old?.description ?? null;
     const changed =
       !old ||
       old.listingUrl !== v.listingUrl ||
       old.title !== v.title ||
       old.price !== price ||
-      old.miles !== miles;
+      old.miles !== miles ||
+      old.trim !== trim ||
+      old.description !== description;
     const photoInvalid =
       !old || old.listingUrl !== v.listingUrl || old.title !== v.title;
     vehicles[v.key] = {
@@ -605,12 +640,15 @@ export function mergeVehicleStore(prev: VehicleStore, current: Vehicle[]): Vehic
       price,
       miles,
       condition,
+      trim,
+      description,
       pricing: old?.pricing ?? null,
       imageUrl: photoInvalid ? null : old.imageUrl,
       imgStatus: old && !photoInvalid ? old.imgStatus : "pendiente",
       imgAt: old && !photoInvalid ? old.imgAt : null,
       changedAt: changed ? now : old.changedAt,
       ...(old?.source ? { source: old.source } : {}),
+      ...(old?.duplicateOf ? { duplicateOf: old.duplicateOf } : {}),
     };
   }
   // Los autos cargados a mano (CSV) sobreviven aunque no estén en el feed.
@@ -699,6 +737,8 @@ export function diffVehicleStore(before: VehicleStore, after: VehicleStore): Veh
     }
     const fields: VehicleFieldChange[] = [];
     cmp(fields, "Título", old.title ?? null, cur.title ?? null);
+    cmp(fields, "Versión", old.trim ?? null, cur.trim ?? null);
+    cmp(fields, "Descripción", old.description ?? null, cur.description ?? null);
     cmp(fields, "Condición", old.condition ?? null, cur.condition ?? null);
     cmp(fields, "Precio", fmtPrice(old.price), fmtPrice(cur.price));
     cmp(fields, "Millas", fmtMiles(old.miles), fmtMiles(cur.miles));
@@ -732,7 +772,7 @@ export function imageCandidates(store: VehicleStore): StoredVehicle[] {
   return listStoredVehicles(store).filter(
     (v) =>
       !!v.listingUrl &&
-      (v.imgStatus !== "ok" || v.price === null) &&
+      (v.imgStatus !== "ok" || v.price === null || v.description === null) &&
       !(v.imgAt !== null && now - v.imgAt < IMG_ERROR_COOLDOWN_MS),
   );
 }
@@ -845,12 +885,16 @@ export function extractDetailsFromHtml(html: string): {
   price: number | null;
   miles: number | null;
   image: string | null;
+  description: string | null;
+  trim: string | null;
   pricing: VehiclePricing;
 } {
   const re = /<script[^>]+application\/ld\+json[^>]*>([\s\S]*?)<\/script>/gi;
   let price: number | null = null;
   let miles: number | null = null;
   let image: string | null = null;
+  let description: string | null = null;
+  let trim: string | null = null;
   let m: RegExpExecArray | null;
   while ((m = re.exec(html))) {
     try {
@@ -870,13 +914,37 @@ export function extractDetailsFromHtml(html: string): {
               : img[0]?.url
             : img?.url;
       if (typeof imgUrl === "string") image = image ?? imgUrl;
+      description =
+        description ??
+        cleanDescription(v.description) ??
+        cleanDescription(v.vehicleDescription) ??
+        cleanDescription(v.disambiguatingDescription);
+      const trimRaw = v.vehicleConfiguration ?? v.vehicleTrim ?? v.trim ?? v.trimLevel;
+      if (typeof trimRaw === "string" && trimRaw.trim()) {
+        trim = trim ?? trimRaw.replace(/\s+/g, " ").trim().slice(0, 60);
+      }
     } catch {
       /* JSON-LD inválido — seguimos */
     }
   }
   if (!image) image = extractImageFromHtml(html);
+  if (!description) description = metaDescription(html);
   const pricing = extractPricingFromText(stripTags(html));
-  return { price: pricing.transparentPrice ?? price, miles, image, pricing };
+  return { price: pricing.transparentPrice ?? price, miles, image, description, trim, pricing };
+}
+
+/** `<meta name="description">` u `og:description` (en cualquier orden de atributos). */
+function metaDescription(html: string): string | null {
+  const patterns = [
+    /<meta[^>]+(?:name|property)=["'](?:description|og:description)["'][^>]*content=["']([^"']*)["']/i,
+    /<meta[^>]+content=["']([^"']*)["'][^>]*(?:name|property)=["'](?:description|og:description)["']/i,
+  ];
+  for (const re of patterns) {
+    const m = re.exec(html);
+    const d = cleanDescription(m?.[1]);
+    if (d) return d;
+  }
+  return null;
 }
 
 /** Quita tags/entidades de un HTML para poder aplicar regex de texto. */
@@ -919,9 +987,37 @@ export interface VehicleDetails {
   imageUrl: string | null;
   price: number | null;
   miles: number | null;
+  /** Descripción de la ficha (recortada) — distingue versiones con igual título. */
+  description: string | null;
+  /** Versión/trim declarada en la ficha (JSON-LD `vehicleConfiguration`). */
+  trim: string | null;
   pricing: VehiclePricing;
   /** true si Decodo respondió con contenido (aunque no traiga todos los campos). */
   scraped: boolean;
+}
+
+/** Normaliza el texto de una descripción (sin HTML, espacios colapsados). */
+export function cleanDescription(s: string | null | undefined): string | null {
+  if (typeof s !== "string") return null;
+  const t = stripTags(s).replace(/\s+/g, " ").trim();
+  if (!t) return null;
+  return t.slice(0, MAX_DESCRIPTION);
+}
+
+/** Primer párrafo "de verdad" de un markdown de ficha (sin nav/cookies). */
+export function extractDescriptionFromMarkdown(md: string): string | null {
+  for (const block of md.split(/\n{2,}/)) {
+    const t = block
+      .replace(/!\[[^\]]*\]\([^)]*\)/g, " ")
+      .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+      .replace(/^#{1,6}\s*/gm, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (t.length < 60) continue;
+    if (/cookie|privacy policy|subscribe|newsletter|business hours|contact us|financing/i.test(t)) continue;
+    return t.slice(0, MAX_DESCRIPTION);
+  }
+  return null;
 }
 
 /**
@@ -933,12 +1029,14 @@ export interface VehicleDetails {
 export async function fetchVehicleDetails(
   env: Env,
   vehicle: Vehicle,
-  opts: { timeoutMs?: number } = {},
+  opts: { timeoutMs?: number; wantDescription?: boolean } = {},
 ): Promise<VehicleDetails> {
   const out: VehicleDetails = {
     imageUrl: null,
     price: null,
     miles: null,
+    description: null,
+    trim: null,
     pricing: { listPrice: null, discount: null, dealerFee: null, adminFee: null, tagFee: null, transparentPrice: null },
     scraped: false,
   };
@@ -958,6 +1056,7 @@ export async function fetchVehicleDetails(
         out.price = extractPriceFromText(first.content);
         out.miles = extractMilesFromText(first.content);
         out.pricing = extractPricingFromText(first.content);
+        out.description = extractDescriptionFromMarkdown(first.content);
         const img = extractImageFromMarkdown(first.content);
         if (img) out.imageUrl = absUrl(vehicle.listingUrl, img);
       } else {
@@ -965,13 +1064,17 @@ export async function fetchVehicleDetails(
         out.price = d.price;
         out.miles = d.miles;
         out.pricing = d.pricing;
+        out.description = d.description;
+        out.trim = d.trim;
         if (d.image) out.imageUrl = absUrl(vehicle.listingUrl, d.image);
-        // Solo si falta la foto, segundo intento en markdown (más liviano).
-        if (!out.imageUrl) {
+        // Si falta foto o (cuando se pide) descripción, segundo intento en
+        // markdown. En el compat de solo-imagen no se gasta una llamada extra.
+        if (!out.imageUrl || (opts.wantDescription && !out.description)) {
           const md = await scrapeForDetails(env, vehicle.listingUrl, { timeoutMs, markdown: true });
           if (md.ok && md.content) {
             const img = extractImageFromMarkdown(md.content);
-            if (img) out.imageUrl = absUrl(vehicle.listingUrl, img);
+            if (img && !out.imageUrl) out.imageUrl = absUrl(vehicle.listingUrl, img);
+            if (!out.description) out.description = extractDescriptionFromMarkdown(md.content);
           }
         }
       }
@@ -1003,7 +1106,8 @@ export async function refreshVehicleImages(
 ): Promise<{ fetched: number; failed: number; pending: number }> {
   const max = opts.max ?? 20;
   const store = await loadVehicleStore(db);
-  const needs = (v: StoredVehicle) => !!v.listingUrl && (v.imgStatus !== "ok" || v.price === null);
+  const needs = (v: StoredVehicle) =>
+    !!v.listingUrl && (v.imgStatus !== "ok" || v.price === null || v.description === null);
   const candidates = (
     opts.keys && opts.keys.length
       ? listStoredVehicles(store).filter((v) => opts.keys!.includes(v.key))
@@ -1018,7 +1122,7 @@ export async function refreshVehicleImages(
   const runOne = async () => {
     while (i < candidates.length) {
       const v = candidates[i++];
-      const d = await fetchVehicleDetails(env, v, { timeoutMs: opts.timeoutMs });
+      const d = await fetchVehicleDetails(env, v, { timeoutMs: opts.timeoutMs, wantDescription: true });
       const cur = store.vehicles[v.key];
       if (cur) {
         if (opts.keys && opts.keys.length) {
@@ -1035,9 +1139,11 @@ export async function refreshVehicleImages(
           if (d.pricing.transparentPrice !== null || d.pricing.listPrice !== null) cur.pricing = d.pricing;
         }
         if (d.imageUrl) cur.imageUrl = d.imageUrl;
+        if (d.description) cur.description = d.description;
+        if (d.trim) cur.trim = d.trim;
         cur.imgStatus = cur.imageUrl ? "ok" : "error";
         cur.imgAt = Date.now();
-        if (d.imageUrl || d.price !== null || d.miles !== null) fetched++;
+        if (d.imageUrl || d.price !== null || d.miles !== null || d.description !== null) fetched++;
         else failed++;
         await saveVehicleStore(db, store).catch(() => {});
       } else {
@@ -1064,23 +1170,30 @@ export async function ensureVehicleDetails(
   env: Env,
   db: Db,
   key: string,
-  opts: { timeoutMs?: number } = {},
+  opts: { timeoutMs?: number; wantDescription?: boolean } = {},
 ): Promise<StoredVehicle | null> {
   const store = await loadVehicleStore(db);
   const v = store.vehicles[key];
   if (!v) return null;
-  const needs = !(v.imageUrl && v.imgStatus === "ok") || v.price === null;
+  const wantDesc = opts.wantDescription ?? true;
+  const needs =
+    !(v.imageUrl && v.imgStatus === "ok") || v.price === null || (wantDesc && v.description === null);
   if (!needs) return v;
   // Si ya intentamos scrapear hace <1 h, no hacemos esperar al cliente otra vez
   // (el nightly lo reintenta con su cooldown largo).
   if (v.imgAt !== null && Date.now() - v.imgAt < IMG_ONDEMAND_COOLDOWN_MS) {
     return v;
   }
-  const d = await fetchVehicleDetails(env, v, { timeoutMs: opts.timeoutMs ?? 20_000 });
+  const d = await fetchVehicleDetails(env, v, {
+    timeoutMs: opts.timeoutMs ?? 20_000,
+    wantDescription: opts.wantDescription ?? true,
+  });
   if (d.price !== null) v.price = d.price;
   if (d.miles !== null) v.miles = d.miles;
   if (d.pricing.transparentPrice !== null || d.pricing.listPrice !== null) v.pricing = d.pricing;
   if (d.imageUrl) v.imageUrl = d.imageUrl;
+  if (d.description) v.description = d.description;
+  if (d.trim) v.trim = d.trim;
   v.imgStatus = v.imageUrl ? "ok" : "error";
   v.imgAt = Date.now();
   await saveVehicleStore(db, store).catch(() => {});
@@ -1094,7 +1207,7 @@ export async function ensureVehicleImage(
   key: string,
   opts: { timeoutMs?: number } = {},
 ): Promise<string | null> {
-  return (await ensureVehicleDetails(env, db, key, opts))?.imageUrl ?? null;
+  return (await ensureVehicleDetails(env, db, key, { ...opts, wantDescription: false }))?.imageUrl ?? null;
 }
 
 // ---------------------------------------------------------------------------
@@ -1138,7 +1251,7 @@ function matchesFilter(v: Vehicle, f: InventoryFilter): boolean {
   }
   if (f.modelo) {
     const m = norm(f.modelo);
-    const hay = norm(`${v.make ?? ""} ${v.model ?? ""} ${v.title}`);
+    const hay = norm(`${v.make ?? ""} ${v.model ?? ""} ${v.trim ?? ""} ${v.title}`);
     if (!hay.includes(m)) return false;
   }
   if (f.condicion) {
@@ -1156,7 +1269,9 @@ function matchesFilter(v: Vehicle, f: InventoryFilter): boolean {
   if (f.precioMax !== undefined && (v.price === null || v.price > f.precioMax)) return false;
   if (f.consulta) {
     const tokens = norm(f.consulta).split(/\s+/).filter(Boolean);
-    const hay = norm(`${v.title} ${v.make ?? ""} ${v.model ?? ""}`);
+    const hay = norm(
+      `${v.title} ${v.make ?? ""} ${v.model ?? ""} ${v.trim ?? ""} ${v.description ?? ""}`,
+    );
     for (const t of tokens) {
       if (!hay.includes(t)) return false;
     }
@@ -1168,6 +1283,10 @@ export interface InventoryMatch {
   key: string;
   vin: string | null;
   title: string;
+  /** Versión/trim declarada (distingue autos con igual título). */
+  trim: string | null;
+  /** Descripción corta de la ficha. */
+  description: string | null;
   condition: string | null;
   price: number | null;
   miles: number | null;
@@ -1223,6 +1342,8 @@ export function queryInventory(
       key: v.key,
       vin: v.vin,
       title: v.title,
+      trim: v.trim,
+      description: v.description,
       condition: v.condition,
       price: v.price,
       miles: v.miles,

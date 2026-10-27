@@ -35,8 +35,14 @@ export async function renderInventario(env: Env, q: InventarioQuery = {}): Promi
   const db = new Db(env.DB);
 
   let all: ReturnType<typeof listStoredVehicles> = [];
+  let duplicates: ReturnType<typeof listStoredVehicles> = [];
   try {
-    all = listStoredVehicles(await loadVehicleStore(db));
+    const store = await loadVehicleStore(db);
+    const every = listStoredVehicles(store, { includeDuplicates: true });
+    // Los marcados `duplicateOf` no se le muestran al bot; quedan acá para que
+    // el dueño los revise y pueda desmarcarlos si la IA se equivocó.
+    all = every.filter((v) => !v.duplicateOf);
+    duplicates = every.filter((v) => v.duplicateOf);
   } catch (e) {
     console.warn("[inventario] no se pudo leer el store:", e);
   }
@@ -82,6 +88,8 @@ export async function renderInventario(env: Env, q: InventarioQuery = {}): Promi
         <td style="padding:8px 9px">${photo}</td>
         <td style="padding:8px 9px">
           <div style="color:var(--cream);font-size:12.5px">${esc(v.title)}</div>
+          ${v.trim ? `<div style="font-size:10.5px;color:var(--accent)">${esc(v.trim)}</div>` : ""}
+          ${v.description ? `<div style="font-size:10.5px;color:var(--dim)">${esc(v.description.slice(0, 120))}${v.description.length > 120 ? "…" : ""}</div>` : ""}
           ${v.vin ? `<div class="font-mono" style="font-size:10px;color:var(--dim)">VIN ${esc(v.vin)}</div>` : ""}
         </td>
         <td style="padding:8px 9px;color:var(--muted);font-size:12px">${esc(v.condition ?? "—")}</td>
@@ -154,6 +162,29 @@ export async function renderInventario(env: Env, q: InventarioQuery = {}): Promi
 
   const flashBox = q.flash ? alertBox(esc(q.flash), q.flash.startsWith("✓") ? "ok" : "bad") : "";
 
+  const duplicatesPanel = duplicates.length
+    ? `<details class="bg-panel border border-line" style="padding:12px 16px">
+         <summary style="cursor:pointer;font-size:12.5px;color:var(--warn)">${esc(t("inv.dup.title", { n: duplicates.length }))}</summary>
+         <p class="text-dim text-[11px]" style="margin:8px 0">${esc(t("inv.dup.help"))}</p>
+         <div style="display:flex;flex-direction:column;gap:6px">
+           ${duplicates
+             .map(
+               (v) => `<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:11.5px;border-top:1px solid var(--line);padding-top:6px">
+                 <span style="color:var(--cream)">${esc(v.title)}</span>
+                 ${v.trim ? `<span style="color:var(--accent)">${esc(v.trim)}</span>` : ""}
+                 <span class="text-dim">→ ${esc(v.duplicateOf ?? "")}</span>
+                 ${v.listingUrl ? `<a href="${esc(v.listingUrl)}" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">ficha ↗</a>` : ""}
+                 <form method="POST" action="/admin/scraping/inventario/duplicados/unmark" style="margin-left:auto">
+                   <input type="hidden" name="key" value="${esc(v.key)}">
+                   <button type="submit" class="ghostbtn" style="font-size:11px;padding:5px 10px">${esc(t("inv.dup.unmark"))}</button>
+                 </form>
+               </div>`,
+             )
+             .join("")}
+         </div>
+       </details>`
+    : "";
+
   const body = `
     <div style="display:flex;flex-direction:column;gap:14px">
       <div style="display:flex;flex-direction:column;gap:2px">
@@ -183,6 +214,7 @@ export async function renderInventario(env: Env, q: InventarioQuery = {}): Promi
       </div>
 
       ${flashBox}
+      ${duplicatesPanel}
       ${table}
       ${pager}
 

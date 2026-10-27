@@ -61,6 +61,7 @@ import { renderDisparadores } from "./views/disparadores";
 import { renderRecursos } from "./views/recursos";
 import { renderComentarios, renderComentariosList, renderComentarioThread, renderComposeBox, commentsParamsFrom } from "./views/comentarios";
 import { renderContactos } from "./views/contactos";
+import { renderBloqueados } from "./views/bloqueados";
 import { renderLicencia } from "./views/licencia";
 import { renderComandos } from "./views/comandos";
 import { renderEquipo } from "./views/equipo";
@@ -98,7 +99,7 @@ import { sendCampaign, createHandoffTemplate, contentApprovalStatus } from "../c
 import { Db } from "../db/client";
 import { LeadsRepo, type Lead } from "../db/leads";
 import { TicketsRepo } from "../db/tickets";
-import { ConversationsRepo } from "../db/conversations";
+import { ConversationsRepo, PAUSE_INDEFINITE } from "../db/conversations";
 import { MessagesRepo } from "../db/messages";
 import { SettingsRepo, SETTING_KEYS, type SettingKey } from "../db/settings";
 import { isValidTimeZone } from "../timezone";
@@ -637,6 +638,27 @@ adminApp.post("/scraping/inventario/import", async (c) => {
   return back(msg);
 });
 
+adminApp.post("/scraping/inventario/duplicados/unmark", async (c) => {
+  const { t } = await panelI18n(c.env);
+  const form = await c.req.formData().catch(() => null);
+  const key = String(form?.get("key") ?? "").trim();
+  if (!key) return c.redirect("/admin/scraping/inventario");
+  const { loadVehicleStore, saveVehicleStore } = await import("../kb/inventory");
+  const db = new Db(c.env.DB);
+  const store = await loadVehicleStore(db);
+  const v = store.vehicles[key];
+  if (v?.duplicateOf) {
+    delete v.duplicateOf;
+    await saveVehicleStore(db, store);
+    await audit(c, {
+      action: "inventario.unmark_duplicate",
+      target: `vehicle:${key}`,
+      targetLabel: v.title,
+    });
+  }
+  return c.redirect(`/admin/scraping/inventario?flash=${encodeURIComponent(t("inv.dup.unmarked"))}`);
+});
+
 adminApp.get("/scraping/export.csv", async (c) => {
   const { exportScrapingCsv } = await import("./views/scraping");
   const beforeRaw = Number(c.req.query("before"));
@@ -670,6 +692,16 @@ adminApp.post("/scraping/run", async (c) => {
   const msg =
     t("msg.scrapingOk", { added: r.added ?? 0, removed: r.removed ?? 0, changed: r.changed ?? 0, vehicles: r.vehicles ?? 0 }) +
     (r.errors.length ? ` · ${t("msg.scrapingErrors", { n: r.errors.length })}` : "");
+  return c.redirect(`/admin/scraping?ok=${encodeURIComponent(msg)}`);
+});
+
+// Enriquecimiento manual por tandas: descripción/versión/foto/precio de hasta
+// 60 fichas. Se corre varias veces para completar un inventario grande.
+adminApp.post("/scraping/fichas", async (c) => {
+  const { t } = await panelI18n(c.env);
+  const { refreshVehicleImages } = await import("../kb/inventory");
+  const r = await refreshVehicleImages(c.env, new Db(c.env.DB), { max: 60, force: true });
+  const msg = t("scr.enrichDone", { ok: r.fetched, failed: r.failed, pending: r.pending });
   return c.redirect(`/admin/scraping?ok=${encodeURIComponent(msg)}`);
 });
 
@@ -2186,6 +2218,52 @@ adminApp.post("/comentarios/:id/suggest", async (c) => {
 // Contactos: todos los que interactúan (separados de Leads).
 adminApp.get("/contactos", async (c) => c.html(await renderContactos(c.env)));
 
+// Contactos bloqueados al bot: silencio total (respuestas + proactivos).
+adminApp.get("/blocked", async (c) => c.html(await renderBloqueados(c.env)));
+
+adminApp.post("/blocked", async (c) => {
+  const { ContactBlocksRepo } = await import("../db/contactBlocks");
+  const form = await c.req.formData().catch(() => null);
+  const target = String(form?.get("target") ?? "").trim();
+  let channel = String(form?.get("channel") ?? "").trim();
+  let channelUserId = String(form?.get("channel_user_id") ?? "").trim();
+  if (target.includes("|")) {
+    const [ch, ...rest] = target.split("|");
+    channel = ch;
+    channelUserId = rest.join("|");
+  }
+  if (!channel || !channelUserId) return c.redirect("/admin/blocked");
+  const reason = String(form?.get("reason") ?? "").trim() || null;
+  await new ContactBlocksRepo(new Db(c.env.DB)).block({
+    channel,
+    channelUserId,
+    reason,
+    createdBy: "panel",
+  });
+  await audit(c, {
+    action: "conversation.block",
+    target: `contact:${channel}:${channelUserId}`,
+    targetLabel: `${channelLabel(channel)} · ${channelUserId}`,
+    afterVal: reason ?? undefined,
+  });
+  return c.redirect("/admin/blocked");
+});
+
+adminApp.post("/blocked/remove", async (c) => {
+  const { ContactBlocksRepo } = await import("../db/contactBlocks");
+  const form = await c.req.formData().catch(() => null);
+  const channel = String(form?.get("channel") ?? "").trim();
+  const channelUserId = String(form?.get("channel_user_id") ?? "").trim();
+  if (!channel || !channelUserId) return c.redirect("/admin/blocked");
+  await new ContactBlocksRepo(new Db(c.env.DB)).unblock(channel, channelUserId);
+  await audit(c, {
+    action: "conversation.unblock",
+    target: `contact:${channel}:${channelUserId}`,
+    targetLabel: `${channelLabel(channel)} · ${channelUserId}`,
+  });
+  return c.redirect("/admin/blocked");
+});
+
 // Auditoría (§ U) — solo lectura (Pro; gate en PRO_GATE + nav). Ninguna ruta
 // escribe ni borra el registro desde el panel.
 function auditQueryFrom(c: { req: { query: (k: string) => string | undefined } }) {
@@ -3524,7 +3602,9 @@ adminApp.post("/conversations/:id/reply", async (c) => {
   const msgs = new MessagesRepo(db);
   await msgs.append(id, "owner", text);
   await convs.touchLastMessage(id);
-  await convs.setPausedUntil(id, Date.now() + TAKEOVER_MS);
+  // Responder como humano = takeover INDEFINIDO: el bot no vuelve solo, ni a la
+  // hora. El dueño lo devuelve explícitamente con "Devolver al bot".
+  await convs.setPausedUntil(id, PAUSE_INDEFINITE);
   await audit(c, {
     action: "conversation.reply",
     target: `conv:${id}`,
@@ -3546,6 +3626,57 @@ adminApp.post("/conversations/:id/pause", async (c) => {
   const convs = new ConversationsRepo(new Db(c.env.DB));
   await convs.setPausedUntil(id, Date.now() + TAKEOVER_MS);
   await audit(c, { action: "conversation.pause", target: `conv:${id}`, targetLabel: `Conversación ${id}` });
+  return c.html(await renderThreadLive(c.env, id));
+});
+
+// Pausa hasta que el dueño la reactive (sentinel lejano en paused_until).
+adminApp.post("/conversations/:id/pause-forever", async (c) => {
+  const id = c.req.param("id");
+  const convs = new ConversationsRepo(new Db(c.env.DB));
+  await convs.setPausedUntil(id, PAUSE_INDEFINITE);
+  await audit(c, {
+    action: "conversation.pause_indefinite",
+    target: `conv:${id}`,
+    targetLabel: `Conversación ${id}`,
+  });
+  return c.html(await renderThreadLive(c.env, id));
+});
+
+// Bloqueo del CONTACTO al bot (silencio total). Es distinto de la pausa: cubre
+// respuestas, seguimientos, campañas y disparadores hasta que se desbloquee.
+adminApp.post("/conversations/:id/block", async (c) => {
+  const id = c.req.param("id");
+  const { ContactBlocksRepo } = await import("../db/contactBlocks");
+  const db = new Db(c.env.DB);
+  const conv = await new ConversationsRepo(db).getById(id);
+  if (!conv) return c.html(await renderThreadLive(c.env, id));
+  await new ContactBlocksRepo(db).block({
+    channel: conv.channel,
+    channelUserId: conv.channel_user_id,
+    displayName: conv.display_name,
+    reason: "panel",
+    createdBy: "panel",
+  });
+  await audit(c, {
+    action: "conversation.block",
+    target: `conv:${id}`,
+    targetLabel: `Conversación · ${channelLabel(conv.channel)}`,
+  });
+  return c.html(await renderThreadLive(c.env, id));
+});
+
+adminApp.post("/conversations/:id/unblock", async (c) => {
+  const id = c.req.param("id");
+  const { ContactBlocksRepo } = await import("../db/contactBlocks");
+  const db = new Db(c.env.DB);
+  const conv = await new ConversationsRepo(db).getById(id);
+  if (!conv) return c.html(await renderThreadLive(c.env, id));
+  await new ContactBlocksRepo(db).unblock(conv.channel, conv.channel_user_id);
+  await audit(c, {
+    action: "conversation.unblock",
+    target: `conv:${id}`,
+    targetLabel: `Conversación · ${channelLabel(conv.channel)}`,
+  });
   return c.html(await renderThreadLive(c.env, id));
 });
 

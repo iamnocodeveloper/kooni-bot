@@ -1,5 +1,12 @@
 import { Db } from "./client";
 
+/**
+ * Pausa "hasta que el dueño lo reactive" (año 2100). Se guarda en
+ * `paused_until` para no cambiar el esquema: todos los `paused_until > now`
+ * existentes siguen funcionando y "Devolver al bot" limpia con null.
+ */
+export const PAUSE_INDEFINITE = 4102444800000;
+
 export interface Conversation {
   id: string;
   channel: string;

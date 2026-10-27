@@ -5,6 +5,7 @@ export const en: Record<keyof typeof es, string> = {
   "nav.conversations": "Conversations",
   "nav.comentarios": "Comments",
   "nav.contactos": "Contacts",
+  "nav.bloqueados": "Blocked",
   "nav.leads": "Leads",
   "nav.etiquetas": "Labels",
   "nav.tickets": "Tickets",

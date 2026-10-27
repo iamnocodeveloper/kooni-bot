@@ -148,8 +148,8 @@ export const configEn: Record<keyof typeof configEs, string> = {
 
   // Settings · Web scraping (Decodo)
   "cfg.scrape.providerLabel": "Scraping provider",
-  "cfg.scrape.help": "Who reads the business site. In “Auto” it first tries a direct fetch (cheap) and, if the site blocks, uses AIsa and finally Decodo.",
-  "cfg.scrape.opt.auto": "Auto (recommended)",
+  "cfg.scrape.help": "Who reads the business site. In “Auto” Decodo is the primary provider; if it fails, it tries a direct sitemap fetch (free) and finally AIsa.",
+  "cfg.scrape.opt.auto": "Auto (Decodo first · recommended)",
   "cfg.scrape.opt.aisa": "AIsa (Firecrawl)",
   "cfg.scrape.opt.decodo": "Decodo",
   "cfg.scrape.aisaKeyLabel": "AIsa — API key (empty = uses the LLM one)",

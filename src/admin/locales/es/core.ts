@@ -8,6 +8,7 @@ export const es = {
   "nav.conversations": "Conversaciones",
   "nav.comentarios": "Comentarios",
   "nav.contactos": "Contactos",
+  "nav.bloqueados": "Bloqueados",
   "nav.leads": "Leads",
   "nav.etiquetas": "Etiquetas",
   "nav.tickets": "Tickets",

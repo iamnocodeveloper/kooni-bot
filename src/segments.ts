@@ -71,7 +71,8 @@ const MEMBER_SELECT = `
   SELECT c.id AS conversationId, c.channel AS channel, c.channel_user_id AS channelUserId,
          c.display_name AS name, MAX(m.created_at) AS lastUserAt
   FROM conversations c
-  JOIN messages m ON m.conversation_id = c.id AND m.role = 'user'`;
+  JOIN messages m ON m.conversation_id = c.id AND m.role = 'user'
+  LEFT JOIN contact_blocks cb ON cb.channel = c.channel AND cb.channel_user_id = c.channel_user_id`;
 
 function whereFor(segmentId: string): { joins: string; where: string } {
   // Etiquetas del usuario: "label:<id>" → conversaciones con esa etiqueta.
@@ -129,10 +130,13 @@ export async function segmentMembers(
   now = Date.now(),
 ): Promise<SegmentMember[]> {
   const { joins, where } = whereFor(segmentId);
+  // Silencio total: un contacto bloqueado nunca entra en una audiencia.
+  const blockedWhere = "cb.channel IS NULL";
+  const whereClause = where ? `${where} AND ${blockedWhere}` : `WHERE ${blockedWhere}`;
   const rows = await db.all<Omit<SegmentMember, "inWindow">>(
     `${MEMBER_SELECT}
      ${joins}
-     ${where}
+     ${whereClause}
      GROUP BY c.id
      ORDER BY lastUserAt DESC`,
   );

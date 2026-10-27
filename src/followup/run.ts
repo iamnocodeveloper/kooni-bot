@@ -74,6 +74,10 @@ export async function pickFollowupCandidates(
        WHERE f.conversation_id IS NULL
          AND c.channel != 'instagram'
          AND (c.paused_until IS NULL OR c.paused_until < ?)
+         AND NOT EXISTS (
+           SELECT 1 FROM contact_blocks b
+           WHERE b.channel = c.channel AND b.channel_user_id = c.channel_user_id
+         )
      )
      WHERE last_user_at IS NOT NULL
        AND last_user_at <= ? AND last_user_at >= ?

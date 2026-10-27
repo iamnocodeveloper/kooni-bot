@@ -164,6 +164,8 @@ function toVehicle(
     year,
     make: marca,
     model: modelo,
+    trim: version || null,
+    description: null,
     condition: cols.condicion ? normCondicion(cols.condicion) : null,
     price: precio !== null && precio > 0 ? Math.round(precio) : null,
     miles: millasN !== null && millasN >= 0 ? Math.round(millasN) : null,

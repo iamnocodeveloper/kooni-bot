@@ -9,6 +9,21 @@ const XML = `<?xml version="1.0"?><urlset><url><loc>https://x/inventory/used-202
 afterEach(() => vi.restoreAllMocks());
 
 describe("scrapeForFeed — elección de fuente", () => {
+  it("auto usa Decodo PRIMERO (no gasta el fetch directo si Decodo responde)", async () => {
+    const calls: string[] = [];
+    globalThis.fetch = vi.fn(async (url: any, init?: any) => {
+      calls.push(String(url));
+      return init?.method === "POST"
+        ? new Response(JSON.stringify({ results: [{ content: XML, status_code: 200 }] }), { status: 200 })
+        : new Response(XML, { status: 200 });
+    }) as any;
+    const r = await scrapeForFeed({ DECODO_AUTH: "user:pass" } as any, SITEMAP);
+    expect(r.ok).toBe(true);
+    expect(r.source).toBe("decodo");
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toContain("scraper-api.decodo.com");
+  });
+
   it("sitemap + directo devuelve XML → usa el directo (sin gastar proveedor)", async () => {
     globalThis.fetch = vi.fn(async () => new Response(XML, { status: 200 })) as any;
     const r = await scrapeForFeed({} as any, SITEMAP);

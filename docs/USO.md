@@ -55,7 +55,25 @@ El panel está en español, tema oscuro Kooni (tinta + teal). De izquierda a der
 - Todas las conversaciones de todos los canales en una sola lista.
 - Abre una conversación para leer el hilo; puedes **responder tú mismo** (handoff)
   y marcar resuelta.
-- Filtros por canal y estado.
+- **Responder como humano deja el bot pausado hasta que uses “Devolver bot”**.
+  No vuelve solo a la hora: la pausa es indefinida.
+- Controles del hilo:
+  - **⏸ Pausar bot aquí** — pausa temporal de 1 hora.
+  - **⏸ Pausar hasta reactivar** — el bot no vuelve hasta que lo devuelvas.
+  - **⛔ Bloquear contacto** — silencio total: ni respuestas, ni seguimientos,
+    ni campañas, ni disparadores. Se desbloquea desde el mismo hilo.
+- **El bot se pausa solo si respondés desde tu app** (Instagram/Messenger,
+  Zernio, WhatsApp por WAHA o WhatsApp Cloud). Ver
+  [`PAUSA-Y-BLOQUEOS.md`](./PAUSA-Y-BLOQUEOS.md).
+- Filtros por canal, estado y **⛔ Bloqueados**.
+
+### Contactos bloqueados
+- Página **Bandeja → Bloqueados** (`/admin/blocked`): lista de contactos con
+  silencio total, motivo y fecha.
+- Alta: elegí un contacto existente o pegá el identificador exacto del canal
+  (ej. `591…@c.us` en WAHA) y un motivo.
+- El bloqueo es **por canal**; la misma persona en otro canal no queda bloqueada.
+- Detalle operativo y diagnóstico: [`PAUSA-Y-BLOQUEOS.md`](./PAUSA-Y-BLOQUEOS.md).
 
 ### Leads — kanban
 - **Toda conversación real deja una ficha.** Si el bot le sacó una intención, la

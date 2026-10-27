@@ -376,7 +376,7 @@ describe("SupportAgent.recordOwnerEcho — respuesta del negocio desde la app na
     return { append, setPaused };
   }
 
-  it("registra el mensaje como owner y pausa el bot ~1h", async () => {
+  it("registra el mensaje como owner y pausa el bot hasta reactivarlo", async () => {
     const { agent } = makeAgent();
     const { append, setPaused } = stubRepos();
 
