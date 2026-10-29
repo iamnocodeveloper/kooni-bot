@@ -51,6 +51,7 @@ web_sync_urls                   = 'https://www.greenwaykiawestpalmbeach.com/deal
   **AIsa** heredada de `settings.llm_api_key`.
 - Panel: usuario `admin`; el password es el secret `DASHBOARD_PASSWORD`.
   Rotarlo: `npx wrangler secret put DASHBOARD_PASSWORD` (invalida las sesiones abiertas).
+- `QUOTE_URL_SECRET` (secret) firma los enlaces de cotización: rotarlo no afecta al panel.
 - Aviso de uso al backend: `USAGE_PUSH_URL` (InsForge `registrar-uso`).
 - Push: `VAPID_PUBLIC_KEY` (var) / `VAPID_PRIVATE_KEY` (secret) / `VAPID_SUBJECT`.
 
@@ -71,12 +72,13 @@ web_sync_urls                   = 'https://www.greenwaykiawestpalmbeach.com/deal
 
 | Métrica | Valor |
 |---|---|
-| Autos en inventario | **436** |
+| Autos en inventario | **397** (si responde Decodo/sitemap: 436) |
 | Sin precio | 94 |
 | Sin foto | 94 |
 | Sin millas | 396 |
 | Última corrida | manual, 0 errores, análisis **40/40 corregidos** |
 | Sesiones del panel | el password se rotó el 2026-10-29 (las sesiones previas quedaron invalidadas) |
+| Credenciales | rotadas `DASHBOARD_PASSWORD`, `KB_REINDEX_TOKEN` y `QUOTE_URL_SECRET`; el resto requiere el panel del proveedor |
 
 > El lote de fichas corre de noche (20 por corrida) o con **“Enriquecer fichas (60)”** en
 > `/admin/scraping`. Los 94 autos nuevos aún no tienen precio/foto.
@@ -109,5 +111,12 @@ curl.exe -u admin:<DASHBOARD_PASSWORD> -X POST -H "Accept: application/json" `
 ## 8. Pendientes / notas
 
 - Completar millas y fichas de los autos nuevos (botón *Enriquecer fichas*).
+- **Rotación pendiente en proveedores**: AIsa (`llm_api_key` + `analysis_llm_api_key`),
+  Decodo, Zernio, WAHA, VAPID (obliga a re-suscribir la PWA) y los tokens de
+  Cloudflare/GitHub del incidente. Los valores nuevos de lo ya rotado están en
+  `backups/cardealer-daniel-2026-10-29/credenciales-rotadas-2026-10-29.md` (local).
+- **Inventario oscilante**: con Decodo/sitemap son 436 autos; cuando Decodo
+  responde `status: failed` (613) y cae a AIsa, quedan 397. Es el fallback
+  diseñado, no pérdida de datos: el cron reintenta cada noche.
 - El panel está en inglés (`panel_language = 'en'`); para español: `UPDATE settings SET value='es' WHERE key='panel_language'`.
 - `kooni-paneles` / `functions` (hub InsForge) se administran aparte; esta ficha cubre solo el bot.
