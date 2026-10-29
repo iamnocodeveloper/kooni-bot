@@ -65,3 +65,6 @@ ventas/
 
 # Config temporal de despliegue de esta instalación (no commitear)
 wrangler.prod.toml
+
+# Respaldos locales de instalaciones de clientes (contienen datos y credenciales)
+backups/

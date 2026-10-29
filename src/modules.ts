@@ -14,6 +14,7 @@
 import type { Env } from "./env";
 import { Db } from "./db/client";
 import { SettingsRepo, SETTING_KEYS } from "./db/settings";
+import { isInstallUnlimited } from "./config";
 
 export interface PaidModule {
   id: string;
@@ -203,11 +204,14 @@ const ALL_MODULE_IDS: readonly string[] = PAID_MODULES.map((m) => m.id);
  *   que escribe el backend de licencias (`syncLicenseState`) cuando el super
  *   admin activa funciones por licencia.
  * - Fail-open: si el valor no se puede leer/parsear, se devuelven todos.
+ * - `INSTALL_UNLIMITED=1` → **TODOS**, siempre (la instalación está fuera del
+ *   esquema de licencias; ver isInstallUnlimited en config.ts).
  */
 export async function unlockedModules(
   env: Env,
   settingsSnapshot?: Record<string, string>,
 ): Promise<Set<string>> {
+  if (isInstallUnlimited(env)) return new Set(ALL_MODULE_IDS);
   try {
     const snapshot =
       settingsSnapshot ??

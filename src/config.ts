@@ -8,6 +8,17 @@ export function isPro(env: Env): boolean {
   return false; // Pro ya NO se activa por var BOT_TIER — solo con licencia (v2 Ed25519)
 }
 
+/**
+ * ¿Esta instalación está FUERA del esquema de licencias? (`INSTALL_UNLIMITED=1`
+ * en el wrangler.toml de la instalación). Es una decisión por instalación, no
+ * un plan: desbloquea todos los módulos y quita todos los límites de uso sin
+ * mirar el código Pro ni el overlay del backend. Las instalaciones normales no
+ * definen la var y siguen igual que siempre.
+ */
+export function isInstallUnlimited(env: Env): boolean {
+  return (env.INSTALL_UNLIMITED ?? "").trim() === "1";
+}
+
 /** ¿Pro desbloqueado? SOLO con una licencia válida pegada en el panel (v2).
  *  Quien instale el template sin licencia queda en free — no hay bypass por var.
  *  La licencia vive en D1 (settings) y se valida con firma Ed25519, por eso async. */

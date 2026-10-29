@@ -45,6 +45,11 @@ describe("unlockedModules — gating por licencia", () => {
     const mods = await unlockedModules(env());
     for (const m of PAID_MODULES) expect(mods.has(m.id)).toBe(true);
   });
+
+  it("INSTALL_UNLIMITED=1 → todos, aunque module_unlocks esté vacío", async () => {
+    const mods = await unlockedModules(env({ INSTALL_UNLIMITED: "1" }), { module_unlocks: "[]" });
+    expect(mods.size).toBe(PAID_MODULES.length);
+  });
 });
 
 describe("isModuleUnlocked", () => {

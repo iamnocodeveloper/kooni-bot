@@ -25,6 +25,11 @@ export interface Env {
   BUSINESS_NAME: string;
   BOT_LANGUAGE: string;
   BOT_TIER: "free" | "pro";
+  // "1" = instalación FUERA del esquema de licencias: todos los módulos
+  // desbloqueados y sin límites de uso (contactos, mensajes, canales, reglas…),
+  // sin importar el código Pro ni el estado que sincronice el backend. Solo se
+  // pone en instalaciones propias; ver isInstallUnlimited() en config.ts.
+  INSTALL_UNLIMITED?: string;
   // Nicho del bot (restaurante, inmobiliaria…). Selecciona el "niche pack" que
   // re-etiqueta el dashboard, aporta el playbook del giro y sus columnas.
   // Ausente/desconocido → pack genérico (comportamiento actual). Ver src/niches/.

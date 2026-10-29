@@ -11,6 +11,34 @@ puede tener su cuenta y las de varios clientes, al instalar se pregunta «¿con 
 otra?»; en agente/CI se exige `--account <email>` (o `--login --wait`) y, si no, **aborta** (no
 instala/licencia bajo la cuenta equivocada). Nuevo comando `logout` para cambiar de cuenta.
 
+## [1.64.0] — 2026-10-29
+
+### Corregido — el análisis IA del inventario no corría
+
+- **`analyzeInventory` le pasaba a `generateText` la propiedad `.model.model`
+  del `ResolvedModel`** (que es `undefined`) → `Cannot read properties of
+  undefined (reading 'specificationVersion')` y **0 correcciones** en todas las
+  corridas desde que se encendió el toggle. Ahora usa el modelo real
+  (`resolved.model`). Verificado en cardaniel: **40/40 autos corregidos**, 0 errores.
+- **Modelo de análisis**: con `analysis_llm_provider = anthropic` la URL base se
+  ignora (solo OpenAI/MiniMax la usan) y una key de gateway daba 401. En
+  cardaniel quedó en `aisa` (gateway `api.aisa.one/v1`, `claude-sonnet-4-5`).
+
+### Agregado — mapa visual de proveedores de scraping
+
+- **Configuración → Scraping** y **Registro de scraping** muestran en lenguaje
+  llano **qué hace Decodo**, **qué hace AIsa**, cuál tiene llave (y de dónde
+  sale), cuál está **EN USO** y el **orden de lectura** (Decodo → sitemap
+  directo → AIsa) según el modo elegido.
+- Componente compartido `src/admin/views/scrapeProviders.ts` + textos ES/EN.
+- cardaniel volvió a `scrape_provider = 'auto'` (Decodo principal, AIsa respaldo).
+
+### Pruebas
+
+- `test/kb/analysisRun.test.ts`: candado de regresión (el modelo real llega a
+  `generateText`), correcciones aplicadas, fallo fail-soft y toggle apagado.
+- `test/admin/scrapeProviders.test.ts`: render del mapa, modo activo y llaves.
+
 ## [1.63.0] — 2026-10-27
 
 ### Agregado — pausa por contacto y lista de bloqueados

@@ -7,9 +7,11 @@ import type { Env } from "../../env";
 import { layout } from "./layout";
 import { panelI18n, type T, type MessageKey } from "../i18n";
 import { Db } from "../../db/client";
+import { SettingsRepo } from "../../db/settings";
 import { loadVehicleStore, listStoredVehicles } from "../../kb/inventory";
 import { ChangeReviewsRepo, type ChangeReview } from "../../db/changeReviews";
 import { emptyState, alertBox, pill as uiPill, iconSubmit } from "./ui";
+import { renderScrapeProviders } from "./scrapeProviders";
 import {
   WebSyncLogRepo,
   type WebSyncChange,
@@ -93,6 +95,7 @@ export async function renderScraping(env: Env, q: ScrapingQuery = {}): Promise<s
   let total = 0;
   let stats = { runs: 0, added: 0, removed: 0, changed: 0, errors: 0 };
   let currentVehicles = 0;
+  let settings: Record<string, string> = {};
 
   try {
     runs = await repo.listRuns({ limit: PAGE + 1, before: q.before, trigger: q.trigger });
@@ -100,6 +103,7 @@ export async function renderScraping(env: Env, q: ScrapingQuery = {}): Promise<s
     stats = await repo.stats(Date.now() - 7 * 86_400_000);
     const store = await loadVehicleStore(db);
     currentVehicles = listStoredVehicles(store).length;
+    settings = await new SettingsRepo(db).all();
   } catch (e) {
     console.warn("[scraping] no se pudo cargar el registro:", e);
   }
@@ -365,6 +369,7 @@ export async function renderScraping(env: Env, q: ScrapingQuery = {}): Promise<s
         <a href="/admin/scraping/inventario" style="font-size:12px;color:var(--accent);text-decoration:none;margin-top:2px">${t("scr.seeInventory")}</a>
       </div>
       ${flash}
+      ${renderScrapeProviders(env, settings, t, { compact: true })}
       ${kpis}
       ${toolbar}
       ${runTable}

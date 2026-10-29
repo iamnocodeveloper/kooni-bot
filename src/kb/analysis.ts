@@ -387,9 +387,12 @@ export async function analyzeInventory(env: Env): Promise<AnalysisOutcome> {
   const batch = [...new Map(prioritized.map((v) => [v.key, v])).values()].slice(0, MAX_BATCH);
   try {
     const ov = await loadAnalysisLlmOverrides(env);
-    const { model, modelId, provider } = createAnalysisModel(env, ov);
+    // `createAnalysisModel` ya devuelve el modelo del AI SDK en `.model`:
+    // pasarlo como `resolved.model` (no `resolved.model.model`, que es undefined
+    // y rompía generateText con "reading 'specificationVersion'").
+    const resolved = createAnalysisModel(env, ov);
     const { text } = await generateText({
-      model: model.model,
+      model: resolved.model,
       prompt: buildPrompt(batch),
       maxOutputTokens: 4000,
     });
@@ -402,8 +405,8 @@ export async function analyzeInventory(env: Env): Promise<AnalysisOutcome> {
       corrections: corrections.length,
       applied,
       duplicates,
-      provider,
-      modelId,
+      provider: resolved.provider,
+      modelId: resolved.modelId,
     };
   } catch (e) {
     // El análisis es un extra: un fallo jamás debe romper el sync.

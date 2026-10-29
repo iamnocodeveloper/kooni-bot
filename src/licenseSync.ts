@@ -12,6 +12,7 @@
 import type { Env } from "./env";
 import { Db } from "./db/client";
 import { SettingsRepo, SETTING_KEYS } from "./db/settings";
+import { isInstallUnlimited } from "./config";
 
 export interface LicenseOverlay {
   plan: "free" | "pro";
@@ -65,6 +66,10 @@ export async function syncLicenseState(
   env: Env,
   opts: { force?: boolean } = {},
 ): Promise<{ ok: boolean; detail?: string }> {
+  // Instalación fuera de licencias: no hay estado que sincronizar ni que
+  // respetar. Sale ANTES de escribir nada (ni overlay, ni module_unlocks, ni
+  // pro_license) para que el backend no pueda reimponer límites o bloqueos.
+  if (isInstallUnlimited(env)) return { ok: true, detail: "instalación sin licencia" };
   const base = apiBase(env);
   const uid = (env.BOT_INSTANCE_ID ?? "").trim();
   const tok = installToken(env);

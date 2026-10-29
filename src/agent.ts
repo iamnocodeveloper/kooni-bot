@@ -194,15 +194,23 @@ export class SupportAgent extends Agent<Env, SupportAgentState> {
         for (const res of checks) {
           const check = await checkLimit(this.env, res);
           if (!check.allowed) {
-            const msg = limitMessage(res, check.used, check.limit ?? 0);
             // El entrante se registra igual: topar el límite frena la respuesta,
             // no la visibilidad de lo que el cliente escribió.
             await this.persistInbound(conv.id, inboundLabel(payload));
-            await new MessagesRepo(db).append(conv.id, "assistant", msg);
-            await pickAdapter(payload.channel as ChannelId).sendReply(
-              { channel: payload.channel as ChannelId, channelUserId: payload.channelUserId, chunks: [msg] },
-              this.env,
-            );
+            // El aviso de plan es INTERNO. Antes se le mandaba al cliente como
+            // si fuera la respuesta del bot ("llegaste al límite… activa Pro"),
+            // que no le dice nada y delata la licencia. Ahora se avisa al dueño.
+            const msg = limitMessage(res, check.used, check.limit ?? 0);
+            try {
+              const { notifyOwnerPush } = await import("./push");
+              await notifyOwnerPush(this.env, {
+                title: "⚠️ Límite del plan alcanzado",
+                body: msg,
+                url: "/admin/licencia",
+              });
+            } catch (e) {
+              console.warn("[limits] no se pudo avisar al dueño:", e);
+            }
             console.warn(`[limits] ${res} al tope (${check.used}/${check.limit}) — conversación ${conv.id} no procesada`);
             return { acknowledged: true };
           }

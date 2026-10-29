@@ -16,6 +16,7 @@ import {
 } from "../control-levels";
 import { layout } from "./layout";
 import { panelI18n, type T } from "../i18n";
+import { renderScrapeProviders } from "./scrapeProviders";
 
 /** Escape untrusted text before interpolating it into an HTML attribute/body. */
 function esc(s: string): string {
@@ -446,7 +447,10 @@ export async function renderConfig(
       <!-- Modelo de análisis (scraping) — separado del chat -->
       ${renderAnalysisLlmSection(settings, t)}
 
-      <!-- Scraping web (Decodo) -->
+      <!-- Scraping web: qué hace Decodo y qué hace AIsa (mapa visual) -->
+      ${renderScrapeProviders(env, settings, t)}
+
+      <!-- Scraping web: llaves y modo -->
       ${renderDecodoSection(env, settings, t)}
 
       <!-- Free-text settings -->

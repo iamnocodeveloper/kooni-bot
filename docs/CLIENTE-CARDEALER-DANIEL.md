@@ -1,0 +1,113 @@
+# Ficha del cliente — cardaniel (Daniel autos)
+
+Referencia de **esta instalación**: dónde vive, qué tiene configurado y cómo se
+opera. Sin secretos: las credenciales viven en Cloudflare (secrets) y en
+`settings` (D1); acá solo se documenta **dónde están**.
+
+---
+
+## 1. Identificación
+
+| | |
+|---|---|
+| Cliente | Daniel autos (cardaniel) |
+| Bot | `Daniel` · idioma `es-MX` · nicho autos |
+| Worker | `kooni-bot-cardealer-daniel2-948b8b` |
+| URL | https://kooni-bot-cardealer-daniel2-948b8b.cardealerdani.workers.dev |
+| Panel | https://kooni-bot-cardealer-daniel2-948b8b.cardealerdani.workers.dev/admin |
+| Cuenta Cloudflare | `Info@dmezzadri.com` (`b579b15488cb0efc53c2434d381cbe17`) |
+| Instancia | `BOT_INSTANCE_ID = 948b8b` |
+| Versión desplegada | **1.64.0** — deploy `300e0ecf-456c-4f1a-937c-9e96ca68d6ed` (2026-10-29) |
+| Cron | `0 3 * * *` (Web Sync nocturno + fotos + métricas) |
+
+## 2. Recursos
+
+| Recurso | Nombre | Notas |
+|---|---|---|
+| D1 | `kooni_cardealer_dani_948b8b_db` | 84 tablas; inventario en `settings.web_sync_vehicles` |
+| Vectorize | `kooni_cardealer_dani_948b8b_kb` | 1024 dims, cosine; se re-embebe desde la KB |
+| Durable Object | `SupportAgent` | migración `v1` (SQLite) |
+| R2 (`MEDIA`) | — | no configurado: los archivos van a D1 |
+| Browser (`BROWSER`) | — | no configurado |
+
+## 3. Configuración vigente (no secreta)
+
+```ini
+INSTALL_UNLIMITED = "1"            # fuera del esquema de licencias: sin límites ni módulos bloqueados
+LLM_PROVIDER      = "openai"       # contra el gateway AIsa (llm_api_base_url = https://api.aisa.one/v1)
+BOT_TIER          = "pro"
+
+scrape_provider                 = 'auto'   # Decodo → sitemap directo → AIsa
+feature_web_sync_enabled        = '1'
+feature_web_sync_analysis_enabled = '1'
+analysis_llm_provider           = 'aisa'   # gateway; NO 'anthropic' (ignora la URL base)
+analysis_llm_model              = 'claude-sonnet-4-5-20250929'
+analysis_llm_api_base_url       = 'https://api.aisa.one/v1'
+panel_language                  = 'en'     # el panel se ve en inglés
+web_sync_urls                   = 'https://www.greenwaykiawestpalmbeach.com/dealer-inspire-inventory/inventory_sitemap'
+```
+
+- Credenciales de scraping: **Decodo** en `settings.decodo_auth` (+ secret `DECODO_AUTH`) y
+  **AIsa** heredada de `settings.llm_api_key`.
+- Panel: usuario `admin`; el password es el secret `DASHBOARD_PASSWORD`.
+  Rotarlo: `npx wrangler secret put DASHBOARD_PASSWORD` (invalida las sesiones abiertas).
+- Aviso de uso al backend: `USAGE_PUSH_URL` (InsForge `registrar-uso`).
+- Push: `VAPID_PUBLIC_KEY` (var) / `VAPID_PRIVATE_KEY` (secret) / `VAPID_SUBJECT`.
+
+## 4. Cómo funciona el inventario (resumen operativo)
+
+1. **Cron 03:00** (o botón *Scrapear ahora*) → `runWebSync`.
+2. **Feed**: `scrape_provider = auto` → **Decodo** lee el sitemap (XML crudo); si falla,
+   sitemap directo (gratis) y por último **AIsa** (`firecrawl/map` + filtro `/inventory/`).
+3. **Parseo determinista** → store `settings.web_sync_vehicles` (clave `vin:` o `url:`) + docs de KB.
+4. **Fichas** (foto/precio/millas/descripción): 20 por corrida nocturna con Decodo HTML/JSON-LD
+   (3 en paralelo, cooldown 3 días). Bajo demanda: tool `fichaAuto`.
+5. **Análisis IA**: 40 autos por corrida (prioriza sospechosos y posibles duplicados),
+   modelo `claude-sonnet-4-5` vía AIsa. Solo **corrige** autos existentes y valida rangos.
+6. **Registro**: `/admin/scraping` (`web_sync_runs` / `web_sync_changes`, 90 días).
+7. **Bot**: `inventarioQuery` (solo lo que hay) y `fichaAuto` (link + foto puntual).
+
+## 5. Estado al 2026-10-29
+
+| Métrica | Valor |
+|---|---|
+| Autos en inventario | **436** |
+| Sin precio | 94 |
+| Sin foto | 94 |
+| Sin millas | 396 |
+| Última corrida | manual, 0 errores, análisis **40/40 corregidos** |
+| Sesiones del panel | el password se rotó el 2026-10-29 (las sesiones previas quedaron invalidadas) |
+
+> El lote de fichas corre de noche (20 por corrida) o con **“Enriquecer fichas (60)”** en
+> `/admin/scraping`. Los 94 autos nuevos aún no tienen precio/foto.
+
+## 6. Runbook
+
+```powershell
+$env:CLOUDFLARE_ACCOUNT_ID="b579b15488cb0efc53c2434d381cbe17"
+npx wrangler whoami                     # debe listar la cuenta de dmezzadri
+npx wrangler deploy                     # publica el código local
+npx wrangler tail kooni-bot-cardealer-daniel2-948b8b   # logs en vivo
+
+# ver la config sin secretos
+npx wrangler d1 execute kooni_cardealer_dani_948b8b_db --remote --command \
+  "SELECT key, value FROM settings WHERE key LIKE 'web_sync%' OR key LIKE 'analysis%' OR key='scrape_provider'"
+```
+
+Disparar una corrida sin entrar al panel (Basic auth):
+
+```powershell
+curl.exe -u admin:<DASHBOARD_PASSWORD> -X POST -H "Accept: application/json" `
+  https://kooni-bot-cardealer-daniel2-948b8b.cardealerdani.workers.dev/admin/scraping/run
+```
+
+## 7. Respaldo
+
+`backups/cardealer-daniel-2026-10-29/` (local, **gitignored**): dump completo de D1,
+`settings` enmascarado y `wrangler.toml`. Instrucciones de restauración en su `README.md`.
+
+## 8. Pendientes / notas
+
+- Completar millas y fichas de los autos nuevos (botón *Enriquecer fichas*).
+- El panel está en inglés (`panel_language = 'en'`); para español: `UPDATE settings SET value='es' WHERE key='panel_language'`.
+- `kooni-paneles` / `functions` (hub InsForge) se administran aparte; esta ficha cubre solo el bot.

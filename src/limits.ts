@@ -1,6 +1,7 @@
 import type { Env } from "./env";
 import { Db } from "./db/client";
 import { SettingsRepo, SETTING_KEYS } from "./db/settings";
+import { isInstallUnlimited } from "./config";
 
 /**
  * Límites de uso por tier (free con límites, Pro sin límites).
@@ -44,8 +45,11 @@ export const PRO_LIMITS: Limits = {
   logRetentionDays: null,
 };
 
-/** ¿Es Pro? Lee el setting pro_license del panel (código HMAC validado) o BOT_TIER=pro. */
+/** ¿Es Pro? Lee el setting pro_license del panel (código Ed25519 validado).
+ *  Una instalación con `INSTALL_UNLIMITED=1` es Pro siempre: está fuera del
+ *  esquema de licencias. */
 export async function isProLicense(env: Env): Promise<boolean> {
+  if (isInstallUnlimited(env)) return true;
   try {
     const { SettingsRepo, SETTING_KEYS } = await import("./db/settings");
     const code = await new SettingsRepo(new Db(env.DB)).get(SETTING_KEYS.proLicense);
@@ -66,6 +70,8 @@ export async function isProLicense(env: Env): Promise<boolean> {
  * la base si no hay overlay o no se puede leer.
  */
 export async function getLimits(env: Env): Promise<Limits> {
+  // Instalación fuera de licencias: sin límites, sin importar el overlay.
+  if (isInstallUnlimited(env)) return PRO_LIMITS;
   const pro = await isProLicense(env);
   const base = pro ? PRO_LIMITS : FREE_LIMITS;
   try {

@@ -4,6 +4,9 @@ import {
   PRO_LIMITS,
   limitMessage,
   checkChannelLimit,
+  checkLimit,
+  getLimits,
+  isProLicense,
   channelLimitMessage,
 } from "../src/limits";
 import type { Env } from "../src/env";
@@ -43,6 +46,32 @@ describe("FREE_LIMITS / PRO_LIMITS", () => {
     const msg = limitMessage("messagesThisMonth", 500, 500);
     expect(msg).toContain("500/500");
     expect(msg.toLowerCase()).toContain("mensajes");
+  });
+});
+
+describe("INSTALL_UNLIMITED=1 (instalación fuera de licencias)", () => {
+  function unlimitedEnv(): Env {
+    return { INSTALL_UNLIMITED: "1", DB: freeEnv().DB } as unknown as Env;
+  }
+
+  it("getLimits devuelve PRO_LIMITS aunque no haya licencia", async () => {
+    expect(await getLimits(unlimitedEnv())).toEqual(PRO_LIMITS);
+  });
+
+  it("isProLicense es true sin código Pro", async () => {
+    expect(await isProLicense(unlimitedEnv())).toBe(true);
+  });
+
+  it("checkLimit no bloquea contactos ni mensajes", async () => {
+    const env = unlimitedEnv();
+    expect((await checkLimit(env, "contacts")).allowed).toBe(true);
+    expect((await checkLimit(env, "messagesThisMonth")).allowed).toBe(true);
+  });
+
+  it("checkChannelLimit no bloquea canales extra", async () => {
+    const chk = await checkChannelLimit(unlimitedEnv(), 99);
+    expect(chk.allowed).toBe(true);
+    expect(chk.limit).toBeNull();
   });
 });
 
